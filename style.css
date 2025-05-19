@@ -1,0 +1,676 @@
+/* ===========================================
+   1) Reset & Base Styles
+=========================================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  scroll-behavior: smooth;
+  background: linear-gradient(135deg, #f0f4f8, #d9e2ec);
+  animation: backgroundShift 20s ease-in-out infinite alternate;
+}
+@keyframes backgroundShift {
+  0% { background: linear-gradient(135deg, #f0f4f8, #d9e2ec); }
+  100% { background: linear-gradient(135deg, #d9e2ec, #f0f4f8); }
+}
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  transition: transform 0.3s ease;
+}
+img:hover {
+  transform: scale(1.05) rotate(1deg);
+}
+a {
+  text-decoration: none;
+  color: inherit;
+  transition: color 0.3s ease, transform 0.3s ease;
+}
+a:hover {
+  color: var(--accent-color);
+  transform: scale(1.05);
+}
+
+/* Container Utility */
+.container {
+  width: 90%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* ===========================================
+   2) CSS Variables
+=========================================== */
+:root {
+  --primary-color: #FF9933;
+  --secondary-color: #00A8CC;
+  --accent-color: #FF2D95;
+  --highlight-color: #A8E63E;
+  --text-color: #333;
+  --background-color: #F9F9F9;
+  --header-height: 70px;
+  --transition-speed: 0.3s;
+  --bubble-color: rgba(255,255,255,0.15);
+}
+
+/* ===========================================
+   3) Background Bubbles Animation
+=========================================== */
+.bubbles-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 0;
+}
+.bubble {
+  position: absolute;
+  bottom: -100px;
+  background-color: var(--bubble-color);
+  border-radius: 50%;
+  animation: rise 12s infinite ease-in;
+  animation-delay: calc(-1s * var(--i));
+}
+.bubble:nth-child(1)  { width: 40px;  height: 40px;  left: 5%;  animation-duration: 14s; }
+.bubble:nth-child(2)  { width: 60px;  height: 60px;  left: 15%; animation-duration: 16s; }
+.bubble:nth-child(3)  { width: 30px;  height: 30px;  left: 25%; animation-duration: 12s; }
+.bubble:nth-child(4)  { width: 80px;  height: 80px;  left: 35%; animation-duration: 18s; }
+.bubble:nth-child(5)  { width: 50px;  height: 50px;  left: 45%; animation-duration: 15s; }
+.bubble:nth-child(6)  { width: 35px;  height: 35px;  left: 55%; animation-duration: 13s; }
+.bubble:nth-child(7)  { width: 45px;  height: 45px;  left: 65%; animation-duration: 17s; }
+.bubble:nth-child(8)  { width: 55px;  height: 55px;  left: 75%; animation-duration: 19s; }
+.bubble:nth-child(9)  { width: 25px;  height: 25px;  left: 85%; animation-duration: 11s; }
+.bubble:nth-child(10) { width: 65px;  height: 65px;  left: 95%; animation-duration: 20s; }
+
+@keyframes rise {
+  0%   { transform: translateY(0)    scale(0.7);  opacity: 0.7; }
+  50%  { opacity: 0.3; }
+  100% { transform: translateY(-120vh) scale(1.2); opacity: 0; }
+}
+
+/* ===========================================
+   4) Header & Branding
+=========================================== */
+header.site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--header-height);
+  background-color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  z-index: 10;
+  animation: fadeInDown 1s ease-out both;
+}
+header .branding {
+  display: flex;
+  align-items: center;
+}
+header .branding img.logo {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  margin-right: 0.75rem;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+header .branding img.logo:hover {
+  transform: rotate(10deg) scale(1.1);
+}
+header .site-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+  transform: perspective(500px) rotateX(5deg);
+}
+
+/* Hamburger Button */
+#hamburger {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.75rem;
+  cursor: pointer;
+  z-index: 11;
+  transition: color var(--transition-speed), transform var(--transition-speed);
+}
+#hamburger:hover {
+  color: var(--accent-color);
+  transform: rotate(90deg) scale(1.2);
+}
+
+/* Mobile Menu */
+#mobile-menu {
+  position: fixed;
+  top: var(--header-height);
+  right: 1rem;
+  width: 260px;
+  background-color: var(--primary-color);
+  border-bottom-left-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  display: none;
+  flex-direction: column;
+  z-index: 11;
+  animation: fadeIn 0.5s ease-out both;
+}
+#mobile-menu.show {
+  display: flex;
+}
+#mobile-menu .nav-list {
+  list-style: none;
+  width: 100%;
+}
+#mobile-menu .nav-list li a {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  color: #fff;
+  font-weight: 500;
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
+}
+#mobile-menu .nav-list li a:hover {
+  background-color: var(--accent-color);
+  transform: scale(1.05);
+}
+
+/* Spacer under fixed header */
+.header-spacer {
+  height: var(--header-height);
+}
+
+/* Ensure content sits above bubbles */
+main, footer {
+  position: relative;
+  z-index: 5;
+}
+
+/* ===========================================
+   5) History Section
+=========================================== */
+.history-section {
+  background-color: rgba(255,255,255,0.85);
+  padding: 4rem 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.history-section .section-title {
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+  color: var(--primary-color);
+  text-align: center;
+  transform: perspective(600px) rotateX(4deg);
+  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+  animation: fadeIn 1s ease-out both;
+}
+.history-section p {
+  font-size: 1rem;
+  color: var(--text-color);
+  line-height: 1.6;
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: justify;
+  animation: fadeIn 1.2s ease-out both;
+}
+
+/* ===========================================
+   6) About Section
+=========================================== */
+.about-section {
+  background-color: rgba(249,249,249,0.9);
+  padding: 4rem 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.about-section .section-title {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+  text-align: center;
+  transform: perspective(600px) rotateX(4deg);
+  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+  animation: fadeIn 1s ease-out both;
+}
+.about-section p {
+  font-size: 1rem;
+  color: var(--text-color);
+  max-width: 800px;
+  margin: 0.5rem auto 1.5rem auto;
+  text-align: center;
+  animation: fadeIn 1.2s ease-out both;
+}
+.owner-name {
+  font-weight: bold;
+  color: var(--accent-color);
+  animation: fadeIn 1.4s ease-out both;
+}
+
+/* ===========================================
+   7) Why Choose Section (FAQ Dropdown)
+=========================================== */
+.why-section {
+  background-color: rgba(255,255,255,0.85);
+  padding: 4rem 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.why-section .section-title {
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+  color: var(--primary-color);
+  text-align: center;
+  transform: perspective(600px) rotateX(4deg);
+  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+  animation: fadeIn 1s ease-out both;
+}
+.faq-item {
+  max-width: 800px;
+  margin: 1rem auto;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  animation: fadeIn 1.2s ease-out both;
+}
+.faq-question {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  background-color: var(--secondary-color);
+  color: #fff;
+  font-size: 1.1rem;
+  text-align: left;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
+}
+.faq-question:hover {
+  background-color: var(--accent-color);
+  transform: scale(1.03);
+}
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.5s ease;
+  background-color: #fff;
+  padding: 0 1.5rem;
+}
+.faq-answer p {
+  padding: 1rem 0;
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+/* ===========================================
+   8) Achievements Section (Auto‑Scroll)
+=========================================== */
+.achievements-section {
+  background-color: rgba(249,249,249,0.85);
+  padding: 4rem 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.achievements-section .section-title {
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+  color: var(--primary-color);
+  text-align: center;
+  transform: perspective(600px) rotateX(4deg);
+  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+  animation: fadeIn 1s ease-out both;
+}
+.achievements-scroll {
+  display: flex;
+  gap: 1rem;
+  overflow: hidden;
+  position: relative;
+  animation: scrollAchievements 20s linear infinite;
+}
+@keyframes scrollAchievements {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(calc(-250px * 5)); }
+}
+/* Duplicate first few cards at end to ensure seamless loop */
+.achievements-scroll .achievement-card:nth-child(-n+3) {
+  /* Cloned cards (first 3) will appear at the end for loop */
+}
+.achievement-card {
+  flex: 0 0 250px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--transition-speed), box-shadow var(--transition-speed);
+}
+.achievement-card:hover {
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.achievement-card img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  animation: fadeIn 1s ease-out both;
+}
+.achievement-caption {
+  padding: 0.75rem;
+  font-size: 1rem;
+  color: var(--text-color);
+  text-align: center;
+}
+.achievements-scroll {
+  overflow-x: auto;             /* keep horizontal scrolling alive */
+  scrollbar-width: none;         /* Firefox */
+}
+.achievements-scroll::-webkit-scrollbar {
+  display: none;                 /* Chrome, Safari, Opera */
+}
+
+/* ===========================================
+   9) Collaboration / Email Form Section
+=========================================== */
+.collaboration-section {
+  background-color: rgba(255,255,255,0.85);
+  padding: 4rem 0;
+}
+.collaboration-section .section-title {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+  text-align: center;
+  transform: perspective(600px) rotateX(4deg);
+  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+  animation: fadeIn 1s ease-out both;
+}
+.collaboration-section p {
+  font-size: 1rem;
+  color: var(--text-color);
+  margin-bottom: 1.5rem;
+  text-align: center;
+  animation: fadeIn 1.2s ease-out both;
+}
+/* Form Styles */
+.collab-form {
+  max-width: 600px;
+  margin: 0 auto;
+  background-color: #f9f9f9;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  animation: fadeIn 1.2s ease-out both;
+}
+.collab-form .form-group {
+  margin-bottom: 1rem;
+}
+.collab-form label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+.collab-form input[type="text"],
+.collab-form input[type="email"],
+.collab-form textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+  color: var(--text-color);
+  transition: border-color var(--transition-speed), transform var(--transition-speed);
+}
+.collab-form input[type="text"]:focus,
+.collab-form input[type="email"]:focus,
+.collab-form textarea:focus {
+  border-color: var(--accent-color);
+  outline: none;
+  transform: scale(1.01);
+  box-shadow: 0 0 0 2px rgba(255,45,149,0.2);
+}
+.btn-submit {
+  display: inline-block;
+  background-color: var(--accent-color);
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+.btn-submit:hover {
+  background-color: var(--highlight-color);
+  transform: translateY(-2px) scale(1.05);
+}
+.note {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #666;
+  text-align: center;
+}
+
+/* ===========================================
+   10) Footer Styles
+=========================================== */
+.site-footer {
+  background-color: #222;
+  color: #f1f1f1;
+  padding: 3rem 0;
+  font-size: 0.9rem;
+  position: relative;
+  overflow: hidden;
+}
+.footer-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+}
+.footer-links {
+  flex: 1 1 200px;
+}
+.footer-heading {
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+  color: var(--accent-color);
+  position: relative;
+  transform: perspective(600px) rotateX(4deg);
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+}
+.footer-heading::after {
+  content: '';
+  position: absolute;
+  width: 50px;
+  height: 3px;
+  background-color: var(--accent-color);
+  bottom: -6px;
+  left: 0;
+}
+.footer-nav {
+  list-style: none;
+}
+.footer-nav li {
+  margin-bottom: 0.75rem;
+}
+.footer-nav li a {
+  color: #ccc;
+  transition: color var(--transition-speed), transform var(--transition-speed);
+  position: relative;
+}
+.footer-nav li a::before {
+  content: '›';
+  position: absolute;
+  left: -1rem;
+  opacity: 0;
+  transition: opacity var(--transition-speed), left var(--transition-speed);
+}
+.footer-nav li a:hover {
+  color: #fff;
+  transform: translateX(5px);
+}
+.footer-nav li a:hover::before {
+  opacity: 1;
+  left: -1.25rem;
+}
+
+.footer-social {
+  flex: 1 1 200px;
+  text-align: center;
+}
+.social-icons {
+  list-style: none;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.social-icons li {
+  display: inline-block;
+}
+.social-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background-color: #333;
+  border-radius: 50%;
+  transition: transform var(--transition-speed), background-color var(--transition-speed);
+  position: relative;
+  overflow: hidden;
+}
+.social-link .icon {
+  width: 24px;
+  height: 24px;
+  fill: #ccc;
+  transition: fill var(--transition-speed), transform var(--transition-speed);
+}
+.social-link:hover {
+  background-color: var(--accent-color);
+  transform: translateY(-4px) scale(1.1);
+}
+.social-link:hover .icon {
+  fill: #fff;
+  transform: rotate(15deg) scale(1.1);
+}
+.social-link::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 153, 51, 0.3);
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  transition: transform var(--transition-speed), opacity var(--transition-speed);
+  transform: scale(0);
+  opacity: 0;
+}
+.social-link:hover::after {
+  transform: scale(2.5);
+  opacity: 1;
+}
+
+.footer-copy {
+  flex: 1 1 100%;
+  text-align: center;
+  margin-top: 2rem;
+  color: #888;
+}
+
+/* ===========================================
+   11) Back-to-Top Button
+=========================================== */
+#back-to-top {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 80px;
+  height: 36px;
+  background-color: var(--accent-color);
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  cursor: pointer;
+  z-index: 11;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition-speed), transform var(--transition-speed);
+}
+#back-to-top.visible {
+  opacity: 1;
+  visibility: visible;
+}
+#back-to-top:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* ===========================================
+   12) Keyframe Animations
+=========================================== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ===========================================
+   13) Responsive Adjustments
+=========================================== */
+@media (max-width: 768px) {
+  header .site-title {
+    font-size: 1.5rem;
+  }
+  .history-section p,
+  .about-section p,
+  .collab-form {
+    width: 90%;
+    margin: 0 auto;
+  }
+  .why-section .faq-item {
+    width: 90%;
+    margin: 1rem auto;
+  }
+  .achievements-scroll {
+    animation: none; /* disable auto-scroll on small screens for usability */
+    overflow-x: auto;
+  }
+  .achievement-card {
+    flex: 0 0 200px;
+  }
+  .footer-container {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .footer-links,
+  .footer-social {
+    flex: 1 1 auto;
+  }
+  .footer-copy {
+    margin-top: 1.5rem;
+  }
+}
+@media (max-width: 480px) {
+  .achievement-card {
+    flex: 0 0 160px;
+  }
+}
