@@ -207,3 +207,48 @@ document.addEventListener("DOMContentLoaded", () => {
     requestAnimationFrame(step);
   }
 });
+document.addEventListener("DOMContentLoaded", () => {
+  const modalOverlay = document.getElementById("history-modal");
+  const readMoreBtn  = document.getElementById("read-more-btn");
+  const closeBtn     = document.getElementById("modal-close");
+
+  // Open Modal
+  if (readMoreBtn && modalOverlay) {
+    readMoreBtn.addEventListener("click", () => {
+      modalOverlay.style.display = "flex";
+      modalOverlay.setAttribute("aria-hidden", "false");
+      // Prevent body scroll while modal is open
+      document.body.style.overflow = "hidden";
+    });
+  }
+
+  // Close Modal via Close Button
+  if (closeBtn && modalOverlay) {
+    closeBtn.addEventListener("click", () => {
+      modalOverlay.style.display = "none";
+      modalOverlay.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    });
+  }
+
+  // Close Modal by Clicking Outside Content
+  if (modalOverlay) {
+    modalOverlay.addEventListener("click", (e) => {
+      // If user clicks on the overlay (not the content area), close
+      if (e.target === modalOverlay) {
+        modalOverlay.style.display = "none";
+        modalOverlay.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+      }
+    });
+  }
+
+  // Optional: Close Modal with ESC key
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modalOverlay.style.display === "flex") {
+      modalOverlay.style.display = "none";
+      modalOverlay.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+  });
+});
