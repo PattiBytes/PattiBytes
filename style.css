@@ -719,14 +719,14 @@ main, footer {
   to   { transform: translateY(0);      opacity: 1; }
 }
 
-/* Close button (red cross) */
+/* 1. Increase z-index so the close button sits above the modal background image */
 .modal-close {
   position: absolute;
   top: 12px;
   right: 12px;
   background: #e74c3c;
   border: none;
-  color: white;
+  color: #fff;                  /* Ensure the “×” is bright white */
   font-size: 1.5rem;
   width: 32px;
   height: 32px;
@@ -737,8 +737,26 @@ main, footer {
   align-items: center;
   justify-content: center;
   transition: background-color 0.2s ease, transform 0.2s ease;
-  z-index: 10;
+  z-index: 101;                 /* Raised above the modal-content’s background */
 }
+
+/* 2. If the modal-content itself had a higher z-index, bump this even more */
+.modal-content {
+  position: relative;
+  background-color: #fff;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  animation: slideDownModal 0.4s ease-out forwards;
+  background-image: url("https://images.unsplash.com/photo-1515716078605-30044a7e3910?auto=format&fit=crop&w=1050&q=80");
+  background-size: cover;
+  background-position: center;
+  z-index: 100;                 /* Keep this just below the close button */
+}
+
 .modal-close:hover {
   background-color: #c0392b;
   transform: scale(1.1);
