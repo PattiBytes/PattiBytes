@@ -674,3 +674,135 @@ main, footer {
     flex: 0 0 160px;
   }
 }
+/* ===========================================
+   Modal Overlay + Content Styles
+=========================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: none;              /* hidden by default */
+  align-items: center;        /* center content vertically */
+  justify-content: center;    /* center content horizontally */
+  z-index: 100;               /* on top of everything else */
+  animation: fadeInOverlay 0.3s ease-out forwards;
+}
+
+/* Fade‑in for the overlay */
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Modal content box */
+.modal-content {
+  position: relative;
+  background-color: #fff;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;            /* avoid overflowing viewport height */
+  overflow-y: auto;            /* scroll if text is tall */
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  animation: slideDownModal 0.4s ease-out forwards;
+  background-image: url("https://images.unsplash.com/photo-1515716078605-30044a7e3910?auto=format&fit=crop&w=1050&q=80");
+  background-size: cover;
+  background-position: center;
+}
+
+/* Slide‑down effect */
+@keyframes slideDownModal {
+  from { transform: translateY(-30px); opacity: 0; }
+  to   { transform: translateY(0);      opacity: 1; }
+}
+
+/* Close button (red cross) */
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: #e74c3c;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  z-index: 10;
+}
+.modal-close:hover {
+  background-color: #c0392b;
+  transform: scale(1.1);
+}
+
+/* Modal title and text area styling */
+.modal-body {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 6px;
+  margin: 48px;
+  padding: 24px;
+  box-sizing: border-box;
+}
+.modal-title {
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+  color: #333;
+  text-align: center;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+}
+.modal-text {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #333;
+}
+.modal-text p {
+  margin-bottom: 1rem;
+}
+.modal-text ul {
+  margin: 1rem 0 1rem 1.25rem;
+}
+.modal-text ul li {
+  margin-bottom: 0.75rem;
+}
+
+/* Read More button style */
+.btn-read-more {
+  display: inline-block;
+  margin-top: 1rem;
+  background-color: var(--accent-color);
+  color: #fff;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+.btn-read-more:hover {
+  background-color: var(--highlight-color);
+  transform: translateY(-2px) scale(1.05);
+}
+
+/* Responsive tweaks for modal */
+@media (max-width: 600px) {
+  .modal-content {
+    width: 95%;
+    margin: 0 10px;
+  }
+  .modal-body {
+    margin: 32px 16px;
+    padding: 16px;
+  }
+  .modal-title {
+    font-size: 1.5rem;
+  }
+}
