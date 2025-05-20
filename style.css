@@ -676,6 +676,8 @@ main, footer {
 }
 /* ===========================================
    Modal Overlay + Content Styles
+/* ===========================================
+   Modal Overlay + Content Styles (Updated)
 =========================================== */
 .modal-overlay {
   position: fixed;
@@ -684,11 +686,12 @@ main, footer {
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.6);
-  display: none;              /* hidden by default */
-  align-items: center;        /* center content vertically */
-  justify-content: center;    /* center content horizontally */
-  z-index: 100;               /* on top of everything else */
+  display: none;                     /* hidden by default */
+  align-items: flex-start;           /* align at top to avoid header overlap */
+  justify-content: center;           /* center content horizontally */
+  z-index: 100;                      /* on top of everything else */
   animation: fadeInOverlay 0.3s ease-out forwards;
+  padding-top: var(--header-height); /* push modal content down by header height */
 }
 
 /* Fade‑in for the overlay */
@@ -704,13 +707,15 @@ main, footer {
   border-radius: 8px;
   width: 90%;
   max-width: 800px;
-  max-height: 90vh;            /* avoid overflowing viewport height */
-  overflow-y: auto;            /* scroll if text is tall */
+  max-height: calc(100vh - var(--header-height) - 40px); /* account for header + some margin */
+  overflow-y: auto;               /* scroll if content is tall */
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   animation: slideDownModal 0.4s ease-out forwards;
   background-image: url("https://images.unsplash.com/photo-1515716078605-30044a7e3910?auto=format&fit=crop&w=1050&q=80");
   background-size: cover;
   background-position: center;
+  z-index: 100;                     /* sit just below the close button */
+  margin: 0 0 20px 0;               /* bottom margin for breathing room */
 }
 
 /* Slide‑down effect */
@@ -719,7 +724,7 @@ main, footer {
   to   { transform: translateY(0);      opacity: 1; }
 }
 
-/* 1. Increase z-index so the close button sits above the modal background image */
+/* Close button (red cross) */
 .modal-close {
   position: absolute;
   top: 12px;
@@ -737,26 +742,8 @@ main, footer {
   align-items: center;
   justify-content: center;
   transition: background-color 0.2s ease, transform 0.2s ease;
-  z-index: 101;                 /* Raised above the modal-content’s background */
+  z-index: 101;                 /* above the modal-content background */
 }
-
-/* 2. If the modal-content itself had a higher z-index, bump this even more */
-.modal-content {
-  position: relative;
-  background-color: #fff;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 800px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  animation: slideDownModal 0.4s ease-out forwards;
-  background-image: url("https://images.unsplash.com/photo-1515716078605-30044a7e3910?auto=format&fit=crop&w=1050&q=80");
-  background-size: cover;
-  background-position: center;
-  z-index: 100;                 /* Keep this just below the close button */
-}
-
 .modal-close:hover {
   background-color: #c0392b;
   transform: scale(1.1);
@@ -766,7 +753,7 @@ main, footer {
 .modal-body {
   background: rgba(255, 255, 255, 0.9);
   border-radius: 6px;
-  margin: 48px;
+  margin: 48px 24px 24px;       /* top margin will combine with padding-top */
   padding: 24px;
   box-sizing: border-box;
 }
@@ -812,12 +799,16 @@ main, footer {
 
 /* Responsive tweaks for modal */
 @media (max-width: 600px) {
+  .modal-overlay {
+    padding-top: calc(var(--header-height) + 20px);
+  }
   .modal-content {
     width: 95%;
-    margin: 0 10px;
+    margin: 0 10px 20px 10px;
+    max-height: calc(100vh - var(--header-height) - 60px);
   }
   .modal-body {
-    margin: 32px 16px;
+    margin: 32px 16px 16px;
     padding: 16px;
   }
   .modal-title {
