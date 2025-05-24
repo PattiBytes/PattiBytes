@@ -12,46 +12,71 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Background Animations -->
-  <div class="bubbles-container">
-    <div class="bubble" style="--i:1;"></div>
-    <div class="bubble" style="--i:2;"></div>
-    <div class="bubble" style="--i:3;"></div>
-    <div class="bubble" style="--i:4;"></div>
-    <div class="bubble" style="--i:5;"></div>
-    <div class="bubble" style="--i:6;"></div>
-    <div class="bubble" style="--i:7;"></div>
-    <div class="bubble" style="--i:8;"></div>
-    <div class="bubble" style="--i:9;"></div>
-    <div class="bubble" style="--i:10;"></div>
+  <div class="bubble-container"></div>
+  
+<!-- Shared Header -->
+<header class="site-header" role="banner">
+  <div class="container branding">
+    <img
+      src="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg"
+      alt="ਪੱਟੀ ਬਾਈਟਸ Logo"
+      class="logo"
+    />
+    <h1 class="site-title">
+      <span class="notranslate" translate="no">ਪੱਟੀ ਬਾਈਟਸ</span>
+    </h1>
   </div>
+  <button
+    id="hamburger"
+    aria-label="Toggle navigation"
+    aria-expanded="false"
+    aria-controls="mobile-menu"
+  >
+    ☰
+  </button>
+  
+  <nav id="mobile-menu" class="site-nav" aria-hidden="true">
+    <ul class="nav-list">
+      <li class="nav-item has-dropdown">
+        <div class="home-with-toggle">
+          <a href="index.html">ਮੁੱਖ ਪੰਨਾ</a>
+          <button
+            class="dropdown-toggle"
+            aria-label="Toggle Topics"
+            aria-expanded="false"
+          >
+            ▼
+          </button>
+        </div>
+        <ul class="dropdown">
+          <li><a href="#history">ਇਤਿਹਾਸ</a></li>
+          <li><a href="#about">ਬਾਰੇ</a></li>
+          <li><a href="#why">ਕਿਉਂ PattiBytes?</a></li>
+          <li><a href="#achievements">ਉਪਲਬਧੀਆਂ</a></li>
+        </ul>
+      </li>
 
-  <!-- Fixed Header -->
-  <header class="site-header" role="banner">
-    <div class="container branding">
-     <img src="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg"  border="0"alt="ਪੱਟੀ ਬਾਈਟਸ Logo" class="logo" />
-     <h1 class="site-title">
-  <span class="notranslate" translate="no">ਪੱਟੀ ਬਾਈਟਸ</span>
-</h1>
-    </div>
-    <button id="hamburger" aria-label="Toggle navigation" aria-expanded="false" aria-controls="mobile-menu">☰</button>
-    <nav id="mobile-menu" class="site-nav" aria-hidden="true">
-      <ul class="nav-list">
-        <li><a href="#history">ਇਤਿਹਾਸ</a></li>
-        <li><a href="#about">ਪੱਟੀ ਬਾਈਟਸ (ਬਾਰੇ)</a></li>
-        <li><a href="#why">ਕਿਉਂ PattiBytes?</a></li>
-        <li><a href="#achievements">ਉપلਬਧੀਆਂ</a></li>
-        <li><a href="#collaboration">ਸहਿਯੋਗ</a></li>
-      </ul>
-    </nav>
-  </header>
-  <div class="header-spacer"></div>
+      <li class="nav-item">
+        <a href="news.html">ਖ਼ਬਰਾਂ</a>
+      </li>
+      <li class="nav-item">
+        <a href="shop.html">ਦੁਕਾਨ</a>
+      </li>
+      <li class="nav-item">
+        <a href="index.html#collaboration">ਸਹਿਯੋਗ</a>
+      </li>
+    </ul>
+  </nav>
+
+</header>
+<div class="header-spacer"></div>
+
 
   <main>
    <!-- History of Patti City (with Read More Modal) -->
 <section id="history" class="history-section">
   <div class="container">
-    <h3 class="section-title">ਪੱਟੀ ਸ਼ਹਿਰ ਦਾ ਇਤਿਹਾਸ</h3>
+    <h2 class="section-title">ਪੱਟੀ ਸ਼ਹਿਰ ਦਾ ਇਤਿਹਾਸ</h2>
 
     <!-- Truncated Preview -->
     <p class="history-preview">
@@ -194,34 +219,40 @@
     </section>
 
     <!-- Achievements Section (Horizontal Auto‑Scroll) -->
-    <section id="achievements" class="achievements-section">
-      <div class="container">
-        <h3 class="section-title">ਉਪਲਬਧੀਆਂ</h3>
-        <div class="achievements-scroll">
-          <div class="achievement-card">
-            <img src="https://th.bing.com/th/id/OIP.yKJreda8K1wSsOLqhJhW3wAAAA?w=173&h=166&c=7&r=0&o=5&pid=1.7" alt="Achievement 1" />
-            <p class="achievement-caption">2020 ਵਿੱਚ ਲਾਂਚ — ਮਲਟੀ-ਪਲੇਟਫਾਰਮ ਪਹੁੰਚ</p>
-          </div>
-          <div class="achievement-card">
-            <img src="https://th.bing.com/th/id/OIP.yKJreda8K1wSsOLqhJhW3wAAAA?w=173&h=166&c=7&r=0&o=5&pid=1.7" alt="Achievement 2" />
-            <p class="achievement-caption">2021 ਸਰਕਾਰੀ ਸਮਾਗਮਾਂ ਦਾ ਮੀਡੀਆ ਭਾਗੀਦਾਰ</p>
-          </div>
-          <div class="achievement-card">
-            <img src="https://th.bing.com/th/id/OIP.yKJreda8K1wSsOLqhJhW3wAAAA?w=173&h=166&c=7&r=0&o=5&pid=1.7" alt="Achievement 3" />
-            <p class="achievement-caption">2022 → 50k+ ਵਫ਼ਾਦਾਰ ਪਾਠਕ</p>
-          </div>
-          <div class="achievement-card">
-            <img src="https://th.bing.com/th/id/OIP.yKJreda8K1wSsOLqhJhW3wAAAA?w=173&h=166&c=7&r=0&o=5&pid=1.7" alt="Achievement 4" />
-            <p class="achievement-caption">2023 'ਬੈਸਟ ਲੋਕਲ ਨਿਊਜ਼ ਪੋਰਟਲ' ਇਨਾਮ</p>
-          </div>
-          <div class="achievement-card">
-            <img src="https://th.bing.com/th/id/OIP.yKJreda8K1wSsOLqhJhW3wAAAA?w=173&h=166&c=7&r=0&o=5&pid=1.7" alt="Achievement 5" />
-            <p class="achievement-caption">2024 ਵਿੱਚ ਸਮਾਜਿਕ ਸੇਵਾ ਵਿੱਚ ਯੋਗਦਾਨ</p>
-          </div>
-          <!-- Duplicate or add more cards as needed -->
-        </div>
+   <section id="achievements" class="achievements-section">
+  <div class="container">
+    <h3 class="section-title">ਉਪਲਬਧੀਆਂ</h3>
+    <div class="achievements-scroll">
+      <!-- ORIGINAL 5 CARDS -->
+      <div class="achievement-card">
+        <img src="https://th.bing.com/th/id/OIP.yKJreda8K1wSsOLqhJhW3wAAAA?w=173&h=166&c=7&r=0&o=5&pid=1.7"
+             alt="2020 Launch – Multi-platform access" />
+        <p class="achievement-caption">2020 ਵਿੱਚ ਲਾਂਚ — ਮਲਟੀ-ਪਲੇਟਫਾਰਮ ਪਹੁੰਚ</p>
       </div>
-    </section>
+      <div class="achievement-card">
+        <img src="https://th.bing.com/th/id/OIP.yKJreda8K1wSsOLqhJhW3wAAAA?w=173&h=166&c=7&r=0&o=5&pid=1.7"
+             alt="2021 Government events media partner" />
+        <p class="achievement-caption">2021 ਸਰਕਾਰੀ ਸਮਾਗਮਾਂ ਦਾ ਮੀਡੀਆ ਭਾਗੀਦਾਰ</p>
+      </div>
+      <div class="achievement-card">
+        <img src="https://th.bing.com/th/id/OIP.yKJreda8K1wSsOLqhJhW3wAAAA?w=173&h=166&c=7&r=0&o=5&pid=1.7"
+             alt="2022 → 50k+ loyal readers" />
+        <p class="achievement-caption">2022 → 50k+ ਵਫ਼ਾਦਾਰ ਪਾਠਕ</p>
+      </div>
+      <div class="achievement-card">
+        <img src="https://th.bing.com/th/id/OIP.yKJreda8K1wSsOLqhJhW3wAAAA?w=173&h=166&c=7&r=0&o=5&pid=1.7"
+             alt="2023 Best local news portal award" />
+        <p class="achievement-caption">2023 'ਬੈਸਟ ਲੋਕਲ ਨਿਊਜ਼ ਪੋਰਟਲ' ਇਨਾਮ</p>
+      </div>
+      <div class="achievement-card">
+        <img src="https://th.bing.com/th/id/OIP.yKJreda8K1wSsOLqhJhW3wAAAA?w=173&h=166&c=7&r=0&o=5&pid=1.7"
+             alt="2024 Contribution to social service" />
+        <p class="achievement-caption">2024 ਵਿੱਚ ਸਮਾਜਿਕ ਸੇਵਾ ਵਿੱਚ ਯੋਗਦਾਨ</p>
+      </div>
+
+    </div>
+  </div>
+</section>
 
     <!-- Collaboration / Contact via Email -->
     <section id="collaboration" class="collaboration-section">
@@ -263,17 +294,18 @@
 
   <!-- Footer -->
   <footer class="site-footer">
-    <div class="footer-container container">
-      <!-- Footer Navigation Links -->
-      <div class="footer-links">
-        <h4 class="footer-heading">Navigate</h4>
-        <ul class="footer-nav">
-          <li><a href="index.html">Home</a></li>
-          <li><a href="shop.html">Shop</a></li>
-          <li><a href="updates.html">Updates</a></li>
-          <li><a href="about.html">About Us</a></li>
-        </ul>
-      </div>
+ 
+     <div class="footer-container container">
+    <!-- Footer Navigation Links -->
+    <div class="footer-links">
+      <h4 class="footer-heading">Navigate</h4>
+      <ul class="footer-nav">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="shop.html">Shop</a></li>
+        <li><a href="updates.html">Updates</a></li>
+        <li><a href="about.html">About Us</a></li>
+      </ul>
+    </div>
 
       <!-- Social Media Section -->
       <div class="footer-social">
@@ -296,19 +328,13 @@
             </a>
           </li>
           <li>
-            <a href="https://wa.me/1234567890?text=Hello%20patti_bytes" class="social-link" target="_blank" aria-label="WhatsApp">
+            <a href="https://whatsapp.com/0029Vbx0b7EQlaxR4fDe72X" class="social-link" target="_blank" aria-label="WhatsApp">
               <svg class="icon icon-whatsapp" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M20.523 3.478A11.937 11.937 0 0 0 12 0C5.372 0 0 5.373 0 12c0 2.087.56 4.04 1.54 5.726L0 24l6.484-1.508A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12 0-3.204-1.222-6.202-3.477-8.522zM12 21.75a9.75 9.75 0 0 1-4.98-1.405l-.357-.213-3.85.896.972-3.747-.232-.374A9.725 9.725 0 0 1 2.25 12 9.75 9.75 0 1 1 12 21.75zm5.386-7.176c-.085-.143-.303-.23-.633-.403-.328-.176-1.943-.958-2.244-1.066s-.524-.176-.742.176c-.219.352-.848 1.066-1.04 1.276-.19.214-.377.241-.705.085-.328-.154-1.383-.51-2.635-1.623-.975-.868-1.633-1.94-1.824-2.27-.19-.328-.02-.506.144-.68.148-.147.328-.382.492-.574.163-.192.219-.328.328-.547.112-.219.056-.41-.028-.575-.085-.143-.742-1.792-1.016-2.459-.268-.643-.54-.557-.742-.564-.19-.007-.41-.007-.63-.007-.219 0-.575.083-.876.41s-1.15 1.127-1.15 2.744c0 1.616 1.177 3.178 1.342 3.402.164.219 2.317 3.547 5.617 4.971.786.339 1.398.541 1.877.693.789.254 1.508.218 2.078.132.634-.091 1.943-.793 2.217-1.557.273-.766.273-1.423.191-1.557z" />
               </svg>
             </a>
           </li>
-          <li>
-            <a href="https://youtube.com/patti_bytes" class="social-link" target="_blank" aria-label="YouTube">
-              <svg class="icon icon-youtube" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M23.498 6.186a2.983 2.983 0 0 0-2.093-2.107C19.453 3.5 12 3.5 12 3.5s-7.453 0-9.405.579A2.983 2.983 0 0 0 .502 6.186C0 8.136 0 12 0 12s0 3.864.502 5.814a2.983 2.983 0 0 0 2.093 2.107C4.547 20.5 12 20.5 12 20.5s7.453 0 9.405-.579a2.983 2.983 0 0 0 2.093-2.107C24 15.864 24 12 24 12s0-3.864-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-              </svg>
-            </a>
-          </li>
+         
         </ul>
       </div>
 
