@@ -1,26 +1,13 @@
 document.addEventListener("DOMContentLoaded", () => {
-  // 1) Element References
+  // ----- 1) GTranslate Toggle (unchanged) -----
   const desktopToggle = document.getElementById("lang-toggle");
-  const mobileMenu    = document.getElementById("mobile-menu");
-  const backToTop     = document.getElementById("back-to-top");
-  const hamburger     = document.getElementById("hamburger");
-
-  // Helper: set GTranslate cookie
   function setGTranslate(lang) {
     document.cookie = `googtrans=/pa/${lang}; expires=Fri, 31 Dec 9999 23:59:59 GMT; path=/`;
   }
-
-  // Initialize saved language (default 'pa')
   const savedLang = localStorage.getItem("pattiBytesLang") || "pa";
   setGTranslate(savedLang);
-
-  // Set initial state of toggle
   if (desktopToggle) {
-    desktopToggle.checked = (savedLang === "en");
-  }
-
-  // When desktop toggle changes
-  if (desktopToggle) {
+    desktopToggle.checked = savedLang === "en";
     desktopToggle.addEventListener("change", (e) => {
       const newLang = e.target.checked ? "en" : "pa";
       localStorage.setItem("pattiBytesLang", newLang);
@@ -29,36 +16,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 2) Hamburger Menu Toggle (Mobile)
-  if (hamburger) {
-    hamburger.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const isExpanded = hamburger.getAttribute("aria-expanded") === "true";
-      hamburger.setAttribute("aria-expanded", !isExpanded);
-      mobileMenu.classList.toggle("show");
-      mobileMenu.setAttribute("aria-hidden", isExpanded);
-    });
-    mobileMenu.addEventListener("click", (e) => e.stopPropagation());
-  }
-  document.addEventListener("click", () => {
-    if (mobileMenu) {
-      mobileMenu.classList.remove("show");
-      hamburger.setAttribute("aria-expanded", "false");
-      mobileMenu.setAttribute("aria-hidden", "true");
-    }
-  });
-
-  // 3) Back-to-Top Button Logic (Debounced)
+  // ----- 2) Back-to-Top Button -----
+  const backToTop = document.getElementById("back-to-top");
   if (backToTop) {
     let scrollTimeout;
     window.addEventListener("scroll", () => {
       if (scrollTimeout) clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(() => {
-        if (window.scrollY > 300) {
-          backToTop.classList.add("visible");
-        } else {
-          backToTop.classList.remove("visible");
-        }
+        backToTop.classList.toggle("visible", window.scrollY > 300);
       }, 100);
     });
     backToTop.addEventListener("click", () => {
@@ -66,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 4) Scroll-Triggered Animations
+  // ----- 3) Scroll-Triggered Animations (unchanged) -----
   (function initScrollAnimations() {
     const elements = document.querySelectorAll(".slide-in-left");
     if (!elements.length) return;
@@ -84,11 +49,10 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.forEach((el) => observer.observe(el));
   })();
 
-  // 5) Three.js 3D Model Setup (Optional)
+  // ----- 4) Three.js Setup (unchanged) -----
   (function initThreeJS() {
     const container = document.getElementById("threejs-container");
     if (!container) return;
-
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(
       45,
@@ -132,11 +96,9 @@ document.addEventListener("DOMContentLoaded", () => {
       renderer.setSize(container.clientWidth, container.clientHeight);
     });
   })();
-});
-document.addEventListener("DOMContentLoaded", () => {
-  /* FAQ Dropdown Toggle */
-  const faqButtons = document.querySelectorAll(".faq-question");
-  faqButtons.forEach((btn) => {
+
+  // ----- 5) FAQ Dropdown (unchanged) -----
+  document.querySelectorAll(".faq-question").forEach((btn) => {
     btn.addEventListener("click", () => {
       const answer = btn.nextElementSibling;
       if (answer.style.maxHeight) {
@@ -147,82 +109,118 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  /* Back-to-Top Button Logic */
-  const backToTop = document.getElementById("back-to-top");
-  window.addEventListener("scroll", () => {
-    if (window.scrollY > 300) {
-      backToTop.classList.add("visible");
-    } else {
-      backToTop.classList.remove("visible");
-    }
-  });
-  backToTop.addEventListener("click", () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  });
-
-  /* Hamburger Menu Toggle (if needed) */
+  // ----- 6) Hamburger + Home ▶ Topics Toggle -----
   const hamburger = document.getElementById("hamburger");
   const mobileMenu = document.getElementById("mobile-menu");
-  hamburger.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const isExpanded = hamburger.getAttribute("aria-expanded") === "true";
-    hamburger.setAttribute("aria-expanded", !isExpanded);
-    mobileMenu.classList.toggle("show");
-    mobileMenu.setAttribute("aria-hidden", isExpanded);
-  });
-  mobileMenu.addEventListener("click", (e) => e.stopPropagation());
-  document.addEventListener("click", () => {
-    mobileMenu.classList.remove("show");
-    hamburger.setAttribute("aria-expanded", "false");
-    mobileMenu.setAttribute("aria-hidden", "true");
-  });
-});
-document.addEventListener("DOMContentLoaded", () => {
-  /* ----------------------------
-     Auto‑Scroll Achievements
-  ----------------------------- */
+
+  if (hamburger && mobileMenu) {
+    // Function to close entire menu & submenus
+    const closeMenu = () => {
+      mobileMenu.classList.remove("show");
+      hamburger.setAttribute("aria-expanded", "false");
+      mobileMenu.setAttribute("aria-hidden", "true");
+
+      // Hide all open submenus & reset caret
+      document.querySelectorAll(".has-dropdown .dropdown").forEach((dd) => {
+        dd.style.display = "none";
+      });
+      document
+        .querySelectorAll(".dropdown-toggle.open")
+        .forEach((btn) => btn.classList.remove("open"));
+    };
+
+    // Toggle main menu
+    const toggleMenu = () => {
+      const isExpanded = hamburger.getAttribute("aria-expanded") === "true";
+      hamburger.setAttribute("aria-expanded", String(!isExpanded));
+      mobileMenu.classList.toggle("show");
+      mobileMenu.setAttribute("aria-hidden", String(isExpanded));
+    };
+
+    // 6a) Hamburger click
+    hamburger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleMenu();
+    });
+
+    // 6b) Clicking outside closes everything
+    document.addEventListener("click", closeMenu);
+    mobileMenu.addEventListener("click", (e) => e.stopPropagation());
+
+    // 6c) Caret‐button toggles dropdown on all screens
+    document.querySelectorAll(".dropdown-toggle").forEach((toggleBtn) => {
+      toggleBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const parentLi = toggleBtn.closest(".has-dropdown");
+        const submenu = parentLi.querySelector(".dropdown");
+        const isOpen = submenu.style.display === "block";
+
+        // Close any other open submenu first
+        document
+          .querySelectorAll(".has-dropdown .dropdown")
+          .forEach((dd) => (dd.style.display = "none"));
+        document
+          .querySelectorAll(".dropdown-toggle.open")
+          .forEach((btn) => btn.classList.remove("open"));
+
+        if (!isOpen) {
+          submenu.style.display = "block";
+          toggleBtn.classList.add("open");
+        } else {
+          submenu.style.display = "none";
+          toggleBtn.classList.remove("open");
+        }
+      });
+    });
+
+    // 6d) Clicking any link inside nav closes the menu
+    mobileMenu.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", (e) => {
+        const href = link.getAttribute("href");
+        // Smooth‐scroll if it’s an in-page anchor
+        if (href.startsWith("#")) {
+          e.preventDefault();
+          const target = document.querySelector(href);
+          if (target) {
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        }
+        closeMenu();
+      });
+    });
+  }
+
+  // ----- 7) Auto-Scroll Achievements (unchanged) -----
   const scrollContainer = document.querySelector(".achievements-scroll");
   if (scrollContainer) {
-    // Total width of all cards (including gaps)
-    const scrollWidth = scrollContainer.scrollWidth;
-    // Visible width of the container
-    const visibleWidth = scrollContainer.clientWidth;
-    // Current scroll position
     let scrollPos = 0;
-    // Scroll speed (pixels per frame)
     const scrollSpeed = 0.5;
-    // When to reset (scrollWidth – visibleWidth)
-    const maxScrollLeft = scrollWidth - visibleWidth;
-
     function step() {
+      const scrollWidth = scrollContainer.scrollWidth;
+      const visibleWidth = scrollContainer.clientWidth;
+      const maxScrollLeft = scrollWidth - visibleWidth;
       scrollPos += scrollSpeed;
       if (scrollPos >= maxScrollLeft) {
-        // Once we reach the end, jump back to start
         scrollPos = 0;
       }
       scrollContainer.scrollLeft = scrollPos;
       requestAnimationFrame(step);
     }
-    // Kick off the animation
     requestAnimationFrame(step);
   }
-});
-document.addEventListener("DOMContentLoaded", () => {
-  const modalOverlay = document.getElementById("history-modal");
-  const readMoreBtn  = document.getElementById("read-more-btn");
-  const closeBtn     = document.getElementById("modal-close");
 
-  // Open Modal
+  // ----- 8) Read More Modal (unchanged) -----
+  const modalOverlay = document.getElementById("history-modal");
+  const readMoreBtn = document.getElementById("read-more-btn");
+  const closeBtn = document.getElementById("modal-close");
+
   if (readMoreBtn && modalOverlay) {
     readMoreBtn.addEventListener("click", () => {
       modalOverlay.style.display = "flex";
       modalOverlay.setAttribute("aria-hidden", "false");
-      // Prevent body scroll while modal is open
       document.body.style.overflow = "hidden";
     });
   }
-
-  // Close Modal via Close Button
   if (closeBtn && modalOverlay) {
     closeBtn.addEventListener("click", () => {
       modalOverlay.style.display = "none";
@@ -230,25 +228,20 @@ document.addEventListener("DOMContentLoaded", () => {
       document.body.style.overflow = "";
     });
   }
-
-  // Close Modal by Clicking Outside Content
   if (modalOverlay) {
     modalOverlay.addEventListener("click", (e) => {
-      // If user clicks on the overlay (not the content area), close
       if (e.target === modalOverlay) {
         modalOverlay.style.display = "none";
         modalOverlay.setAttribute("aria-hidden", "true");
         document.body.style.overflow = "";
       }
     });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && modalOverlay.style.display === "flex") {
+        modalOverlay.style.display = "none";
+        modalOverlay.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+      }
+    });
   }
-
-  // Optional: Close Modal with ESC key
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && modalOverlay.style.display === "flex") {
-      modalOverlay.style.display = "none";
-      modalOverlay.setAttribute("aria-hidden", "true");
-      document.body.style.overflow = "";
-    }
-  });
 });
