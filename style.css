@@ -1002,3 +1002,190 @@ header .site-title {
     font-size: 1.5rem;
   }
 }
+/* ------------------------------
+  1) Center-Align All Headings
+------------------------------ */
+h1, h2, h3, h4, h5, h6 {
+  text-align: center;                     /* center all headings */
+  color: var(--text-color);
+  position: relative;
+  transition: color var(--transition-speed), transform var(--transition-speed);
+}
+
+/* ------------------------------
+  2) Add Hover/Focus Animations on Headings
+------------------------------ */
+h1:hover, h2:hover, h3:hover {
+  color: var(--accent-color);             /* accent color on hover */
+  transform: scale(1.02);                  /* slight zoom */
+}
+
+h1::after, h2::after, h3::after {
+  content: '';
+  display: block;
+  margin: 0.5rem auto 0;                   /* spacing below heading */
+  width: 50px;
+  height: 3px;
+  background-color: var(--accent-color);
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity var(--transition-speed), width var(--transition-speed);
+}
+h1:hover::after, h2:hover::after, h3:hover::after {
+  opacity: 1;
+  width: 70px;                             /* underline expands on hover */
+}
+
+/* ------------------------------
+  3) Center-Align Section Titles (Override .section-title)
+------------------------------ */
+.section-title {
+  text-align: center;                      /* ensure section titles are centered */
+  margin: 0 auto 1.5rem auto;
+  color: var(--primary-color);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  position: relative;
+  padding-bottom: 0.5rem;
+  transition: transform var(--transition-speed), color var(--transition-speed);
+}
+
+/* Hover effect for .section-title */
+.section-title:hover {
+  color: var(--accent-color);
+  transform: scale(1.05);
+}
+.section-title::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 4px;
+  background-color: var(--accent-color);
+  border-radius: 2px;
+  opacity: 0.7;
+  transition: width var(--transition-speed);
+}
+.section-title:hover::after {
+  width: 100px;                            /* underline lengthens on hover */
+}
+
+/* ------------------------------
+  4) Optionally Center Body Text
+     (If you want paragraphs to be centered) 
+------------------------------ */
+p, .history-preview, .modal-text p {
+  text-align: center;                      /* center paragraphs for a more “modern” vibe */
+  max-width: 800px;
+  margin: 0 auto 1rem auto;
+}
+
+/* For longer blocks where justified may be better, you can keep them justified. */
+
+/* ------------------------------
+  5) Center-Align Cards & Captions
+------------------------------ */
+.news-card .news-content h4,
+.news-card .news-content p {
+  text-align: center;                      /* headlines & blurbs centered */
+}
+
+.achievement-card p {
+  text-align: center;                      /* captions centered */
+}
+
+/* ------------------------------
+  6) Animate Nav-Item Hover (Subtle) 
+------------------------------ */
+.site-nav .nav-list li a {
+  transition: background-color var(--transition-speed),
+              transform var(--transition-speed),
+              color var(--transition-speed);
+  text-align: center;                      /* center links on mobile and desktop */
+}
+.site-nav .nav-list li a:hover {
+  color: var(--background-color);
+  background-color: var(--accent-color);
+  transform: translateY(-2px) scale(1.02);
+}
+
+/* ------------------------------
+  7) Center “Read More” Button & Headings in History Section
+------------------------------ */
+.history-section .section-title {
+  margin-bottom: 2rem;
+}
+.history-section .history-preview {
+  margin-bottom: 1.5rem;
+}
+.btn-read-more {
+  display: block;
+  margin: 1.5rem auto 0 auto;
+}
+
+/* ------------------------------
+  8) Center FAQ Questions & Answers
+------------------------------ */
+.why-section .faq-item {
+  margin: 1rem auto;
+  text-align: center;                      /* center the entire FAQ block */
+}
+.why-section .faq-question {
+  width: 100%;
+  text-align: center;                      /* center question text */
+  border-radius: 8px;
+}
+.why-section .faq-answer {
+  padding: 1rem 2rem;                      /* add side padding */
+  text-align: center;                      /* center answer text */
+}
+.why-section .faq-answer p {
+  margin: 0 auto;
+}
+
+/* ------------------------------
+  9) Center Form Labels & Inputs
+------------------------------ */
+.collab-form label {
+  display: block;
+  text-align: left;                        /* you can keep labels left-aligned */
+}
+.collab-form input,
+.collab-form textarea {
+  margin-left: auto;
+  margin-right: auto;                      /* center the input within form */
+  display: block;
+}
+
+/* ------------------------------
+  10) Center Footer Headings & Links
+------------------------------ */
+.footer-links,
+.footer-social {
+  text-align: center;                      /* center footer group titles */
+}
+.footer-nav li a {
+  display: inline-block;                   /* align links in a row on small screens */
+  margin: 0.5rem 1rem;
+}
+.footer-nav li a:hover {
+  color: var(--accent-color);
+  transform: translateY(-2px);
+}
+
+/* ------------------------------
+  11) Smooth Fade-In for Centered Headings
+------------------------------ */
+@keyframes fadeInCenter {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+h1, h2, h3, .section-title {
+  opacity: 0;
+  animation: fadeInCenter 0.8s ease-out forwards;
+}
+h1 { animation-delay: 0.1s; }
+h2 { animation-delay: 0.2s; }
+h3, .section-title { animation-delay: 0.3s; }
