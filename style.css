@@ -11,40 +11,16 @@ html {
   scroll-behavior: smooth;
   background: linear-gradient(135deg, #f0f4f8, #d9e2ec);
   animation: backgroundShift 20s ease-in-out infinite alternate;
+  height: 100%;
 }
-@keyframes backgroundShift {
-  0% { background: linear-gradient(135deg, #f0f4f8, #d9e2ec); }
-  100% { background: linear-gradient(135deg, #d9e2ec, #f0f4f8); }
-}
-img {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  transition: transform 0.3s ease;
-}
-img:hover {
-  transform: scale(1.05) rotate(1deg);
-}
-a {
-  text-decoration: none;
-  color: inherit;
-  transition: color 0.3s ease, transform 0.3s ease;
-}
-a:hover {
-  color: var(--accent-color);
-  transform: scale(1.05);
-}
-
-/* Container Utility */
-.container {
-  width: 90%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1rem;
+body {
+  min-height: 100vh;
+  position: relative;
+  z-index: 1; /* ensure content is above bubbles */
 }
 
 /* ===========================================
-   2) CSS Variables
+   2) CSS Variables (Theme / Colors)
 =========================================== */
 :root {
   --primary-color: #FF9933;
@@ -52,51 +28,53 @@ a:hover {
   --accent-color: #FF2D95;
   --highlight-color: #A8E63E;
   --text-color: #333;
-  --background-color: #F9F9F9;
+  --background-color: #FFFFFF;
   --header-height: 70px;
   --transition-speed: 0.3s;
-  --bubble-color: rgba(255,255,255,0.15);
+
+  /* Bubble variables */
+  --bubble-color: rgba(255, 255, 255, 0.15);
 }
 
 /* ===========================================
-   3) Background Bubbles Animation
+   3) Background Gradient Animation
 =========================================== */
-.bubbles-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100vh;
-  overflow: hidden;
-  z-index: 0;
-}
-.bubble {
-  position: absolute;
-  bottom: -100px;
-  background-color: var(--bubble-color);
-  border-radius: 50%;
-  animation: rise 12s infinite ease-in;
-  animation-delay: calc(-1s * var(--i));
-}
-.bubble:nth-child(1)  { width: 40px;  height: 40px;  left: 5%;  animation-duration: 14s; }
-.bubble:nth-child(2)  { width: 60px;  height: 60px;  left: 15%; animation-duration: 16s; }
-.bubble:nth-child(3)  { width: 30px;  height: 30px;  left: 25%; animation-duration: 12s; }
-.bubble:nth-child(4)  { width: 80px;  height: 80px;  left: 35%; animation-duration: 18s; }
-.bubble:nth-child(5)  { width: 50px;  height: 50px;  left: 45%; animation-duration: 15s; }
-.bubble:nth-child(6)  { width: 35px;  height: 35px;  left: 55%; animation-duration: 13s; }
-.bubble:nth-child(7)  { width: 45px;  height: 45px;  left: 65%; animation-duration: 17s; }
-.bubble:nth-child(8)  { width: 55px;  height: 55px;  left: 75%; animation-duration: 19s; }
-.bubble:nth-child(9)  { width: 25px;  height: 25px;  left: 85%; animation-duration: 11s; }
-.bubble:nth-child(10) { width: 65px;  height: 65px;  left: 95%; animation-duration: 20s; }
-
-@keyframes rise {
-  0%   { transform: translateY(0)    scale(0.7);  opacity: 0.7; }
-  50%  { opacity: 0.3; }
-  100% { transform: translateY(-120vh) scale(1.2); opacity: 0; }
+@keyframes backgroundShift {
+  0%   { background: linear-gradient(135deg, #f0f4f8, #d9e2ec); }
+  100% { background: linear-gradient(135deg, #d9e2ec, #f0f4f8); }
 }
 
 /* ===========================================
-   4) Header & Branding
+   4) Bubbles (Full-Screen Animated Background)
+=========================================== */
+
+/* ===========================================
+   5) Container Utility
+=========================================== */
+
+
+/* ===========================================
+   6) Typography & Links
+=========================================== */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-color);
+}
+p, li {
+  color: var(--text-color);
+  line-height: 1.6;
+}
+a {
+  text-decoration: none;
+  color: inherit;
+  transition: color var(--transition-speed), transform var(--transition-speed);
+}
+a:hover {
+  color: var(--accent-color);
+  transform: scale(1.05);
+}
+
+/* ===========================================
+   7) Header & Branding (Shared Across All Pages)
 =========================================== */
 header.site-header {
   position: fixed;
@@ -111,7 +89,6 @@ header.site-header {
   padding: 0 1rem;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   z-index: 10;
-  animation: fadeInDown 1s ease-out both;
 }
 header .branding {
   display: flex;
@@ -123,7 +100,7 @@ header .branding img.logo {
   border-radius: 50%;
   margin-right: 0.75rem;
   object-fit: cover;
-  transition: transform 0.3s ease;
+  transition: transform var(--transition-speed);
 }
 header .branding img.logo:hover {
   transform: rotate(10deg) scale(1.1);
@@ -136,7 +113,9 @@ header .site-title {
   transform: perspective(500px) rotateX(5deg);
 }
 
-/* Hamburger Button */
+/* ===========================================
+   Mobile Hamburger
+=========================================== */
 #hamburger {
   background: none;
   border: none;
@@ -151,16 +130,44 @@ header .site-title {
   transform: rotate(90deg) scale(1.2);
 }
 
-/* Mobile Menu */
+/* ===========================================
+   Mobile Menu Container
+=========================================== */
+/* --------------------------------------------
+   2) Hamburger Button (Mobile)
+-------------------------------------------- */
+#hamburger {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.75rem;
+  cursor: pointer;
+  z-index: 11;
+  transition: color var(--transition-speed),
+              transform var(--transition-speed);
+}
+#hamburger:hover {
+  color: var(--accent-color);
+  transform: rotate(90deg) scale(1.2);
+}
+
+/* Spacer to push content below the fixed header */
+.header-spacer {
+  height: var(--header-height);
+}
+
+/* --------------------------------------------
+   3) Mobile Menu (hidden by default)
+-------------------------------------------- */
 #mobile-menu {
   position: fixed;
   top: var(--header-height);
   right: 1rem;
-  width: 260px;
+  width: 240px;
   background-color: var(--primary-color);
   border-bottom-left-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  display: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  display: none;           /* hidden until .show is added */
   flex-direction: column;
   z-index: 11;
   animation: fadeIn 0.5s ease-out both;
@@ -170,7 +177,8 @@ header .site-title {
 }
 #mobile-menu .nav-list {
   list-style: none;
-  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 #mobile-menu .nav-list li a {
   display: block;
@@ -178,287 +186,240 @@ header .site-title {
   padding: 0.75rem 1rem;
   color: #fff;
   font-weight: 500;
-  transition: background-color var(--transition-speed), transform var(--transition-speed);
+  transition: background-color var(--transition-speed),
+              transform var(--transition-speed);
 }
 #mobile-menu .nav-list li a:hover {
   background-color: var(--accent-color);
   transform: scale(1.05);
 }
+/* --------------------------------------------
+   2) Hamburger Icon (hidden on desktop)
+-------------------------------------------- */
+/* Hamburger ↷ only shown on mobile (<769px) */
+#hamburger {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.75rem;
+  cursor: pointer;
+  z-index: 11;
+  transition: color var(--transition-speed), transform var(--transition-speed);
+}
+#hamburger:hover {
+  color: var(--accent-color);
+  transform: rotate(90deg) scale(1.2);
+}
+@media (min-width: 769px) {
+  #hamburger {
+    display: none;
+  }
+}
 
-/* Spacer under fixed header */
+/* --------------------------------------------
+   Mobile Menu Container
+-------------------------------------------- */
+#mobile-menu {
+  position: fixed;
+  top: var(--header-height);
+  right: 0;
+  width: 240px;
+  background-color: var(--primary-color);
+  border-bottom-left-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  display: none;            /* → toggled by JS via .show */
+  flex-direction: column;
+  z-index: 11;
+  animation: fadeIn 0.5s ease-out both;
+  max-height: calc(100vh - var(--header-height));
+  overflow-y: auto;
+}
+
+/* When JS adds .show, menu slides in */
+#mobile-menu.show {
+  display: flex;
+}
+
+/* Always show the menu on desktop (no hamburger) */
+@media (min-width: 769px) {
+  #mobile-menu {
+    position: static;
+    display: flex !important;
+    flex-direction: row;
+    background: transparent;
+    box-shadow: none;
+    width: auto;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* Hide any visible scrollbar in the mobile menu */
+#mobile-menu {
+  scrollbar-width: none; /* Firefox */
+}
+#mobile-menu::-webkit-scrollbar {
+  display: none;         /* Chrome, Safari, Opera */
+}
+
+/* --------------------------------------------
+   Navigation List & Items
+-------------------------------------------- */
+.site-nav .nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column; /* mobile default */
+}
+.site-nav .nav-list li {
+  position: relative;      /* for dropdown positioning */
+}
+.site-nav .nav-list li a {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  color: #fff;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color var(--transition-speed),
+              transform var(--transition-speed);
+}
+.site-nav .nav-list li a:hover {
+  background-color: var(--accent-color);
+  transform: scale(1.05);
+}
+
+/* On desktop, lay out top-level links horizontally */
+@media (min-width: 769px) {
+  .site-nav .nav-list {
+    flex-direction: row;
+  }
+  .site-nav .nav-list li {
+    margin-left: 1rem;
+  }
+  .site-nav .nav-list li a {
+    padding: 0.5rem 0.75rem;
+    color: #fff;
+  }
+}
+
+/* --------------------------------------------
+   Home + Caret Wrapper (always visible)
+-------------------------------------------- */
+.home-with-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.home-with-toggle a {
+  flex-grow: 1;
+  color: #fff;
+  text-decoration: none;
+  padding: 0.75rem 1rem;
+}
+.home-with-toggle .dropdown-toggle {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1rem;
+  padding: 0 0.75rem;
+  cursor: pointer;
+  transition: transform var(--transition-speed), color var(--transition-speed);
+}
+.home-with-toggle .dropdown-toggle:hover {
+  color: var(--accent-color);
+}
+/* Rotate caret when submenu is open */
+.home-with-toggle .dropdown-toggle.open {
+  transform: rotate(180deg);
+}
+
+/* --------------------------------------------
+   Dropdown (hide by default, toggled via JS or hover)
+-------------------------------------------- */
+.site-nav .dropdown {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: none;            /* → only shown when JS toggles or on hover at ≥769px */
+  background-color: var(--primary-color);
+  border-radius: 4px;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 200px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  z-index: 20;
+}
+.site-nav .dropdown li a {
+  display: block;
+  padding: 0.5rem 1rem;
+  color: #fff;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: background-color var(--transition-speed);
+}
+.site-nav .dropdown li a:hover {
+  background-color: var(--accent-color);
+}
+
+/* Keep parent positioned for absolute dropdown */
+.site-nav .has-dropdown {
+  position: relative;
+}
+
+/* Show submenu on hover for desktop */
+@media (min-width: 769px) {
+  .site-nav .has-dropdown:hover .dropdown {
+    display: block;
+  }
+  /* If you prefer to hide the caret on desktop and rely purely on hover, uncomment this:
+  .home-with-toggle .dropdown-toggle {
+    display: none;
+  }
+  */
+}
+
+/* On small screens, make the dropdown push items below (position: relative) */
+@media (max-width: 768px) {
+  #mobile-menu.show .has-dropdown .dropdown {
+    display: none; /* still hidden until JS toggles */
+  }
+  #mobile-menu.show .has-dropdown:focus-within .dropdown,
+  #mobile-menu.show .has-dropdown .dropdown-toggle.open + .dropdown {
+    display: block;
+    position: relative;
+    top: 0;
+    left: 0;
+    box-shadow: none;
+  }
+}
+
+/* Spacer below header (in your HTML, keep a <div class="header-spacer"></div>) */
 .header-spacer {
   height: var(--header-height);
 }
 
-/* Ensure content sits above bubbles */
-main, footer {
-  position: relative;
-  z-index: 5;
+/* Simple fadeIn keyframes (for the menu) */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* ===========================================
-   5) History Section
-=========================================== */
-.history-section {
-  background-color: rgba(255,255,255,0.85);
-  padding: 4rem 0;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-}
-.history-section .section-title {
-  font-size: 2rem;
-  margin-bottom: 1.5rem;
-  color: var(--primary-color);
-  text-align: center;
-  transform: perspective(600px) rotateX(4deg);
-  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
-  animation: fadeIn 1s ease-out both;
-}
-.history-section p {
-  font-size: 1rem;
-  color: var(--text-color);
-  line-height: 1.6;
-  max-width: 800px;
-  margin: 0 auto;
-  text-align: justify;
-  animation: fadeIn 1.2s ease-out both;
-}
+/* --------------------------------------------
+   End of Navigation/CSS for Dropdown & Hamburger
+-------------------------------------------- */
+
 
 /* ===========================================
-   6) About Section
-=========================================== */
-.about-section {
-  background-color: rgba(249,249,249,0.9);
-  padding: 4rem 0;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-}
-.about-section .section-title {
-  font-size: 2rem;
-  margin-bottom: 1rem;
-  color: var(--primary-color);
-  text-align: center;
-  transform: perspective(600px) rotateX(4deg);
-  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
-  animation: fadeIn 1s ease-out both;
-}
-.about-section p {
-  font-size: 1rem;
-  color: var(--text-color);
-  max-width: 800px;
-  margin: 0.5rem auto 1.5rem auto;
-  text-align: center;
-  animation: fadeIn 1.2s ease-out both;
-}
-.owner-name {
-  font-weight: bold;
-  color: var(--accent-color);
-  animation: fadeIn 1.4s ease-out both;
-}
-
-/* ===========================================
-   7) Why Choose Section (FAQ Dropdown)
-=========================================== */
-.why-section {
-  background-color: rgba(255,255,255,0.85);
-  padding: 4rem 0;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-}
-.why-section .section-title {
-  font-size: 2rem;
-  margin-bottom: 1.5rem;
-  color: var(--primary-color);
-  text-align: center;
-  transform: perspective(600px) rotateX(4deg);
-  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
-  animation: fadeIn 1s ease-out both;
-}
-.faq-item {
-  max-width: 800px;
-  margin: 1rem auto;
-  background-color: #f9f9f9;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  animation: fadeIn 1.2s ease-out both;
-}
-.faq-question {
-  width: 100%;
-  padding: 1rem 1.5rem;
-  background-color: var(--secondary-color);
-  color: #fff;
-  font-size: 1.1rem;
-  text-align: left;
-  border: none;
-  outline: none;
-  cursor: pointer;
-  transition: background-color var(--transition-speed), transform var(--transition-speed);
-}
-.faq-question:hover {
-  background-color: var(--accent-color);
-  transform: scale(1.03);
-}
-.faq-answer {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.5s ease;
-  background-color: #fff;
-  padding: 0 1.5rem;
-}
-.faq-answer p {
-  padding: 1rem 0;
-  color: var(--text-color);
-  line-height: 1.6;
-}
-
-/* ===========================================
-   8) Achievements Section (Auto‑Scroll)
-=========================================== */
-.achievements-section {
-  background-color: rgba(249,249,249,0.85);
-  padding: 4rem 0;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-}
-.achievements-section .section-title {
-  font-size: 2rem;
-  margin-bottom: 1.5rem;
-  color: var(--primary-color);
-  text-align: center;
-  transform: perspective(600px) rotateX(4deg);
-  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
-  animation: fadeIn 1s ease-out both;
-}
-.achievements-scroll {
-  display: flex;
-  gap: 1rem;
-  overflow: hidden;
-  position: relative;
-  animation: scrollAchievements 20s linear infinite;
-}
-@keyframes scrollAchievements {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(calc(-250px * 5)); }
-}
-/* Duplicate first few cards at end to ensure seamless loop */
-.achievements-scroll .achievement-card:nth-child(-n+3) {
-  /* Cloned cards (first 3) will appear at the end for loop */
-}
-.achievement-card {
-  flex: 0 0 250px;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  transition: transform var(--transition-speed), box-shadow var(--transition-speed);
-}
-.achievement-card:hover {
-  transform: translateY(-4px) scale(1.05);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-.achievement-card img {
-  width: 100%;
-  height: 160px;
-  object-fit: cover;
-  animation: fadeIn 1s ease-out both;
-}
-.achievement-caption {
-  padding: 0.75rem;
-  font-size: 1rem;
-  color: var(--text-color);
-  text-align: center;
-}
-.achievements-scroll {
-  overflow-x: auto;             /* keep horizontal scrolling alive */
-  scrollbar-width: none;         /* Firefox */
-}
-.achievements-scroll::-webkit-scrollbar {
-  display: none;                 /* Chrome, Safari, Opera */
-}
-
-/* ===========================================
-   9) Collaboration / Email Form Section
-=========================================== */
-.collaboration-section {
-  background-color: rgba(255,255,255,0.85);
-  padding: 4rem 0;
-}
-.collaboration-section .section-title {
-  font-size: 2rem;
-  margin-bottom: 1rem;
-  color: var(--primary-color);
-  text-align: center;
-  transform: perspective(600px) rotateX(4deg);
-  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
-  animation: fadeIn 1s ease-out both;
-}
-.collaboration-section p {
-  font-size: 1rem;
-  color: var(--text-color);
-  margin-bottom: 1.5rem;
-  text-align: center;
-  animation: fadeIn 1.2s ease-out both;
-}
-/* Form Styles */
-.collab-form {
-  max-width: 600px;
-  margin: 0 auto;
-  background-color: #f9f9f9;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  animation: fadeIn 1.2s ease-out both;
-}
-.collab-form .form-group {
-  margin-bottom: 1rem;
-}
-.collab-form label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-}
-.collab-form input[type="text"],
-.collab-form input[type="email"],
-.collab-form textarea {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 1rem;
-  color: var(--text-color);
-  transition: border-color var(--transition-speed), transform var(--transition-speed);
-}
-.collab-form input[type="text"]:focus,
-.collab-form input[type="email"]:focus,
-.collab-form textarea:focus {
-  border-color: var(--accent-color);
-  outline: none;
-  transform: scale(1.01);
-  box-shadow: 0 0 0 2px rgba(255,45,149,0.2);
-}
-.btn-submit {
-  display: inline-block;
-  background-color: var(--accent-color);
-  color: #fff;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.3s ease, transform 0.2s ease;
-}
-.btn-submit:hover {
-  background-color: var(--highlight-color);
-  transform: translateY(-2px) scale(1.05);
-}
-.note {
-  margin-top: 0.75rem;
-  font-size: 0.85rem;
-  color: #666;
-  text-align: center;
-}
-
-/* ===========================================
-   10) Footer Styles
+   8) Footer (Shared Across All Pages)
 =========================================== */
 .site-footer {
   background-color: #222;
@@ -467,6 +428,7 @@ main, footer {
   font-size: 0.9rem;
   position: relative;
   overflow: hidden;
+  z-index: 1;
 }
 .footer-container {
   display: flex;
@@ -521,7 +483,6 @@ main, footer {
   opacity: 1;
   left: -1.25rem;
 }
-
 .footer-social {
   flex: 1 1 200px;
   text-align: center;
@@ -579,7 +540,6 @@ main, footer {
   transform: scale(2.5);
   opacity: 1;
 }
-
 .footer-copy {
   flex: 1 1 100%;
   text-align: center;
@@ -588,7 +548,7 @@ main, footer {
 }
 
 /* ===========================================
-   11) Back-to-Top Button
+   9) Back-to-Top Button
 =========================================== */
 #back-to-top {
   position: fixed;
@@ -621,63 +581,249 @@ main, footer {
 }
 
 /* ===========================================
-   12) Keyframe Animations
+   10) Sections (Generic Styling)
 =========================================== */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes fadeInDown {
-  from { opacity: 0; transform: translateY(-20px); }
-  to   { opacity: 1; transform: translateY(0); }
+.section-title {
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+  color: var(--primary-color);
+  text-align: center;
+  transform: perspective(600px) rotateX(4deg);
+  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+  animation: fadeIn 1s ease-out both;
 }
 
 /* ===========================================
-   13) Responsive Adjustments
+   11) History Section
 =========================================== */
-@media (max-width: 768px) {
-  header .site-title {
-    font-size: 1.5rem;
-  }
-  .history-section p,
-  .about-section p,
-  .collab-form {
-    width: 90%;
-    margin: 0 auto;
-  }
-  .why-section .faq-item {
-    width: 90%;
-    margin: 1rem auto;
-  }
-  .achievements-scroll {
-    animation: none; /* disable auto-scroll on small screens for usability */
-    overflow-x: auto;
-  }
-  .achievement-card {
-    flex: 0 0 200px;
-  }
-  .footer-container {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-  .footer-links,
-  .footer-social {
-    flex: 1 1 auto;
-  }
-  .footer-copy {
-    margin-top: 1.5rem;
-  }
+.history-section {
+  background-color: rgba(255,255,255,0.85);
+  padding: 4rem 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
 }
-@media (max-width: 480px) {
-  .achievement-card {
-    flex: 0 0 160px;
-  }
+.history-section p,
+.history-preview {
+  font-size: 1rem;
+  color: var(--text-color);
+  line-height: 1.6;
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: justify;
+  animation: fadeIn 1.2s ease-out both;
 }
+
 /* ===========================================
-   Modal Overlay + Content Styles
+   12) About Section
+=========================================== */
+.about-section {
+  background-color: rgba(249,249,249,0.9);
+  padding: 4rem 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.about-section p {
+  font-size: 1rem;
+  color: var(--text-color);
+  max-width: 800px;
+  margin: 0.5rem auto 1.5rem auto;
+  text-align: center;
+  animation: fadeIn 1.2s ease-out both;
+}
+.owner-name {
+  font-weight: bold;
+  color: var(--accent-color);
+  animation: fadeIn 1.4s ease-out both;
+}
+
 /* ===========================================
-   Modal Overlay + Content Styles (Updated)
+   13) FAQ / Why Choose Section
+=========================================== */
+.why-section {
+  background-color: rgba(255,255,255,0.85);
+  padding: 4rem 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.faq-item {
+  max-width: 800px;
+  margin: 1rem auto;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  animation: fadeIn 1.2s ease-out both;
+}
+.faq-question {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  background-color: var(--secondary-color);
+  color: #fff;
+  font-size: 1.1rem;
+  text-align: left;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
+}
+.faq-question:hover {
+  background-color: var(--accent-color);
+  transform: scale(1.03);
+}
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.5s ease;
+  background-color: #fff;
+  padding: 0 1.5rem;
+}
+.faq-answer p {
+  padding: 1rem 0;
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+/* ===========================================
+   14) Achievements Section (Auto-Scroll Only Images + Captions)
+=========================================== */
+.achievements-section {
+  background-color: var(--background-color);
+  padding: 40px 0;
+  text-align: center;
+}
+.achievements-section .section-title {
+  margin-bottom: 20px;
+}
+
+.achievements-scroll-wrapper {
+  overflow: hidden;
+  width: 100%;
+  position: relative;
+
+  /* Hide scrollbar in all browsers */
+  scrollbar-width: none;     /* Firefox */
+  -ms-overflow-style: none;  /* IE 10+ */
+}
+.achievements-scroll-wrapper::-webkit-scrollbar {
+  display: none;             /* Chrome, Safari, Opera */
+}
+
+.achievements-scroll {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 20px;
+  animation: scrollAchievements 20s linear infinite;
+
+  /* Also hide scrollbar here just in case */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.achievements-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.achievement-card {
+  flex: 0 0 auto;
+  width: 180px;
+  text-align: center;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--transition-speed), box-shadow var(--transition-speed);
+}
+.achievement-card:hover {
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.achievement-card img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px 8px 0 0;
+  animation: fadeIn 1s ease-out both;
+}
+.achievement-card p {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: var(--text-color);
+  padding: 8px;
+}
+
+/* Move entire row left by 50% of its width over 20s */
+@keyframes scrollAchievements {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ===========================================
+   15) Collaboration / Email Form Section
+=========================================== */
+.collaboration-section {
+  background-color: rgba(255,255,255,0.85);
+  padding: 4rem 0;
+}
+.collaboration-section .section-title {
+  margin-bottom: 1rem;
+}
+.collab-form {
+  max-width: 600px;
+  margin: 0 auto;
+  background-color: #f9f9f9;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  animation: fadeIn 1.2s ease-out both;
+}
+.collab-form .form-group {
+  margin-bottom: 1rem;
+}
+.collab-form label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+.collab-form input[type="text"],
+.collab-form input[type="email"],
+.collab-form textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+  color: var(--text-color);
+  transition: border-color var(--transition-speed), transform var(--transition-speed);
+}
+.collab-form input[type="text"]:focus,
+.collab-form input[type="email"]:focus,
+.collab-form textarea:focus {
+  border-color: var(--accent-color);
+  outline: none;
+  transform: scale(1.01);
+  box-shadow: 0 0 0 2px rgba(255,45,149,0.2);
+}
+.btn-submit {
+  background-color: var(--accent-color);
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+.btn-submit:hover {
+  background-color: var(--highlight-color);
+  transform: translateY(-2px) scale(1.05);
+}
+.note {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #666;
+  text-align: center;
+}
+
+/* ===========================================
+   16) Modal Overlay + Content Styles
 =========================================== */
 .modal-overlay {
   position: fixed;
@@ -685,53 +831,45 @@ main, footer {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
+  background-color: rgba(0,0,0,0.6);
   display: none;                     /* hidden by default */
-  align-items: flex-start;           /* align at top to avoid header overlap */
-  justify-content: center;           /* center content horizontally */
-  z-index: 100;                      /* on top of everything else */
+  align-items: flex-start;           /* avoid header overlap */
+  justify-content: center;
+  z-index: 100;                      /* on top of everything */
   animation: fadeInOverlay 0.3s ease-out forwards;
-  padding-top: var(--header-height); /* push modal content down by header height */
+  padding-top: var(--header-height); /* push modal content below header */
 }
-
-/* Fade‑in for the overlay */
 @keyframes fadeInOverlay {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-
-/* Modal content box */
 .modal-content {
   position: relative;
   background-color: #fff;
   border-radius: 8px;
   width: 90%;
   max-width: 800px;
-  max-height: calc(100vh - var(--header-height) - 40px); /* account for header + some margin */
-  overflow-y: auto;               /* scroll if content is tall */
+  max-height: calc(100vh - var(--header-height) - 40px);
+  overflow-y: auto;
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   animation: slideDownModal 0.4s ease-out forwards;
   background-image: url("https://images.unsplash.com/photo-1515716078605-30044a7e3910?auto=format&fit=crop&w=1050&q=80");
   background-size: cover;
   background-position: center;
-  z-index: 100;                     /* sit just below the close button */
-  margin: 0 0 20px 0;               /* bottom margin for breathing room */
+  z-index: 100;
+  margin: 0 0 20px 0;
 }
-
-/* Slide‑down effect */
 @keyframes slideDownModal {
   from { transform: translateY(-30px); opacity: 0; }
   to   { transform: translateY(0);      opacity: 1; }
 }
-
-/* Close button (red cross) */
 .modal-close {
   position: absolute;
   top: 12px;
   right: 12px;
   background: #e74c3c;
   border: none;
-  color: #fff;                  /* Ensure the “×” is bright white */
+  color: #fff;
   font-size: 1.5rem;
   width: 32px;
   height: 32px;
@@ -742,18 +880,16 @@ main, footer {
   align-items: center;
   justify-content: center;
   transition: background-color 0.2s ease, transform 0.2s ease;
-  z-index: 101;                 /* above the modal-content background */
+  z-index: 101;
 }
 .modal-close:hover {
   background-color: #c0392b;
   transform: scale(1.1);
 }
-
-/* Modal title and text area styling */
 .modal-body {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255,255,255,0.9);
   border-radius: 6px;
-  margin: 48px 24px 24px;       /* top margin will combine with padding-top */
+  margin: 48px 24px 24px;
   padding: 24px;
   box-sizing: border-box;
 }
@@ -778,8 +914,6 @@ main, footer {
 .modal-text ul li {
   margin-bottom: 0.75rem;
 }
-
-/* Read More button style */
 .btn-read-more {
   display: inline-block;
   margin-top: 1rem;
@@ -797,8 +931,61 @@ main, footer {
   transform: translateY(-2px) scale(1.05);
 }
 
-/* Responsive tweaks for modal */
-@media (max-width: 600px) {
+/* ===========================================
+   17) Keyframe Animations (Common)
+=========================================== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ===========================================
+   18) Responsive Adjustments
+=========================================== */
+@media (max-width: 768px) {
+  header .site-title {
+    font-size: 1.5rem;
+  }
+  .history-section p,
+  .about-section p,
+  .collab-form {
+    width: 90%;
+    margin: 0 auto;
+  }
+  .why-section .faq-item {
+    width: 90%;
+    margin: 1rem auto;
+  }
+  /* On small screens, stop auto-scroll and allow manual scroll */
+  .achievements-scroll {
+    animation: none;
+    overflow-x: auto;
+  }
+  .achievement-card {
+    flex: 0 0 200px;
+  }
+  .footer-container {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .footer-links,
+  .footer-social {
+    flex: 1 1 auto;
+  }
+  .footer-copy {
+    margin-top: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .achievement-card {
+    flex: 0 0 160px;
+  }
   .modal-overlay {
     padding-top: calc(var(--header-height) + 20px);
   }
