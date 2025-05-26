@@ -1189,3 +1189,708 @@ h1, h2, h3, .section-title {
 h1 { animation-delay: 0.1s; }
 h2 { animation-delay: 0.2s; }
 h3, .section-title { animation-delay: 0.3s; }
+/* ===========================================
+   1) Reset & Base Styles
+=========================================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  scroll-behavior: smooth;
+  background: linear-gradient(135deg, #f0f4f8, #d9e2ec);
+  animation: backgroundShift 20s ease-in-out infinite alternate;
+  height: 100%;
+}
+body {
+  min-height: 100vh;
+  position: relative;
+  z-index: 1; /* ensure content is above bubbles */
+}
+
+/* ===========================================
+   2) CSS Variables (Theme / Colors)
+=========================================== */
+:root {
+  --primary-color: #FF9933;
+  --secondary-color: #00A8CC;
+  --accent-color: #FF2D95;
+  --highlight-color: #A8E63E;
+  --text-color: #333;
+  --background-color: #FFFFFF;
+  --header-height: 70px;
+  --transition-speed: 0.3s;
+}
+
+/* ===========================================
+   3) Background Gradient Animation
+=========================================== */
+@keyframes backgroundShift {
+  0%   { background: linear-gradient(135deg, #f0f4f8, #d9e2ec); }
+  100% { background: linear-gradient(135deg, #d9e2ec, #f0f4f8); }
+}
+
+/* ===========================================
+   4) Typography & Links
+=========================================== */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-color);
+}
+p, li {
+  color: var(--text-color);
+  line-height: 1.6;
+}
+a {
+  text-decoration: none;
+  color: inherit;
+  transition: color var(--transition-speed), transform var(--transition-speed);
+}
+a:hover {
+  color: var(--accent-color);
+  transform: scale(1.05);
+}
+
+/* ===========================================
+   5) Header & Branding
+=========================================== */
+header.site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--header-height);
+  background-color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  z-index: 10;
+}
+header .branding {
+  display: flex;
+  align-items: center;
+}
+header .branding img.logo {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  margin-right: 0.75rem;
+  object-fit: cover;
+  transition: transform var(--transition-speed);
+}
+header .branding img.logo:hover {
+  transform: rotate(10deg) scale(1.1);
+}
+header .site-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+  transform: perspective(500px) rotateX(5deg);
+}
+
+/* ===========================================
+   6) Mobile Hamburger & Menu
+=========================================== */
+#hamburger {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.75rem;
+  cursor: pointer;
+  z-index: 11;
+  transition: color var(--transition-speed), transform var(--transition-speed);
+}
+#hamburger:hover {
+  color: var(--accent-color);
+  transform: rotate(90deg) scale(1.2);
+}
+.header-spacer {
+  height: var(--header-height);
+}
+#mobile-menu {
+  position: fixed;
+  top: var(--header-height);
+  right: 1rem;
+  width: 240px;
+  background-color: var(--primary-color);
+  border-bottom-left-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  display: none;
+  flex-direction: column;
+  z-index: 11;
+  animation: fadeIn 0.5s ease-out both;
+}
+#mobile-menu.show {
+  display: flex;
+}
+#mobile-menu .nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+#mobile-menu .nav-list li a {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  color: #fff;
+  font-weight: 500;
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
+}
+#mobile-menu .nav-list li a:hover {
+  background-color: var(--accent-color);
+  transform: scale(1.05);
+}
+@media (min-width: 769px) {
+  #hamburger {
+    display: none;
+  }
+  #mobile-menu {
+    position: static;
+    display: flex !important;
+    flex-direction: row;
+    background: transparent;
+    box-shadow: none;
+    width: auto;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* Dropdown Styling */
+.home-with-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.home-with-toggle a {
+  flex-grow: 1;
+  color: #fff;
+  text-decoration: none;
+  padding: 0.75rem 1rem;
+}
+.home-with-toggle .dropdown-toggle {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1rem;
+  padding: 0 0.75rem;
+  cursor: pointer;
+  transition: transform var(--transition-speed), color var(--transition-speed);
+}
+.home-with-toggle .dropdown-toggle:hover {
+  color: var(--accent-color);
+}
+.home-with-toggle .dropdown-toggle.open {
+  transform: rotate(180deg);
+}
+.site-nav .dropdown {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: none;
+  background-color: var(--primary-color);
+  border-radius: 4px;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 200px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  z-index: 20;
+}
+.site-nav .dropdown li a {
+  display: block;
+  padding: 0.5rem 1rem;
+  color: #fff;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: background-color var(--transition-speed);
+}
+.site-nav .dropdown li a:hover {
+  background-color: var(--accent-color);
+}
+.site-nav .has-dropdown {
+  position: relative;
+}
+@media (min-width: 769px) {
+  .site-nav .has-dropdown:hover .dropdown {
+    display: block;
+  }
+}
+@media (max-width: 768px) {
+  #mobile-menu.show .has-dropdown .dropdown-toggle.open + .dropdown,
+  #mobile-menu.show .has-dropdown:focus-within .dropdown {
+    display: block;
+    position: relative;
+    top: 0;
+    left: 0;
+    box-shadow: none;
+  }
+}
+
+/* ===========================================
+   7) Footer Styling
+=========================================== */
+.site-footer {
+  background-color: #222;
+  color: #f1f1f1;
+  padding: 3rem 0;
+  font-size: 0.9rem;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+.footer-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+}
+.footer-links {
+  flex: 1 1 200px;
+}
+.footer-heading {
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+  color: var(--accent-color);
+  position: relative;
+  transform: perspective(600px) rotateX(4deg);
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+}
+.footer-heading::after {
+  content: '';
+  position: absolute;
+  width: 50px;
+  height: 3px;
+  background-color: var(--accent-color);
+  bottom: -6px;
+  left: 0;
+}
+.footer-nav {
+  list-style: none;
+}
+.footer-nav li {
+  margin-bottom: 0.75rem;
+}
+.footer-nav li a {
+  color: #ccc;
+  transition: color var(--transition-speed), transform var(--transition-speed);
+  position: relative;
+}
+.footer-nav li a::before {
+  content: '›';
+  position: absolute;
+  left: -1rem;
+  opacity: 0;
+  transition: opacity var(--transition-speed), left var(--transition-speed);
+}
+.footer-nav li a:hover {
+  color: #fff;
+  transform: translateX(5px);
+}
+.footer-nav li a:hover::before {
+  opacity: 1;
+  left: -1.25rem;
+}
+.footer-social {
+  flex: 1 1 200px;
+  text-align: center;
+}
+.social-icons {
+  list-style: none;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.social-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background-color: #333;
+  border-radius: 50%;
+  transition: transform var(--transition-speed), background-color var(--transition-speed);
+  position: relative;
+  overflow: hidden;
+}
+.social-link .icon {
+  width: 24px;
+  height: 24px;
+  fill: #ccc;
+  transition: fill var(--transition-speed), transform var(--transition-speed);
+}
+.social-link:hover {
+  background-color: var(--accent-color);
+  transform: translateY(-4px) scale(1.1);
+}
+.social-link:hover .icon {
+  fill: #fff;
+  transform: rotate(15deg) scale(1.1);
+}
+.social-link::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 153, 51, 0.3);
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  transition: transform var(--transition-speed), opacity var(--transition-speed);
+  transform: scale(0);
+  opacity: 0;
+}
+.social-link:hover::after {
+  transform: scale(2.5);
+  opacity: 1;
+}
+.footer-copy {
+  flex: 1 1 100%;
+  text-align: center;
+  margin-top: 2rem;
+  color: #888;
+}
+
+/* ===========================================
+   8) Back-to-Top Button
+=========================================== */
+#back-to-top {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 80px;
+  height: 36px;
+  background-color: var(--accent-color);
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  cursor: pointer;
+  z-index: 11;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition-speed), transform var(--transition-speed);
+}
+#back-to-top.visible {
+  opacity: 1;
+  visibility: visible;
+}
+#back-to-top:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* ===========================================
+   9) Sections Generic Styling
+=========================================== */
+.section-title {
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+  color: var(--primary-color);
+  text-align: center;
+  transform: perspective(600px) rotateX(4deg);
+  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+  animation: fadeIn 1s ease-out both;
+}
+
+/* ===========================================
+   10) Keyframe Animations
+=========================================== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ===========================================
+   11) Responsive Adjustments
+=========================================== */
+@media (max-width: 768px) {
+  header .site-title {
+    font-size: 1.5rem;
+  }
+  .footer-container {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .footer-links,
+  .footer-social {
+    flex: 1 1 auto;
+  }
+  .footer-copy {
+    margin-top: 1.5rem;
+  }
+}
+
+/* ===========================================
+   News Page & Modal CSS
+   (Append these below your existing rules)
+=========================================== */
+
+/* 1) NEWS GRID: 2D Grid Layout */
+.latest-news .news-grid {
+  display: grid;
+  gap: 1.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-auto-rows: auto;
+  padding: 1rem 0;
+}
+
+/* ===========================================
+   News Card: Border, Background & Hover
+=========================================== */
+.latest-news .news-card {
+  background-color: #ffffff;
+  border: 2px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.latest-news .news-card:hover,
+.latest-news .news-card:focus-within {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+  border-color: var(--accent-color);
+}
+
+/* 2) Card Media Container & Enlarge Button */
+.latest-news .news-card .media-container {
+  position: relative;
+  max-height: 200px;
+  overflow: hidden;
+  background-color: #000;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+.latest-news .news-card .media-container img,
+.latest-news .news-card .media-container iframe {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+}
+.enlarge-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.6);
+  border: none;
+  color: #fff;
+  font-size: 1.2rem;
+  padding: 0.3rem;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 2;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.enlarge-btn:hover,
+.enlarge-btn:focus {
+  background: rgba(255,255,255,0.8);
+  color: #000;
+  transform: scale(1.1);
+}
+
+/* 3) News Content & “Read More” Button */
+.latest-news .news-card .news-content {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+}
+.latest-news .news-card .news-content h4 {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: var(--primary-color);
+  transition: color 0.3s ease;
+}
+.latest-news .news-card:hover .news-content h4,
+.latest-news .news-card:focus-within .news-content h4 {
+  color: var(--accent-color);
+}
+.latest-news .news-card .news-content p {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text-color);
+  margin-bottom: 1.25rem;
+  flex-grow: 1;
+}
+.latest-news .news-card .read-more-btn {
+  display: inline-block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  background-color: var(--accent-color);
+  padding: 0.6rem 1.4rem;
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  text-align: center;
+}
+.latest-news .news-card .read-more-btn:hover,
+.latest-news .news-card .read-more-btn:focus {
+  background-color: var(--highlight-color);
+  transform: translateY(-2px) scale(1.03);
+}
+/* Hide empty media containers */
+.latest-news .news-card .media-container:empty {
+  display: none;
+}
+
+/* ===========================================
+   REUSABLE MODAL: News Text
+=========================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: fadeInOverlay 0.3s ease-out forwards;
+  padding: 1rem;
+}
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.modal-content {
+  background-color: #fff;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 600px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  animation: scaleInModal 0.3s ease-out forwards;
+  position: relative;
+}
+@keyframes scaleInModal {
+  from { transform: scale(0.95); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+.modal-close {
+  position: absolute;
+  top: 12px; right: 12px;
+  background: #e74c3c;
+  border: none;
+  color: #fff;
+  font-size: 1.5rem;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  z-index: 201;
+}
+.modal-close:hover {
+  background-color: #c0392b;
+  transform: scale(1.1);
+}
+.modal-body {
+  padding: 2rem 1.5rem 1.5rem 1.5rem;
+}
+.modal-title {
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+  text-align: center;
+  transition: color var(--transition-speed);
+}
+.modal-content-text {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--text-color);
+  margin-bottom: 1rem;
+  text-align: justify;
+}
+/* ===========================================
+   REUSABLE MODAL: Image Lightbox
+=========================================== */
+.image-modal {
+  display: none;
+}
+.image-modal .modal-content {
+  background: transparent;
+  max-width: 90vw;
+  max-height: 90vh;
+  padding: 0;
+  box-shadow: none;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.image-modal .modal-close {
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.image-modal .modal-close:hover,
+.image-modal .modal-close:focus {
+  background: rgba(255,255,255,0.8);
+  color: #000;
+  transform: scale(1.1);
+}
+.image-modal-body {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#modal-image {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+/* ===========================================
+   Responsive Adjustments for Modals & Cards
+=========================================== */
+@media (max-width: 768px) {
+  .modal-body {
+    padding: 1.5rem 1rem 1rem 1rem;
+  }
+  .modal-title {
+    font-size: 1.5rem;
+  }
+  .modal-content-text {
+    font-size: 0.95rem;
+  }
+  .latest-news .news-card .media-container {
+    max-height: 160px;
+  }
+}
+@media (min-width: 480px) {
+  .modal-media {
+    max-height: 400px;
+  }
+}
+.modal-content-text p {
+  margin-bottom: 1rem;
+}
+.modal-content-text ul {
+  margin-bottom: 1rem;
+  padding-left: 1.25rem;
+}
+.modal-content-text li {
+  margin-bottom: 0.5rem;
+}
