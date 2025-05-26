@@ -16,7 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // ----- 2) Back-to-Top Button -----
+  // ----- 2) Back-to-Top Button (unchanged) -----
   const backToTop = document.getElementById("back-to-top");
   if (backToTop) {
     let scrollTimeout;
@@ -109,18 +109,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // ----- 6) Hamburger + Home ▶ Topics Toggle -----
+  // ----- 6) Hamburger + “Home ▶ Topics” Toggle (unchanged) -----
   const hamburger = document.getElementById("hamburger");
   const mobileMenu = document.getElementById("mobile-menu");
 
   if (hamburger && mobileMenu) {
-    // Function to close entire menu & submenus
     const closeMenu = () => {
       mobileMenu.classList.remove("show");
       hamburger.setAttribute("aria-expanded", "false");
       mobileMenu.setAttribute("aria-hidden", "true");
 
-      // Hide all open submenus & reset caret
       document.querySelectorAll(".has-dropdown .dropdown").forEach((dd) => {
         dd.style.display = "none";
       });
@@ -129,7 +127,6 @@ document.addEventListener("DOMContentLoaded", () => {
         .forEach((btn) => btn.classList.remove("open"));
     };
 
-    // Toggle main menu
     const toggleMenu = () => {
       const isExpanded = hamburger.getAttribute("aria-expanded") === "true";
       hamburger.setAttribute("aria-expanded", String(!isExpanded));
@@ -137,17 +134,13 @@ document.addEventListener("DOMContentLoaded", () => {
       mobileMenu.setAttribute("aria-hidden", String(isExpanded));
     };
 
-    // 6a) Hamburger click
     hamburger.addEventListener("click", (e) => {
       e.stopPropagation();
       toggleMenu();
     });
-
-    // 6b) Clicking outside closes everything
     document.addEventListener("click", closeMenu);
     mobileMenu.addEventListener("click", (e) => e.stopPropagation());
 
-    // 6c) Caret‐button toggles dropdown on all screens
     document.querySelectorAll(".dropdown-toggle").forEach((toggleBtn) => {
       toggleBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -155,7 +148,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const submenu = parentLi.querySelector(".dropdown");
         const isOpen = submenu.style.display === "block";
 
-        // Close any other open submenu first
         document
           .querySelectorAll(".has-dropdown .dropdown")
           .forEach((dd) => (dd.style.display = "none"));
@@ -173,17 +165,13 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
 
-    // 6d) Clicking any link inside nav closes the menu
     mobileMenu.querySelectorAll("a").forEach((link) => {
       link.addEventListener("click", (e) => {
         const href = link.getAttribute("href");
-        // Smooth‐scroll if it’s an in-page anchor
         if (href.startsWith("#")) {
           e.preventDefault();
           const target = document.querySelector(href);
-          if (target) {
-            target.scrollIntoView({ behavior: "smooth", block: "start" });
-          }
+          if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
         }
         closeMenu();
       });
@@ -200,48 +188,188 @@ document.addEventListener("DOMContentLoaded", () => {
       const visibleWidth = scrollContainer.clientWidth;
       const maxScrollLeft = scrollWidth - visibleWidth;
       scrollPos += scrollSpeed;
-      if (scrollPos >= maxScrollLeft) {
-        scrollPos = 0;
-      }
+      if (scrollPos >= maxScrollLeft) scrollPos = 0;
       scrollContainer.scrollLeft = scrollPos;
       requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
   }
 
-  // ----- 8) Read More Modal (unchanged) -----
-  const modalOverlay = document.getElementById("history-modal");
+  // ----- 8) “History” Read-More Modal (unchanged) -----
+  const historyModal = document.getElementById("history-modal");
   const readMoreBtn = document.getElementById("read-more-btn");
   const closeBtn = document.getElementById("modal-close");
 
-  if (readMoreBtn && modalOverlay) {
+  if (readMoreBtn && historyModal) {
     readMoreBtn.addEventListener("click", () => {
-      modalOverlay.style.display = "flex";
-      modalOverlay.setAttribute("aria-hidden", "false");
+      historyModal.style.display = "flex";
+      historyModal.setAttribute("aria-hidden", "false");
       document.body.style.overflow = "hidden";
     });
   }
-  if (closeBtn && modalOverlay) {
+  if (closeBtn && historyModal) {
     closeBtn.addEventListener("click", () => {
-      modalOverlay.style.display = "none";
-      modalOverlay.setAttribute("aria-hidden", "true");
+      historyModal.style.display = "none";
+      historyModal.setAttribute("aria-hidden", "true");
       document.body.style.overflow = "";
     });
   }
-  if (modalOverlay) {
-    modalOverlay.addEventListener("click", (e) => {
-      if (e.target === modalOverlay) {
-        modalOverlay.style.display = "none";
-        modalOverlay.setAttribute("aria-hidden", "true");
+  if (historyModal) {
+    historyModal.addEventListener("click", (e) => {
+      if (e.target === historyModal) {
+        historyModal.style.display = "none";
+        historyModal.setAttribute("aria-hidden", "true");
         document.body.style.overflow = "";
       }
     });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && modalOverlay.style.display === "flex") {
-        modalOverlay.style.display = "none";
-        modalOverlay.setAttribute("aria-hidden", "true");
+      if (e.key === "Escape" && historyModal.style.display === "flex") {
+        historyModal.style.display = "none";
+        historyModal.setAttribute("aria-hidden", "true");
         document.body.style.overflow = "";
       }
     });
   }
+
+  /*********************************************
+   * 9) “Read More →” Buttons for News Cards
+   *********************************************/
+ const newsModal   = document.getElementById("news-modal");
+const modalTitle  = document.getElementById("modal-title");
+const modalText   = document.getElementById("modal-text");
+const modalMedia  = document.getElementById("modal-media");
+const modalCloseN = document.getElementById("modal-close");
+
+function clearModalMedia() {
+  if (modalMedia) modalMedia.innerHTML = "";
+}
+
+document.querySelectorAll(".latest-news .read-more-btn").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    const card = e.target.closest(".news-card");
+    if (!card) return;
+
+    // 1) Title remains plain text → safe against XSS
+    const title   = card.getAttribute("data-title")   || "";
+    // 2) Content is now HTML → inject via innerHTML
+    const content = card.getAttribute("data-content") || "";
+    modalTitle.textContent = title;
+    modalText.innerHTML    = content;
+
+    // 3) If there is a media-container, clone it:
+    clearModalMedia();
+    const sourceMedia = card.querySelector(".media-container");
+    if (sourceMedia) {
+      const clone = sourceMedia.cloneNode(true);
+      clone.style.width  = "100%";
+      clone.style.height = "auto";
+      clone.querySelectorAll("img, iframe").forEach((el) => {
+        el.style.width  = "100%";
+        el.style.height = "auto";
+      });
+      modalMedia.appendChild(clone);
+    }
+
+    // 4) Show the modal
+    newsModal.style.display       = "flex";
+    newsModal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+  });
+});
+
+function closeNewsModal() {
+  newsModal.style.display       = "none";
+  newsModal.setAttribute("aria-hidden", "true");
+  document.body.style.overflow  = "";
+  clearModalMedia();
+}
+
+modalCloseN.addEventListener("click", closeNewsModal);
+newsModal.addEventListener("click", (e) => {
+  if (e.target === newsModal) closeNewsModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && newsModal.style.display === "flex") {
+    closeNewsModal();
+  }
+});
+
+  /*******************************************
+   * 10) Image-Lightbox (“Enlarge”) Logic
+   *******************************************/
+  const imageModal       = document.getElementById("image-modal");
+  let   modalImageElem   = document.getElementById("modal-image");
+  const imageModalClose  = document.getElementById("image-modal-close");
+
+  function closeImageModal() {
+    imageModal.style.display = "none";
+    imageModal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+
+    // If we previously replaced <img> with <iframe>, restore <img> element:
+    if (modalImageElem.tagName !== "IMG") {
+      const newImg = document.createElement("img");
+      newImg.id = "modal-image";
+      newImg.style.maxWidth = "100%";
+      newImg.style.maxHeight = "100%";
+      newImg.style.display = "block";
+      newImg.style.objectFit = "contain";
+      newImg.alt = "";
+      modalImageElem.replaceWith(newImg);
+      modalImageElem = newImg;
+    }
+  }
+
+  document.querySelectorAll(".enlarge-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const mediaContainer = e.target.closest(".media-container");
+      if (!mediaContainer) return;
+
+      // 1) If the card has an <img>, enlarge that:
+      const imgElem = mediaContainer.querySelector("img");
+      if (imgElem) {
+        modalImageElem.src = imgElem.src;
+        modalImageElem.alt = imgElem.alt || "";
+      } else {
+        // 2) Otherwise, if it's a <iframe> (video), clone it instead:
+        const iframeElem = mediaContainer.querySelector("iframe");
+        if (iframeElem) {
+          // Remove existing <img> (just set its src to empty)
+          modalImageElem.remove();
+          const cloneIframe = iframeElem.cloneNode(true);
+          cloneIframe.style.maxWidth  = "100%";
+          cloneIframe.style.maxHeight = "100%";
+          cloneIframe.style.display   = "block";
+          cloneIframe.setAttribute("frameborder", "0");
+          cloneIframe.setAttribute("allowfullscreen", "");
+          // Insert cloned iframe into the modal body
+          const wrapper = document.querySelector(".image-modal-body");
+          wrapper.appendChild(cloneIframe);
+          // Keep a reference in modalImageElem so we can restore later
+          modalImageElem = cloneIframe;
+        }
+      }
+
+      // 3) Show the lightbox modal
+      imageModal.style.display = "flex";
+      imageModal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+    });
+  });
+
+  // Close when × is clicked
+  if (imageModalClose) imageModalClose.addEventListener("click", closeImageModal);
+
+  // Close when clicking outside content
+  imageModal.addEventListener("click", (e) => {
+    if (e.target === imageModal) closeImageModal();
+  });
+
+  // Close on Escape
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && imageModal.style.display === "flex") {
+      closeImageModal();
+    }
+  });
 });
