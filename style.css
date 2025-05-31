@@ -1680,24 +1680,30 @@ header .site-title {
   object-fit: cover;
 }
 .enlarge-btn {
-  position: absolute;
+ position: absolute;
   top: 8px;
   right: 8px;
   background: rgba(0,0,0,0.6);
   border: none;
   color: #fff;
   font-size: 1.2rem;
-  padding: 0.3rem;
+  line-height: 1;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   cursor: pointer;
   z-index: 2;
   transition: background 0.2s ease, transform 0.2s ease;
 }
+
+ 
+}
 .enlarge-btn:hover,
-.enlarge-btn:focus {
+.enlarge-btn:focus { 
   background: rgba(255,255,255,0.8);
   color: #000;
   transform: scale(1.1);
+ 
 }
 
 /* 3) News Content & “Read More” Button */
@@ -1992,17 +1998,271 @@ header .site-title {
     margin-bottom: 1rem;
   }
 }
+/* =================================================================
+   places.css: Grid + Modal Styles (scoped to Places page)
+================================================================= */
 
-.skip-link {
-  position: absolute;
-  top: -40px;
-  left: 1rem;
-  background: #000;
-  color: #fff;
-  padding: 0.5rem 1rem;
-  z-index: 999;
-  transition: top 0.2s ease;
+/* 1) SEARCH WRAPPER */
+.search-container {
+  margin: 1rem 0;
+  text-align: center;
 }
-.skip-link:focus {
-  top: 1rem;
+.search-wrapper {
+  display: inline-flex;
+  align-items: center;
+  background-color: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: 30px;
+  padding: 0.25rem 0.5rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
+  width: 100%;
+}
+.search-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: #555;
+  margin-right: 0.5rem;
+}
+.search-input {
+  flex: 1;
+  border: none;
+  font-size: 1rem;
+  padding: 0.5rem;
+  outline: none;
+}
+.clear-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #888;
+  cursor: pointer;
+  display: none;
+  padding: 0 0.5rem;
+  transition: color 0.2s ease;
+}
+.clear-btn:hover {
+  color: #444;
+}
+.clear-btn.visible {
+  display: inline-block;
+}
+
+/* 2) “NO MATCH” MESSAGE */
+.no-match-message {
+  display: none;
+  margin: 1rem 0;
+  color: var(--accent-color);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* 3) GRID OF CARDS */
+.places-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 1rem;
+}
+
+/* 4) PLACE CARD */
+.place-card {
+  background-color: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+.place-card:hover,
+.place-card:focus-within {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  border-color: var(--accent-color);
+}
+.place-card.hidden {
+  display: none !important;
+}
+
+/* Media container inside card */
+.place-card .media-container {
+  max-height: 180px;
+  overflow: hidden;
+  background-color: #000;
+}
+.place-card .media-container img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Text content inside card */
+.place-card .place-content {
+  padding: 1rem;
+  flex: 1;
+}
+.place-card h3 {
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+  color: var(--primary-color);
+}
+.place-card .place-desc {
+  font-size: 0.95rem;
+  color: var(--text-color);
+  margin-bottom: 1rem;
+}
+.place-card .read-more-btn {
+  display: inline-block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  background-color: var(--accent-color);
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+.place-card .read-more-btn:hover,
+.place-card .read-more-btn:focus {
+  background-color: var(--highlight-color);
+  transform: translateY(-2px) scale(1.03);
+}
+
+/* 5) MODAL OVERLAY */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: none; /* Toggle to flex to show */
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 1rem;
+}
+.modal-overlay[aria-hidden="false"] {
+  display: flex;
+}
+@keyframes scaleInModal {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 6) MODAL CONTENT BOX */
+.modal-content {
+  background-color: #fff;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 600px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  animation: scaleInModal 0.3s ease-out forwards;
+  position: relative;
+}
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: #e74c3c;
+  border: none;
+  color: #fff;
+  font-size: 1.5rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  z-index: 201;
+}
+.modal-close:hover,
+.modal-close:focus {
+  background-color: #c0392b;
+  transform: scale(1.1);
+}
+
+/* 7) MODAL BODY */
+.modal-body {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.modal-media {
+  width: 100%;
+  max-height: 50vh;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.modal-media img {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.modal-text {
+  padding: 0 1rem 1rem 1rem;
+}
+.modal-text h3 {
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+  text-align: center;
+}
+.modal-text p {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--text-color);
+  margin-bottom: 1rem;
+  text-align: justify;
+}
+.modal-nav {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+.modal-nav-btn {
+  background-color: var(--secondary-color);
+  color: #fff;
+  border: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+.modal-nav-btn:hover,
+.modal-nav-btn:focus {
+  background-color: var(--accent-color);
+  transform: translateY(-2px) scale(1.02);
+}
+.modal-nav-btn:disabled {
+  background-color: #ccc;
+  cursor: default;
+  transform: none;
+}
+
+/* 8) RESPONSIVE ADJUSTMENTS */
+@media (max-width: 768px) {
+  .modal-text h3 {
+    font-size: 1.5rem;
+  }
+  .modal-text p {
+    font-size: 0.95rem;
+  }
+  .modal-media {
+    max-height: 40vh;
+  }
 }
