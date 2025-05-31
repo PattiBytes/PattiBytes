@@ -373,3 +373,209 @@ document.addEventListener("keydown", (e) => {
     }
   });
 });
+document.addEventListener("DOMContentLoaded", () => {
+  // ──── 1) Grab Elements ────
+  const searchInput = document.getElementById("places-search");
+  const clearBtn = document.getElementById("clear-search");
+  const noMatchDiv = document.getElementById("no-match");
+  const placeCards = Array.from(document.querySelectorAll(".place-card"));
+
+  const modalOverlay = document.getElementById("places-modal");
+  const modalMedia = document.getElementById("modal-media");
+  const modalText = document.getElementById("modal-text");
+  const modalClose = document.getElementById("modal-close");
+  const modalPrev = document.getElementById("modal-prev");
+  const modalNext = document.getElementById("modal-next");
+
+  // ──── 2) Helper: Read current language from GTranslate cookie ────
+  function getCurrentLang() {
+    const name = "googtrans=";
+    const decoded = decodeURIComponent(document.cookie);
+    const parts = decoded.split("; ");
+    for (let part of parts) {
+      if (part.indexOf(name) === 0) {
+        const val = part.substring(name.length);
+        const segs = val.split("/");
+        if (segs.length === 3 && segs[2]) {
+          return segs[2]; // "en" or "pa"
+        }
+      }
+    }
+    return "pa"; // default to Punjabi
+  }
+
+  // ──── 3) Debounce utility ────
+  function debounce(fn, delay = 200) {
+    let timeoutId;
+    return (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => fn(...args), delay);
+    };
+  }
+
+  // ──── 4) Filtering Logic: search using each card’s visible text ────
+  function filterPlaces() {
+    const queryRaw = searchInput.value.trim();
+    const query = queryRaw.toLowerCase();
+    const lang = getCurrentLang(); // either "pa" or "en"
+    let anyVisible = false;
+
+    placeCards.forEach((card) => {
+      // 4a) Grab the card’s combined visible text (which GTranslate has updated)
+      // We use textContent so that tags (<strong>, etc.) are ignored.
+      const combinedText = card.textContent.trim().toLowerCase();
+      const matches = query === "" || combinedText.includes(query);
+      card.classList.toggle("hidden", !matches);
+      if (matches) anyVisible = true;
+    });
+
+    // 4b) Show/hide “No match” & set dynamic text
+    if (!anyVisible && query.length > 0) {
+      if (lang === "en") {
+        noMatchDiv.textContent =
+          "No results found. Please try searching in the other language.";
+      } else {
+        noMatchDiv.textContent =
+          "ਕੋਈ ਮੇਲ ਨਹੀਂ ਲੱਭਿਆ। ਕਿਰਪਾ ਕਰਕੇ ਵੱਖਰੀ ਭਾਸ਼ਾ ਵਿੱਚ ਕੋਸ਼ਿਸ਼ ਕਰੋ।";
+      }
+      noMatchDiv.style.display = "block";
+    } else {
+      noMatchDiv.style.display = "none";
+    }
+
+    // 4c) Toggle clear button visibility
+    clearBtn.classList.toggle("visible", query.length > 0);
+  }
+
+  // ──── 5) Clear Button Handler ────
+  clearBtn.addEventListener("click", () => {
+    searchInput.value = "";
+    filterPlaces();
+    searchInput.focus();
+  });
+
+  // Run filter on input (debounced)
+  searchInput.addEventListener("input", debounce(filterPlaces, 150));
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      searchInput.value = "";
+      filterPlaces();
+      searchInput.blur();
+    }
+  });
+
+  // Initial filter (in case there’s a prefilled value)
+  filterPlaces();
+
+  // ──── 6) Modal Logic ────
+  let currentIndex = -1;
+  function getVisibleCards() {
+    return placeCards.filter((card) => !card.classList.contains("hidden"));
+  }
+
+  // Update the text of Prev/Next buttons using each card’s <h3> from data-full
+  function updateNavButtons() {
+    const visible = getVisibleCards();
+    if (currentIndex <= 0) {
+      modalPrev.disabled = true;
+      modalPrev.textContent = "";
+    } else {
+      modalPrev.disabled = false;
+      const prevCard = visible[currentIndex - 1];
+      const prevTitleMatch =
+        prevCard.getAttribute("data-full").match(/<h3>(.*?)<\/h3>/) || [];
+      const prevTitle = prevTitleMatch[1] || "← ਪਿਛਲਾ";
+      modalPrev.textContent = `← ${prevTitle}`;
+    }
+    if (currentIndex >= visible.length - 1) {
+      modalNext.disabled = true;
+      modalNext.textContent = "";
+    } else {
+      const nextCard = visible[currentIndex + 1];
+      const nextTitleMatch =
+        nextCard.getAttribute("data-full").match(/<h3>(.*?)<\/h3>/) || [];
+      const nextTitle = nextTitleMatch[1] || "ਅਗਲਾ →";
+      modalNext.disabled = false;
+      modalNext.textContent = `${nextTitle} →`;
+    }
+  }
+
+  function openModal(index) {
+    const visible = getVisibleCards();
+    if (index < 0 || index >= visible.length) return;
+    currentIndex = index;
+    const card = visible[currentIndex];
+
+    // 6a) Populate Media
+    modalMedia.innerHTML = "";
+    const imgElem = card.querySelector(".media-container img");
+    if (imgElem) {
+      const cloneImg = imgElem.cloneNode(true);
+      cloneImg.style.width = "100%";
+      cloneImg.style.height = "auto";
+      modalMedia.appendChild(cloneImg);
+    }
+
+    // 6b) Populate Text (data-full contains HTML)
+    modalText.innerHTML = card.getAttribute("data-full") || "";
+
+    // 6c) Show Modal
+    modalOverlay.style.display = "flex";
+    modalOverlay.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+
+    // 6d) Update Prev/Next Buttons
+    updateNavButtons();
+  }
+
+  function closeModal() {
+    modalOverlay.style.display = "none";
+    modalOverlay.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+  }
+
+  // Attach click on each card (entire card)
+  placeCards.forEach((card) => {
+    card.addEventListener("click", () => {
+      const idx = getVisibleCards().indexOf(card);
+      openModal(idx);
+    });
+    // Also attach on “Read More” button
+    const btn = card.querySelector(".read-more-btn");
+    if (btn) {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const idx = getVisibleCards().indexOf(card);
+        openModal(idx);
+      });
+    }
+  });
+
+  // Modal close handlers
+  if (modalClose) {
+    modalClose.addEventListener("click", closeModal);
+  }
+  modalOverlay.addEventListener("click", (e) => {
+    if (e.target === modalOverlay) {
+      closeModal();
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modalOverlay.style.display === "flex") {
+      closeModal();
+    }
+  });
+
+  // Prev / Next button handlers
+  modalPrev.addEventListener("click", () => {
+    if (currentIndex > 0) {
+      openModal(currentIndex - 1);
+    }
+  });
+  modalNext.addEventListener("click", () => {
+    const visible = getVisibleCards();
+    if (currentIndex < visible.length - 1) {
+      openModal(currentIndex + 1);
+    }
+  });
+});
