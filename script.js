@@ -945,3 +945,84 @@ window.onclick = function(event) {
     closeModal();
   }
 };
+// ----- Updated Navigation (Hamburger + Dropdown) -----
+document.addEventListener("DOMContentLoaded", () => {
+  const hamburger = document.getElementById("hamburger");
+  const mobileMenu = document.getElementById("mobile-menu");
+
+  if (!hamburger || !mobileMenu) return;
+
+  // Close all submenus and the mobile menu
+  function closeAll() {
+    mobileMenu.classList.remove("show");
+    hamburger.setAttribute("aria-expanded", "false");
+    mobileMenu.setAttribute("aria-hidden", "true");
+
+    document.querySelectorAll(".has-dropdown .dropdown").forEach(dd => {
+      dd.style.display = "none";
+    });
+    document.querySelectorAll(".dropdown-toggle.open").forEach(btn => {
+      btn.classList.remove("open");
+    });
+  }
+
+  // Toggle the mobile menu itself
+  function toggleMenu() {
+    const isExpanded = hamburger.getAttribute("aria-expanded") === "true";
+    hamburger.setAttribute("aria-expanded", String(!isExpanded));
+    mobileMenu.classList.toggle("show");
+    mobileMenu.setAttribute("aria-hidden", String(isExpanded));
+
+    // When closing the menu, also hide any open submenu
+    if (isExpanded) {
+      document.querySelectorAll(".has-dropdown .dropdown").forEach(dd => {
+        dd.style.display = "none";
+      });
+      document.querySelectorAll(".dropdown-toggle.open").forEach(btn => {
+        btn.classList.remove("open");
+      });
+    }
+  }
+
+  // Clicking the hamburger button
+  hamburger.addEventListener("click", e => {
+    e.stopPropagation();
+    toggleMenu();
+  });
+
+  // Clicking outside closes everything
+  document.addEventListener("click", () => {
+    closeAll();
+  });
+
+  // Prevent clicks inside the menu from bubbling out
+  mobileMenu.addEventListener("click", e => e.stopPropagation());
+
+  // Handle each “Topics” dropdown toggle button
+  document.querySelectorAll(".dropdown-toggle").forEach(toggleBtn => {
+    toggleBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      const parentLi = toggleBtn.closest(".has-dropdown");
+      const submenu = parentLi.querySelector(".dropdown");
+      const isOpen = toggleBtn.classList.contains("open");
+
+
+     
+    });
+  });
+
+  // When any link inside the menu is clicked, close the menu
+  mobileMenu.querySelectorAll("a").forEach(link => {
+    link.addEventListener("click", e => {
+      const href = link.getAttribute("href") || "";
+      if (href.startsWith("#")) {
+        e.preventDefault();
+        const target = document.querySelector(href);
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }
+      closeAll();
+    });
+  });
+});
