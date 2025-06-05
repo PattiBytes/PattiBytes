@@ -579,3 +579,369 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+document.addEventListener("DOMContentLoaded", () => {
+  /* ----------------------------------------
+     1) Hamburger Menu Toggle
+  ---------------------------------------- */
+  const hamburger = document.getElementById("hamburger");
+  const mobileMenu = document.getElementById("mobile-menu");
+  if (hamburger && mobileMenu) {
+    hamburger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isExpanded = hamburger.getAttribute("aria-expanded") === "true";
+      hamburger.setAttribute("aria-expanded", String(!isExpanded));
+      mobileMenu.classList.toggle("show");
+      mobileMenu.setAttribute("aria-hidden", String(isExpanded));
+    });
+    mobileMenu.addEventListener("click", (e) => e.stopPropagation());
+    document.addEventListener("click", () => {
+      if (mobileMenu.classList.contains("show")) {
+        mobileMenu.classList.remove("show");
+        hamburger.setAttribute("aria-expanded", "false");
+        mobileMenu.setAttribute("aria-hidden", "true");
+      }
+    });
+  }
+
+  /* ----------------------------------------
+     2) “Read More” Modal Logic
+  ---------------------------------------- */
+  const readModal = document.getElementById("read-modal");
+  const readTitle = document.getElementById("read-title");
+  const readText = document.getElementById("read-text");
+  const btnReadMore = document.querySelectorAll(".btn-read-more");
+  const btnReadClose = document.getElementById("read-close");
+
+  // Full descriptions for each product ID
+  const productDetails = {
+    1: {
+      title: "ਪੰਜਾਬੀ ਟੀ-ਸ਼ਰਟ",
+      text: `
+        <strong>ਤਫਸੀਲੀ ਵਰਣਨ:</strong><br/>
+        ਇਹ 100% ਕਾਟਨ ਦੀ ਟੀ-ਸ਼ਰਟ ਹੈ ਜਿਸ ਉੱਤੇ “ਪੱਟੀ ਬਾਈਟਸ” ਦਾ ਪੰਜਾਬੀ ਲਹਿਜ਼ਾ ਪ੍ਰਿੰਟ ਕੀਤਾ ਗਿਆ ਹੈ।
+        ਮਿਡੀਅਮ ਫਿਟ, ਨਰਮ ਅਤੇ ਹੇਠਲੇ ਦਰਜੇ ਦੀ ਸ਼ੈਲੀ – ਰੰਗ: ਚਿੱਟਾ, ਨੀਲਾ, ਕਾਲਾ।
+        <br/><br/>
+        <strong>ਵਿਸ਼ੇਸ਼ਤਾ:</strong>
+        <ul>
+          <li>ਐਕਸਟਰਿਮ ਵਾਸ਼ਰ</li>
+          <li>ਸਮਰਥਿਤ ਦਰਜੇ ਦੀ ਸੁਤਲੀ</li>
+          <li>ਔਥੈਂਟਿਕ ਪੰਜਾਬੀ ਨਕਸ਼</li>
+        </ul>
+      `,
+    },
+    2: {
+      title: "ਪੰਜਾਬੀ ਕੌਫ਼ੀ ਮੱਗ",
+      text: `
+        <strong>ਤਫਸੀਲੀ ਵਰਣਨ:</strong><br/>
+        11 oz ਸਿਰਾਮਿਕ ਮੱਗ ਉੱਤੇ “ਛੋਹਾ ਦੇ ਘਰੇ” ਦੇ ਪੰਜਾਬੀ ਸ਼ਬਦ ਲਿਖੇ ਹੋਏ ਹਨ। ਮੁੱਕਦਰ ਰੰਗ: ਨੀਲਾ ਬੋਰਡਰ।
+        ਪੀਣ ਲਈ ਆਦਰਸ਼, ਡਿਸਪਲੇਅ ਕਰਨ ਲਈ ਆਰਾਮਦਾਇਕ। 
+        <br/><br/>
+        <strong>ਵਿਸ਼ੇਸ਼ਤਾ:</strong>
+        <ul>
+          <li>ਡਿਸ਼ਵਾਸ਼ਰ ਅਤੇ ਮਾਈਕ੍ਰੋਵੇਵ ਸੇਫ਼</li>
+          <li>ਲਕੜੀ ਦਾ ਕਵਰ ਨਾਲ ਉਪਲਬ্ধ</li>
+          <li>ਉਪਹਾਰ ਦੇ ਤੌਰ ਤੇ ਸ਼ਾਨਦਾਰ</li>
+        </ul>
+      `,
+    },
+    3: {
+      title: "ਪੰਜਾਬੀ ਪੋਸਟਰ",
+      text: `
+        <strong>ਤਫਸੀਲੀ ਵਰਣਨ:</strong><br/>
+        18"x24" ਮੈਟ ਲੈਮੀਨੇਟਿਡ ਪੋਸਟਰ ਵਿੱਚ ਪੰਜਾਬੀ ਲੋਕਧਾਰਾ ਦੇ ਰੰਗੀਨ ਦ੍ਰਿਸ਼ ਹਨ। 
+        ਤੁਹਾਡੇ ਕੰਮਰੇ ਜਾਂ ਆਫਿਸ ਦੀ ਸ਼ਾਨ ਵਧਾਉਂਦਾ ਹੈ।
+        <br/><br/>
+        <strong>ਵਿਸ਼ੇਸ਼ਤਾ:</strong>
+        <ul>
+          <li>ਹਾਈ-ਰੈਜ਼ੋਲੇਸ਼ਨ ਪ੍ਰਿੰਟ</li>
+          <li>ਟਿਅਰ-ਰੇਜ਼ਿਸਟੈਂਟ ਮੈਟੀਸ਼ ਫਿਨਿਸ਼</li>
+          <li>ਦਿੱਤਾ ਮੁੱਕਦਰ ਦੀ ਮਹਾਰਤ</li>
+        </ul>
+      `,
+    },
+  };
+
+  btnReadMore.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const id = e.currentTarget.getAttribute("data-id");
+      if (!productDetails[id]) return;
+      readTitle.innerHTML = productDetails[id].title;
+      readText.innerHTML = productDetails[id].text;
+      readModal.style.display = "flex";
+      readModal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+    });
+  });
+
+  btnReadClose.addEventListener("click", () => {
+    readModal.style.display = "none";
+    readModal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+  });
+
+  readModal.addEventListener("click", (e) => {
+    if (e.target === readModal) {
+      readModal.style.display = "none";
+      readModal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && readModal.style.display === "flex") {
+      readModal.style.display = "none";
+      readModal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+  });
+
+  /* ----------------------------------------
+     3) Image Carousel Logic
+  ---------------------------------------- */
+  document.querySelectorAll(".product-card").forEach((card) => {
+    const carousel = card.querySelector(".image-carousel");
+    if (!carousel) return;
+
+    const images = carousel.querySelectorAll(".carousel-image");
+    const prevBtn = carousel.querySelector(".prev-btn");
+    const nextBtn = carousel.querySelector(".next-btn");
+    let idx = 0;
+    carousel.dataset.index = 0;
+
+    // If only one image, hide arrows
+    if (images.length <= 1) {
+      prevBtn.style.display = "none";
+      nextBtn.style.display = "none";
+    }
+
+    function showImage(newIdx) {
+      images[idx].classList.remove("active");
+      idx = (newIdx + images.length) % images.length;
+      carousel.dataset.index = idx;
+      images[idx].classList.add("active");
+    }
+
+    prevBtn.addEventListener("click", () => {
+      showImage(idx - 1);
+    });
+    nextBtn.addEventListener("click", () => {
+      showImage(idx + 1);
+    });
+  });
+
+  /* ----------------------------------------
+     4) Image Enlarge (Lightbox) Logic
+  ---------------------------------------- */
+  const imageModal = document.getElementById("image-modal");
+  const imageClose = document.getElementById("image-close");
+  const imageModalImg = document.getElementById("image-modal-img");
+  document.querySelectorAll(".enlarge-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const mediaContainer = e.currentTarget.closest(".media-container");
+      if (!mediaContainer) return;
+      const carousel = mediaContainer.querySelector(".image-carousel");
+      const idx = parseInt(carousel.dataset.index, 10);
+      const currentImage = carousel.querySelectorAll(".carousel-image")[idx];
+      if (!currentImage) return;
+      imageModalImg.src = currentImage.src;
+      imageModalImg.alt = currentImage.alt || "Enlarged product";
+      imageModal.style.display = "flex";
+      imageModal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+    });
+  });
+
+  imageClose.addEventListener("click", () => {
+    imageModal.style.display = "none";
+    imageModal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+  });
+  imageModal.addEventListener("click", (e) => {
+    if (e.target === imageModal) {
+      imageModal.style.display = "none";
+      imageModal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && imageModal.style.display === "flex") {
+      imageModal.style.display = "none";
+      imageModal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+  });
+
+  /* ----------------------------------------
+     5) Shopping Cart Logic
+  ---------------------------------------- */
+  let cart = []; // each entry: { id, title, price, link, quantity }
+
+  const btnAddCart = document.querySelectorAll(".btn-add-cart");
+  const cartBtn = document.getElementById("cart-btn");
+  const cartCount = document.getElementById("cart-count");
+  const cartModal = document.getElementById("cart-modal");
+  const cartItemsEl = document.querySelector(".cart-items");
+  const cartTotalEl = document.getElementById("cart-total");
+  const cartClose = document.getElementById("cart-close");
+
+  // Product data for cart
+  const productData = {
+    1: {
+      title: "ਪੰਜਾਬੀ ਟੀ-ਸ਼ਰਟ",
+      price: 499,
+      link: "https://www.amazon.in/example-product-1",
+    },
+    2: {
+      title: "ਪੰਜਾਬੀ ਕੌਫ਼ੀ ਮੱਗ",
+      price: 299,
+      link: "https://www.flipkart.com/example-product-2",
+    },
+    3: {
+      title: "ਪੰਜਾਬੀ ਪੋਸਟਰ",
+      price: 199,
+      link: "https://pattibytes.myshopify.com/example-product-3",
+    },
+  };
+
+  function updateCartUI() {
+    cartItemsEl.innerHTML = "";
+    if (cart.length === 0) {
+      cartItemsEl.innerHTML =
+        '<p class="empty-cart">ਤੁਹਾਡੇ ਕਾਰਟ ਵਿੱਚ ਕੁਝ ਨਹੀਂ।</p>';
+      cartTotalEl.textContent = "0";
+      return;
+    }
+    let total = 0;
+    cart.forEach((item, index) => {
+      total += item.price * item.quantity;
+      const div = document.createElement("div");
+      div.classList.add("cart-item");
+      div.innerHTML = `
+        <div class="item-info">
+          <span>${item.title}</span>
+          <span>₹${item.price} × <span class="qty-display">${item.quantity}</span></span>
+        </div>
+        <div class="quantity-controls">
+          <button class="qty-btn" data-index="${index}" data-action="decrease">−</button>
+          <button class="qty-btn" data-index="${index}" data-action="increase">＋</button>
+          <button class="remove-btn" data-index="${index}" aria-label="Remove">🗑️</button>
+        </div>
+      `;
+      cartItemsEl.appendChild(div);
+    });
+    cartTotalEl.textContent = total.toFixed(2);
+
+    // Attach event handlers for qty and remove
+    cartItemsEl.querySelectorAll(".qty-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const idx = parseInt(e.currentTarget.dataset.index, 10);
+        const action = e.currentTarget.dataset.action;
+        if (action === "increase") {
+          cart[idx].quantity += 1;
+        } else if (action === "decrease") {
+          cart[idx].quantity -= 1;
+          if (cart[idx].quantity < 1) cart.splice(idx, 1);
+        }
+        if (cart.length === 0) {
+          cartCount.textContent = "0";
+        } else {
+          const sumQty = cart.reduce((acc, it) => acc + it.quantity, 0);
+          cartCount.textContent = sumQty;
+        }
+        updateCartUI();
+      });
+    });
+
+    cartItemsEl.querySelectorAll(".remove-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const idx = parseInt(e.currentTarget.dataset.index, 10);
+        cart.splice(idx, 1);
+        if (cart.length === 0) {
+          cartCount.textContent = "0";
+        } else {
+          const sumQty = cart.reduce((acc, it) => acc + it.quantity, 0);
+          cartCount.textContent = sumQty;
+        }
+        updateCartUI();
+      });
+    });
+  }
+
+  btnAddCart.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const id = e.currentTarget.getAttribute("data-id");
+      if (!productData[id]) return;
+
+      // If exists, just increment quantity
+      const existing = cart.find((item) => item.id === id);
+      if (existing) {
+        existing.quantity += 1;
+      } else {
+        cart.push({
+          id,
+          title: productData[id].title,
+          price: productData[id].price,
+          link: productData[id].link,
+          quantity: 1,
+        });
+      }
+
+      const sumQty = cart.reduce((acc, it) => acc + it.quantity, 0);
+      cartCount.textContent = sumQty;
+    });
+  });
+
+  // Open Cart Modal
+  cartBtn.addEventListener("click", () => {
+    updateCartUI();
+    cartModal.style.display = "flex";
+    cartModal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+  });
+
+  // Close Cart Modal
+  cartClose.addEventListener("click", () => {
+    cartModal.style.display = "none";
+    cartModal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+  });
+
+  cartModal.addEventListener("click", (e) => {
+    if (e.target === cartModal) {
+      cartModal.style.display = "none";
+      cartModal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && cartModal.style.display === "flex") {
+      cartModal.style.display = "none";
+      cartModal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+  });
+});
+function showComingSoon(event) {
+  event.preventDefault();
+  const modal = document.getElementById("comingSoonModal");
+  modal.classList.add("show");
+  modal.style.display = "block";
+}
+
+function closeModal() {
+  const modal = document.getElementById("comingSoonModal");
+  modal.classList.remove("show");
+  setTimeout(() => {
+    modal.style.display = "none";
+  }, 300); // matches transition time
+}
+
+// Close modal if clicked outside the box
+window.onclick = function(event) {
+  const modal = document.getElementById("comingSoonModal");
+  const content = modal.querySelector(".modal-content");
+  if (event.target === modal) {
+    closeModal();
+  }
+};
