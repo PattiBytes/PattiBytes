@@ -31,1197 +31,6 @@ body {
   --background-color: #FFFFFF;
   --header-height: 70px;
   --transition-speed: 0.3s;
-
-  /* Bubble variables */
-  --bubble-color: rgba(255, 255, 255, 0.15);
-}
-
-/* ===========================================
-   3) Background Gradient Animation
-=========================================== */
-@keyframes backgroundShift {
-  0%   { background: linear-gradient(135deg, #f0f4f8, #d9e2ec); }
-  100% { background: linear-gradient(135deg, #d9e2ec, #f0f4f8); }
-}
-
-/* ===========================================
-   4) Bubbles (Full-Screen Animated Background)
-=========================================== */
-
-/* ===========================================
-   5) Container Utility
-=========================================== */
-
-
-/* ===========================================
-   6) Typography & Links
-=========================================== */
-h1, h2, h3, h4, h5, h6 {
-  color: var(--text-color);
-}
-p, li {
-  color: var(--text-color);
-  line-height: 1.6;
-}
-a {
-  text-decoration: none;
-  color: inherit;
-  transition: color var(--transition-speed), transform var(--transition-speed);
-}
-a:hover {
-  color: var(--accent-color);
-  transform: scale(1.05);
-}
-
-/* ===========================================
-   7) Header & Branding (Shared Across All Pages)
-=========================================== */
-header.site-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: var(--header-height);
-  background-color: var(--primary-color);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 1rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  z-index: 10;
-}
-header .branding {
-  display: flex;
-  align-items: center;
-}
-header .branding img.logo {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  margin-right: 0.75rem;
-  object-fit: cover;
-  transition: transform var(--transition-speed);
-}
-header .branding img.logo:hover {
-  transform: rotate(10deg) scale(1.1);
-}
-header .site-title {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #fff;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-  transform: perspective(500px) rotateX(5deg);
-}
-
-/* ===========================================
-   Mobile Hamburger
-=========================================== */
-#hamburger {
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 1.75rem;
-  cursor: pointer;
-  z-index: 11;
-  transition: color var(--transition-speed), transform var(--transition-speed);
-}
-#hamburger:hover {
-  color: var(--accent-color);
-  transform: rotate(90deg) scale(1.2);
-}
-
-/* ===========================================
-   Mobile Menu Container
-=========================================== */
-/* --------------------------------------------
-   2) Hamburger Button (Mobile)
--------------------------------------------- */
-#hamburger {
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 1.75rem;
-  cursor: pointer;
-  z-index: 11;
-  transition: color var(--transition-speed),
-              transform var(--transition-speed);
-}
-#hamburger:hover {
-  color: var(--accent-color);
-  transform: rotate(90deg) scale(1.2);
-}
-
-/* Spacer to push content below the fixed header */
-.header-spacer {
-  height: var(--header-height);
-}
-
-/* --------------------------------------------
-   3) Mobile Menu (hidden by default)
--------------------------------------------- */
-#mobile-menu {
-  position: fixed;
-  top: var(--header-height);
-  right: 1rem;
-  width: 240px;
-  background-color: var(--primary-color);
-  border-bottom-left-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  display: none;           /* hidden until .show is added */
-  flex-direction: column;
-  z-index: 11;
-  animation: fadeIn 0.5s ease-out both;
-}
-#mobile-menu.show {
-  display: flex;
-}
-#mobile-menu .nav-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-#mobile-menu .nav-list li a {
-  display: block;
-  width: 100%;
-  padding: 0.75rem 1rem;
-  color: #fff;
-  font-weight: 500;
-  transition: background-color var(--transition-speed),
-              transform var(--transition-speed);
-}
-#mobile-menu .nav-list li a:hover {
-  background-color: var(--accent-color);
-  transform: scale(1.05);
-}
-/* --------------------------------------------
-   2) Hamburger Icon (hidden on desktop)
--------------------------------------------- */
-/* Hamburger ↷ only shown on mobile (<769px) */
-#hamburger {
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 1.75rem;
-  cursor: pointer;
-  z-index: 11;
-  transition: color var(--transition-speed), transform var(--transition-speed);
-}
-#hamburger:hover {
-  color: var(--accent-color);
-  transform: rotate(90deg) scale(1.2);
-}
-@media (min-width: 769px) {
-  #hamburger {
-    display: none;
-  }
-}
-
-/* --------------------------------------------
-   Mobile Menu Container
--------------------------------------------- */
-#mobile-menu {
-  position: fixed;
-  top: var(--header-height);
-  right: 0;
-  width: 240px;
-  background-color: var(--primary-color);
-  border-bottom-left-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  display: none;            /* → toggled by JS via .show */
-  flex-direction: column;
-  z-index: 11;
-  animation: fadeIn 0.5s ease-out both;
-  max-height: calc(100vh - var(--header-height));
-  overflow-y: auto;
-}
-
-/* When JS adds .show, menu slides in */
-#mobile-menu.show {
-  display: flex;
-}
-
-/* Always show the menu on desktop (no hamburger) */
-@media (min-width: 769px) {
-  #mobile-menu {
-    position: static;
-    display: flex !important;
-    flex-direction: row;
-    background: transparent;
-    box-shadow: none;
-    width: auto;
-    max-height: none;
-    overflow: visible;
-  }
-}
-
-/* Hide any visible scrollbar in the mobile menu */
-#mobile-menu {
-  scrollbar-width: none; /* Firefox */
-}
-#mobile-menu::-webkit-scrollbar {
-  display: none;         /* Chrome, Safari, Opera */
-}
-
-/* --------------------------------------------
-   Navigation List & Items
--------------------------------------------- */
-.site-nav .nav-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column; /* mobile default */
-}
-.site-nav .nav-list li {
-  position: relative;      /* for dropdown positioning */
-}
-.site-nav .nav-list li a {
-  display: block;
-  width: 100%;
-  padding: 0.75rem 1rem;
-  color: #fff;
-  font-weight: 500;
-  text-decoration: none;
-  transition: background-color var(--transition-speed),
-              transform var(--transition-speed);
-}
-.site-nav .nav-list li a:hover {
-  background-color: var(--accent-color);
-  transform: scale(1.05);
-}
-
-/* On desktop, lay out top-level links horizontally */
-@media (min-width: 769px) {
-  .site-nav .nav-list {
-    flex-direction: row;
-  }
-  .site-nav .nav-list li {
-    margin-left: 1rem;
-  }
-  .site-nav .nav-list li a {
-    padding: 0.5rem 0.75rem;
-    color: #fff;
-  }
-}
-
-/* --------------------------------------------
-   Home + Caret Wrapper (always visible)
--------------------------------------------- */
-.home-with-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.home-with-toggle a {
-  flex-grow: 1;
-  color: #fff;
-  text-decoration: none;
-  padding: 0.75rem 1rem;
-}
-.home-with-toggle .dropdown-toggle {
-  background: transparent;
-  border: none;
-  color: #fff;
-  font-size: 1rem;
-  padding: 0 0.75rem;
-  cursor: pointer;
-  transition: transform var(--transition-speed), color var(--transition-speed);
-}
-.home-with-toggle .dropdown-toggle:hover {
-  color: var(--accent-color);
-}
-/* Rotate caret when submenu is open */
-.home-with-toggle .dropdown-toggle.open {
-  transform: rotate(180deg);
-}
-
-/* --------------------------------------------
-   Dropdown (hide by default, toggled via JS or hover)
--------------------------------------------- */
-.site-nav .dropdown {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: none;            /* → only shown when JS toggles or on hover at ≥769px */
-  background-color: var(--primary-color);
-  border-radius: 4px;
-  position: absolute;
-  top: 100%;
-  left: 0;
-  min-width: 200px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  z-index: 20;
-}
-.site-nav .dropdown li a {
-  display: block;
-  padding: 0.5rem 1rem;
-  color: #fff;
-  font-size: 0.95rem;
-  text-decoration: none;
-  transition: background-color var(--transition-speed);
-}
-.site-nav .dropdown li a:hover {
-  background-color: var(--accent-color);
-}
-
-/* Keep parent positioned for absolute dropdown */
-.site-nav .has-dropdown {
-  position: relative;
-}
-
-/* Show submenu on hover for desktop */
-@media (min-width: 769px) {
-  .site-nav .has-dropdown:hover .dropdown {
-    display: block;
-  }
-  /* If you prefer to hide the caret on desktop and rely purely on hover, uncomment this:
-  .home-with-toggle .dropdown-toggle {
-    display: none;
-  }
-  */
-}
-
-/* On small screens, make the dropdown push items below (position: relative) */
-@media (max-width: 768px) {
-  #mobile-menu.show .has-dropdown .dropdown {
-    display: none; /* still hidden until JS toggles */
-  }
-  #mobile-menu.show .has-dropdown:focus-within .dropdown,
-  #mobile-menu.show .has-dropdown .dropdown-toggle.open + .dropdown {
-    display: block;
-    position: relative;
-    top: 0;
-    left: 0;
-    box-shadow: none;
-  }
-}
-
-/* Spacer below header (in your HTML, keep a <div class="header-spacer"></div>) */
-.header-spacer {
-  height: var(--header-height);
-}
-
-/* Simple fadeIn keyframes (for the menu) */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* --------------------------------------------
-   End of Navigation/CSS for Dropdown & Hamburger
--------------------------------------------- */
-
-
-/* ===========================================
-   8) Footer (Shared Across All Pages)
-=========================================== */
-.site-footer {
-  background-color: #222;
-  color: #f1f1f1;
-  padding: 3rem 0;
-  font-size: 0.9rem;
-  position: relative;
-  overflow: hidden;
-  z-index: 1;
-}
-.footer-container {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 2rem;
-}
-.footer-links {
-  flex: 1 1 200px;
-}
-.footer-heading {
-  font-size: 1.2rem;
-  margin-bottom: 1rem;
-  color: var(--accent-color);
-  position: relative;
-  transform: perspective(600px) rotateX(4deg);
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-}
-.footer-heading::after {
-  content: '';
-  position: absolute;
-  width: 50px;
-  height: 3px;
-  background-color: var(--accent-color);
-  bottom: -6px;
-  left: 0;
-}
-.footer-nav {
-  list-style: none;
-}
-.footer-nav li {
-  margin-bottom: 0.75rem;
-}
-.footer-nav li a {
-  color: #ccc;
-  transition: color var(--transition-speed), transform var(--transition-speed);
-  position: relative;
-}
-.footer-nav li a::before {
-  content: '›';
-  position: absolute;
-  left: -1rem;
-  opacity: 0;
-  transition: opacity var(--transition-speed), left var(--transition-speed);
-}
-.footer-nav li a:hover {
-  color: #fff;
-  transform: translateX(5px);
-}
-.footer-nav li a:hover::before {
-  opacity: 1;
-  left: -1.25rem;
-}
-.footer-social {
-  flex: 1 1 200px;
-  text-align: center;
-}
-.social-icons {
-  list-style: none;
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-.social-icons li {
-  display: inline-block;
-}
-.social-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  background-color: #333;
-  border-radius: 50%;
-  transition: transform var(--transition-speed), background-color var(--transition-speed);
-  position: relative;
-  overflow: hidden;
-}
-.social-link .icon {
-  width: 24px;
-  height: 24px;
-  fill: #ccc;
-  transition: fill var(--transition-speed), transform var(--transition-speed);
-}
-.social-link:hover {
-  background-color: var(--accent-color);
-  transform: translateY(-4px) scale(1.1);
-}
-.social-link:hover .icon {
-  fill: #fff;
-  transform: rotate(15deg) scale(1.1);
-}
-.social-link::after {
-  content: '';
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background: rgba(255, 153, 51, 0.3);
-  border-radius: 50%;
-  top: 0;
-  left: 0;
-  transition: transform var(--transition-speed), opacity var(--transition-speed);
-  transform: scale(0);
-  opacity: 0;
-}
-.social-link:hover::after {
-  transform: scale(2.5);
-  opacity: 1;
-}
-.footer-copy {
-  flex: 1 1 100%;
-  text-align: center;
-  margin-top: 2rem;
-  color: #888;
-}
-
-/* ===========================================
-   9) Back-to-Top Button
-=========================================== */
-#back-to-top {
-  position: fixed;
-  bottom: 20px;
-  left: 20px;
-  width: 80px;
-  height: 36px;
-  background-color: var(--accent-color);
-  color: #fff;
-  border: none;
-  border-radius: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  cursor: pointer;
-  z-index: 11;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity var(--transition-speed), transform var(--transition-speed);
-}
-#back-to-top.visible {
-  opacity: 1;
-  visibility: visible;
-}
-#back-to-top:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-}
-
-/* ===========================================
-   10) Sections (Generic Styling)
-=========================================== */
-.section-title {
-  font-size: 2rem;
-  margin-bottom: 1.5rem;
-  color: var(--primary-color);
-  text-align: center;
-  transform: perspective(600px) rotateX(4deg);
-  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
-  animation: fadeIn 1s ease-out both;
-}
-
-/* ===========================================
-   11) History Section
-=========================================== */
-.history-section {
-  background-color: rgba(255,255,255,0.85);
-  padding: 4rem 0;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-}
-.history-section p,
-.history-preview {
-  font-size: 1rem;
-  color: var(--text-color);
-  line-height: 1.6;
-  max-width: 800px;
-  margin: 0 auto;
-  text-align: justify;
-  animation: fadeIn 1.2s ease-out both;
-}
-
-/* ===========================================
-   12) About Section
-=========================================== */
-.about-section {
-  background-color: rgba(249,249,249,0.9);
-  padding: 4rem 0;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-}
-.about-section p {
-  font-size: 1rem;
-  color: var(--text-color);
-  max-width: 800px;
-  margin: 0.5rem auto 1.5rem auto;
-  text-align: center;
-  animation: fadeIn 1.2s ease-out both;
-}
-.owner-name {
-  font-weight: bold;
-  color: var(--accent-color);
-  animation: fadeIn 1.4s ease-out both;
-}
-
-/* ===========================================
-   13) FAQ / Why Choose Section
-=========================================== */
-.why-section {
-  background-color: rgba(255,255,255,0.85);
-  padding: 4rem 0;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-}
-.faq-item {
-  max-width: 800px;
-  margin: 1rem auto;
-  background-color: #f9f9f9;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  animation: fadeIn 1.2s ease-out both;
-}
-.faq-question {
-  width: 100%;
-  padding: 1rem 1.5rem;
-  background-color: var(--secondary-color);
-  color: #fff;
-  font-size: 1.1rem;
-  text-align: left;
-  border: none;
-  outline: none;
-  cursor: pointer;
-  transition: background-color var(--transition-speed), transform var(--transition-speed);
-}
-.faq-question:hover {
-  background-color: var(--accent-color);
-  transform: scale(1.03);
-}
-.faq-answer {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.5s ease;
-  background-color: #fff;
-  padding: 0 1.5rem;
-}
-.faq-answer p {
-  padding: 1rem 0;
-  color: var(--text-color);
-  line-height: 1.6;
-}
-
-/* ===========================================
-   14) Achievements Section (Auto-Scroll Only Images + Captions)
-=========================================== */
-.achievements-section {
-  background-color: var(--background-color);
-  padding: 40px 0;
-  text-align: center;
-}
-.achievements-section .section-title {
-  margin-bottom: 20px;
-}
-
-.achievements-scroll-wrapper {
-  overflow: hidden;
-  width: 100%;
-  position: relative;
-
-  /* Hide scrollbar in all browsers */
-  scrollbar-width: none;     /* Firefox */
-  -ms-overflow-style: none;  /* IE 10+ */
-}
-.achievements-scroll-wrapper::-webkit-scrollbar {
-  display: none;             /* Chrome, Safari, Opera */
-}
-
-.achievements-scroll {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 20px;
-  animation: scrollAchievements 20s linear infinite;
-
-  /* Also hide scrollbar here just in case */
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.achievements-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.achievement-card {
-  flex: 0 0 auto;
-  width: 180px;
-  text-align: center;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  transition: transform var(--transition-speed), box-shadow var(--transition-speed);
-}
-.achievement-card:hover {
-  transform: translateY(-4px) scale(1.05);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-.achievement-card img {
-  width: 100%;
-  height: 120px;
-  object-fit: cover;
-  border-radius: 8px 8px 0 0;
-  animation: fadeIn 1s ease-out both;
-}
-.achievement-card p {
-  margin-top: 8px;
-  font-size: 0.9rem;
-  color: var(--text-color);
-  padding: 8px;
-}
-
-/* Move entire row left by 50% of its width over 20s */
-@keyframes scrollAchievements {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-
-/* ===========================================
-   15) Collaboration / Email Form Section
-=========================================== */
-.collaboration-section {
-  background-color: rgba(255,255,255,0.85);
-  padding: 4rem 0;
-}
-.collaboration-section .section-title {
-  margin-bottom: 1rem;
-}
-.collab-form {
-  max-width: 600px;
-  margin: 0 auto;
-  background-color: #f9f9f9;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  animation: fadeIn 1.2s ease-out both;
-}
-.collab-form .form-group {
-  margin-bottom: 1rem;
-}
-.collab-form label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-}
-.collab-form input[type="text"],
-.collab-form input[type="email"],
-.collab-form textarea {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 1rem;
-  color: var(--text-color);
-  transition: border-color var(--transition-speed), transform var(--transition-speed);
-}
-.collab-form input[type="text"]:focus,
-.collab-form input[type="email"]:focus,
-.collab-form textarea:focus {
-  border-color: var(--accent-color);
-  outline: none;
-  transform: scale(1.01);
-  box-shadow: 0 0 0 2px rgba(255,45,149,0.2);
-}
-.btn-submit {
-  background-color: var(--accent-color);
-  color: #fff;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.3s ease, transform 0.2s ease;
-}
-.btn-submit:hover {
-  background-color: var(--highlight-color);
-  transform: translateY(-2px) scale(1.05);
-}
-.note {
-  margin-top: 0.75rem;
-  font-size: 0.85rem;
-  color: #666;
-  text-align: center;
-}
-
-/* ===========================================
-   16) Modal Overlay + Content Styles
-=========================================== */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0,0,0,0.6);
-  display: none;                     /* hidden by default */
-  align-items: flex-start;           /* avoid header overlap */
-  justify-content: center;
-  z-index: 100;                      /* on top of everything */
-  animation: fadeInOverlay 0.3s ease-out forwards;
-  padding-top: var(--header-height); /* push modal content below header */
-}
-@keyframes fadeInOverlay {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-.modal-content {
-  position: relative;
-  background-color: #fff;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 800px;
-  max-height: calc(100vh - var(--header-height) - 40px);
-  overflow-y: auto;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  animation: slideDownModal 0.4s ease-out forwards;
-  background-image: url("https://images.unsplash.com/photo-1515716078605-30044a7e3910?auto=format&fit=crop&w=1050&q=80");
-  background-size: cover;
-  background-position: center;
-  z-index: 100;
-  margin: 0 0 20px 0;
-}
-@keyframes slideDownModal {
-  from { transform: translateY(-30px); opacity: 0; }
-  to   { transform: translateY(0);      opacity: 1; }
-}
-.modal-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: #e74c3c;
-  border: none;
-  color: #fff;
-  font-size: 1.5rem;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  cursor: pointer;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s ease, transform 0.2s ease;
-  z-index: 101;
-}
-.modal-close:hover {
-  background-color: #c0392b;
-  transform: scale(1.1);
-}
-.modal-body {
-  background: rgba(255,255,255,0.9);
-  border-radius: 6px;
-  margin: 48px 24px 24px;
-  padding: 24px;
-  box-sizing: border-box;
-}
-.modal-title {
-  font-size: 1.75rem;
-  margin-bottom: 1rem;
-  color: #333;
-  text-align: center;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
-}
-.modal-text {
-  font-size: 1rem;
-  line-height: 1.6;
-  color: #333;
-}
-.modal-text p {
-  margin-bottom: 1rem;
-}
-.modal-text ul {
-  margin: 1rem 0 1rem 1.25rem;
-}
-.modal-text ul li {
-  margin-bottom: 0.75rem;
-}
-.btn-read-more {
-  display: inline-block;
-  margin-top: 1rem;
-  background-color: var(--accent-color);
-  color: #fff;
-  padding: 0.6rem 1.2rem;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.2s ease;
-}
-.btn-read-more:hover {
-  background-color: var(--highlight-color);
-  transform: translateY(-2px) scale(1.05);
-}
-
-/* ===========================================
-   17) Keyframe Animations (Common)
-=========================================== */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes fadeInDown {
-  from { opacity: 0; transform: translateY(-20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* ===========================================
-   18) Responsive Adjustments
-=========================================== */
-@media (max-width: 768px) {
-  header .site-title {
-    font-size: 1.5rem;
-  }
-  .history-section p,
-  .about-section p,
-  .collab-form {
-    width: 90%;
-    margin: 0 auto;
-  }
-  .why-section .faq-item {
-    width: 90%;
-    margin: 1rem auto;
-  }
-  /* On small screens, stop auto-scroll and allow manual scroll */
-  .achievements-scroll {
-    animation: none;
-    overflow-x: auto;
-  }
-  .achievement-card {
-    flex: 0 0 200px;
-  }
-  .footer-container {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-  .footer-links,
-  .footer-social {
-    flex: 1 1 auto;
-  }
-  .footer-copy {
-    margin-top: 1.5rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .achievement-card {
-    flex: 0 0 160px;
-  }
-  .modal-overlay {
-    padding-top: calc(var(--header-height) + 20px);
-  }
-  .modal-content {
-    width: 95%;
-    margin: 0 10px 20px 10px;
-    max-height: calc(100vh - var(--header-height) - 60px);
-  }
-  .modal-body {
-    margin: 32px 16px 16px;
-    padding: 16px;
-  }
-  .modal-title {
-    font-size: 1.5rem;
-  }
-}
-/* ------------------------------
-  1) Center-Align All Headings
------------------------------- */
-h1, h2, h3, h4, h5, h6 {
-  text-align: center;                     /* center all headings */
-  color: var(--text-color);
-  position: relative;
-  transition: color var(--transition-speed), transform var(--transition-speed);
-}
-
-/* ------------------------------
-  2) Add Hover/Focus Animations on Headings
------------------------------- */
-h1:hover, h2:hover, h3:hover {
-  color: var(--accent-color);             /* accent color on hover */
-  transform: scale(1.02);                  /* slight zoom */
-}
-
-h1::after, h2::after, h3::after {
-  content: '';
-  display: block;
-  margin: 0.5rem auto 0;                   /* spacing below heading */
-  width: 50px;
-  height: 3px;
-  background-color: var(--accent-color);
-  border-radius: 2px;
-  opacity: 0;
-  transition: opacity var(--transition-speed), width var(--transition-speed);
-}
-h1:hover::after, h2:hover::after, h3:hover::after {
-  opacity: 1;
-  width: 70px;                             /* underline expands on hover */
-}
-
-/* ------------------------------
-  3) Center-Align Section Titles (Override .section-title)
------------------------------- */
-.section-title {
-  text-align: center;                      /* ensure section titles are centered */
-  margin: 0 auto 1.5rem auto;
-  color: var(--primary-color);
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  position: relative;
-  padding-bottom: 0.5rem;
-  transition: transform var(--transition-speed), color var(--transition-speed);
-}
-
-/* Hover effect for .section-title */
-.section-title:hover {
-  color: var(--accent-color);
-  transform: scale(1.05);
-}
-.section-title::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60px;
-  height: 4px;
-  background-color: var(--accent-color);
-  border-radius: 2px;
-  opacity: 0.7;
-  transition: width var(--transition-speed);
-}
-.section-title:hover::after {
-  width: 100px;                            /* underline lengthens on hover */
-}
-
-/* ------------------------------
-  4) Optionally Center Body Text
-     (If you want paragraphs to be centered) 
------------------------------- */
-p, .history-preview, .modal-text p {
-  text-align: center;                      /* center paragraphs for a more “modern” vibe */
-  max-width: 800px;
-  margin: 0 auto 1rem auto;
-}
-
-/* For longer blocks where justified may be better, you can keep them justified. */
-
-/* ------------------------------
-  5) Center-Align Cards & Captions
------------------------------- */
-.news-card .news-content h4,
-.news-card .news-content p {
-  text-align: center;                      /* headlines & blurbs centered */
-}
-
-.achievement-card p {
-  text-align: center;                      /* captions centered */
-}
-
-/* ------------------------------
-  6) Animate Nav-Item Hover (Subtle) 
------------------------------- */
-.site-nav .nav-list li a {
-  transition: background-color var(--transition-speed),
-              transform var(--transition-speed),
-              color var(--transition-speed);
-  text-align: center;                      /* center links on mobile and desktop */
-}
-.site-nav .nav-list li a:hover {
-  color: var(--background-color);
-  background-color: var(--accent-color);
-  transform: translateY(-2px) scale(1.02);
-}
-
-/* ------------------------------
-  7) Center “Read More” Button & Headings in History Section
------------------------------- */
-.history-section .section-title {
-  margin-bottom: 2rem;
-}
-.history-section .history-preview {
-  margin-bottom: 1.5rem;
-}
-.btn-read-more {
-  display: block;
-  margin: 1.5rem auto 0 auto;
-}
-
-/* ------------------------------
-  8) Center FAQ Questions & Answers
------------------------------- */
-.why-section .faq-item {
-  margin: 1rem auto;
-  text-align: center;                      /* center the entire FAQ block */
-}
-.why-section .faq-question {
-  width: 100%;
-  text-align: center;                      /* center question text */
-  border-radius: 8px;
-}
-.why-section .faq-answer {
-  padding: 1rem 2rem;                      /* add side padding */
-  text-align: center;                      /* center answer text */
-}
-.why-section .faq-answer p {
-  margin: 0 auto;
-}
-
-/* ------------------------------
-  9) Center Form Labels & Inputs
------------------------------- */
-.collab-form label {
-  display: block;
-  text-align: left;                        /* you can keep labels left-aligned */
-}
-.collab-form input,
-.collab-form textarea {
-  margin-left: auto;
-  margin-right: auto;                      /* center the input within form */
-  display: block;
-}
-
-/* ------------------------------
-  10) Center Footer Headings & Links
------------------------------- */
-.footer-links,
-.footer-social {
-  text-align: center;                      /* center footer group titles */
-}
-.footer-nav li a {
-  display: inline-block;                   /* align links in a row on small screens */
-  margin: 0.5rem 1rem;
-}
-.footer-nav li a:hover {
-  color: var(--accent-color);
-  transform: translateY(-2px);
-}
-
-/* ------------------------------
-  11) Smooth Fade-In for Centered Headings
------------------------------- */
-@keyframes fadeInCenter {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-h1, h2, h3, .section-title {
-  opacity: 0;
-  animation: fadeInCenter 0.8s ease-out forwards;
-}
-h1 { animation-delay: 0.1s; }
-h2 { animation-delay: 0.2s; }
-h3, .section-title { animation-delay: 0.3s; }
-/* ===========================================
-   1) Reset & Base Styles
-=========================================== */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-html {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  scroll-behavior: smooth;
-  background: linear-gradient(135deg, #f0f4f8, #d9e2ec);
-  animation: backgroundShift 20s ease-in-out infinite alternate;
-  height: 100%;
-}
-body {
-  min-height: 100vh;
-  position: relative;
-  z-index: 1; /* ensure content is above bubbles */
-}
-
-/* ===========================================
-   2) CSS Variables (Theme / Colors)
-=========================================== */
-:root {
-  --primary-color: #FF9933;
-  --secondary-color: #00A8CC;
-  --accent-color: #FF2D95;
-  --highlight-color: #A8E63E;
-  --text-color: #333;
-  --background-color: #FFFFFF;
-  --header-height: 70px;
-  --transition-speed: 0.3s;
 }
 
 /* ===========================================
@@ -1252,8 +61,95 @@ a:hover {
   transform: scale(1.05);
 }
 
+/* --------------------------------------------
+   Center-Align Headings & Add Hover Effects
+-------------------------------------------- */
+h1, h2, h3 {
+  text-align: center;
+  position: relative;
+  transition: color var(--transition-speed), transform var(--transition-speed);
+}
+h1:hover, h2:hover, h3:hover {
+  color: var(--accent-color);
+  transform: scale(1.02);
+}
+h1::after, h2::after, h3::after {
+  content: '';
+  display: block;
+  margin: 0.5rem auto 0;
+  width: 50px;
+  height: 3px;
+  background-color: var(--accent-color);
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity var(--transition-speed), width var(--transition-speed);
+}
+h1:hover::after, h2:hover::after, h3:hover::after {
+  opacity: 1;
+  width: 70px;
+}
+
+/* --------------------------------------------
+   Center “Section Titles” & Add Underline Hover
+-------------------------------------------- */
+.section-title {
+  font-size: 2rem;
+  margin: 0 auto 1.5rem auto;
+  color: var(--primary-color);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-align: center;
+  position: relative;
+  padding-bottom: 0.5rem;
+  transform: perspective(600px) rotateX(4deg);
+  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
+  transition: transform var(--transition-speed), color var(--transition-speed);
+  opacity: 0;
+  animation: fadeInCenter 0.8s ease-out forwards;
+}
+.section-title:hover {
+  color: var(--accent-color);
+  transform: scale(1.05);
+}
+.section-title::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 4px;
+  background-color: var(--accent-color);
+  border-radius: 2px;
+  opacity: 0.7;
+  transition: width var(--transition-speed);
+}
+.section-title:hover::after {
+  width: 100px;
+}
+
+/* --------------------------------------------
+   Fade-In Center Animation
+-------------------------------------------- */
+@keyframes fadeInCenter {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+h1 { animation-delay: 0.1s; }
+h2 { animation-delay: 0.2s; }
+h3 { animation-delay: 0.3s; }
+
+/* --------------------------------------------
+   Center Body Text for Modern Vibe
+-------------------------------------------- */
+.history-preview, .modal-text p {
+  text-align: center;
+  max-width: 800px;
+  margin: 0 auto 1rem auto;
+}
+
 /* ===========================================
-   5) Header & Branding
+   5) Header & Branding (Shared Across All Pages)
 =========================================== */
 header.site-header {
   position: fixed;
@@ -1323,6 +219,8 @@ header .site-title {
   flex-direction: column;
   z-index: 11;
   animation: fadeIn 0.5s ease-out both;
+  max-height: calc(100vh - var(--header-height));
+  overflow-y: auto;
 }
 #mobile-menu.show {
   display: flex;
@@ -1339,10 +237,12 @@ header .site-title {
   color: #fff;
   font-weight: 500;
   transition: background-color var(--transition-speed), transform var(--transition-speed);
+  text-align: center;
 }
 #mobile-menu .nav-list li a:hover {
+  color: var(--background-color);
   background-color: var(--accent-color);
-  transform: scale(1.05);
+  transform: translateY(-2px) scale(1.02);
 }
 @media (min-width: 769px) {
   #hamburger {
@@ -1358,9 +258,21 @@ header .site-title {
     max-height: none;
     overflow: visible;
   }
+  .site-nav .nav-list {
+    flex-direction: row;
+  }
+  .site-nav .nav-list li {
+    margin-left: 1rem;
+  }
+  .site-nav .nav-list li a {
+    padding: 0.5rem 0.75rem;
+    color: #fff;
+  }
 }
 
-/* Dropdown Styling */
+/* --------------------------------------------
+   Dropdown Styling
+-------------------------------------------- */
 .home-with-toggle {
   display: flex;
   align-items: center;
@@ -1387,6 +299,9 @@ header .site-title {
 .home-with-toggle .dropdown-toggle.open {
   transform: rotate(180deg);
 }
+.site-nav .has-dropdown {
+  position: relative;
+}
 .site-nav .dropdown {
   list-style: none;
   margin: 0;
@@ -1412,9 +327,6 @@ header .site-title {
 .site-nav .dropdown li a:hover {
   background-color: var(--accent-color);
 }
-.site-nav .has-dropdown {
-  position: relative;
-}
 @media (min-width: 769px) {
   .site-nav .has-dropdown:hover .dropdown {
     display: block;
@@ -1431,8 +343,22 @@ header .site-title {
   }
 }
 
+/* --------------------------------------------
+   7) Simple fadeIn Keyframe
+-------------------------------------------- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ===========================================
-   7) Footer Styling
+   8) Footer (Shared Across All Pages)
 =========================================== */
 .site-footer {
   background-color: #222;
@@ -1452,6 +378,7 @@ header .site-title {
 }
 .footer-links {
   flex: 1 1 200px;
+  text-align: center;
 }
 .footer-heading {
   font-size: 1.2rem;
@@ -1472,14 +399,20 @@ header .site-title {
 }
 .footer-nav {
   list-style: none;
+  text-align: center;
 }
 .footer-nav li {
-  margin-bottom: 0.75rem;
+  display: inline-block;
+  margin: 0.5rem 1rem;
 }
 .footer-nav li a {
   color: #ccc;
   transition: color var(--transition-speed), transform var(--transition-speed);
   position: relative;
+}
+.footer-nav li a:hover {
+  color: #fff;
+  transform: translateY(-2px);
 }
 .footer-nav li a::before {
   content: '›';
@@ -1487,10 +420,6 @@ header .site-title {
   left: -1rem;
   opacity: 0;
   transition: opacity var(--transition-speed), left var(--transition-speed);
-}
-.footer-nav li a:hover {
-  color: #fff;
-  transform: translateX(5px);
 }
 .footer-nav li a:hover::before {
   opacity: 1;
@@ -1542,9 +471,9 @@ header .site-title {
   border-radius: 50%;
   top: 0;
   left: 0;
-  transition: transform var(--transition-speed), opacity var(--transition-speed);
   transform: scale(0);
   opacity: 0;
+  transition: transform var(--transition-speed), opacity var(--transition-speed);
 }
 .social-link:hover::after {
   transform: scale(2.5);
@@ -1558,7 +487,7 @@ header .site-title {
 }
 
 /* ===========================================
-   8) Back-to-Top Button
+   9) Back-to-Top Button
 =========================================== */
 #back-to-top {
   position: fixed;
@@ -1591,32 +520,381 @@ header .site-title {
 }
 
 /* ===========================================
-   9) Sections Generic Styling
+   10) Sections (Generic Styling)
 =========================================== */
 .section-title {
-  font-size: 2rem;
   margin-bottom: 1.5rem;
-  color: var(--primary-color);
-  text-align: center;
-  transform: perspective(600px) rotateX(4deg);
-  text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
-  animation: fadeIn 1s ease-out both;
 }
 
 /* ===========================================
-   10) Keyframe Animations
+   11) History Section
+=========================================== */
+.history-section {
+  background-color: rgba(255,255,255,0.85);
+  padding: 4rem 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.history-section p,
+.history-preview {
+  font-size: 1rem;
+  color: var(--text-color);
+  line-height: 1.6;
+  max-width: 800px;
+  margin: 0 auto 1rem auto;
+  text-align: center;
+  animation: fadeIn 1.2s ease-out both;
+}
+.btn-read-more {
+  display: block;
+  margin: 1.5rem auto 0 auto;
+}
+
+/* ===========================================
+   12) About Section
+=========================================== */
+.about-section {
+  background-color: rgba(249,249,249,0.9);
+  padding: 4rem 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.about-section p {
+  font-size: 1rem;
+  color: var(--text-color);
+  max-width: 800px;
+  margin: 0.5rem auto 1.5rem auto;
+  text-align: center;
+  animation: fadeIn 1.2s ease-out both;
+}
+.owner-name {
+  font-weight: bold;
+  color: var(--accent-color);
+  animation: fadeIn 1.4s ease-out both;
+}
+
+/* ===========================================
+   13) FAQ / Why Choose Section
+=========================================== */
+.why-section {
+  background-color: rgba(255,255,255,0.85);
+  padding: 4rem 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+.faq-item {
+  max-width: 800px;
+  margin: 1rem auto;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  animation: fadeIn 1.2s ease-out both;
+  text-align: center;
+}
+.faq-question {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  background-color: var(--secondary-color);
+  color: #fff;
+  font-size: 1.1rem;
+  text-align: center;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
+  border-radius: 8px;
+}
+.faq-question:hover {
+  background-color: var(--accent-color);
+  transform: scale(1.03);
+}
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.5s ease;
+  background-color: #fff;
+  padding: 0 1.5rem;
+  text-align: center;
+}
+.faq-answer p {
+  padding: 1rem 0;
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+/* ===========================================
+   14) Achievements Section (Auto-Scroll Only Images + Captions)
+=========================================== */
+.achievements-section {
+  background-color: var(--background-color);
+  padding: 40px 0;
+  text-align: center;
+}
+.achievements-section .section-title {
+  margin-bottom: 20px;
+}
+.achievements-scroll-wrapper {
+  overflow: hidden;
+  width: 100%;
+  position: relative;
+  scrollbar-width: none;     /* Firefox */
+  -ms-overflow-style: none;  /* IE 10+ */
+}
+.achievements-scroll-wrapper::-webkit-scrollbar {
+  display: none;             /* Chrome, Safari, Opera */
+}
+.achievements-scroll {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 20px;
+  animation: scrollAchievements 20s linear infinite;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.achievements-scroll::-webkit-scrollbar {
+  display: none;
+}
+.achievement-card {
+  flex: 0 0 auto;
+  width: 180px;
+  text-align: center;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--transition-speed), box-shadow var(--transition-speed);
+}
+.achievement-card:hover {
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.achievement-card img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px 8px 0 0;
+  animation: fadeIn 1s ease-out both;
+}
+.achievement-card p {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: var(--text-color);
+  padding: 8px;
+}
+@keyframes scrollAchievements {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ===========================================
+   15) Collaboration / Email Form Section
+=========================================== */
+.collaboration-section {
+  background-color: rgba(255,255,255,0.85);
+  padding: 4rem 0;
+}
+.collaboration-section .section-title {
+  margin-bottom: 1rem;
+}
+.collab-form {
+  max-width: 600px;
+  margin: 0 auto;
+  background-color: #f9f9f9;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  animation: fadeIn 1.2s ease-out both;
+}
+.collab-form .form-group {
+  margin-bottom: 1rem;
+}
+.collab-form label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  text-align: left;
+}
+.collab-form input[type="text"],
+.collab-form input[type="email"],
+.collab-form textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+  color: var(--text-color);
+  transition: border-color var(--transition-speed), transform var(--transition-speed);
+  margin-left: auto;
+  margin-right: auto;
+  display: block;
+}
+.collab-form input[type="text"]:focus,
+.collab-form input[type="email"]:focus,
+.collab-form textarea:focus {
+  border-color: var(--accent-color);
+  outline: none;
+  transform: scale(1.01);
+  box-shadow: 0 0 0 2px rgba(255,45,149,0.2);
+}
+.btn-submit {
+  background-color: var(--accent-color);
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
+}
+.btn-submit:hover {
+  background-color: var(--highlight-color);
+  transform: translateY(-2px) scale(1.05);
+}
+.note {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #666;
+  text-align: center;
+}
+
+/* ===========================================
+   16) Modal Overlay + Content Styles (Reusable)
+=========================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.6);
+  display: none;                     /* hidden by default */
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: fadeInOverlay 0.3s ease-out forwards;
+  padding: 1rem;
+}
+.modal-overlay[aria-hidden="false"] {
+  display: flex;
+}
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.modal-content {
+  position: relative;
+  background-color: #fff;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: calc(100vh - var(--header-height) - 40px);
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  animation: slideDownModal 0.4s ease-out forwards;
+  padding: 1.5rem;
+}
+@keyframes slideDownModal {
+  from { transform: translateY(-30px); opacity: 0; }
+  to   { transform: translateY(0);      opacity: 1; }
+}
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: #e74c3c;
+  border: none;
+  color: #fff;
+  font-size: 1.5rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
+  z-index: 201;
+}
+.modal-close:hover {
+  background-color: #c0392b;
+  transform: scale(1.1);
+}
+.modal-body {
+  background: rgba(255,255,255,0.9);
+  border-radius: 6px;
+  margin: 48px 24px 24px;
+  padding: 24px;
+  box-sizing: border-box;
+}
+.modal-title {
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+  text-align: center;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+  transition: color var(--transition-speed);
+}
+.modal-content-text {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--text-color);
+  margin-bottom: 1rem;
+  text-align: justify;
+}
+.btn-read-more {
+  display: inline-block;
+  margin-top: 1rem;
+  background-color: var(--accent-color);
+  color: #fff;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+.btn-read-more:hover {
+  background-color: var(--highlight-color);
+  transform: translateY(-2px) scale(1.05);
+}
+
+/* ===========================================
+   17) Keyframe Animations (Common)
 =========================================== */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 /* ===========================================
-   11) Responsive Adjustments
+   18) Responsive Adjustments
 =========================================== */
 @media (max-width: 768px) {
   header .site-title {
     font-size: 1.5rem;
+  }
+  .history-section p,
+  .about-section p,
+  .collab-form {
+    width: 90%;
+    margin: 0 auto 1rem auto;
+  }
+  .why-section .faq-item {
+    width: 90%;
+    margin: 1rem auto;
+  }
+  /* On small screens, disable auto-scroll and allow manual scroll */
+  .achievements-scroll {
+    animation: none;
+    overflow-x: auto;
+  }
+  .achievement-card {
+    flex: 0 0 200px;
   }
   .footer-container {
     flex-direction: column;
@@ -1632,12 +910,31 @@ header .site-title {
   }
 }
 
-/* ===========================================
-   News Page & Modal CSS
-   (Append these below your existing rules)
-=========================================== */
+@media (max-width: 480px) {
+  .achievement-card {
+    flex: 0 0 160px;
+  }
+  .modal-overlay {
+    padding-top: calc(var(--header-height) + 20px);
+  }
+  .modal-content {
+    width: 95%;
+    margin: 0 10px 20px 10px;
+    max-height: calc(100vh - var(--header-height) - 60px);
+  }
+  .modal-body {
+    margin: 32px 16px 16px;
+    padding: 16px;
+  }
+  .modal-title {
+    font-size: 1.5rem;
+  }
+}
 
-/* 1) NEWS GRID: 2D Grid Layout */
+/* ===========================================
+   Additional News Page & Modal CSS
+=========================================== */
+/* 1) News Grid */
 .latest-news .news-grid {
   display: grid;
   gap: 1.75rem;
@@ -1645,10 +942,7 @@ header .site-title {
   grid-auto-rows: auto;
   padding: 1rem 0;
 }
-
-/* ===========================================
-   News Card: Border, Background & Hover
-=========================================== */
+/* 2) News Card Styling */
 .latest-news .news-card {
   background-color: #ffffff;
   border: 2px solid rgba(0, 0, 0, 0.08);
@@ -1663,8 +957,7 @@ header .site-title {
   box-shadow: 0 8px 20px rgba(0,0,0,0.08);
   border-color: var(--accent-color);
 }
-
-/* 2) Card Media Container & Enlarge Button */
+/* 3) Card Media Container & Enlarge Button */
 .latest-news .news-card .media-container {
   position: relative;
   max-height: 200px;
@@ -1680,7 +973,7 @@ header .site-title {
   object-fit: cover;
 }
 .enlarge-btn {
- position: absolute;
+  position: absolute;
   top: 8px;
   right: 8px;
   background: rgba(0,0,0,0.6);
@@ -1695,18 +988,13 @@ header .site-title {
   z-index: 2;
   transition: background 0.2s ease, transform 0.2s ease;
 }
-
- 
-}
 .enlarge-btn:hover,
-.enlarge-btn:focus { 
+.enlarge-btn:focus {
   background: rgba(255,255,255,0.8);
   color: #000;
   transform: scale(1.1);
- 
 }
-
-/* 3) News Content & “Read More” Button */
+/* 4) News Content & Read More */
 .latest-news .news-card .news-content {
   padding: 1.25rem;
   display: flex;
@@ -1747,65 +1035,16 @@ header .site-title {
   background-color: var(--highlight-color);
   transform: translateY(-2px) scale(1.03);
 }
-/* Hide empty media containers */
 .latest-news .news-card .media-container:empty {
   display: none;
 }
 
-/* ===========================================
-   REUSABLE MODAL: News Text
-=========================================== */
+/* Reusable News Text Modal */
 .modal-overlay {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  animation: fadeInOverlay 0.3s ease-out forwards;
   padding: 1rem;
 }
-@keyframes fadeInOverlay {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
 .modal-content {
-  background-color: #fff;
-  border-radius: 8px;
-  width: 100%;
   max-width: 600px;
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  animation: scaleInModal 0.3s ease-out forwards;
-  position: relative;
-}
-@keyframes scaleInModal {
-  from { transform: scale(0.95); opacity: 0; }
-  to   { transform: scale(1);    opacity: 1; }
-}
-.modal-close {
-  position: absolute;
-  top: 12px; right: 12px;
-  background: #e74c3c;
-  border: none;
-  color: #fff;
-  font-size: 1.5rem;
-  width: 32px; height: 32px;
-  border-radius: 50%;
-  cursor: pointer;
-  line-height: 1;
-  transition: background-color 0.2s ease, transform 0.2s ease;
-  z-index: 201;
-}
-.modal-close:hover {
-  background-color: #c0392b;
-  transform: scale(1.1);
-}
-.modal-body {
-  padding: 2rem 1.5rem 1.5rem 1.5rem;
 }
 .modal-title {
   font-size: 1.75rem;
@@ -1821,12 +1060,8 @@ header .site-title {
   margin-bottom: 1rem;
   text-align: justify;
 }
-/* ===========================================
-   REUSABLE MODAL: Image Lightbox
-=========================================== */
-.image-modal {
-  display: none;
-}
+
+/* Reusable Image Lightbox */
 .image-modal .modal-content {
   background: transparent;
   max-width: 90vw;
@@ -1867,28 +1102,11 @@ header .site-title {
   object-fit: contain;
   border-radius: 4px;
 }
-/* ===========================================
-   Responsive Adjustments (Enhancements Only)
-=========================================== */
 
-/* 1) Ensure header scales on very small screens */
-@media (max-width: 480px) {
-  header.site-header {
-    padding: 0 0.5rem;
-  }
-  header .branding img.logo {
-    width: 40px;
-    height: 40px;
-  }
-  header .site-title {
-    font-size: 1.25rem;
-  }
-}
-
-/* 2) News Grid: stack cards and prevent media/text overlap */
+/* Responsive Adjustments for News */
 @media (max-width: 768px) {
   .latest-news .news-grid {
-    grid-template-columns: 1fr; /* one column */
+    grid-template-columns: 1fr;
     gap: 1rem;
   }
   .latest-news .news-card {
@@ -1896,7 +1114,7 @@ header .site-title {
     flex-direction: column;
   }
   .latest-news .news-card .media-container {
-    max-height: 160px; /* shrink image/video height */
+    max-height: 160px;
   }
   .latest-news .news-card .news-content {
     padding: 1rem;
@@ -1913,10 +1131,6 @@ header .site-title {
     padding: 0.5rem 1rem;
     font-size: 0.9rem;
   }
-}
-
-/* 3) Ensure modals fill width on small screens */
-@media (max-width: 768px) {
   .modal-overlay {
     padding: 0.5rem;
   }
@@ -1940,10 +1154,6 @@ header .site-title {
   .modal-content-text ul {
     padding-left: 1rem;
   }
-}
-
-/* 4) Image-Lightbox: adapt to viewport */
-@media (max-width: 768px) {
   .image-modal .modal-content {
     max-width: 95vw;
     max-height: 80vh;
@@ -1955,54 +1165,10 @@ header .site-title {
   }
 }
 
-/* 5) Footer: center-align items on narrow screens */
-@media (max-width: 600px) {
-  .footer-container {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-  .footer-links,
-  .footer-social {
-    width: 100%;
-    margin-bottom: 1rem;
-  }
-}
-
-
-/* 7) Text spacing: prevent merging with adjacent media */
-@media (max-width: 768px) {
-  .latest-news .news-card .news-content p {
-    margin-top: 0.5rem;
-    margin-bottom: 0.75rem;
-  }
-  .latest-news .news-card .news-content h4 {
-    margin-bottom: 0.5rem;
-  }
-}
-
-/* 8) Ensure the "Read More" button remains visible and touch-friendly */
-@media (max-width: 480px) {
-  .latest-news .news-card .read-more-btn {
-    width: 100%;
-    text-align: center;
-    padding: 0.75rem;
-    font-size: 1rem;
-  }
-}
-
-/* 9) Reduce section-title margins on small screens */
-@media (max-width: 480px) {
-  .section-title {
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-  }
-}
-/* =================================================================
-   places.css: Grid + Modal Styles (scoped to Places page)
-================================================================= */
-
-/* 1) SEARCH WRAPPER */
+/* ===========================================
+   places.css: Grid + Modal Styles (Scoped to Places Page)
+=========================================== */
+/* 1) Search Wrapper */
 .search-container {
   margin: 1rem 0;
   text-align: center;
@@ -2048,7 +1214,7 @@ header .site-title {
   display: inline-block;
 }
 
-/* 2) “NO MATCH” MESSAGE */
+/* 2) “No Match” Message */
 .no-match-message {
   display: none;
   margin: 1rem 0;
@@ -2057,7 +1223,7 @@ header .site-title {
   text-align: center;
 }
 
-/* 3) GRID OF CARDS */
+/* 3) Grid of Place Cards */
 .places-grid {
   display: grid;
   gap: 1.5rem;
@@ -2065,7 +1231,7 @@ header .site-title {
   margin-top: 1rem;
 }
 
-/* 4) PLACE CARD */
+/* 4) Place Card */
 .place-card {
   background-color: #fff;
   border: 2px solid rgba(0, 0, 0, 0.08);
@@ -2086,8 +1252,7 @@ header .site-title {
 .place-card.hidden {
   display: none !important;
 }
-
-/* Media container inside card */
+/* Media Container */
 .place-card .media-container {
   max-height: 180px;
   overflow: hidden;
@@ -2098,8 +1263,7 @@ header .site-title {
   height: auto;
   display: block;
 }
-
-/* Text content inside card */
+/* Text Content */
 .place-card .place-content {
   padding: 1rem;
   flex: 1;
@@ -2132,70 +1296,15 @@ header .site-title {
   transform: translateY(-2px) scale(1.03);
 }
 
-/* 5) MODAL OVERLAY */
+/* 5) Modal Overlay */
 .modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
-  display: none; /* Toggle to flex to show */
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
   padding: 1rem;
 }
-.modal-overlay[aria-hidden="false"] {
-  display: flex;
-}
-@keyframes scaleInModal {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-/* 6) MODAL CONTENT BOX */
 .modal-content {
-  background-color: #fff;
-  border-radius: 8px;
-  width: 100%;
   max-width: 600px;
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  animation: scaleInModal 0.3s ease-out forwards;
-  position: relative;
+  padding: 1.5rem;
 }
-.modal-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: #e74c3c;
-  border: none;
-  color: #fff;
-  font-size: 1.5rem;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.2s ease;
-  z-index: 201;
-}
-.modal-close:hover,
-.modal-close:focus {
-  background-color: #c0392b;
-  transform: scale(1.1);
-}
-
-/* 7) MODAL BODY */
 .modal-body {
-  padding: 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2241,7 +1350,7 @@ header .site-title {
   border-radius: 4px;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.2s ease;
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
 }
 .modal-nav-btn:hover,
 .modal-nav-btn:focus {
@@ -2254,7 +1363,7 @@ header .site-title {
   transform: none;
 }
 
-/* 8) RESPONSIVE ADJUSTMENTS */
+/* 8) Responsive Adjustments for Places Modal */
 @media (max-width: 768px) {
   .modal-text h3 {
     font-size: 1.5rem;
@@ -2266,9 +1375,11 @@ header .site-title {
     max-height: 40vh;
   }
 }
-/* --------------------------------------------
-   1) Re‐use existing CSS variables (or redefine if needed)
--------------------------------------------- */
+
+/* ===========================================
+   shop.css: Shop-Specific Styles
+=========================================== */
+/* 1) Re‐use existing CSS variables */
 :root {
   --primary-color: #FF9933;
   --secondary-color: #00A8CC;
@@ -2280,9 +1391,7 @@ header .site-title {
   --transition-speed: 0.3s;
 }
 
-/* --------------------------------------------
-   2) Cart Button (Bottom‐Right)
--------------------------------------------- */
+/* 2) Cart Button (Bottom‐Right) */
 #cart-btn {
   position: fixed;
   bottom: 20px;
@@ -2299,8 +1408,7 @@ header .site-title {
   justify-content: center;
   z-index: 50;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  transition: transform var(--transition-speed),
-              background-color var(--transition-speed);
+  transition: transform var(--transition-speed), background-color var(--transition-speed);
 }
 #cart-btn:hover {
   transform: scale(1.1);
@@ -2321,9 +1429,7 @@ header .site-title {
   font-weight: bold;
 }
 
-/* --------------------------------------------
-   3) Layout: Shop Section & Grid
--------------------------------------------- */
+/* 3) Layout: Shop Section & Grid */
 .shop-section {
   background-color: rgba(255, 255, 255, 0.9);
   padding: 4rem 0;
@@ -2336,7 +1442,6 @@ header .site-title {
   text-shadow: 2px 2px 6px rgba(0,0,0,0.2);
   animation: fadeIn 1s ease-out both;
 }
-
 .products-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -2344,9 +1449,7 @@ header .site-title {
   padding: 0 1rem;
 }
 
-/* --------------------------------------------
-   4) Individual Product Cards
--------------------------------------------- */
+/* 4) Individual Product Cards */
 .product-card {
   background-color: #fff;
   border-radius: 8px;
@@ -2354,8 +1457,7 @@ header .site-title {
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   display: flex;
   flex-direction: column;
-  transition: transform var(--transition-speed),
-              box-shadow var(--transition-speed);
+  transition: transform var(--transition-speed), box-shadow var(--transition-speed);
   animation: fadeIn 1s ease-out both;
 }
 .product-card:hover {
@@ -2363,7 +1465,7 @@ header .site-title {
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
-/* ===== 4.1) Media Container & Enlarge Button ===== */
+/* 4.1) Media Container & Enlarge Button */
 .media-container {
   position: relative;
 }
@@ -2389,7 +1491,7 @@ header .site-title {
   background-color: rgba(0,0,0,0.6);
 }
 
-/* ===== 4.2) Image Carousel Container ===== */
+/* 4.2) Image Carousel Container */
 .image-carousel {
   position: relative;
   width: 100%;
@@ -2437,20 +1539,18 @@ header .site-title {
   right: 8px;
 }
 
-/* ===== 4.3) Text Content ===== */
+/* 4.3) Text Content */
 .product-title {
   font-size: 1.25rem;
   color: var(--text-color);
   margin: 0.75rem 1rem 0.25rem;
 }
-
 .product-price {
   font-size: 1rem;
   color: var(--accent-color);
   font-weight: bold;
   margin: 0 1rem 0.5rem;
 }
-
 .product-short {
   font-size: 0.95rem;
   color: var(--text-color);
@@ -2459,7 +1559,7 @@ header .site-title {
   text-align: justify;
 }
 
-/* ===== 4.4) Action Buttons ===== */
+/* 4.4) Action Buttons */
 .product-actions {
   display: flex;
   gap: 0.5rem;
@@ -2476,8 +1576,7 @@ header .site-title {
   border-radius: 4px;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: background-color var(--transition-speed),
-              transform var(--transition-speed);
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
 }
 .product-actions .btn-read-more {
   background-color: var(--secondary-color);
@@ -2545,7 +1644,7 @@ header .site-title {
   height: 32px;
   border-radius: 50%;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.2s ease;
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
   z-index: 101;
 }
 .cart-modal-content .modal-close:hover {
@@ -2625,79 +1724,51 @@ header .site-title {
 }
 
 /* --------------------------------------------
-   6) “Read More” Modal Overlay & Content
+   6) “Read More” Modal Overlay & Content (Shop)
 -------------------------------------------- */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0,0,0,0.6);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  animation: fadeInOverlay 0.3s ease-out forwards;
-}
-.modal-content {
-  position: relative;
-  background-color: #fff;
-  border-radius: 8px;
+#read-modal .modal-content {
   width: 90%;
   max-width: 600px;
-  max-height: calc(100vh - var(--header-height) - 40px);
-  overflow-y: auto;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  animation: slideDownModal 0.4s ease-out forwards;
   padding: 1.5rem;
 }
-.modal-content .modal-close {
-  position: absolute;
+#read-modal .modal-close {
   top: 12px;
   right: 12px;
   background: #e74c3c;
-  border: none;
-  color: #fff;
-  font-size: 1.25rem;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.2s ease;
-  z-index: 101;
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
 }
-.modal-content .modal-close:hover {
+#read-modal .modal-close:hover {
   background-color: #c0392b;
   transform: scale(1.1);
 }
-.modal-body {
+#read-modal .modal-body {
   background: rgba(255, 255, 255, 0.95);
   border-radius: 6px;
   padding: 1rem;
   margin-top: 1rem;
 }
-.modal-title {
+#read-modal .modal-title {
   font-size: 1.5rem;
   margin-bottom: 0.75rem;
   color: var(--text-color);
   text-align: center;
 }
-.modal-text {
+#read-modal .modal-text {
   font-size: 1rem;
   line-height: 1.6;
   color: var(--text-color);
-}
-.modal-text p,
-.modal-text ul {
   margin-bottom: 1rem;
 }
-.modal-text ul li {
+#read-modal .modal-text p,
+#read-modal .modal-text ul {
+  margin-bottom: 1rem;
+}
+#read-modal .modal-text ul li {
   margin-left: 1rem;
 }
 
 /* --------------------------------------------
-   7) Image Lightbox Modal
+   7) Image Lightbox Modal (Shop)
 -------------------------------------------- */
 #image-modal .modal-content {
   max-width: 90%;
@@ -2726,10 +1797,6 @@ header .site-title {
 @keyframes slideDownModal {
   from { transform: translateY(-30px); opacity: 0; }
   to   { transform: translateY(0); opacity: 1; }
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* --------------------------------------------
@@ -2760,6 +1827,7 @@ header .site-title {
     padding: 0.4rem 0.6rem;
   }
 }
+
 /* Buy Button Styling */
 .btn-buy-now {
   display: inline-block;
@@ -2775,10 +1843,12 @@ header .site-title {
   background-color: #e68900;
 }
 
-/* Modal Overlay */
+/* --------------------------------------------------------------------------------
+   Coming Soon Modal Styling
+-------------------------------------------------------------------------------- */
 .modal {
   display: none;
-  position: none;
+  position: top;
   z-index: 999;
   left: 0;
   top: 0;
@@ -2786,8 +1856,9 @@ header .site-title {
   height: 100vh;
   background-color: rgba(0, 0, 0, 0.5);
 }
-
-/* Modal Content Box */
+.modal.show {
+  display: block;
+}
 .modal-content {
   background-color: #fff;
   margin: 100px auto;
@@ -2802,14 +1873,10 @@ header .site-title {
   transform: translateY(30px);
   transition: all 0.4s ease;
 }
-
-/* Animate Class when modal opens */
 .modal.show .modal-content {
   opacity: 1;
   transform: translateY(0);
 }
-
-/* Close Button */
 .close-btn {
   position: absolute;
   right: 15px;
@@ -2821,4 +1888,501 @@ header .site-title {
 }
 .close-btn:hover {
   color: #000;
+}
+
+/* ===========================================
+   11) Responsive Adjustments (Global)
+=========================================== */
+@media (max-width: 600px) {
+  .footer-container {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .footer-links,
+  .footer-social {
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+}
+
+
+
+
+
+/* ===========================================================
+   1) Modal Size & Image Responsiveness Overrides
+   (Make modal content fit the viewport and images fully visible)
+   =========================================================== */
+
+/* Ensure all modals use full viewport width and adapt height */
+.modal-content {
+  width: 100% !important;
+  max-width: 90vw !important;
+  max-height: 90vh !important;
+  margin: 0 auto !important;
+  box-sizing: border-box;
+  padding: 1rem !important;
+}
+
+/* Override any fixed widths inside modal-body */
+.modal-body {
+  padding: 0.5rem !important;
+}
+
+/* Make sure images inside modals scale to fit the screen */
+.modal-body img,
+#modal-image {
+  max-width: 100% !important;
+  max-height: 85vh !important;
+  object-fit: contain !important;
+  display: block;
+  margin: 0 auto;
+}
+
+/* If an iframe is shown (e.g., video), let it fill available space */
+.modal-body iframe {
+  width: 100% !important;
+  height: 85vh !important;
+}
+
+/* For the “Coming Soon” modal */
+.modal.show .modal-content {
+  width: 90% !important;
+  max-width: 400px !important;
+  max-height: 80vh !important;
+}
+
+/* ===========================================================
+   2) Desktop Navigation Overrides
+   (Ensure horizontal buttons with hover + animation on desktop)
+   =========================================================== */
+
+/* Only apply when viewport ≥ 769px */
+@media (min-width: 769px) {
+  /* Force navigation list to display horizontally */
+  .site-nav .nav-list {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* Style each top-level link for hover/animation */
+  .site-nav .nav-list li a {
+    padding: 0.75rem 1.5rem !important;
+    transition: transform 0.3s ease, color 0.3s ease !important;
+    position: relative;
+  }
+  .site-nav .nav-list li a:hover {
+    color: var(--accent-color) !important;
+    transform: translateY(-3px) scale(1.05) !important;
+  }
+
+  /* Underline animation on hover */
+  .site-nav .nav-list li a::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background-color: var(--accent-color);
+    transition: width 0.3s ease, left 0.3s ease;
+  }
+  .site-nav .nav-list li a:hover::after {
+    width: 60%;
+    left: 20%;
+  }
+}
+
+/* ===========================================================
+   3) “Enlarge” Image Lightbox Overrides
+   (Ensure enlarged images always fit within viewport)
+   =========================================================== */
+
+/* Force the lightbox container to fill most of the viewport */
+#image-modal .modal-content {
+  width: 100% !important;
+  max-width: 95vw !important;
+  max-height: 95vh !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Make the close button slightly larger on desktop */
+@media (min-width: 769px) {
+  #image-modal .modal-close {
+    top: 12px !important;
+    right: 12px !important;
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 1.5rem !important;
+  }
+}
+
+/* Ensure the <img> inside the lightbox scales correctly */
+#image-modal-img {
+  max-width: 100% !important;
+  max-height: 90vh !important;
+  object-fit: contain !important;
+  display: block;
+  margin: 0 auto;
+}
+
+/* ===========================================================
+   4) Places-Page Modal Overrides
+   (Same responsive treatment for the “places” modal)
+   =========================================================== */
+
+/* Force places modal to occupy up to 90% of viewport width */
+#places-modal .modal-content {
+  width: 100% !important;
+  max-width: 90vw !important;
+  max-height: 90vh !important;
+  padding: 0.5rem !important;
+  box-sizing: border-box;
+}
+
+/* Ensure text and images inside places modal scale */
+#places-modal .modal-body {
+  padding: 0.5rem !important;
+}
+#places-modal .modal-media img {
+  max-width: 100% !important;
+  max-height: 50vh !important;
+  object-fit: contain !important;
+  display: block;
+  margin: 0 auto;
+}
+#places-modal .modal-text {
+  padding: 0.5rem !important;
+  max-height: 35vh;
+  overflow-y: auto;
+}
+
+/* ===========================================================
+   5) General Responsive Adjustments (Overrides)
+   =========================================================== */
+
+/* On very small screens, make sure modals fill width */
+@media (max-width: 480px) {
+  .modal-content {
+    width: 95% !important;
+    max-width: 95% !important;
+    max-height: 95vh !important;
+    padding: 0.5rem !important;
+  }
+  .modal-body img,
+  #modal-image {
+    max-height: 80vh !important;
+  }
+}
+
+/* On tablet portrait, ensure nav links stack if needed */
+@media (max-width: 768px) {
+  .site-nav .nav-list {
+    flex-direction: column !important;
+    align-items: center;
+  }
+  .site-nav .nav-list li {
+    width: 100%;
+  }
+  .site-nav .nav-list li a {
+    padding: 0.75rem 1rem !important;
+  }
+}
+/* ===========================================================
+   1) Hide Scrollbar in Hamburger Menu
+   =========================================================== */
+#mobile-menu {
+  scrollbar-width: none;        /* Firefox */
+}
+#mobile-menu::-webkit-scrollbar {
+  display: none;                /* Chrome, Safari, Opera */
+}
+
+/* ===========================================================
+   2) Center “Coming Soon” Modal & Make It Responsive
+   =========================================================== */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.modal.show .modal-content {
+  opacity: 1;
+  transform: translateY(0);
+  width: 90%;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-content {
+  background-color: #fff;
+  margin: 0 auto;
+  padding: 20px;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  max-height: 80vh;
+  position: relative;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.4s ease;
+}
+
+/* Close button styles */
+.close-btn {
+  position: absolute;
+  right: 15px;
+  top: 10px;
+  font-size: 24px;
+  color: #888;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+.close-btn:hover {
+  color: #000;
+}
+
+/* Ensure images inside “Coming Soon” modal scale responsively */
+.modal-content img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1rem auto 0;
+  object-fit: contain;
+}
+
+/* On very small screens, adjust modal height */
+@media (max-width: 480px) {
+  .modal-content {
+    max-height: 90vh;
+    width: 95%;
+  }
+  .modal-content img {
+    max-height: 60vh;
+  }
+}
+
+/* ===========================================================
+   3) Enlarge-Image Lightbox Responsiveness
+   =========================================================== */
+#image-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0,0,0,0.6);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+  box-sizing: border-box;
+  z-index: 1000;
+}
+#image-modal .modal-content {
+  background: transparent;
+  width: 100%;
+  max-width: 95vw;
+  max-height: 95vh;
+  padding: 0;
+  box-shadow: none;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+#image-modal-img {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+  display: block;
+  margin: 0;
+}
+
+/* Close button adjustments */
+#image-modal .modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  font-size: 1.5rem;
+}
+#image-modal .modal-close:hover {
+  background: rgba(255,255,255,0.8);
+  color: #000;
+}
+
+/* ===========================================================
+   4) Ensure Footer Stays Below Content (No Blank Space)
+   =========================================================== */
+html, body {
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+main, .shop-section, .places-section {
+  flex: 1 0 auto; /* allow main content to grow so footer sits below */
+}
+.site-footer {
+  flex-shrink: 0; /* footer stays at bottom if content is short */
+}
+
+/* ===========================================================
+   5) Shop “Products Grid” Scrollbar Hidden (Optional)
+   =========================================================== */
+.products-grid {
+  scrollbar-width: none;        /* Firefox */
+}
+.products-grid::-webkit-scrollbar {
+  display: none;                /* Chrome, Safari, Opera */
+}
+
+/* ===========================================================
+   6) Desktop Navigation Hover + Animation (Re‐applying to override)
+   =========================================================== */
+@media (min-width: 769px) {
+  .site-nav .nav-list {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: center;
+    align-items: center;
+  }
+  .site-nav .nav-list li a {
+    padding: 0.75rem 1.5rem !important;
+    position: relative;
+    transition: transform 0.3s ease, color 0.3s ease !important;
+  }
+  .site-nav .nav-list li a:hover {
+    color: var(--accent-color) !important;
+    transform: translateY(-3px) scale(1.05) !important;
+  }
+  .site-nav .nav-list li a::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background-color: var(--accent-color);
+    transition: width 0.3s ease, left 0.3s ease;
+  }
+  .site-nav .nav-list li a:hover::after {
+    width: 60%;
+    left: 20%;
+  }
+}
+
+/* ===========================================================
+   7) Ensure Mobile Menu Submenus Hide Scrollbar
+   =========================================================== */
+#mobile-menu .dropdown {
+  scrollbar-width: none;        /* Firefox */
+}
+#mobile-menu .dropdown::-webkit-scrollbar {
+  display: none;                /* Chrome, Safari, Opera */
+}
+
+/* ===========================================================
+   8) Adjust Hamburger Menu Height so Footer Isn’t Overlapped
+   =========================================================== */
+#hamburger {
+  z-index: 20; /* ensure it’s above any overlay */
+}
+#mobile-menu {
+  top: var(--header-height);
+  bottom: auto; /* allow it to expand downward as needed */
+  max-height: calc(100vh - var(--header-height));
+  overflow-y: auto;
+}
+
+/* ===========================================================
+   9) “Coming Soon” Buy Button Centering (Optional)
+   =========================================================== */
+.btn-buy-now {
+  display: inline-block;
+  margin: 0 auto;
+  text-align: center;
+}
+
+/* If any parent container tries to position items absolutely, override */
+.coming-soon-container {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+/* ===========================================================
+   Override to make header non-fixed (static) and adjust spacing
+   =========================================================== */
+
+/* 1) Make header static instead of fixed */
+header.site-header {
+  position: static !important;
+  width: 100%;
+  top: auto;
+  left: auto;
+  box-shadow: none; /* optional: remove drop shadow if undesired */
+}
+
+/* 2) Remove extra top spacing previously provided by header-spacer */
+.header-spacer {
+  display: none !important;
+  height: 0 !important;
+}
+
+/* 3) Ensure main content flows under the now-static header */
+main,
+.shop-section,
+.places-section {
+  margin-top: 0 !important;
+}
+
+/* 4) If any modals or other elements relied on header height for padding, override */
+.modal-overlay {
+  padding-top: 0 !important;
+}
+
+/* 5) Adjust back-to-top button if needed (optional) */
+#back-to-top {
+  bottom: 20px;
+  left: 20px;
+}
+
+/* 6) Re-center navigation links now that header isn’t fixed */
+@media (min-width: 769px) {
+  .site-nav .nav-list {
+    justify-content: center !important;
+  }
+}
+
+/* 7) Remove leftover positioning related to fixed header */
+html,
+body {
+  padding-top: 0 !important;
 }
