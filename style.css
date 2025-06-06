@@ -2386,3 +2386,425 @@ html,
 body {
   padding-top: 0 !important;
 }
+/* ===========================================================================
+   1) CSS Variables (unchanged)
+============================================================================== */
+:root {
+  --primary-color: #FF9933;
+  --secondary-color: #00A8CC;
+  --accent-color: #FF2D95;
+  --highlight-color: #A8E63E;
+  --text-color: #333;
+  --background-color: #FFFFFF;
+  --header-height: 70px;
+  --transition-speed: 0.3s;
+}
+
+/* ===========================================================================
+   2) Header & Branding (Make Non-Fixed, Static)
+============================================================================== */
+header.site-header {
+  position: static !important;
+  top: auto;
+  left: auto;
+  width: 100%;
+  height: var(--header-height);
+  background-color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  box-shadow: none;
+  z-index: 10;
+}
+header .branding {
+  display: flex;
+  align-items: center;
+}
+header .branding img.logo {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  margin-right: 0.75rem;
+  object-fit: cover;
+  transition: transform var(--transition-speed);
+}
+header .branding img.logo:hover {
+  transform: rotate(10deg) scale(1.1);
+}
+header .site-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+  transform: perspective(500px) rotateX(5deg);
+}
+
+/* Remove the spacer that used to push content below a fixed header */
+.header-spacer {
+  display: none !important;
+  height: 0 !important;
+}
+
+/* ===========================================================================
+   3) Hamburger & Mobile Menu Behavior
+============================================================================== */
+#hamburger {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.75rem;
+  cursor: pointer;
+  z-index: 11;
+  transition: color var(--transition-speed), transform var(--transition-speed);
+}
+#hamburger:hover {
+  color: var(--accent-color);
+  transform: rotate(90deg) scale(1.2);
+}
+/* Hide hamburger on desktop */
+@media (min-width: 769px) {
+  #hamburger {
+    display: none;
+  }
+}
+
+/* Mobile Menu Container */
+#mobile-menu {
+  position: fixed;
+  top: var(--header-height);
+  right: 1rem;
+  width: 240px;
+  background-color: var(--primary-color);
+  border-bottom-left-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  display: none;           /* toggled via JS (.show) */
+  flex-direction: column;
+  z-index: 11;
+  animation: fadeIn 0.5s ease-out both;
+  max-height: calc(100vh - var(--header-height));
+  overflow-y: auto;
+}
+/* When .show is added (JS), display flex */
+#mobile-menu.show {
+  display: flex;
+}
+/* Hide scrollbar in mobile menu */
+#mobile-menu {
+  scrollbar-width: none; /* Firefox */
+}
+#mobile-menu::-webkit-scrollbar {
+  display: none;         /* Chrome, Safari, Opera */
+}
+/* Mobile: nav-list in column */
+.site-nav .nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.site-nav .nav-list li {
+  position: relative; /* for submenu positioning */
+}
+.site-nav .nav-list li a {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  color: #fff;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
+}
+.site-nav .nav-list li a:hover {
+  background-color: var(--accent-color);
+  transform: scale(1.05);
+}
+
+/* ===========================================================================
+   4) Desktop Navigation & Dropdowns
+============================================================================== */
+@media (min-width: 769px) {
+  /* Always show mobile menu as a horizontal bar */
+  #mobile-menu {
+    position: static;
+    display: flex !important;
+    flex-direction: row;
+    background: transparent;
+    box-shadow: none;
+    width: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .site-nav .nav-list {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+  }
+  .site-nav .nav-list li {
+    margin-left: 1rem;
+  }
+  .site-nav .nav-list li a {
+    padding: 0.5rem 0.75rem;
+    color: #fff;
+  }
+
+  /* Dropdown: show on hover */
+  .site-nav .has-dropdown:hover > .dropdown {
+    display: block !important;
+  }
+  .site-nav .dropdown {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: none; /* show only on hover */
+    background-color: var(--primary-color);
+    border-radius: 4px;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 200px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    z-index: 20;
+  }
+  .site-nav .dropdown li a {
+    display: block;
+    padding: 0.5rem 1rem !important;
+    color: #fff !important;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: background-color var(--transition-speed), transform var(--transition-speed) !important;
+  }
+  .site-nav .dropdown li a:hover {
+    background-color: var(--accent-color) !important;
+    transform: scale(1.05) !important;
+  }
+}
+
+/* ===========================================================================
+   5) Enhanced Hover Effects for All Nav Links
+============================================================================== */
+.site-nav .nav-list li a {
+  position: relative;
+  transition: color 0.3s ease, transform 0.3s ease !important;
+}
+.site-nav .nav-list li a:hover,
+.site-nav .nav-list li a:focus {
+  color: var(--primary-color) !important;
+  transform: translateY(-3px) scale(1.05) !important;
+}
+/* Underline animation on hover */
+.site-nav .nav-list li a::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background-color: var(--accent-color);
+  transition: width 0.3s ease, left 0.3s ease !important;
+}
+.site-nav .nav-list li a:hover::after,
+.site-nav .nav-list li a:focus::after {
+  width: 60%;
+  left: 20%;
+}
+
+/* ===========================================================================
+   6) Scrollbar Hiding in Grids & Other Containers
+============================================================================== */
+/* Hide scrollbar in products grid (shop page) */
+.products-grid {
+  scrollbar-width: none; /* Firefox */
+}
+.products-grid::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+/* Hide scrollbar in any dropdown within mobile menu */
+#mobile-menu .dropdown {
+  scrollbar-width: none;
+}
+#mobile-menu .dropdown::-webkit-scrollbar {
+  display: none;
+}
+
+/* ===========================================================================
+   7) “Coming Soon” Modal (Only on Click, Not Fixed)
+============================================================================== */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+.modal.show .modal-content {
+  opacity: 1;
+  transform: translateY(0);
+}
+.modal-content {
+  background-color: #fff;
+  margin: 0 auto;
+  padding: 20px;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.4s ease;
+}
+.close-btn {
+  position: absolute;
+  right: 15px;
+  top: 10px;
+  font-size: 24px;
+  color: #888;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+.close-btn:hover,
+.close-btn:focus {
+  color: #000;
+}
+/* Ensure images inside this modal scale responsively */
+.modal-content img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1rem auto 0;
+  object-fit: contain;
+}
+@media (max-width: 480px) {
+  .modal-content {
+    max-height: 90vh;
+    width: 95%;
+  }
+  .modal-content img {
+    max-height: 60vh;
+  }
+}
+
+/* ===========================================================================
+   8) Enlarge‐Image Lightbox Responsiveness
+============================================================================== */
+#image-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0,0,0,0.6);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+  box-sizing: border-box;
+  z-index: 1000;
+}
+#image-modal.show {
+  display: flex !important;
+}
+#image-modal .modal-content {
+  background: transparent;
+  width: 100%;
+  max-width: 95vw;
+  max-height: 95vh;
+  padding: 0;
+  box-shadow: none;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+#image-modal-img {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+  display: block;
+  margin: 0;
+}
+#image-modal .modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  font-size: 1.5rem;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+#image-modal .modal-close:hover,
+#image-modal .modal-close:focus {
+  background: rgba(255,255,255,0.8);
+  color: #000;
+  transform: scale(1.1);
+}
+@media (max-width: 480px) {
+  #image-modal .modal-content {
+    max-width: 95vw;
+    max-height: 80vh;
+  }
+  #image-modal-img {
+    max-height: 80vh;
+  }
+}
+
+/* ===========================================================================
+   9) Ensure Footer Sticks to Bottom When Content is Short
+============================================================================== */
+html, body {
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+main,
+.shop-section,
+.places-section {
+  flex: 1 0 auto;
+}
+.site-footer {
+  flex-shrink: 0;
+}
+
+/* ===========================================================================
+   10) Scrollbar Hiding in Other Containers
+============================================================================== */
+/* Hide any leftover scrollbars in the shop products carousel */
+.products-grid {
+  scrollbar-width: none; /* Firefox */
+}
+.products-grid::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* ===========================================================================
+   11) Simple Fade-In Keyframes
+============================================================================== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
