@@ -575,10 +575,14 @@ header .site-title {
    13) FAQ / Why Choose Section
 =========================================== */
 .why-section {
-  background-color: rgba(255,255,255,0.85);
-  padding: 4rem 0;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
+  padding: 3rem 1rem;
+  background: #f9fafb;
+  border-radius: 10px;
+  margin: 2rem auto;
+  max-width: 900px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
 }
+
 .faq-item {
   max-width: 800px;
   margin: 1rem auto;
@@ -616,10 +620,40 @@ header .site-title {
 }
 .faq-answer p {
   padding: 1rem 0;
+   margin: 0.4rem 0;
   color: var(--text-color);
   line-height: 1.6;
 }
+.faq-answer ul {
+  padding-left: 1.2rem;
+}
+.faq-answer ul li {
+  margin-bottom: 0.4rem;
+}
 
+.why-section .collab-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: #0d3b66;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.why-section .collab-link:hover {
+  text-decoration: underline;
+}
+/* Responsive tweaks */
+@media (max-width: 768px) {
+  .why-section .section-title {
+    font-size: 1.75rem;
+  }
+  .faq-question {
+    font-size: 1.05rem;
+  }
+  .faq-answer {
+    font-size: 0.95rem;
+  }
+}
 /* ===========================================
    14) Achievements Section (Auto-Scroll Only Images + Captions)
 =========================================== */
@@ -652,6 +686,7 @@ header .site-title {
 .achievements-scroll::-webkit-scrollbar {
   display: none;
 }
+
 .achievement-card {
   flex: 0 0 auto;
   width: 180px;
@@ -2808,3 +2843,6 @@ main,
     transform: translateY(0);
   }
 }
+
+
+
