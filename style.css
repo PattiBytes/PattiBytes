@@ -716,6 +716,19 @@ header .site-title {
   color: var(--text-color);
   padding: 8px;
 }
+.card-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.6rem;
+}
+.achievement-caption {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #333333;
+}
+
+.achievement-caption strong {
+  color: #054e64;
+}
 @keyframes scrollAchievements {
   0%   { transform: translateX(0); }
   100% { transform: translateX(-50%); }
