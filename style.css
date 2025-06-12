@@ -2856,6 +2856,50 @@ main,
     transform: translateY(0);
   }
 }
+/* Container for the whole mobile field */
+.phone-group {
+  margin-bottom: 1.5rem;
+}
 
+/* Label styling */
+.phone-group > label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
 
+/* Wrapper that holds select + input */
+.phone-input-wrapper {
+  display: flex;
+  gap: 0.5rem;           /* space between select + input */
+  align-items: center;   /* vertically center them */
+}
 
+/* Country-code dropdown */
+.phone-input-wrapper select {
+  flex: 0 0 auto;        /* fixed width */
+  width: 5.5rem;         /* adjust as needed */
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  appearance: none;      /* removes default arrow styling in some browsers */
+}
+
+/* Mobile-number input */
+.phone-input-wrapper input[type="tel"] {
+  flex: 1 1 auto;        /* fill remaining space */
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+/* Focus states */
+.phone-input-wrapper select:focus,
+.phone-input-wrapper input:focus {
+  outline: none;
+  border-color: #007bff; /* blue highlight */
+  box-shadow: 0 0 2px rgba(0, 123, 255, 0.5);
+}
