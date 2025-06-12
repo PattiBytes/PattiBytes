@@ -1028,11 +1028,16 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 
+// collab.js
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('collabForm');
+  const status = document.getElementById('formStatus');
 
-  document.getElementById('collabForm').addEventListener('submit', function() {
-    // reveal the message
-    document.getElementById('formStatus').style.display = 'block';
-    // optionally scroll it into view
-    document.getElementById('formStatus').scrollIntoView({ behavior: 'smooth' });
+  if (!form || !status) return;
+
+  form.addEventListener('submit', () => {
+    // reveal the inline “thank you” message
+    status.style.display = 'block';
+    status.scrollIntoView({ behavior: 'smooth' });
   });
-
+});
