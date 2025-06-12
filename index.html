@@ -368,25 +368,33 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <label for="email">ਈਮੇਲ:</label>
     <input type="email" id="email" name="email" placeholder="example@domain.com"  required />
   </div>
-      <div class="form-group phone-group">
-  <label for="countryCode">ਸੰਪਰਕ ਨੰਬਰ:</label>
+     <div class="form-group phone-group">
+  <label for="mobile">ਮੋਬਾਈਲ ਨੰਬਰ:</label>
   <div class="phone-input-wrapper">
-    <select id="countryCode" name="countryCode" aria-label="Country code">
+    <select
+      id="mobileCountryCode"
+      name="countryCode"
+      aria-label="ਦੇਸ਼ ਦਾ ਕੋਡ"
+      required
+    >
       <option value="+91" selected>+91</option>
       <option value="+1">+1</option>
       <option value="+44">+44</option>
       <option value="+61">+61</option>
-      <!-- add more as needed -->
+      <!-- ਹੋਰ ਕੋਡ ਇਥੇ ਸ਼ਾਮਲ ਕਰੋ -->
     </select>
     <input
       type="tel"
-      id="phone"
-      name="phone"
-      placeholder="9876543210"
-      aria-label="Local phone number"
-    required />
+      id="mobile"
+      name="mobile"
+      placeholder="ਮਿਸਾਲ: 9876543210"
+      aria-label="ਸਥਾਨਕ ਮੋਬਾਈਲ ਨੰਬਰ"
+      pattern="[0-9]{6,14}"
+      required
+    />
   </div>
 </div>
+
 
   <div class="form-group">
     <label for="message">ਸੰਦੇਸ਼:</label>
