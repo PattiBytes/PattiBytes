@@ -1026,3 +1026,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 });
+
+
+
+  document.getElementById('collabForm').addEventListener('submit', function() {
+    // reveal the message
+    document.getElementById('formStatus').style.display = 'block';
+    // optionally scroll it into view
+    document.getElementById('formStatus').scrollIntoView({ behavior: 'smooth' });
+  });
+
