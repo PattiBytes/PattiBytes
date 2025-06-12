@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="pa">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
- <title class="notranslate">ਪੱਟੀ ਬਾਈਟਸ |ਮੁੱਖ ਪੰਨਾ</title>
+ <title class="notranslate">ਪੱਟੀ ਬਾਈਟਸ |ਮੁੱਖ ਪੰਨਾ</title>
   
 
   <meta name="description" content="ਪੱਟੀ ਬਾਈਟਸ: ਪੱਟੀ ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ, ਉਪਲਬਧੀਆਂ ਅਤੇ ਸੰਸਕ੍ਰਿਤੀ ਲਈ ਕੋਰ ਸੰਸਥਾਨ。" />
@@ -337,37 +338,41 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <h3 class="section-title">ਸਹਿਯੋਗ ਲਈ ਸੰਪਰਕ ਕਰੋ</h3>
         <p>ਜੇ ਤੁਸੀਂ ਸਾਡੀ ਟੀਮ ਨਾਲ ਸਹਿਯੋਗ, ਲਈ ਰੁਚੀ ਰੱਖਦੇ ਹੋ, ਤਾਂ ਹੇਠਾਂ ਆਪਣਾ ਵੇਰਵਾ ਭਰੋ।</p>
 
-        <!-- Mailto Form -->
-        <form
-          class="collab-form"
-          action="mailto:bytespatti@gmail.com"
-          method="post"
-          enctype="text/plain"
-        >
-          <div class="form-group">
-            <label for="name">ਨਾਮ:</label>
-            <input type="text" id="name" name="Name" placeholder="ਆਪਣਾ ਨਾਮ ਦਰਜ ਕਰੋ" required />
-          </div>
-          <div class="form-group">
-            <label for="email">ਈਮੇਲ:</label>
-            <input type="email" id="email" name="Email" placeholder="example@domain.com" required />
-          </div>
-          <div class="form-group">
-            <label for="subject">ਸਬਜੈਕਟ:</label>
-            <input type="text" id="subject" name="Subject" placeholder="ਸਬਜੈਕਟ ਲਿਖੋ" required />
-          </div>
-          <div class="form-group">
-            <label for="message">ਸੰਦੇਸ਼:</label>
-            <textarea id="message" name="Message" rows="5" placeholder="ਤੁਹਾਡਾ ਸੰਦੇਸ਼..." required></textarea>
-          </div>
-          <button type="submit" class="btn-submit">ਭੇਜੋ</button>
-        </form>
-        <p class="note">
-          ● ਭੇਜਣ 'ਤੇ ਤੁਹਾਡਾ ਡਿਫੌਲਟ ਈਮੇਲ ਐਪ ਖੁੱਲੇਗਾ ਅਤੇ ਸਭ ਫੀਲਡਸ ਪਹਿਲਾਂ ਹੀ ਭਰੇ ਹੋਏ ਮਿਲਣਗੇ। ਕਿਰਪਾ ਕਰਕੇ ਈਮੇਲ ਵਿੱਚ “Send” ਤੇ ਕਲਿੱਕ ਕਰਨਾ ਨਾ ਭੁੱਲੋ।
-        </p>
-      </div>
-    </section>
-  </main>
+      <form
+  class="collab-form"
+  action="https://formsubmit.co/bytespatti@gmail.com"
+  method="POST"
+>
+  <div class="form-group">
+    <label for="name">ਨਾਮ:</label>
+    <input type="text" id="name" name="name" placeholder="ਆਪਣਾ ਨਾਮ ਦਰਜ ਕਰੋ" required />
+  </div>
+  <div class="form-group">
+    <label for="email">ਈਮੇਲ:</label>
+    <input type="email" id="email" name="email" placeholder="example@domain.com" required />
+  </div>
+  <div class="form-group">
+    <label for="subject">ਸਬਜੈਕਟ:</label>
+    <input type="text" id="subject" name="_subject" placeholder="ਸਬਜੈਕਟ ਲਿਖੋ" required />
+  </div>
+  <div class="form-group">
+    <label for="message">ਸੰਦੇਸ਼:</label>
+    <textarea id="message" name="message" rows="5" placeholder="ਤੁਹਾਡਾ ਸੰਦੇਸ਼..." required></textarea>
+  </div>
+
+  <!-- Optional: Prevent spam with honeypot -->
+  <input type="text" name="_honey" style="display:none">
+  <!-- Optional: Disable CAPTCHA (only for trusted sites) -->
+  <input type="hidden" name="_captcha" value="false">
+  <!-- Optional: Redirect after submission -->
+  <input type="hidden" name="_next" value="https://yourdomain.com/thank-you.html">
+
+  <button type="submit" class="btn-submit">ਭੇਜੋ</button>
+</form>
+        <!-- Confirmation message (hidden by default) -->
+<div id="formStatus" class="note" style="display: none; color: #2d7a2d; font-weight: bold; text-align: center; margin-top: 1rem;">
+  ✅ Your message has been sent! We’ll reach out to you soon.
+</div>
 
   <!-- Footer -->
   <footer class="site-footer">
@@ -393,7 +398,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <li>
             <a href="https://instagram.com/patti_bytes" class="social-link" target="_blank" aria-label="Instagram">
               <svg class="icon icon-instagram" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 2.163c3.204 0 3.584.012 4.849.07 1.366.062 2.633.36 3.608 1.335.975.975 1.274 2.242 1.335 3.608.058 1.265.07 1.645.07 4.849s-.012 3.584-.07 4.849c-.062 1.366-.36 2.633-1.335 3.608-.975.975-2.242 1.274-3.608 1.335-1.265.058-1.645.07-4.849.07s-3.584-.012-4.849-.07c-1.366-.062-2.633-.36-3.608-1.335-.975-.975-1.274-2.242-1.335-3.608C2.175 15.584 2.163 15.204 2.163 12s.012-3.584.07-4.849c.062-1.366.36-2.633 1.335-3.608.975-.975 2.242-1.274 3.608-1.335C8.416 2.175 8.796 2.163 12 2.163m0-2.163C8.741 0 8.332.014 7.052.072 5.76.13 4.597.443 3.607 1.433 2.616 2.424 2.303 3.587 2.245 4.879 2.187 6.159 2.173 6.568 2.173 12s.014 5.841.072 7.121c.058 1.292.371 2.455 1.362 3.446.991.991 2.154 1.304 3.446 1.362 1.28.058 1.689.072 7.121.072s5.841-.014 7.121-.072c1.292-.058 2.455-.371 3.446-1.362.991-.991 1.304-2.154 1.362-3.446.058-1.28.072-1.689.072-7.121s-.014-5.841-.072-7.121c-.058-1.292-.371-2.455-1.362-3.446C19.455.443 18.292.13 17 .072 15.719.014 15.31 0 12 0z" />
+               <path d="M12 2.163c3.204 0 3.584.012 4.849.07 1.366.062 2.633.36 3.608 1.335.975.975 1.274 2.242 1.335 3.608.058 1.265.07 1.645.07 4.849s-.012 3.584-.07 4.849c-.062 1.366-.36 2.633-1.335 3.608-.975.975-2.242 1.274-3.608 1.335-1.265.058-1.645.07-4.849.07s-3.584-.012-4.849-.07c-1.366-.062-2.633-.36-3.608-1.335-.975-.975-1.274-2.242-1.335-3.608C2.175 15.584 2.163 15.204 2.163 12s.012-3.584.07-4.849c.062-1.366.36-2.633 1.335-3.608.975-.975 2.242-1.274 3.608-1.335C8.416 2.175 8.796 2.163 12 2.163m0-2.163C8.741 0 8.332.014 7.052.072 5.76.13 4.597.443 3.607 1.433 2.616 2.424 2.303 3.587 2.245 4.879 2.187 6.159 2.173 6.568 2.173 12s.014 5.841.072 7.121c.058 1.292.371 2.455 1.362 3.446.991.991 2.154 1.304 3.446 1.362 1.28.058 1.689.072 7.121.072s5.841-.014 7.121-.072c1.292-.058 2.455-.371 3.446-1.362.991-.991 1.304-2.154 1.362-3.446.058-1.28.072-1.689.072-7.121s-.014-5.841-.072-7.121c-.058-1.292-.371-2.455-1.362-3.446C19.455.443 18.292.13 17 .072 15.719.014 15.31 0 12 0z" />
                 <path d="M12 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zm0 10.162a3.999 3.999 0 1 1 0-7.998 3.999 3.999 0 0 1 0 7.998z" />
                 <circle cx="18.406" cy="5.594" r="1.44" />
               </svg>
@@ -406,7 +411,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
               </svg>
             </a>
           </li>
-          <li>
+         <li>
             <a href="https://whatsapp.com/channel/0029Vb6x0b7EQIaxR4fDe72X" class="social-link" target="_blank" aria-label="WhatsApp">
               <svg class="icon icon-whatsapp" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M20.523 3.478A11.937 11.937 0 0 0 12 0C5.372 0 0 5.373 0 12c0 2.087.56 4.04 1.54 5.726L0 24l6.484-1.508A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12 0-3.204-1.222-6.202-3.477-8.522zM12 21.75a9.75 9.75 0 0 1-4.98-1.405l-.357-.213-3.85.896.972-3.747-.232-.374A9.725 9.725 0 0 1 2.25 12 9.75 9.75 0 1 1 12 21.75zm5.386-7.176c-.085-.143-.303-.23-.633-.403-.328-.176-1.943-.958-2.244-1.066s-.524-.176-.742.176c-.219.352-.848 1.066-1.04 1.276-.19.214-.377.241-.705.085-.328-.154-1.383-.51-2.635-1.623-.975-.868-1.633-1.94-1.824-2.27-.19-.328-.02-.506.144-.68.148-.147.328-.382.492-.574.163-.192.219-.328.328-.547.112-.219.056-.41-.028-.575-.085-.143-.742-1.792-1.016-2.459-.268-.643-.54-.557-.742-.564-.19-.007-.41-.007-.63-.007-.219 0-.575.083-.876.41s-1.15 1.127-1.15 2.744c0 1.616 1.177 3.178 1.342 3.402.164.219 2.317 3.547 5.617 4.971.786.339 1.398.541 1.877.693.789.254 1.508.218 2.078.132.634-.091 1.943-.793 2.217-1.557.273-.766.273-1.423.191-1.557z" />
@@ -420,7 +425,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <!-- Footer Credits -->
       <div class="footer-copy">
           <p>
-      © <span class="notranslate" translate="no">ਪੱਟੀ ਬਾਈਟਸ</span> 2025 – All rights reserved.
+      © <span class="notranslate" translate="no">ਪੱਟੀ ਬਾਈਟਸ</span> 2025 – All rights reserved.
     </p>
       </div>
     </div>
