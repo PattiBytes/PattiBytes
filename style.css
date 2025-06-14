@@ -516,12 +516,89 @@ header .site-title {
   transform: scale(2.5);
   opacity: 1;
 }
+/* ===========================================
+   Footer Credits Styling
+=========================================== */
 .footer-copy {
-  flex: 1 1 100%;
+  background-color: #111;
+  padding: 1.5rem 1rem;
   text-align: center;
-  margin-top: 2rem;
-  color: #888;
+  color: #eee;
+  font-family: "Segoe UI", sans-serif;
+  overflow: hidden;
+  position: relative;
 }
+
+/* Base styles for both lines */
+.footer-copy p {
+  margin: 0.3rem 0;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeUp 0.8s ease-out forwards;
+}
+
+/* Stagger the animations */
+.footer-copy .copyright {
+  animation-delay: 0.3s;
+  font-size: 0.95rem;
+}
+.footer-copy .made-with {
+  animation-delay: 0.6s;
+  font-size: 1rem;
+  font-style: italic;
+}
+
+/* Accent the brand name */
+.footer-copy .notranslate {
+  color: var(--accent-color);
+  font-weight: bold;
+}
+
+/* “Made with” heart pulse */
+.footer-copy .heart {
+  display: inline-block;
+  margin: 0 0.25rem;
+  color: #e25555;
+  animation: heartPulse 1.2s ease-in-out infinite;
+}
+
+/* Thrillyverse link underline */
+.footer-copy .made-with a {
+  color: var(--accent-color);
+  text-decoration: none;
+  position: relative;
+  padding-bottom: 2px;
+}
+.footer-copy .made-with a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--accent-color);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease;
+}
+.footer-copy .made-with a:hover::after,
+.footer-copy .made-with a:focus::after {
+  transform: scaleX(1);
+}
+
+/* Keyframes */
+@keyframes fadeUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heartPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.4); }
+}
+
 
 /* ===========================================
    10) Back-to-Top Button
