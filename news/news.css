@@ -1,0 +1,251 @@
+/* ===========================================
+   Variables and Global Settings
+=========================================== */
+:root {
+  --transition-speed: 0.3s;
+  --text-color: #333;
+  --accent-color: #ff2d95;
+  --secondary-color: #0d3b66;
+  --highlight-color: #e91e63;
+  --background-color: #f9f9f9;
+}
+
+/* ===========================================
+   Additional News Page & Modal CSS
+=========================================== */
+
+/* 1) News Grid */
+.latest-news .news-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-auto-rows: auto;
+  gap: 1.75rem;
+  padding: 1rem 0;
+}
+
+/* 2) News Card Styling */
+.latest-news .news-card {
+  overflow: hidden;
+  border: 2px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  background-color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.latest-news .news-card:hover,
+.latest-news .news-card:focus-within {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  border-color: var(--accent-color);
+}
+
+/* 3) Card Media Container & Enlarge Button */
+.latest-news .news-card .media-container {
+  position: relative;
+  max-height: 200px;
+  overflow: hidden;
+  background-color: #000;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.latest-news .news-card .media-container img,
+.latest-news .news-card .media-container iframe {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+}
+
+.enlarge-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  line-height: 1;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  z-index: 2;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.enlarge-btn:hover,
+.enlarge-btn:focus {
+  background: rgba(255, 255, 255, 0.8);
+  color: #000;
+  transform: scale(1.1);
+}
+
+/* 4) News Content & Read More */
+.latest-news .news-card .news-content {
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem;
+}
+.latest-news .news-card .news-content h4 {
+  font-size: 1.25rem;
+  color: var(--primary-color);
+  margin-bottom: 0.75rem;
+  transition: color 0.3s ease;
+}
+.latest-news .news-card:hover .news-content h4,
+.latest-news .news-card:focus-within .news-content h4 {
+  color: var(--accent-color);
+}
+.latest-news .news-card .news-content p {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text-color);
+  margin-bottom: 1.25rem;
+  flex-grow: 1;
+}
+.latest-news .news-card .read-more-btn {
+  padding: 0.6rem 1.4rem;
+  border: none;
+  border-radius: 30px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  background-color: var(--accent-color);
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+.latest-news .news-card .read-more-btn:hover,
+.latest-news .news-card .read-more-btn:focus {
+  background-color: var(--highlight-color);
+  transform: translateY(-2px) scale(1.03);
+}
+.latest-news .news-card .media-container:empty {
+  display: none;
+}
+
+/* Reusable News Text Modal */
+.modal-overlay {
+  padding: 0;
+}
+.modal-content {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 1rem;
+  overflow: auto;
+  background-color: #fff;
+  box-shadow: none;
+  border-radius: 0;
+}
+.modal-title {
+  font-size: 1.75rem;
+  color: var(--primary-color);
+  text-align: center;
+  margin-bottom: 1rem;
+  transition: color var(--transition-speed);
+}
+.modal-content-text {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--text-color);
+  text-align: justify;
+  margin-bottom: 1rem;
+}
+
+/* Reusable Image Lightbox */
+.image-modal .modal-content {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+.image-modal .modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.image-modal .modal-close:hover,
+.image-modal .modal-close:focus {
+  background: rgba(255, 255, 255, 0.8);
+  color: #000;
+  transform: scale(1.1);
+}
+.image-modal-body {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+}
+#modal-image,
+.image-modal-body iframe {
+  max-width: none;
+  max-height: none;
+  width: auto;
+  height: auto;
+}
+
+/* Responsive Adjustments for News */
+@media (max-width: 768px) {
+  .latest-news .news-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .latest-news .news-card {
+    display: flex;
+    flex-direction: column;
+  }
+  .latest-news .news-card .media-container {
+    max-height: 160px;
+  }
+  .latest-news .news-card .news-content {
+    padding: 1rem;
+  }
+  .latest-news .news-card .news-content h4 {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+  }
+  .latest-news .news-card .news-content p {
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+  }
+  .latest-news .news-card .read-more-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+  }
+  .modal-content,
+  .image-modal .modal-content {
+    width: 100vw;
+    height: 100vh;
+    padding: 0.5rem;
+  }
+  .modal-title {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .modal-content-text {
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+  }
+  .modal-content-text ul {
+    padding-left: 1rem;
+  }
+  .image-modal-body {
+    padding: 0;
+  }
+  #modal-image,
+  .image-modal-body iframe {
+    max-width: 100%;
+    max-height: 100%;
+  }
+}
