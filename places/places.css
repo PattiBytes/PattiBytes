@@ -1,0 +1,247 @@
+/* ===========================================
+   Variables and Global Settings
+=========================================== */
+:root {
+  --transition-speed: 0.3s;
+  --text-color: #333;
+  --accent-color: #ff2d95;
+  --secondary-color: #0d3b66;
+  --highlight-color: #e91e63;
+  --background-color: #f9f9f9;
+}
+
+/* ===========================================
+   1) Search Wrapper
+=========================================== */
+.search-container {
+  text-align: center;
+  margin: 1rem 0;
+}
+.search-wrapper {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  max-width: 400px;
+  padding: 0.25rem 0.5rem;
+  background-color: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: 30px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+.search-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+  margin-right: 0.5rem;
+  fill: #555;
+}
+.search-input {
+  flex: 1;
+  font-size: 1rem;
+  padding: 0.5rem;
+  border: none;
+  outline: none;
+}
+.clear-btn {
+  display: none;
+  padding: 0 0.5rem;
+  font-size: 1.25rem;
+  color: #888;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.clear-btn:hover {
+  color: #444;
+}
+.clear-btn.visible {
+  display: inline-block;
+}
+
+/* ===========================================
+   2) “No Match” Message
+=========================================== */
+.no-match-message {
+  display: none;
+  margin: 1rem 0;
+  text-align: center;
+  color: var(--accent-color);
+  font-weight: 600;
+}
+
+/* ===========================================
+   3) Grid of Place Cards
+=========================================== */
+.places-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+/* ===========================================
+   4) Place Card Styling
+=========================================== */
+.place-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 2px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  background-color: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: transform 0.3s ease,
+              box-shadow 0.3s ease,
+              border-color 0.3s ease;
+}
+.place-card:hover,
+.place-card:focus-within {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  border-color: var(--accent-color);
+}
+.place-card.hidden {
+  display: none !important;
+}
+
+.place-card .media-container {
+  max-height: 180px;
+  overflow: hidden;
+  background-color: #000;
+}
+.place-card .media-container img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.place-card .place-content {
+  flex: 1;
+  padding: 1rem;
+}
+.place-card h3 {
+  font-size: 1.2rem;
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+}
+.place-card .place-desc {
+  font-size: 0.95rem;
+  color: var(--text-color);
+  margin-bottom: 1rem;
+}
+.place-card .read-more-btn {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  background-color: var(--accent-color);
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: background-color 0.3s ease,
+              transform 0.2s ease;
+}
+.place-card .read-more-btn:hover,
+.place-card .read-more-btn:focus {
+  background-color: var(--highlight-color);
+  transform: translateY(-2px) scale(1.03);
+}
+
+/* ===========================================
+   5) Modal Overlay & Content
+=========================================== */
+.modal-overlay {
+  padding: 0;
+}
+.modal-content {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 1.5rem;
+  overflow: auto;
+  background-color: #fff;
+  border-radius: 0;
+  box-shadow: none;
+}
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Media in Modal */
+.modal-media {
+  width: 100%;
+  max-height: 50vh;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.modal-media img {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+/* Text in Modal */
+.modal-text {
+  padding: 0 1rem 1rem;
+}
+.modal-text h3 {
+  font-size: 1.75rem;
+  color: var(--primary-color);
+  text-align: center;
+  margin-bottom: 1rem;
+}
+.modal-text p {
+  font-size: 1rem;
+  color: var(--text-color);
+  line-height: 1.6;
+  text-align: justify;
+  margin-bottom: 1rem;
+}
+
+/* Modal Navigation */
+.modal-nav {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+.modal-nav-btn {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  background-color: var(--secondary-color);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color var(--transition-speed),
+              transform var(--transition-speed);
+}
+.modal-nav-btn:hover,
+.modal-nav-btn:focus {
+  background-color: var(--accent-color);
+  transform: translateY(-2px) scale(1.02);
+}
+.modal-nav-btn:disabled {
+  background-color: #ccc;
+  cursor: default;
+  transform: none;
+}
+
+/* ===========================================
+   6) Responsive Adjustments for Places Modal
+=========================================== */
+@media (max-width: 768px) {
+  .modal-text h3 {
+    font-size: 1.5rem;
+  }
+  .modal-text p {
+    font-size: 0.95rem;
+  }
+  .modal-media {
+    max-height: 40vh;
+  }
+}
