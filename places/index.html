@@ -81,29 +81,38 @@ permalink: /places/
           </div>
         </div>
         <div id="no-match" class="no-match-message" aria-live="polite"></div>
-
-        <!-- Dynamic Places Grid -->
-        <div class="places-grid">
-          {% for place in site.places %}
-            <article class="place-card" data-full="{{ place.content | xml_escape }}">
-              {% if place.data.image %}
-                <div class="media-container">
-                  <img src="{{ place.data.image | relative_url }}"
-                       alt="{{ place.data.title }}" loading="lazy">
-                </div>
-              {% endif %}
-              <div class="place-content">
-                <h3>{{ place.data.title }}</h3>
-                <p class="place-desc">{{ place.data.preview }}</p>
-                <button
-                  class="read-more-btn"
-                  aria-label="ਪੂਰਾ ਪੜ੍ਹੋ about {{ place.data.title }}"
-                >
-                  ਪੂਰਾ ਪੜ੍ਹੋ →
-                </button>
-              </div>
-            </article>
-          {% endfor %}
+<!-- Dynamic Places Grid -->
+<div class="places-grid">
+  {% for place in site.places %}
+    <article
+      class="place-card"
+      data-id="{{ place.id }}"
+      data-title="{{ place.title | escape }}"
+      data-preview="{{ place.preview | escape }}"
+      data-full="{{ place.content | escape }}"
+      {% if place.image %}data-image="{{ place.image | relative_url }}"{% endif %}
+    >
+      {% if place.image %}
+        <div class="media-container">
+          <img
+            src="{{ place.image | relative_url }}"
+            alt="{{ place.title | escape }}"
+            loading="lazy"
+          />
+        </div>
+      {% endif %}
+      <div class="place-content">
+        <h3>{{ place.title }}</h3>
+        <p class="place-desc">{{ place.preview }}</p>
+        <button
+          class="read-more-btn"
+          aria-label="ਪੂਰਾ ਪੜ੍ਹੋ about {{ place.title | escape }}"
+        >
+          ਪੂਰਾ ਪੜ੍ਹੋ →
+        </button>
+      </div>
+    </article>
+  {% endfor %}
         </div>
       </div>
     </section>
