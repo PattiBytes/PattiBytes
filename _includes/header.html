@@ -1,0 +1,25 @@
+<header class="site-header" role="banner">
+  <div class="container branding">
+    <a href="{{ '/' | relative_url }}" aria-label="Go to Patti Bytes Home">
+      <img src="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg"
+           alt="ਪੱਟੀ ਬਾਈਟਸ Logo"
+           class="logo"
+           width="50"
+           height="50"
+           loading="lazy">
+    </a>
+    <h1 class="site-title"><span class="notranslate" translate="no">{{ site.title }}</span></h1>
+  </div>
+
+  <button id="hamburger" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="mobile-menu">☰</button>
+
+  <nav id="mobile-menu" class="site-nav" aria-hidden="true" role="navigation">
+    <ul class="nav-list">
+      <li class="nav-item"><a href="{{ '/' | relative_url }}">ਮੁੱਖ ਪੰਨਾ</a></li>
+      <li class="nav-item"><a href="{{ '/news/' | relative_url }}">ਖ਼ਬਰਾਂ</a></li>
+      <li class="nav-item"><a href="{{ '/places/' | relative_url }}">ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ</a></li>
+      <li class="nav-item"><a href="{{ '/shop/' | relative_url }}">ਦੁਕਾਨ</a></li>
+      <li class="nav-item"><a href="{{ '/#collaboration' | relative_url }}">ਸੰਪਰਕ ਕਰੋ</a></li>
+    </ul>
+  </nav>
+</header>
