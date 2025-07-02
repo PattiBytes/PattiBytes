@@ -1,48 +1,24 @@
 module.exports = function(eleventyConfig) {
-    // 1. Passthrough Copy: Copy static assets directly to the output folder (_site)
-    // These files are not processed by Eleventy's templating engine, but need to be
-    // copied to the final built site.
     eleventyConfig.addPassthroughCopy("style.css");
     eleventyConfig.addPassthroughCopy("news.css");
     eleventyConfig.addPassthroughCopy("news.js");
     eleventyConfig.addPassthroughCopy("places.css");
     eleventyConfig.addPassthroughCopy("places.js");
-    eleventyConfig.addPassthroughCopy("script.js"); // Your global script.js
-    eleventyConfig.addPassthroughCopy("assets"); // For any images or other assets you might have
-    eleventyConfig.addPassthroughCopy("admin"); // Essential for Netlify CMS admin interface
+    eleventyConfig.addPassthroughCopy("script.js");
+    eleventyConfig.addPassthroughCopy("assets");
+    eleventyConfig.addPassthroughCopy("admin");
+    eleventyConfig.addPassthroughCopy("index.css"); // If you're using this file
 
-    // 2. Configure Eleventy's directories and template engines
     return {
-        // Input directory: Where Eleventy looks for your source files (templates, data, includes).
-        // "." means the root of your project.
         dir: {
             input: "./",
-            // Output directory: Where Eleventy builds the final static site.
-            // This is the folder that GitHub Pages will serve.
             output: "_site",
-            // Includes directory: Where layouts and partials (like base.html) are stored.
-            // This path is relative to the `input` directory.
             includes: "_includes",
-            // Data directory: Where global data files (like _data/site.json) are stored.
-            // This path is relative to the `input` directory.
             data: "_data"
         },
-        // Template formats Eleventy should process.
-        // "html" means it will process .html files as Nunjucks templates.
-        // "njk" means it will process .njk files as Nunjucks templates.
-        // "md" means it will process .md (Markdown) files.
         templateFormats: ["html", "njk", "md"],
-        
-        // Specify the template engine to use for Markdown files.
-        // This allows you to use Nunjucks syntax (e.g., {% if %}, {{ variable }})
-        // directly within your Markdown files if needed, before Markdown is rendered.
         markdownTemplateEngine: "njk",
-        
-        // Specify the template engine to use for HTML files.
-        // This is crucial for your news/index.html and places/index.html to work as Nunjucks templates.
-        htmlTemplateEngine: "njk",
-        
-        // Specify the template engine for data files (if you use .js data files that need templating).
+        htmlTemplateEngine: "njk", // THIS IS THE CRUCIAL LINE
         dataTemplateEngine: "njk"
     };
 };
