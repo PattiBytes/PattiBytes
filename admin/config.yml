@@ -10,24 +10,24 @@ collections:
     label: "News Articles"
     folder: "_news"
     create: true
-    slug: "{{slug}}"
+    slug: "{{id}}"          # use the `id` field for filenames
     fields:
       - { label: "Title", name: "title", widget: "string", required: true }
       - { label: "ID (for direct links)", name: "id", widget: "string", hint: "Must be unique." }
       - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
       - { label: "Image (Optional)", name: "image", widget: "image" }
-      - { label: "Tags", name: "tags", widget: "list", default: ["news"], required: true }
+      - { label: "Tags", name: "tags", widget: "list", required: true }
       - { label: "Full Content", name: "body", widget: "markdown", required: true }
 
   - name: "places"
     label: "Places of Interest"
     folder: "_places"
     create: true
-    slug: "{{slug}}"
+    slug: "{{id}}"
     fields:
       - { label: "Name", name: "title", widget: "string", required: true }
       - { label: "ID (for direct links)", name: "id", widget: "string", hint: "Must be unique." }
       - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
       - { label: "Image (Optional)", name: "image", widget: "image" }
-      - { label: "Tags", name: "tags", widget: "list", default: ["places"], required: true }
+      - { label: "Tags", name: "tags", widget: "list", required: true }
       - { label: "Full Description", name: "body", widget: "markdown", required: true }
