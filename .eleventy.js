@@ -1,6 +1,7 @@
 module.exports = function(eleventyConfig) {
     // 1. Passthrough Copy: Copy static assets directly to the output folder (_site)
-    // These files are not processed by Eleventy's templating engine.
+    // These files are not processed by Eleventy's templating engine, but need to be
+    // copied to the final built site.
     eleventyConfig.addPassthroughCopy("style.css");
     eleventyConfig.addPassthroughCopy("news.css");
     eleventyConfig.addPassthroughCopy("news.js");
@@ -12,16 +13,18 @@ module.exports = function(eleventyConfig) {
 
     // 2. Configure Eleventy's directories and template engines
     return {
-        // Input directory: Where Eleventy looks for source files.
+        // Input directory: Where Eleventy looks for your source files (templates, data, includes).
         // "." means the root of your project.
         dir: {
             input: "./",
             // Output directory: Where Eleventy builds the final static site.
-            // This is the folder you'll deploy to GitHub Pages (or Netlify).
+            // This is the folder that GitHub Pages will serve.
             output: "_site",
             // Includes directory: Where layouts and partials (like base.html) are stored.
+            // This path is relative to the `input` directory.
             includes: "_includes",
             // Data directory: Where global data files (like _data/site.json) are stored.
+            // This path is relative to the `input` directory.
             data: "_data"
         },
         // Template formats Eleventy should process.
