@@ -15,19 +15,15 @@ collections:
     label: "News Articles"
     folder: "_news"
     create: true
-    slug: "{{id}}"  # use the `id` field for filenames
+    slug: "{{id | default: title}}"
+    sort: "date:desc"  # <-- Sorts by latest date
     fields:
       - { label: "Title", name: "title", widget: "string", required: true }
-      - { - label: "ID" name: "id" widget: "string" required: false
-hint: "Leave blank to auto-fill from title and id must be unique" }
+      - { label: "ID (for direct links)", name: "id", widget: "string", required: false, hint: "Leave blank to auto-fill from title" }
       - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
-      - label: "Image (Optional)"
-        name: "image"
-        widget: "image"
-        required: false
-        media_library:
-          allow_multiple: false   # Enables delete/remove button
-      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["news"] }
+      - { label: "Image (Optional)", name: "image", widget: "image", required: false, media_library: { allow_multiple: false, delete: true } }
+      - { label: "Tags", name: "tags", widget: "list", required: true }
+      - { label: "Date", name: "date", widget: "datetime", format: "YYYY-MM-DD HH:mm", required: true }
       - { label: "Full Content", name: "body", widget: "markdown", required: true }
 
   - name: "places"
