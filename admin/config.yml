@@ -16,15 +16,10 @@ collections:
       - {label: "ID (for direct links)", name: "id", widget: "string", hint: "e.g., train-cancellation. Must be unique."}
       - {label: "Card Preview Text", name: "preview", widget: "text", required: true, hint: "A short text for the news card."}
       - {label: "Image (Optional)", name: "image", widget: "image", required: false}
-      - {label: "Tags", name: "tags", widget: "list", default: ["news"], required: true, hint: "Add 'news' tag for the news collection."} # This is the added/updated line
+      - {label: "Tags", name: "tags", widget: "list", default: ["news"], required: true, hint: "Add 'news' tag for the news collection."}
       - {label: "Full Content", name: "body", widget: "markdown", required: true}
 
   - name: "places" # A label for the CMS UI
-    label: "Places of Interest"
-    folder: "_places" # The folder where place entries will be stored
-    create: true # Allow users to create new places
-    slug: "{{slug}}"
-     - name: "places" # A label for the CMS UI
     label: "Places of Interest"
     folder: "_places" # The folder where place entries will be stored
     create: true # Allow users to create new places
