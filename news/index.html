@@ -4,11 +4,12 @@ title: "ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ"
 description: "ਪੱਟੀ ਬਾਈਟਸ: ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ"
 permalink: /news/
 css: "/news/news.css"
-js: "/news/news.js"
+js:  "/news/news.js"
 ---
+
 <section class="latest-news">
   <div class="container">
-    <h2 class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</h2>
+    <h2 class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟס</h2>
     <div class="news-grid">
       {% for article in site.news %}
         <article id="{{ article.data.id }}" class="news-card{% if article.data.featured %} featured-card{% endif %}">
@@ -30,13 +31,7 @@ js: "/news/news.js"
     </div>
   </div>
 
-  <!-- News Modal -->
-  <div id="news-modal" class="modal-overlay" aria-hidden="true">
-    <!-- …your existing modal markup… -->
-  </div>
-
-  <!-- Image Lightbox Modal -->
-  <div id="image-modal" class="modal-overlay image-modal" aria-hidden="true">
-    <!-- …your existing modal markup… -->
-  </div>
+  <!-- your existing modals -->
+  <div id="news-modal" class="modal-overlay" aria-hidden="true">…</div>
+  <div id="image-modal" class="modal-overlay image-modal" aria-hidden="true">…</div>
 </section>
