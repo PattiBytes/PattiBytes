@@ -72,8 +72,11 @@ permalink: /news/
             <article
               id="{{ article.data.id }}"
               class="news-card{% if article.data.featured %} featured-card{% endif %}"
+              data-id="{{ article.data.id }}"
               data-title="{{ article.data.title | escape }}"
+              data-preview="{{ article.data.preview | escape }}"
               data-content="{{ article.content | xml_escape }}"
+              {% if article.data.image %}data-image="{{ article.data.image | relative_url }}"{% endif %}
             >
               {% if article.data.image %}
                 <div class="media-container">
@@ -95,13 +98,22 @@ permalink: /news/
         </div>
       </div>
 
-      <!-- Text Modal -->
+      <!-- ======================
+           News-Text Modal
+           ====================== -->
       <div id="news-modal" class="modal-overlay" aria-hidden="true">
         <div class="modal-content">
           <button id="modal-close" class="modal-close" aria-label="Close">&times;</button>
           <div class="modal-body">
-            <h3 id="modal-title" class="modal-title">Title goes here</h3>
+            <!-- NEW: Show the ID -->
+            <p id="modal-id" class="modal-id"></p>
+            <!-- Title -->
+            <h3 id="modal-title" class="modal-title"></h3>
+            <!-- Preview snippet -->
+            <p id="modal-preview" class="modal-preview"></p>
+            <!-- Media -->
             <div id="modal-media" class="modal-media"></div>
+            <!-- Full content -->
             <div id="modal-text" class="modal-content-text"></div>
           </div>
         </div>
