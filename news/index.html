@@ -68,14 +68,15 @@ permalink: /news/
       <div class="container">
         <h2 class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</h2>
         <div class="news-grid">
-        {% for article in site.news %}
+      {% assign sorted_news = site.news | sort: "date" | reverse %}
+{% for article in sorted_news %}
   <article
     id="{{ article.id }}"
     class="news-card{% if article.featured %} featured-card{% endif %}"
     data-id="{{ article.id }}"
     data-title="{{ article.title | escape }}"
     data-preview="{{ article.preview | escape }}"
-    data-content="{{ article.content | escape }}"
+    data-content="{{ article.content | xml_escape }}"
     {% if article.image %}data-image="{{ article.image }}"{% endif %}
   >
     {% if article.image %}
@@ -98,6 +99,7 @@ permalink: /news/
     </div>
   </article>
 {% endfor %}
+
 
         </div>
       </div>
