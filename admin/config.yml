@@ -10,21 +10,22 @@ media_library:
   config:
     publicKey: "demopublickey"  # Replace with your real key or remove this section if not using Uploadcare
 
+
 collections:
   - name: "news"
     label: "News Articles"
     folder: "_news"
     create: true
-    slug: "{{id | default: title}}"
-    sort: "date:desc"  # <-- Sorts by latest date
+    slug: "{{id}}"  # Uses the `id` field for filenames
     fields:
       - { label: "Title", name: "title", widget: "string", required: true }
-      - { label: "ID (for direct links)", name: "id", widget: "string", required: false, hint: "Leave blank to auto-fill from title" }
+      - { label: "ID (for direct links)", name: "id", widget: "string", hint: "Must be unique. Leave blank for auto-generation.", required: false }
+      - { label: "Date", name: "date", widget: "datetime", format: "YYYY-MM-DD HH:mm", required: true, default: "" }
       - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
-      - { label: "Image (Optional)", name: "image", widget: "image", required: false, media_library: { allow_multiple: false, delete: true } }
-      - { label: "Tags", name: "tags", widget: "list", required: true }
-      - { label: "Date", name: "date", widget: "datetime", format: "YYYY-MM-DD HH:mm", required: true }
+      - { label: "Image (Optional)", name: "image", widget: "image", required: false, media_library: { allow_multiple: false } }
+      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["news"] }
       - { label: "Full Content", name: "body", widget: "markdown", required: true }
+
 
   - name: "places"
     label: "Places of Interest"
