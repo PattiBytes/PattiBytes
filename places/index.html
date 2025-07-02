@@ -3,19 +3,16 @@ layout: default
 title: "ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ"
 description: "ਪੱਟੀ ਦੇ ਇਤਿਹਾਸਕ ਅਤੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ"
 permalink: /places/
-css: "/places.css"
+css: "/places/places.css"
+js:  "/places/places.js"
 ---
 
 <section class="places-section">
   <div class="container">
     <h2 class="section-title">ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ</h2>
 
-    <div class="search-container">
-      <label for="places-search" class="visually-hidden">Search places</label>
-      <div class="search-wrapper">
-        <!-- (keep your existing search markup here) -->
-      </div>
-    </div>
+    <!-- keep your search markup as‑is -->
+    <div class="search-container">…</div>
     <div id="no-match" class="no-match-message" aria-live="polite"></div>
 
     <div class="places-grid">
@@ -41,4 +38,7 @@ css: "/places.css"
       {% endfor %}
     </div>
   </div>
+
+  <!-- your existing places modal -->
+  <div id="places-modal" class="modal-overlay" aria-hidden="true">…</div>
 </section>
