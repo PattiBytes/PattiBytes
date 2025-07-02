@@ -1,37 +1,64 @@
 ---
 layout: default
 title: "ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ"
-description: "ਪੱਟੀ ਬਾਈਟਸ: ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ"
+description: "ਪੱਟੀ ਬਾਈਟਸ: ਪੱਟੀ ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ"
 permalink: /news/
 css: "/news/news.css"
 js:  "/news/news.js"
 ---
-
-<section class="latest-news">
-  <div class="container">
-    <h2 class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟס</h2>
-    <div class="news-grid">
-      {% for article in site.news %}
-        <article id="{{ article.data.id }}" class="news-card{% if article.data.featured %} featured-card{% endif %}">
+<main>
+  <section class="latest-news">
+    <div class="container">
+      <h2 class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</h2>
+      <div class="news-grid">
+        {% for article in site.news %}
+        <article
+          id="{{ article.data.id }}"
+          class="news-card{% if article.data.featured %} featured-card{% endif %}"
+          data-title="{{ article.data.title }}"
+          data-content="{{ article.content | strip_newlines | replace: '"', '\"' }}"
+        >
           {% if article.data.image %}
-            <div class="media-container">
-              <img src="{{ article.data.image | relative_url }}" alt="{{ article.data.title }}" loading="lazy">
-            </div>
+          <div class="media-container">
+            <button class="enlarge-btn" aria-label="Enlarge image">🔍</button>
+            <img src="{{ article.data.image | relative_url }}" 
+                 alt="{{ article.data.title }}" 
+                 loading="lazy" />
+          </div>
           {% endif %}
           <div class="news-content{% unless article.data.image %} no-media{% endunless %}">
             <h4>{{ article.data.title }}</h4>
             <p class="card-preview">{{ article.data.preview }}</p>
             <div class="news-actions">
-              <a class="read-more-btn" href="{{ article.url }}">ਪੂਰਾ ਪੜ੍ਹੋ →</a>
-              <button class="copy-link" data-link="{{ article.url }}" title="Copy Link">🔗</button>
+              <button class="read-more-btn">ਪੂਰਾ ਪੜ੍ਹੋ →</button>
+              <button class="copy-link" title="Copy Link">🔗</button>
             </div>
           </div>
         </article>
-      {% endfor %}
+        {% endfor %}
+      </div>
     </div>
-  </div>
 
-  <!-- your existing modals -->
-  <div id="news-modal" class="modal-overlay" aria-hidden="true">…</div>
-  <div id="image-modal" class="modal-overlay image-modal" aria-hidden="true">…</div>
-</section>
+    <!-- News-Text Modal -->
+    <div id="news-modal" class="modal-overlay" aria-hidden="true">
+      <div class="modal-content">
+        <button id="modal-close" class="modal-close" aria-label="Close">&times;</button>
+        <div class="modal-body">
+          <h3 id="modal-title" class="modal-title">Title goes here</h3>
+          <div id="modal-media" class="modal-media"></div>
+          <p id="modal-text" class="modal-content-text">Full content goes here.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Image-Lightbox Modal -->
+    <div id="image-modal" class="modal-overlay image-modal" aria-hidden="true">
+      <div class="modal-content">
+        <button id="image-modal-close" class="modal-close" aria-label="Close">&times;</button>
+        <div class="modal-body image-modal-body">
+          <img id="modal-image" src="" alt="" />
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
