@@ -18,7 +18,8 @@ collections:
     slug: "{{id}}"  # use the `id` field for filenames
     fields:
       - { label: "Title", name: "title", widget: "string", required: true }
-      - { label: "ID (for direct links)", name: "id", widget: "string", hint: "Must be unique." }
+      - { - label: "ID" name: "id" widget: "string" required: false
+hint: "Leave blank to auto-fill from title and id must be unique" }
       - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
       - label: "Image (Optional)"
         name: "image"
@@ -33,7 +34,8 @@ collections:
     label: "Places of Interest"
     folder: "_places"
     create: true
-    slug: "{{id}}"
+    slug: "{{id | default: title}}"
+
     fields:
       - { label: "Name", name: "title", widget: "string", required: true }
       - { label: "ID (for direct links)", name: "id", widget: "string", hint: "Must be unique." }
