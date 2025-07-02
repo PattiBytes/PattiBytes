@@ -5,18 +5,28 @@ backend:
 media_folder: "assets/uploads"
 public_folder: "/assets/uploads"
 
+media_library:
+  name: uploadcare
+  config:
+    publicKey: "demopublickey"  # Replace with your real key or remove this section if not using Uploadcare
+
 collections:
   - name: "news"
     label: "News Articles"
     folder: "_news"
     create: true
-    slug: "{{id}}"          # use the `id` field for filenames
+    slug: "{{id}}"  # use the `id` field for filenames
     fields:
       - { label: "Title", name: "title", widget: "string", required: true }
       - { label: "ID (for direct links)", name: "id", widget: "string", hint: "Must be unique." }
       - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
-      - { label: "Image (Optional)", name: "image", widget: "image" }
-      - { label: "Tags", name: "tags", widget: "list", required: true }
+      - label: "Image (Optional)"
+        name: "image"
+        widget: "image"
+        required: false
+        media_library:
+          allow_multiple: false   # Enables delete/remove button
+      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["news"] }
       - { label: "Full Content", name: "body", widget: "markdown", required: true }
 
   - name: "places"
@@ -28,6 +38,11 @@ collections:
       - { label: "Name", name: "title", widget: "string", required: true }
       - { label: "ID (for direct links)", name: "id", widget: "string", hint: "Must be unique." }
       - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
-      - { label: "Image (Optional)", name: "image", widget: "image" }
-      - { label: "Tags", name: "tags", widget: "list", required: true }
+      - label: "Image (Optional)"
+        name: "image"
+        widget: "image"
+        required: false
+        media_library:
+          allow_multiple: false   # Enables delete/remove button
+      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["places"] }
       - { label: "Full Description", name: "body", widget: "markdown", required: true }
