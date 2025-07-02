@@ -1,10 +1,13 @@
 ---
+layout: "base.html"
+permalink: "/news/index.html"
+# You can add other front matter here if needed, like title, description, etc.
 title: "ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ"
 description: "ਪੱਟੀ ਬਾਈਟਸ: ਪੱਟੀ ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ ਇੱਥੇ ਪੜ੍ਹੋ।"
 keywords: "ਪੱਟੀ ਬਾਈਟਸ, Patti Bytes news, Patti News, ਖਬਰਾਂ, ਅਪਡੇਟਸ, ਪੰਜਾਬੀ ਖਬਰਾਂ"
-layout: "base.html" # This tells Eleventy to use your base.html layout
-permalink: "/news/index.html" # This sets the output path for this page
 ---
+
+{# The above is the Front Matter. The content below is your Nunjucks template #}
 
 {% block head_css %} {# Injecting news.css into the head of base.html #}
 <link rel="stylesheet" href="/news.css" />
