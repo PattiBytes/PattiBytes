@@ -1,8 +1,8 @@
 ---
-title: testing the news
-id: testing-news
-preview: testing the news testing the news
+title: 1 ਤੋਂ 14 ਜੁਲਾਈ ਤੱਕ ਭਗਤਾਂਵਾਲਾ-ਖੇਮਕਰਣ ਟਰੇਨ ਬੰਦ
+id: ਜੁਲਾਈ-ਤੱਕ
+preview: 1 ਤੋਂ 14 ਜੁਲਾਈ ਤੱਕ ਭਗਤਾਂਵਾਲਾ-ਖੇਮਕਰਣ ਟਰੇਨ ਬੰਦ
 tags:
   - news
 ---
-k﻿ida di aaaaa
+1 ਤੋਂ 14 ਜੁਲਾਈ ਤੱਕ ਭਗਤਾਂਵਾਲਾ-ਖੇਮਕਰਣ ਟਰੇਨ ਬੰਦ
