@@ -9,11 +9,15 @@ on:
   push:
     branches:
       - main # Replace 'main' with your default branch name if it's different (e.g., 'master')
-# ADD THIS BLOCK HERE:
+
+# Permissions: This block grants the necessary permissions to the GITHUB_TOKEN
+# that GitHub Actions automatically creates for this workflow run.
+# These permissions are crucial for the deployment action to push content
+# to your repository and manage GitHub Pages.
 permissions:
-  contents: write # Allows the action to write files to the repository
+  contents: write # Allows the action to write files to the repository (e.g., push to gh-pages)
   pages: write    # Specifically allows the action to manage GitHub Pages deployments
-  id-token: write # Required for some advanced GitHub Pages setups, good to include
+  id-token: write # Required for some advanced GitHub Pages setups (e.g., OIDC), good to include
 
 # Jobs: A workflow is made up of one or more jobs that run in parallel by default.
 jobs:
@@ -26,7 +30,7 @@ jobs:
       # Step 1: Checkout the repository code.
       # This action brings your repository's content onto the GitHub Actions runner.
       - name: Checkout code
-        uses: actions/checkout@v4 # Uses the official checkout action
+        uses: actions/checkout@v4 # Uses the official checkout action to get your code
 
       # Step 2: Set up Node.js environment.
       # This action installs a specific version of Node.js on the runner.
@@ -34,7 +38,7 @@ jobs:
         uses: actions/setup-node@v4 # Uses the official setup-node action
         with:
           node-version: '20' # Specify the Node.js version. '20' is a good stable choice.
-                            # You can change this if your project requires a different version.
+                              # You can change this if your project requires a different version.
 
       # Step 3: Install project dependencies.
       # This runs 'npm install' based on your package.json file.
