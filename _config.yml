@@ -1,0 +1,7 @@
+collections:
+  news:
+    output: true
+    permalink: /news/:slug/
+  places:
+    output: true
+    permalink: /places/:slug/
