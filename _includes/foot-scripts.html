@@ -1,0 +1,14 @@
+<!-- Google Tag Manager (noscript) -->
+<noscript>
+  <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5WKZPF3F"
+          height="0" width="0" style="display:none;visibility:hidden">
+  </iframe>
+</noscript>
+
+<!-- Shared JavaScript -->
+<script defer src="{{ '/script.js' | relative_url }}"></script>
+
+<!-- Page-specific JS if present in front-matter (e.g. `page.js`) -->
+{% if page.js %}
+<script defer src="{{ page.js | relative_url }}"></script>
+{% endif %}
