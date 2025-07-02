@@ -9,6 +9,11 @@ on:
   push:
     branches:
       - main # Replace 'main' with your default branch name if it's different (e.g., 'master')
+# ADD THIS BLOCK HERE:
+permissions:
+  contents: write # Allows the action to write files to the repository
+  pages: write    # Specifically allows the action to manage GitHub Pages deployments
+  id-token: write # Required for some advanced GitHub Pages setups, good to include
 
 # Jobs: A workflow is made up of one or more jobs that run in parallel by default.
 jobs:
