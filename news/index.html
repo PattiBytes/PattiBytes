@@ -68,33 +68,37 @@ permalink: /news/
       <div class="container">
         <h2 class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</h2>
         <div class="news-grid">
-          {% for article in site.news %}
-            <article
-              id="{{ article.data.id }}"
-              class="news-card{% if article.data.featured %} featured-card{% endif %}"
-              data-id="{{ article.data.id }}"
-              data-title="{{ article.data.title | escape }}"
-              data-preview="{{ article.data.preview | escape }}"
-              data-content="{{ article.content | xml_escape }}"
-              {% if article.data.image %}data-image="{{ article.data.image | relative_url }}"{% endif %}
-            >
-              {% if article.data.image %}
-                <div class="media-container">
-                  <button class="enlarge-btn" aria-label="Enlarge image">🔍</button>
-                  <img src="{{ article.data.image | relative_url }}"
-                       alt="{{ article.data.title }}" loading="lazy">
-                </div>
-              {% endif %}
-              <div class="news-content{% unless article.data.image %} no-media{% endunless %}">
-                <h4>{{ article.data.title }}</h4>
-                <p class="card-preview">{{ article.data.preview }}</p>
-                <div class="news-actions">
-                  <button class="read-more-btn">ਪੂਰਾ ਪੜ੍ਹੋ →</button>
-                  <button class="copy-link" title="Copy Link">🔗</button>
-                </div>
-              </div>
-            </article>
-          {% endfor %}
+        {% for article in site.news %}
+  <article
+    id="{{ article.id }}"
+    class="news-card{% if article.featured %} featured-card{% endif %}"
+    data-id="{{ article.id }}"
+    data-title="{{ article.title | escape }}"
+    data-preview="{{ article.preview | escape }}"
+    data-content="{{ article.content | escape }}"
+    {% if article.image %}data-image="{{ article.image }}"{% endif %}
+  >
+    {% if article.image %}
+      <div class="media-container">
+        <button class="enlarge-btn" aria-label="Enlarge image">🔍</button>
+        <img
+          src="{{ article.image }}"
+          alt="{{ article.title | escape }}"
+          loading="lazy"
+        />
+      </div>
+    {% endif %}
+    <div class="news-content{% unless article.image %} no-media{% endunless %}">
+      <h4>{{ article.title }}</h4>
+      <p class="card-preview">{{ article.preview }}</p>
+      <div class="news-actions">
+        <button class="read-more-btn">ਪੂਰਾ ਪੜ੍ਹੋ →</button>
+        <button class="copy-link" title="Copy Link">🔗</button>
+      </div>
+    </div>
+  </article>
+{% endfor %}
+
         </div>
       </div>
 
