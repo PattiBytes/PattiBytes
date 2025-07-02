@@ -1,69 +1,19 @@
 ---
 layout: "base.html"
 permalink: "/news/index.html"
-# You can add other front matter here if needed, like title, description, etc.
 title: "ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ"
 description: "ਪੱਟੀ ਬਾਈਟਸ: ਪੱਟੀ ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ ਇੱਥੇ ਪੜ੍ਹੋ।"
 keywords: "ਪੱਟੀ ਬਾਈਟਸ, Patti Bytes news, Patti News, ਖਬਰਾਂ, ਅਪਡੇਟਸ, ਪੰਜਾਬੀ ਖਬਰਾਂ"
 ---
 
-{# The above is the Front Matter. The content below is your Nunjucks template #}
+{# The content below will be processed by Nunjucks if the front matter is correct #}
 
 {% block head_css %} {# Injecting news.css into the head of base.html #}
 <link rel="stylesheet" href="/news.css" />
 {% endblock %}
 
 <section class="latest-news">
-    <div class="container">
-        <h2 class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</h2>
-        <div class="news-grid">
-            {# Loop through the 'news' collection, newest first #}
-            {% for item in collections.news | reverse %}
-            <article class="news-card {% if item.data.id == 'train-cancel' or item.data.id == 'pattibytes-website-launch' %}featured-card{% endif %}"
-                     id="{{ item.data.id }}"
-                     data-title="{{ item.data.title }}"
-                     data-content="{{ item.content | safe }}"> {# item.content contains the HTML from Markdown #}
-
-                {% if item.data.image %}
-                <div class="media-container">
-                    <button class="enlarge-btn" aria-label="Enlarge image">🔍</button>
-                    <img src="{{ item.data.image }}" alt="{{ item.data.title }}" loading="lazy" />
-                </div>
-                {% endif %}
-
-                <div class="news-content {% if not item.data.image %}no-media{% endif %}">
-                    <h4>{{ item.data.title }}</h4>
-                    <p class="card-preview">{{ item.data.preview }}</p>
-                    <div class="news-actions">
-                        <button class="read-more-btn">ਪੂਰਾ ਪੜ੍ਹੋ →</button>
-                        <button class="copy-link" title="Copy Link">🔗</button>
-                    </div>
-                </div>
-            </article>
-            {% endfor %}
-        </div>
-    </div>
-
-    <div id="news-modal" class="modal-overlay" aria-hidden="true">
-        <div class="modal-content">
-            <button id="modal-close" class="modal-close" aria-label="Close">×</button>
-            <div class="modal-body">
-                <h3 id="modal-title" class="modal-title">Title goes here</h3>
-                <div id="modal-media" class="modal-media"></div>
-                <p id="modal-text" class="modal-content-text">Full content goes here.</p>
-            </div>
-        </div>
-    </div>
-
-    <div id="image-modal" class="modal-overlay image-modal" aria-hidden="true">
-        <div class="modal-content">
-            <button id="image-modal-close" class="modal-close" aria-label="Close">×</button>
-            <div class="modal-body image-modal-body">
-                <img id="modal-image" src="" alt="" />
-            </div>
-        </div>
-    </div>
-</section>
+    </section>
 
 {% block body_js %} {# Injecting news.js into the body of base.html #}
 <script defer src="/news.js"></script>
