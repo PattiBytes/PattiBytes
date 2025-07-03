@@ -5,48 +5,50 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ਪੱਟੀ ਬਾਈਟਸ Admin Panel</title>
 
-  <!-- Netlify Identity Widget -->
+  <!-- Identity Widget -->
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 
-  <!-- Styling for full-height CMS -->
+  <!-- CMS Styles -->
   <style>
     html, body, #nc-root {
       margin: 0;
       padding: 0;
       height: 100%;
-      font-family: system-ui, sans-serif;
-      background-color: #f4f4f4;
+      background: #f8f9fa;
     }
   </style>
 </head>
 <body>
+  <!-- CMS Mount Point -->
   <div id="nc-root"></div>
 
-  <!-- Load CMS first -->
-  <script src="https://unpkg.com/netlify-cms@^2.10.0/dist/netlify-cms.js"></script>
-
-  <!-- Safe error handling -->
+  <!-- Netlify CMS: MUST BE LAST TO LOAD -->
   <script>
-    window.addEventListener('error', e => {
-      console.error('⚠️ Admin Panel JS Error:', e.error || e.message);
+    // Wait for full DOM
+    window.addEventListener('DOMContentLoaded', function () {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/netlify-cms@^2.10.0/dist/netlify-cms.js';
+      script.onload = function () {
+        // Optional: initialize custom logic after CMS is ready
+        console.log("✅ Netlify CMS loaded");
+
+        // Identity auto-login flow
+        if (window.netlifyIdentity) {
+          window.netlifyIdentity.on("init", user => {
+            if (!user) {
+              window.netlifyIdentity.on("login", () => {
+                document.location.href = "/admin/";
+              });
+              window.netlifyIdentity.open();
+            }
+          });
+        }
+      };
+      document.body.appendChild(script);
     });
   </script>
 
-  <!-- Identity init logic -->
-  <script>
-    if (window.netlifyIdentity) {
-      window.netlifyIdentity.on("init", user => {
-        if (!user) {
-          window.netlifyIdentity.on("login", () => {
-            document.location.href = "/admin/";
-          });
-          window.netlifyIdentity.open();
-        }
-      });
-    }
-  </script>
-
-  <!-- Custom CMS logic (after CMS is loaded) -->
+  <!-- Custom scripts (optional but safe after CMS) -->
   <script src="preview-templates.js" defer></script>
   <script src="custom-admin.js" defer></script>
 </body>
