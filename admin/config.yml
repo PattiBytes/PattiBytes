@@ -13,46 +13,32 @@ collections:
     slug: "{{id}}"
     fields:
       - { label: "Title", name: "title", widget: "string", required: true }
-      - { label: "ID",    name: "id",    widget: "string", hint: "Unique identifier", required: false }
-      - label: "Date"
-        name: "date"
-        widget: "datetime"
-        format: "YYYY-MM-DD HH:mm"
-        required: true
-        default: "{{year}}-{{month}}-{{day}} {{hour}}:{{minute}}"
-      - { label: "Preview", name: "preview", widget: "text", required: true }
-
-      # ← Use rich-text here ↓
+      - { label: "ID (for direct links)", name: "id", widget: "string", required: false }
+      - { label: "Date", name: "date", widget: "datetime", format: "YYYY-MM-DD HH:mm", required: true }
+      - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
+      - { label: "Image", name: "image", widget: "image", required: false }
+      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["news"] }
       - label: "Full Content"
         name: "body"
-        widget: "rich-text"
-        buttons:
-          [ bold, italic, link, code, heading, quote, bulleted-list, numbered-list, image, video ]
-        shortcuts:
-          bold: true       # Ctrl/Cmd +B
-          italic: true     # Ctrl/Cmd +I
-          code: true       # Ctrl/Cmd +`
-          link: true       # Ctrl/Cmd +K
-          heading: false   # disable Ctrl/Cmd +H if you like
-        # Optional: define custom block types here
+        widget: markdown
+        buttons: ["bold", "italic", "code", "link", "heading-one", "heading-two", "quote", "unordered-list", "ordered-list"]
         editor_components: []
 
-  - name: "places"
+
+    - name: "places"
     label: "Places of Interest"
     folder: "_places"
     create: true
     slug: "{{id | default: title}}"
     fields:
-      - { label: "Name",    name: "title", widget: "string", required: true }
-      - { label: "ID",      name: "id",    widget: "string", required: true }
-      - { label: "Preview", name: "preview", widget: "text", required: true }
-
+      - { label: "Name", name: "title", widget: "string", required: true }
+      - { label: "ID (for direct links)", name: "id", widget: "string", required: true }
+      - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
+      - { label: "Image", name: "image", widget: "image", required: false }
+      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["places"] }
       - label: "Full Description"
         name: "body"
-        widget: "rich-text"
-        buttons:
-          [ bold, italic, link, heading, bulleted-list ]
-        shortcuts:
-          bold: true
-          italic: true
+        widget: markdown
+        buttons: ["bold", "italic", "code", "link", "heading-one", "heading-two", "quote", "unordered-list", "ordered-list"]
         editor_components: []
+
