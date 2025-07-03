@@ -5,11 +5,6 @@ backend:
 media_folder: "assets/uploads"
 public_folder: "/assets/uploads"
 
-media_library:
-  name: uploadcare
-  config:
-    publicKey: "demopublickey"  # Replace with your real key or remove this section if not using Uploadcare
-
 collections:
   - name: "news"
     label: "News Articles"
@@ -26,17 +21,15 @@ collections:
       - label: "ID (for direct links)"
         name: "id"
         widget: "string"
-        hint: "Must be unique. Leave blank for auto‑generation."
+        hint: "Must be unique; leave blank to auto‑generate."
         required: false
 
-      # ──────────────────────────────────────────────────────
       - label: "Date"
         name: "date"
         widget: "datetime"
         format: "YYYY-MM-DD HH:mm"
         required: true
         default: "{{year}}-{{month}}-{{day}} {{hour}}:{{minute}}"
-      # ──────────────────────────────────────────────────────
 
       - label: "Card Preview Text"
         name: "preview"
@@ -47,6 +40,8 @@ collections:
         name: "image"
         widget: "image"
         required: false
+        media_library:
+          allow_multiple: false
 
       - label: "Tags"
         name: "tags"
@@ -66,14 +61,36 @@ collections:
     slug: "{{id | default: title}}"
 
     fields:
-      - { label: "Name", name: "title", widget: "string", required: true }
-      - { label: "ID (for direct links)", name: "id", widget: "string", hint: "Must be unique." }
-      - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
+      - label: "Name"
+        name: "title"
+        widget: "string"
+        required: true
+
+      - label: "ID (for direct links)"
+        name: "id"
+        widget: "string"
+        required: true
+        hint: "Must be unique."
+
+      - label: "Card Preview Text"
+        name: "preview"
+        widget: "text"
+        required: true
+
       - label: "Image (Optional)"
         name: "image"
         widget: "image"
         required: false
         media_library:
-          allow_multiple: false   # Enables delete/remove button
-      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["places"] }
-      - { label: "Full Description", name: "body", widget: "markdown", required: true }
+          allow_multiple: false
+
+      - label: "Tags"
+        name: "tags"
+        widget: "list"
+        required: true
+        default: ["places"]
+
+      - label: "Full Description"
+        name: "body"
+        widget: "markdown"
+        required: true
