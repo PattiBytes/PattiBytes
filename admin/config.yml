@@ -6,39 +6,114 @@ media_folder: "assets/uploads"
 public_folder: "/assets/uploads"
 
 collections:
+
+  # ─────────────────────────────────────────────────────────────
   - name: "news"
     label: "News Articles"
     folder: "_news"
     create: true
     slug: "{{id}}"
+
     fields:
-      - { label: "Title", name: "title", widget: "string", required: true }
-      - { label: "ID (for direct links)", name: "id", widget: "string", required: false }
-      - { label: "Date", name: "date", widget: "datetime", format: "YYYY-MM-DD HH:mm", required: true }
-      - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
-      - { label: "Image", name: "image", widget: "image", required: false }
-      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["news"] }
+      - label: "Title"
+        name: "title"
+        widget: "string"
+        required: true
+
+      - label: "ID (for direct links)"
+        name: "id"
+        widget: "string"
+        hint: "Must be unique; leave blank to auto‑generate."
+        required: false
+
+      - label: "Date"
+        name: "date"
+        widget: "datetime"
+        format: "YYYY-MM-DD HH:mm"
+        required: true
+        default: "{{year}}-{{month}}-{{day}} {{hour}}:{{minute}}"
+
+      - label: "Card Preview Text"
+        name: "preview"
+        widget: "text"
+        required: true
+
+      - label: "Image (Optional)"
+        name: "image"
+        widget: "image"
+        required: false
+        media_library:
+          allow_multiple: false
+
+      - label: "Tags"
+        name: "tags"
+        widget: "list"
+        required: true
+        default: ["news"]
+
       - label: "Full Content"
         name: "body"
-        widget: markdown
-        buttons: ["bold", "italic", "code", "link", "heading-one", "heading-two", "quote", "unordered-list", "ordered-list"]
+        widget: "markdown"
+        buttons:
+          - bold
+          - italic
+          - code
+          - link
+          - heading-one
+          - heading-two
+          - quote
+          - bulleted-list
+          - ordered-list
         editor_components: []
 
-
-    - name: "places"
+  # ─────────────────────────────────────────────────────────────
+  - name: "places"
     label: "Places of Interest"
     folder: "_places"
     create: true
     slug: "{{id | default: title}}"
+
     fields:
-      - { label: "Name", name: "title", widget: "string", required: true }
-      - { label: "ID (for direct links)", name: "id", widget: "string", required: true }
-      - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
-      - { label: "Image", name: "image", widget: "image", required: false }
-      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["places"] }
+      - label: "Name"
+        name: "title"
+        widget: "string"
+        required: true
+
+      - label: "ID (for direct links)"
+        name: "id"
+        widget: "string"
+        hint: "Must be unique."
+        required: true
+
+      - label: "Card Preview Text"
+        name: "preview"
+        widget: "text"
+        required: true
+
+      - label: "Image (Optional)"
+        name: "image"
+        widget: "image"
+        required: false
+        media_library:
+          allow_multiple: false
+
+      - label: "Tags"
+        name: "tags"
+        widget: "list"
+        required: true
+        default: ["places"]
+
       - label: "Full Description"
         name: "body"
-        widget: markdown
-        buttons: ["bold", "italic", "code", "link", "heading-one", "heading-two", "quote", "unordered-list", "ordered-list"]
+        widget: "markdown"
+        buttons:
+          - bold
+          - italic
+          - code
+          - link
+          - heading-one
+          - heading-two
+          - quote
+          - bulleted-list
+          - ordered-list
         editor_components: []
-
