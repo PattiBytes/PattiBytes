@@ -1,21 +1,28 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ਪੱਟੀ ਬਾਈਟਸ Admin</title>
-  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-</head>
-<body>
-  <div id="nc-root"></div>
-  <script src="https://unpkg.com/netlify-cms@^2.0.0/dist/netlify-cms.js"></script>
-  <script>
-    // Init the Identity widget
-    if (window.netlifyIdentity) {
-      window.netlifyIdentity.on("init", user => {
-        if (!user) window.netlifyIdentity.open();
-      });
-    }
-  </script>
-</body>
+<!DOCTYPE html>
+<html lang="pa">
+  <head>
+    <meta charset="utf-8" />
+    <title>ਪੱਟੀ ਬਾਈਟਸ Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Netlify Identity Widget -->
+    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+  </head>
+  <body>
+    <div id="nc-root"></div>
+
+    <!-- Netlify CMS -->
+    <script src="https://unpkg.com/netlify-cms@^2.10.0/dist/netlify-cms.js"></script>
+
+    <script>
+      // Auto-open Netlify Identity login if user not signed in
+      if (window.netlifyIdentity) {
+        window.netlifyIdentity.on("init", user => {
+          if (!user) {
+            window.netlifyIdentity.open();
+          }
+        });
+      }
+    </script>
+  </body>
 </html>
