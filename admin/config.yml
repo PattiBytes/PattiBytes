@@ -12,13 +12,13 @@ collections:
     create: true
     slug: "{{id}}"
     fields:
-      - { label: "Title", name: "title", widget: "string", required: true }
-      - { label: "ID (for direct links)", name: "id", widget: "string", hint: "Must be unique; leave blank to auto-generate.", required: false }
-      - { label: "Date", name: "date", widget: "datetime", format: "YYYY-MM-DD HH:mm", required: true }
-      - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
+      - { label: "News Da Title", name: "title", widget: "string", required: true }
+      - { label: "ID (paave shd do)", name: "id", widget: "string", hint: "Must be unique; leave blank to auto-generate.", required: false }
+      - { label: "Date", name: "date", widget: "datetime", hint: "Click On Now to auto-generate.", format: "YYYY-MM-DD HH:mm", required: true }
+      - { label: "khabar not in detail", name: "preview", widget: "text", required: true }
       - { label: "Image", name: "image", widget: "image", required: false, media_library: { allow_multiple: false } }
-      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["news"] }
-      - label: "Full Content"
+      - { label: "Tags (auto)", name: "tags", widget: "list", required: true, default: ["news"] }
+      - label: "Poori News/Khabar"
         name: "body"
         widget: "markdown"
         buttons:
@@ -39,12 +39,12 @@ collections:
     create: true
     slug: "{{id | default: title}}"
     fields:
-      - { label: "Name", name: "title", widget: "string", required: true }
-      - { label: "ID (for direct links)", name: "id", widget: "string", required: true }
-      - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
+      - { label: "place da Naam", name: "title", widget: "string", required: true }
+      - { label: "ID (paave shd do)", name: "id", widget: "string", hint: "Must be unique; leave blank to auto-generate.", required: false }
+      - { label: "place baare 1-2 glaan", name: "preview", widget: "text", required: true }
       - { label: "Image", name: "image", widget: "image", required: false, media_library: { allow_multiple: false } }
-      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["places"] }
-      - label: "Full Description"
+      - { label: "Tags (auto)", name: "tags", widget: "list", required: true, default: ["places"] }
+      - label: "saari detail uss place baare"
         name: "body"
         widget: "markdown"
         buttons:
