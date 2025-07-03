@@ -11,95 +11,48 @@ collections:
     folder: "_news"
     create: true
     slug: "{{id}}"
-
     fields:
-      - label: "Title"
-        name: "title"
-        widget: "string"
-        required: true
-
-      - label: "ID (for direct links)"
-        name: "id"
-        widget: "string"
-        hint: "Must be unique; leave blank to auto‑generate."
-        required: false
-
+      - { label: "Title", name: "title", widget: "string", required: true }
+      - { label: "ID",    name: "id",    widget: "string", hint: "Unique identifier", required: false }
       - label: "Date"
         name: "date"
         widget: "datetime"
         format: "YYYY-MM-DD HH:mm"
         required: true
         default: "{{year}}-{{month}}-{{day}} {{hour}}:{{minute}}"
+      - { label: "Preview", name: "preview", widget: "text", required: true }
 
-      - label: "Card Preview Text"
-        name: "preview"
-        widget: "text"
-        required: true
-
-      - label: "Image (Optional)"
-        name: "image"
-        widget: "image"
-        required: false
-        media_library:
-          allow_multiple: false
-
-      - label: "Tags"
-        name: "tags"
-        widget: "list"
-        required: true
-        default: ["news"]
-
+      # ← Use rich-text here ↓
       - label: "Full Content"
         name: "body"
         widget: "rich-text"
-        buttons: [ bold, italic, link, code, heading, quote, bulleted-list, numbered-list ]
-        # optional: which keyboard shortcuts are enabled
+        buttons:
+          [ bold, italic, link, code, heading, quote, bulleted-list, numbered-list, image, video ]
         shortcuts:
-          bold: true       # Ctrl+B
-          italic: true     # Ctrl+I
-          code: true       # Ctrl+` 
-        editor_components: []  # you can add custom blocks here
+          bold: true       # Ctrl/Cmd +B
+          italic: true     # Ctrl/Cmd +I
+          code: true       # Ctrl/Cmd +`
+          link: true       # Ctrl/Cmd +K
+          heading: false   # disable Ctrl/Cmd +H if you like
+        # Optional: define custom block types here
+        editor_components: []
 
   - name: "places"
     label: "Places of Interest"
     folder: "_places"
     create: true
     slug: "{{id | default: title}}"
-
     fields:
-      - label: "Name"
-        name: "title"
-        widget: "string"
-        required: true
-
-      - label: "ID (for direct links)"
-        name: "id"
-        widget: "string"
-        required: true
-        hint: "Must be unique."
-
-      - label: "Card Preview Text"
-        name: "preview"
-        widget: "text"
-        required: true
-
-      - label: "Image (Optional)"
-        name: "image"
-        widget: "image"
-        required: false
-        media_library:
-          allow_multiple: false
-
-      - label: "Tags"
-        name: "tags"
-        widget: "list"
-        required: true
-        default: ["places"]
+      - { label: "Name",    name: "title", widget: "string", required: true }
+      - { label: "ID",      name: "id",    widget: "string", required: true }
+      - { label: "Preview", name: "preview", widget: "text", required: true }
 
       - label: "Full Description"
         name: "body"
         widget: "rich-text"
-        buttons: [ bold, italic, link, heading, bulleted-list ]
+        buttons:
+          [ bold, italic, link, heading, bulleted-list ]
         shortcuts:
           bold: true
           italic: true
+        editor_components: []
