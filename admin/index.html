@@ -5,22 +5,22 @@
   <title>ਪੱਟੀ ਬਾਈਟਸ Admin</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- 1️⃣ Netlify CMS -->
-  <script src="https://unpkg.com/netlify-cms@^2.10.0/dist/netlify-cms.js"></script>
-
-  <!-- 2️⃣ Rich‑Text Widget Plugin -->
-  <!-- Note: use the UMD build from the official widget package -->
-  <script src="https://unpkg.com/netlify-cms-widget-rich-text@^1.1.0/dist/index.umd.js"></script>
-
-  <!-- 3️⃣ Netlify Identity -->
+  <!-- Netlify Identity Widget -->
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 
+  <!-- Netlify CMS Core -->
+  <script src="https://unpkg.com/netlify-cms@^2.10.0/dist/netlify-cms.js"></script>
+
   <style>
-    /* Make sure the CMS takes the full viewport */
     html, body, #nc-root {
       margin: 0;
       padding: 0;
       height: 100%;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f7f7f7;
     }
   </style>
 </head>
@@ -28,17 +28,11 @@
   <div id="nc-root"></div>
 
   <script>
-    // Simple error catcher to surface any loading issues
-    window.addEventListener('error', function (e) {
-      console.error('🍃 Netlify CMS error:', e.error || e.message);
-      alert('Netlify CMS failed to load. Check console for details.');
-    });
-
-    // Initialize Netlify Identity and auto‑open login if needed
+    // Initialize Netlify Identity
     if (window.netlifyIdentity) {
       window.netlifyIdentity.on("init", user => {
         if (!user) {
-          window.netlifyIdentity.open();
+          window.netlifyIdentity.open(); // Prompt login
         }
       });
     }
