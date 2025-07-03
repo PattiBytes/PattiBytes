@@ -1,6 +1,6 @@
 ---
 title: testing the news
-id: sj
+id: ""
 date: 2025-07-03 13:26
 preview: dchdh c
 tags:
