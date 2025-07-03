@@ -12,19 +12,26 @@ media_library:
 
 
 collections:
-  - name: "news"
+   - name: "news"
     label: "News Articles"
     folder: "_news"
     create: true
-    slug: "{{id}}"  # Uses the `id` field for filenames
+    slug: "{{id}}"
     fields:
-      - { label: "Title", name: "title", widget: "string", required: true }
-      - { label: "ID (for direct links)", name: "id", widget: "string", hint: "Must be unique. Leave blank for auto-generation.", required: false }
-      - { label: "Date", name: "date", widget: "datetime", format: "YYYY-MM-DD HH:mm", required: true, default: "" }
-      - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
-      - { label: "Image (Optional)", name: "image", widget: "image", required: false, media_library: { allow_multiple: false } }
-      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["news"] }
-      - { label: "Full Content", name: "body", widget: "markdown", required: true }
+      - { label: "Title",    name: "title",   widget: "string",   required: true }
+      - { label: "ID",       name: "id",      widget: "string" }
+      - 
+        label: "Date"
+        name: "date"
+        widget: "datetime"
+        format: "YYYY-MM-DD HH:mm"
+        required: true
+        # ← set default to current date/time:
+        default: "{{year}}-{{month}}-{{day}} {{hour}}:{{minute}}"
+      - { label: "Preview",   name: "preview", widget: "text",     required: true }
+      - { label: "Image",     name: "image",   widget: "image",    required: false }
+      - { label: "Tags",      name: "tags",    widget: "list",     required: true, default: ["news"] }
+      - { label: "Body",      name: "body",    widget: "markdown", required: true }
 
 
   - name: "places"
