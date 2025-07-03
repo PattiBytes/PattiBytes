@@ -7,13 +7,11 @@ public_folder: "/assets/uploads"
 
 collections:
 
-  # ─────────────────────────────────────────────────────────────
   - name: "news"
     label: "News Articles"
     folder: "_news"
     create: true
     slug: "{{id}}"
-
     fields:
       - label: "Title"
         name: "title"
@@ -59,20 +57,17 @@ collections:
           - italic
           - code
           - link
-          - heading-one
-          - heading-two
+          - heading
           - quote
           - bulleted-list
-          - ordered-list
+          - numbered-list
         editor_components: []
 
-  # ─────────────────────────────────────────────────────────────
   - name: "places"
     label: "Places of Interest"
     folder: "_places"
     create: true
     slug: "{{id | default: title}}"
-
     fields:
       - label: "Name"
         name: "title"
@@ -111,9 +106,8 @@ collections:
           - italic
           - code
           - link
-          - heading-one
-          - heading-two
+          - heading
           - quote
           - bulleted-list
-          - ordered-list
+          - numbered-list
         editor_components: []
