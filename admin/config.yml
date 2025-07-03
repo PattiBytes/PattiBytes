@@ -51,8 +51,14 @@ collections:
 
       - label: "Full Content"
         name: "body"
-        widget: "markdown"
-        required: true
+        widget: "rich-text"
+        buttons: [ bold, italic, link, code, heading, quote, bulleted-list, numbered-list ]
+        # optional: which keyboard shortcuts are enabled
+        shortcuts:
+          bold: true       # Ctrl+B
+          italic: true     # Ctrl+I
+          code: true       # Ctrl+` 
+        editor_components: []  # you can add custom blocks here
 
   - name: "places"
     label: "Places of Interest"
@@ -92,5 +98,8 @@ collections:
 
       - label: "Full Description"
         name: "body"
-        widget: "markdown"
-        required: true
+        widget: "rich-text"
+        buttons: [ bold, italic, link, heading, bulleted-list ]
+        shortcuts:
+          bold: true
+          italic: true
