@@ -68,7 +68,7 @@ permalink: /news/
       <div class="container">
         <h2 class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</h2>
         <div class="news-grid">
-      {% assign sorted_news = site.news | sort: "date" | reverse %}
+    {% assign sorted_news = site.news | sort: "date" | reverse %}
 {% for article in sorted_news %}
   <article
     id="{{ article.id }}"
