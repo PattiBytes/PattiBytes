@@ -3,42 +3,51 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pattibytes Admin Panel</title>
+  <title>ਪੱਟੀ ਬਾਈਟਸ Admin Panel</title>
 
   <!-- Netlify Identity Widget -->
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 
-  <!-- Netlify CMS Core -->
-  <script src="https://unpkg.com/netlify-cms@^2.10.0/dist/netlify-cms.js"></script>
-
-  <!-- Optional: your custom admin styles -->
-  <!-- <link rel="stylesheet" href="custom-admin.css" /> -->
-
+  <!-- Styling for full-height CMS -->
   <style>
-    /* Make the CMS take full height */
-    html, body, #nc-root { margin:0; padding:0; height:100%; }
+    html, body, #nc-root {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: system-ui, sans-serif;
+      background-color: #f4f4f4;
+    }
   </style>
 </head>
 <body>
   <div id="nc-root"></div>
 
-  <!-- Identity initialization -->
+  <!-- Load CMS first -->
+  <script src="https://unpkg.com/netlify-cms@^2.10.0/dist/netlify-cms.js"></script>
+
+  <!-- Safe error handling -->
+  <script>
+    window.addEventListener('error', e => {
+      console.error('⚠️ Admin Panel JS Error:', e.error || e.message);
+    });
+  </script>
+
+  <!-- Identity init logic -->
   <script>
     if (window.netlifyIdentity) {
       window.netlifyIdentity.on("init", user => {
-        if (!user) window.netlifyIdentity.open();
+        if (!user) {
+          window.netlifyIdentity.on("login", () => {
+            document.location.href = "/admin/";
+          });
+          window.netlifyIdentity.open();
+        }
       });
     }
   </script>
-<script>
-  window.addEventListener('error', e => {
-    console.error('Admin Panel JS Error:', e.error || e.message);
-    alert('⚠️ Admin Panel Error: check console for details!');
-  });
-</script>
 
-  <!-- Custom scripts -->
-  <script src="custom-admin.js"></script>
-  <script src="preview-templates.js"></script>
+  <!-- Custom CMS logic (after CMS is loaded) -->
+  <script src="preview-templates.js" defer></script>
+  <script src="custom-admin.js" defer></script>
 </body>
 </html>
