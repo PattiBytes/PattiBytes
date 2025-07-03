@@ -1,28 +1,42 @@
 <!DOCTYPE html>
-<html>
+<html lang="pa">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pattibytes Admin Panel</title>
+
+  <!-- Netlify Identity Widget -->
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+
+  <!-- Netlify CMS Core -->
+  <script src="https://unpkg.com/netlify-cms@^2.10.0/dist/netlify-cms.js"></script>
+
+  <!-- Optional: your custom admin styles -->
+  <!-- <link rel="stylesheet" href="custom-admin.css" /> -->
+
+  <style>
+    /* Make the CMS take full height */
+    html, body, #nc-root { margin:0; padding:0; height:100%; }
+  </style>
 </head>
 <body>
-  <script src="https://unpkg.com/netlify-cms@^2.0.0/dist/netlify-cms.js"></script>
+  <div id="nc-root"></div>
+
   <script>
+    // Initialize Netlify Identity and auto‑prompt login if needed
     if (window.netlifyIdentity) {
       window.netlifyIdentity.on("init", user => {
         if (!user) {
-          window.netlifyIdentity.on("login", () => {
-            document.location.href = "/admin/";
-          });
+          window.netlifyIdentity.open();
         }
       });
     }
   </script>
+
+  <!-- Your custom admin JS (e.g. event hooks, widget registrations) -->
   <script src="custom-admin.js"></script>
-  <script src="https://unpkg.com/netlify-cms@^2.10.0/dist/netlify-cms.js"></script>
-<script src="preview-templates.js"></script>
 
-
+  <!-- Your preview templates -->
+  <script src="preview-templates.js"></script>
 </body>
 </html>
