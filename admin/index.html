@@ -30,6 +30,12 @@
       });
     }
   </script>
+<script>
+  window.addEventListener('error', e => {
+    console.error('Admin Panel JS Error:', e.error || e.message);
+    alert('⚠️ Admin Panel Error: check console for details!');
+  });
+</script>
 
   <!-- Custom scripts -->
   <script src="custom-admin.js"></script>
