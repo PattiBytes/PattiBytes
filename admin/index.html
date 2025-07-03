@@ -1,55 +1,23 @@
 <!DOCTYPE html>
-<html lang="pa">
+<html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ਪੱਟੀ ਬਾਈਟਸ Admin Panel</title>
-
-  <!-- Identity Widget -->
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-
-  <!-- CMS Styles -->
-  <style>
-    html, body, #nc-root {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      background: #f8f9fa;
-    }
-  </style>
 </head>
 <body>
-  <!-- CMS Mount Point -->
-  <div id="nc-root"></div>
-
-  <!-- Netlify CMS: MUST BE LAST TO LOAD -->
+  <script src="https://unpkg.com/netlify-cms@^2.0.0/dist/netlify-cms.js"></script>
   <script>
-    // Wait for full DOM
-    window.addEventListener('DOMContentLoaded', function () {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/netlify-cms@^2.10.0/dist/netlify-cms.js';
-      script.onload = function () {
-        // Optional: initialize custom logic after CMS is ready
-        console.log("✅ Netlify CMS loaded");
-
-        // Identity auto-login flow
-        if (window.netlifyIdentity) {
-          window.netlifyIdentity.on("init", user => {
-            if (!user) {
-              window.netlifyIdentity.on("login", () => {
-                document.location.href = "/admin/";
-              });
-              window.netlifyIdentity.open();
-            }
+    if (window.netlifyIdentity) {
+      window.netlifyIdentity.on("init", user => {
+        if (!user) {
+          window.netlifyIdentity.on("login", () => {
+            document.location.href = "/admin/";
           });
         }
-      };
-      document.body.appendChild(script);
-    });
+      });
+    }
   </script>
-
-  <!-- Custom scripts (optional but safe after CMS) -->
-  <script src="preview-templates.js" defer></script>
-  <script src="custom-admin.js" defer></script>
 </body>
 </html>
