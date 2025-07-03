@@ -22,21 +22,17 @@
 <body>
   <div id="nc-root"></div>
 
+  <!-- Identity initialization -->
   <script>
-    // Initialize Netlify Identity and auto‑prompt login if needed
     if (window.netlifyIdentity) {
       window.netlifyIdentity.on("init", user => {
-        if (!user) {
-          window.netlifyIdentity.open();
-        }
+        if (!user) window.netlifyIdentity.open();
       });
     }
   </script>
 
-  <!-- Your custom admin JS (e.g. event hooks, widget registrations) -->
+  <!-- Custom scripts -->
   <script src="custom-admin.js"></script>
-
-  <!-- Your preview templates -->
   <script src="preview-templates.js"></script>
 </body>
 </html>
