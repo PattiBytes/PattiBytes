@@ -5,25 +5,36 @@
   <title>ਪੱਟੀ ਬਾਈਟਸ Admin</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Netlify Identity -->
+  <!-- Netlify Identity Widget -->
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-  
+
   <!-- Netlify CMS core -->
   <script src="https://unpkg.com/netlify-cms@^2.10.0/dist/netlify-cms.js"></script>
-  
+
   <!-- Rich‑Text Widget Plugin -->
   <script src="https://unpkg.com/netlify-cms-widget-rich-text/dist/bundle.js"></script>
-  
-  <script>
-    // Auto‑open Identity login if not authenticated
-    if (window.netlifyIdentity) {
-      window.netlifyIdentity.on("init", user => {
-        if (!user) window.netlifyIdentity.open();
-      });
+
+  <style>
+    /* Optional: basic styling to make the CMS full‑screen */
+    html, body, #nc-root {
+      margin: 0;
+      padding: 0;
+      height: 100%;
     }
-  </script>
+  </style>
 </head>
 <body>
   <div id="nc-root"></div>
+
+  <script>
+    // Initialize Netlify Identity and auto‑open the login modal if not signed in
+    if (window.netlifyIdentity) {
+      window.netlifyIdentity.on("init", user => {
+        if (!user) {
+          window.netlifyIdentity.open();
+        }
+      });
+    }
+  </script>
 </body>
 </html>
