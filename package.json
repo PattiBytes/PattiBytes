@@ -1,9 +1,0 @@
-{
-  "name": "pattibytes",
-  "scripts": {
-    "build": "jekyll build"
-  },
-  "dependencies": {
-    "jekyll": "^4.2.0"
-  }
-}
