@@ -1,0 +1,26 @@
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1em;
+}
+.news-card {
+  border: 1px solid #ddd;
+  padding: 1em;
+  border-radius: 8px;
+  margin-bottom: 1.5em;
+  background-color: #fff;
+}
+.read-more-btn,
+.copy-link {
+  margin-right: 0.5em;
+  background: #f0f0f0;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+}
+.enlarge-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  float: right;
+}
