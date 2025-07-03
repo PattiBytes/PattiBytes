@@ -10,30 +10,54 @@ media_library:
   config:
     publicKey: "demopublickey"  # Replace with your real key or remove this section if not using Uploadcare
 
-
 collections:
-     - name: "news"
+  - name: "news"
     label: "News Articles"
     folder: "_news"
     create: true
     slug: "{{id}}"
+
     fields:
-      - { label: "Title", name: "title", widget: "string", required: true }
-      - { label: "ID (for direct links)", name: "id", widget: "string", required: false }
-      # ────────────────────────────────────────────────────────────────────────
+      - label: "Title"
+        name: "title"
+        widget: "string"
+        required: true
+
+      - label: "ID (for direct links)"
+        name: "id"
+        widget: "string"
+        hint: "Must be unique. Leave blank for auto‑generation."
+        required: false
+
+      # ──────────────────────────────────────────────────────
       - label: "Date"
         name: "date"
         widget: "datetime"
         format: "YYYY-MM-DD HH:mm"
         required: true
-        # ← this template injects the current date/time automatically
         default: "{{year}}-{{month}}-{{day}} {{hour}}:{{minute}}"
-      # ────────────────────────────────────────────────────────────────────────
-      - { label: "Card Preview Text", name: "preview", widget: "text", required: true }
-      - { label: "Image (Optional)", name: "image", widget: "image", required: false }
-      - { label: "Tags", name: "tags", widget: "list", required: true, default: ["news"] }
-      - { label: "Full Content", name: "body", widget: "markdown", required: true }
+      # ──────────────────────────────────────────────────────
 
+      - label: "Card Preview Text"
+        name: "preview"
+        widget: "text"
+        required: true
+
+      - label: "Image (Optional)"
+        name: "image"
+        widget: "image"
+        required: false
+
+      - label: "Tags"
+        name: "tags"
+        widget: "list"
+        required: true
+        default: ["news"]
+
+      - label: "Full Content"
+        name: "body"
+        widget: "markdown"
+        required: true
 
   - name: "places"
     label: "Places of Interest"
