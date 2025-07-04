@@ -108,21 +108,33 @@
 .image-carousel {
   position: relative;
   width: 100%;
-  height: 180px;
+  max-width: 400px;     /* prevent it from becoming excessively wide */
+  height: auto;
+  max-height: 200px;    /* cap the height so it stays a manageable size */
   background-color: #f9f9f9;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;     /* hide any slight overflow if image aspect ratio differs */
 }
+
+/* Base hidden state */
 .carousel-image {
   display: none;
-  width: 100%;
-  height: 180px;
-  object-fit: cover;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;  /* contain ensures the whole image is visible */
 }
+
+/* Only the active slide shows */
 .carousel-image.active {
   display: block;
+  margin: 0 auto;       /* center it in the container */
 }
+
+/* Navigation buttons */
 .carousel-btn {
   position: absolute;
   top: 50%;
@@ -142,16 +154,27 @@
   user-select: none;
   z-index: 5;
 }
+
 .carousel-btn:hover {
   background-color: rgba(0,0,0,0.6);
 }
+
 .prev-btn {
   left: 8px;
 }
+
 .next-btn {
   right: 8px;
 }
-
+.carousel-sticker-sheet {
+  width: 240px;      /* total sheet size: 4 stickers × 4 stickers */
+  height: 240px;
+  background-image: var(--sticker-url);
+  background-repeat: repeat;
+  background-size: 60px 60px;  /* each sticker appears as 60×60px */
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
 /* 4.3) Text Content */
 .product-title {
   font-size: 1.25rem;
