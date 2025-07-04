@@ -610,53 +610,39 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnReadClose = document.getElementById("read-close");
 
   // Full descriptions for each product ID
-  const productDetails = {
-    1: {
-      title: "ਪੰਜਾਬੀ ਟੀ-ਸ਼ਰਟ",
-      text: `
-        <strong>ਤਫਸੀਲੀ ਵਰਣਨ:</strong><br/>
-        ਇਹ 100% ਕਾਟਨ ਦੀ ਟੀ-ਸ਼ਰਟ ਹੈ ਜਿਸ ਉੱਤੇ “ਪੱਟੀ ਬਾਈਟਸ” ਦਾ ਪੰਜਾਬੀ ਲਹਿਜ਼ਾ ਪ੍ਰਿੰਟ ਕੀਤਾ ਗਿਆ ਹੈ।
-        ਮਿਡੀਅਮ ਫਿਟ, ਨਰਮ ਅਤੇ ਹੇਠਲੇ ਦਰਜੇ ਦੀ ਸ਼ੈਲੀ – ਰੰਗ: ਚਿੱਟਾ, ਨੀਲਾ, ਕਾਲਾ।
-        <br/><br/>
-        <strong>ਵਿਸ਼ੇਸ਼ਤਾ:</strong>
-        <ul>
-          <li>ਐਕਸਟਰਿਮ ਵਾਸ਼ਰ</li>
-          <li>ਸਮਰਥਿਤ ਦਰਜੇ ਦੀ ਸੁਤਲੀ</li>
-          <li>ਔਥੈਂਟਿਕ ਪੰਜਾਬੀ ਨਕਸ਼</li>
-        </ul>
-      `,
-    },
-    2: {
-      title: "ਪੰਜਾਬੀ ਕੌਫ਼ੀ ਮੱਗ",
-      text: `
-        <strong>ਤਫਸੀਲੀ ਵਰਣਨ:</strong><br/>
-        11 oz ਸਿਰਾਮਿਕ ਮੱਗ ਉੱਤੇ “ਛੋਹਾ ਦੇ ਘਰੇ” ਦੇ ਪੰਜਾਬੀ ਸ਼ਬਦ ਲਿਖੇ ਹੋਏ ਹਨ। ਮੁੱਕਦਰ ਰੰਗ: ਨੀਲਾ ਬੋਰਡਰ।
-        ਪੀਣ ਲਈ ਆਦਰਸ਼, ਡਿਸਪਲੇਅ ਕਰਨ ਲਈ ਆਰਾਮਦਾਇਕ। 
-        <br/><br/>
-        <strong>ਵਿਸ਼ੇਸ਼ਤਾ:</strong>
-        <ul>
-          <li>ਡਿਸ਼ਵਾਸ਼ਰ ਅਤੇ ਮਾਈਕ੍ਰੋਵੇਵ ਸੇਫ਼</li>
-          <li>ਲਕੜੀ ਦਾ ਕਵਰ ਨਾਲ ਉਪਲਬ্ধ</li>
-          <li>ਉਪਹਾਰ ਦੇ ਤੌਰ ਤੇ ਸ਼ਾਨਦਾਰ</li>
-        </ul>
-      `,
-    },
-    3: {
-      title: "ਪੰਜਾਬੀ ਪੋਸਟਰ",
-      text: `
-        <strong>ਤਫਸੀਲੀ ਵਰਣਨ:</strong><br/>
-        18"x24" ਮੈਟ ਲੈਮੀਨੇਟਿਡ ਪੋਸਟਰ ਵਿੱਚ ਪੰਜਾਬੀ ਲੋਕਧਾਰਾ ਦੇ ਰੰਗੀਨ ਦ੍ਰਿਸ਼ ਹਨ। 
-        ਤੁਹਾਡੇ ਕੰਮਰੇ ਜਾਂ ਆਫਿਸ ਦੀ ਸ਼ਾਨ ਵਧਾਉਂਦਾ ਹੈ।
-        <br/><br/>
-        <strong>ਵਿਸ਼ੇਸ਼ਤਾ:</strong>
-        <ul>
-          <li>ਹਾਈ-ਰੈਜ਼ੋਲੇਸ਼ਨ ਪ੍ਰਿੰਟ</li>
-          <li>ਟਿਅਰ-ਰੇਜ਼ਿਸਟੈਂਟ ਮੈਟੀਸ਼ ਫਿਨਿਸ਼</li>
-          <li>ਦਿੱਤਾ ਮੁੱਕਦਰ ਦੀ ਮਹਾਰਤ</li>
-        </ul>
-      `,
-    },
-  };
+ const productDetails = {
+  1: {
+    title: "ਪੱਟੀ ਬਾਈਟਸ ਸਟਿੱਕਰ ਪੈਕ",
+    text: `
+      <strong>ਤਫਸੀਲੀ ਵਰਣਨ:</strong><br/>
+      ਇਹ ਸਟਿੱਕਰ ਪੈਕ ਵਿੱਚ 10 ਰੰਗੀਨ ਪੰਜਾਬੀ ਲੋਕਧਾਰਾ ਦੇ ਡਿਜ਼ਾਈਨਡ ਸਟਿੱਕਰ ਸ਼ਾਮਲ ਹਨ। 
+      ਹਰ ਸਟਿੱਕਰ ਦੀ ਮਾਪ: 5cm × 5cm, ਪ੍ਰੀਮੀਅਮ ਮੈਟ ਫਿਨਿਸ਼ ਅਤੇ ਜਲ-ਰੋਧੀ।
+      <br/><br/>
+      <strong>ਵਿਸ਼ੇਸ਼ਤਾ:</strong>
+      <ul>
+        <li>ਹਾਈ-ਕੁਆਲਿਟੀ ਵਾਈਨਾਈਲ ਮੈਟਰੀਅਲ</li>
+        <li>ਪੂਰੀ ਤਰ੍ਹਾਂ ਜਲ-ਰੋਧੀ ਅਤੇ ਟਿਕਾਊ</li>
+        <li>ਆਸਾਨ ਪੀਲ ਅਤੇ ਸਟਿਕ</li>
+        <li>ਉੱਚ ਰੈਜ਼ੋਲੇਸ਼ਨ ਪ੍ਰਿੰਟ</li>
+      </ul>
+    `,
+  },
+  2: {
+    title: "ਪੰਜਾਬੀ ਟੀ-ਸ਼ਰਟ",
+    text: `
+      <strong>ਤਫਸੀਲੀ ਵਰਣਨ:</strong><br/>
+      ਇਹ 100% ਕਾਟਨ ਦੀ ਟੀ-ਸ਼ਰਟ ਹੈ ਜਿਸ ਉੱਤੇ “ਪੱਟੀ ਬਾਈਟਸ” ਦਾ ਪੰਜਾਬੀ ਲਹਿਜ਼ਾ ਪ੍ਰਿੰਟ ਕੀਤਾ ਗਿਆ ਹੈ।
+      ਮਿਡੀਅਮ ਫਿਟ, ਨਰਮ ਅਤੇ ਹੇਠਲੇ ਦਰਜੇ ਦੀ ਸ਼ੈਲੀ – ਰੰਗ: ਚਿੱਟਾ, ਨੀਲਾ, ਕਾਲਾ।
+      <br/><br/>
+      <strong>ਵਿਸ਼ੇਸ਼ਤਾ:</strong>
+      <ul>
+        <li>ਐਕਸਟਰਿਮ ਵਾਸ਼ਰ</li>
+        <li>ਸਮਰਥਿਤ ਦਰਜੇ ਦੀ ਸੁਤਲੀ</li>
+        <li>ਔਥੈਂਟਿਕ ਪੰਜਾਬੀ ਨਕਸ਼</li>
+      </ul>
+    `,
+  },
+};
 
   btnReadMore.forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -783,22 +769,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Product data for cart
   const productData = {
-    1: {
-      title: "ਪੰਜਾਬੀ ਟੀ-ਸ਼ਰਟ",
-      price: 499,
-      link: "https://www.amazon.in/example-product-1",
-    },
-    2: {
-      title: "ਪੰਜਾਬੀ ਕੌਫ਼ੀ ਮੱਗ",
-      price: 299,
-      link: "https://www.flipkart.com/example-product-2",
-    },
-    3: {
-      title: "ਪੰਜਾਬੀ ਪੋਸਟਰ",
-      price: 199,
-      link: "https://pattibytes.myshopify.com/example-product-3",
-    },
-  };
+  1: {
+    title: "ਪੱਟੀ ਬਾਈਟਸ ਸਟਿੱਕਰ ਪੈਕ",
+    price: 400,
+    link: "https://pattibytes.myshopify.com/example-sticker-pack",
+  },
+  2: {
+    title: "ਪੰਜਾਬੀ ਟੀ-ਸ਼ਰਟ",
+    price: 499,
+    link: "https://www.amazon.in/example-product-1",
+  },
+};
+
+   
 
   function updateCartUI() {
     cartItemsEl.innerHTML = "";
