@@ -245,3 +245,18 @@
     max-height: 40vh;
   }
 }
+
+.news-date,
+.place-date {
+  display: block;
+  font-size: 0.9em;
+  color: #666;
+  margin-bottom: 0.25em;
+}
+
+.media-container img {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
