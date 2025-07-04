@@ -41,6 +41,7 @@ collections:
     fields:
       - { label: "place da Naam", name: "title", widget: "string", required: true }
       - { label: "ID (paave shd do)", name: "id", widget: "string", hint: "Must be unique; leave blank to auto-generate.", required: false }
+      - { label: "Date", name: "date", widget: "datetime", hint: "Click On Now to auto-generate.", format: "YYYY-MM-DD HH:mm", required: true }
       - { label: "place baare 1-2 glaan", name: "preview", widget: "text", required: true }
       - { label: "Image", name: "image", widget: "image", required: false, media_library: { allow_multiple: false } }
       - { label: "Tags (auto)", name: "tags", widget: "list", required: true, default: ["places"] }
