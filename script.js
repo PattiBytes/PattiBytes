@@ -768,7 +768,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const cartClose = document.getElementById("cart-close");
 
   // Product data for cart
-  const productData = {
+ const productData = {
   1: {
     title: "ਪੱਟੀ ਬਾਈਟਸ ਸਟਿੱਕਰ ਪੈਕ",
     price: 400,
