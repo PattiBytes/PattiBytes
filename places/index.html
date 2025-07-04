@@ -81,9 +81,9 @@ permalink: /places/
           </div>
         </div>
         <div id="no-match" class="no-match-message" aria-live="polite"></div>
-<!-- Dynamic Places Grid -->
+<!-- Dynamic Places Grid, sorted by date (newest first) -->
+{% assign sorted_places = site.places | sort: "date" | reverse %}
 <div class="places-grid">
-  {% assign sorted_places = site.places | sort: "date" | reverse %}
   {% for place in sorted_places %}
     <article
       class="place-card"
@@ -91,33 +91,22 @@ permalink: /places/
       data-title="{{ place.title | escape }}"
       data-preview="{{ place.preview | escape }}"
       data-full="{{ place.body | xml_escape }}"
-      data-date="{{ place.date }}"
       {% if place.image %}data-image="{{ place.image | relative_url }}"{% endif %}
     >
       {% if place.image %}
         <div class="media-container">
-          <button class="enlarge-btn" aria-label="Enlarge image">🔍</button>
           <img
             src="{{ place.image | relative_url }}"
             alt="{{ place.title | escape }}"
             loading="lazy"
-            style="max-width:100%; height:auto;"
           />
         </div>
       {% endif %}
       <div class="place-content">
-        <!-- Show place date/time if you added it -->
-        {% if place.date %}
-        <time class="place-date"
-              datetime="{{ place.date | date_to_xmlschema }}">
-          {{ place.date | date: "%d %b %Y, %H:%M" }}
-        </time>
-        {% endif %}
         <h3>{{ place.title }}</h3>
         <p class="place-desc">{{ place.preview }}</p>
         <button
           class="read-more-btn"
-          data-id="{{ place.id }}"
           aria-label="ਪੂਰਾ ਪੜ੍ਹੋ about {{ place.title | escape }}"
         >
           ਪੂਰਾ ਪੜ੍ਹੋ →
@@ -125,6 +114,8 @@ permalink: /places/
       </div>
     </article>
   {% endfor %}
+
+
 </div>
 
         </div>
