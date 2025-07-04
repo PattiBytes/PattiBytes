@@ -54,3 +54,100 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 });
+
+// places.js
+
+document.addEventListener("DOMContentLoaded", () => {
+  const cards = document.querySelectorAll(".place-card");
+  const modal = document.getElementById("places-modal");
+  const modalMedia = document.getElementById("modal-media");
+  const modalText = document.getElementById("modal-text");
+  const btnClose = document.getElementById("modal-close");
+  const btnPrev = document.getElementById("modal-prev");
+  const btnNext = document.getElementById("modal-next");
+
+  let currentIndex = -1;
+
+  // Open modal for a given card index
+  function openModal(index) {
+    currentIndex = index;
+    const card = cards[currentIndex];
+    const imgSrc = card.dataset.image;
+    const fullText = card.dataset.full;
+    modalMedia.innerHTML = imgSrc
+      ? `<img src="${imgSrc}" alt="" loading="lazy" style="max-width:100%;">`
+      : "";
+    modalText.innerHTML = fullText;
+    modal.setAttribute("aria-hidden", "false");
+    modal.classList.add("open");
+  }
+
+  // Close modal
+  function closeModal() {
+    modal.setAttribute("aria-hidden", "true");
+    modal.classList.remove("open");
+  }
+
+  // Prev/Next
+  function showPrev() {
+    openModal((currentIndex - 1 + cards.length) % cards.length);
+  }
+  function showNext() {
+    openModal((currentIndex + 1) % cards.length);
+  }
+
+  // 1) Attach only to Read‑More buttons
+  cards.forEach((card, idx) => {
+    const readBtn = card.querySelector(".read-more-btn");
+    const copyBtn = card.querySelector(".copy-link");
+
+    // Open modal when Read‑More is clicked
+    if (readBtn) {
+      readBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        openModal(idx);
+      });
+    }
+
+    // Copy Link handler (example)
+    if (copyBtn) {
+      copyBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        const url = `${window.location.origin}/places/#${card.dataset.id}`;
+        navigator.clipboard.writeText(url)
+          .then(() => alert("Link copied!"))
+          .catch(() => alert("Copy failed"));
+      });
+    }
+
+    // Prevent card click from doing anything (if you had a handler)
+    card.addEventListener("click", e => {
+      /* no-op: or you can remove any existing logic here */
+    });
+  });
+
+  // Modal controls
+  btnClose.addEventListener("click", e => {
+    e.stopPropagation();
+    closeModal();
+  });
+  btnPrev.addEventListener("click", e => {
+    e.stopPropagation();
+    showPrev();
+  });
+  btnNext.addEventListener("click", e => {
+    e.stopPropagation();
+    showNext();
+  });
+
+  // Close modal on overlay click (optional)
+  modal.addEventListener("click", e => {
+    if (e.target === modal) closeModal();
+  });
+
+  // Escape key closes modal
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeModal();
+  });
+});
+
