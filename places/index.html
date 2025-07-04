@@ -105,12 +105,8 @@ permalink: /places/
       <div class="place-content">
         <h3>{{ place.title }}</h3>
         <p class="place-desc">{{ place.preview }}</p>
-        <button
-          class="read-more-btn"
-          aria-label="ਪੂਰਾ ਪੜ੍ਹੋ about {{ place.title | escape }}"
-        >
-          ਪੂਰਾ ਪੜ੍ਹੋ →
-        </button>
+        <button class="read-more-btn" aria-label="ਪੂਰਾ ਪੜ੍ਹੋ about {{ place.title | escape }}" > ਪੂਰਾ ਪੜ੍ਹੋ →</button>
+          <button class="copy-link" title="Copy Link">🔗</button>
       </div>
     </article>
   {% endfor %} 
@@ -318,6 +314,6 @@ permalink: /places/
 
   <!-- Global + Page‑specific JS -->
   <script defer src="/script.js"></script>
-  <script defer src="/places.js"></script>
+  <script defer src="places.js"></script>
 </body>
 </html>
