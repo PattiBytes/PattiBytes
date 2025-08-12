@@ -1,1 +1,2 @@
 curl -L https://srv.adstxtmanager.com/19390/pattibytes.com > ads.txt
+google.com, pub-5755659850244383, DIRECT, f08c47fec0942fa0
