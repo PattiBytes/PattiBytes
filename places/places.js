@@ -1,4 +1,4 @@
-// places.js (updated)
+// places.js (updated, unified)
 (function () {
   "use strict";
 
@@ -32,18 +32,6 @@
     setTimeout(() => el.classList.remove(className), duration);
   }
 
-  // Build canonical link for an article/card: prefer data-id, then id attribute
-  function buildHashUrlForElement(el, pathFallback) {
-    if (!el) return null;
-    const id = el.dataset.id || el.id;
-    if (!id) return null;
-    // If caller passed a specific path (e.g. '/places/'), use it; otherwise use current pathname
-    const basePath = pathFallback || window.location.pathname;
-    // Ensure basePath ends with a slash for readability
-    const normalizedBase = basePath.endsWith("/") ? basePath : basePath;
-    return `${window.location.origin}${normalizedBase}#${id}`;
-  }
-
   // Single DOMContentLoaded handler
   document.addEventListener("DOMContentLoaded", () => {
     // ---------- COPY LINK HANDLERS ----------
@@ -56,23 +44,25 @@
           return;
         }
 
-        // Determine a sensible path: if article is a place-card, point to /places/
-        const isPlace = article.classList.contains("place-card");
-        const isNews = article.classList.contains("news-card");
-
-        // Prefer explicit dataset.path if set, otherwise pick based on class
-        let pathFallback = article.dataset.path || (isPlace ? "/places/" : window.location.pathname);
-
-        // Use the article's dataset.id or id property
-        const url = buildHashUrlForElement(article, pathFallback);
+        // Prefer explicit data-url (set in template)
+        let url = btn.dataset.url;
         if (!url) {
-          console.error("copy-link: no id for article");
+          // fallback: build from id + path if available
+          const id = article.dataset.id || article.id;
+          if (id) {
+            let basePath = article.dataset.path || window.location.pathname;
+            url = `${window.location.origin}${basePath}#${id}`;
+          }
+        }
+
+        if (!url) {
+          console.error("copy-link: no URL to copy");
           return;
         }
 
         try {
           await copyToClipboard(url);
-          // Visual feedback (non-blocking)
+          // Visual feedback
           btn.classList.add("copied");
           const prev = btn.textContent;
           btn.textContent = "✔️";
@@ -82,7 +72,6 @@
           }, 1500);
         } catch (err) {
           console.warn("copy failed", err);
-          // As fallback show an alert (you may replace with custom UI)
           alert("Copy failed — please copy manually: " + url);
         }
       });
@@ -91,7 +80,6 @@
     // ---------- HASH ON LOAD: scroll + highlight ----------
     const initialHash = window.location.hash.slice(1);
     if (initialHash) {
-      // Delay slightly to allow layout to settle
       setTimeout(() => {
         const target = document.getElementById(initialHash);
         if (target) {
@@ -101,7 +89,7 @@
       }, 250);
     }
 
-    // ---------- PLACES MODAL (if any) ----------
+    // ---------- PLACES MODAL ----------
     const cards = Array.from(document.querySelectorAll(".place-card"));
     const modal = document.getElementById("places-modal");
     const modalMedia = modal ? modal.querySelector("#modal-media") : null;
@@ -119,27 +107,25 @@
       currentIndex = index;
       const card = cards[currentIndex];
 
-      // Populate media and content safely
+      // Populate media and content
       const imgSrc = card.dataset.image || "";
-      const fullHtml = card.dataset.full || card.dataset.preview || card.innerHTML || "";
+      const fullHtml =
+        card.dataset.full || card.dataset.preview || card.innerHTML || "";
 
       if (modalMedia) {
         modalMedia.innerHTML = imgSrc
-          ? `<img src="${imgSrc}" alt="${(card.dataset.title || card.querySelector('h3')?.textContent || '')}" loading="lazy" style="max-width:100%;">`
+          ? `<img src="${imgSrc}" alt="${card.dataset.title || card.querySelector("h3")?.textContent || ""}" loading="lazy" style="max-width:100%;">`
           : "";
       }
       if (modalText) {
         modalText.innerHTML = fullHtml;
       }
 
-      // Show modal
       modal.setAttribute("aria-hidden", "false");
       modal.classList.add("open");
 
-      // Save focus and move focus to close button for keyboard users
       lastFocusedElement = document.activeElement;
       if (btnClose) btnClose.focus();
-      // Prevent background scroll
       document.documentElement.classList.add("modal-open");
     }
 
@@ -147,28 +133,26 @@
       if (!modal) return;
       modal.setAttribute("aria-hidden", "true");
       modal.classList.remove("open");
-      // restore focus
-      if (lastFocusedElement && typeof lastFocusedElement.focus === "function") {
+      if (
+        lastFocusedElement &&
+        typeof lastFocusedElement.focus === "function"
+      ) {
         lastFocusedElement.focus();
       }
       document.documentElement.classList.remove("modal-open");
     }
 
     function showPrev() {
-      if (cards.length === 0) return;
-      const prev = (currentIndex - 1 + cards.length) % cards.length;
-      openModal(prev);
+      if (!cards.length) return;
+      openModal((currentIndex - 1 + cards.length) % cards.length);
     }
     function showNext() {
-      if (cards.length === 0) return;
-      const next = (currentIndex + 1) % cards.length;
-      openModal(next);
+      if (!cards.length) return;
+      openModal((currentIndex + 1) % cards.length);
     }
 
-    // Attach handlers only if modal exists
     if (cards.length && modal) {
       cards.forEach((card, idx) => {
-        // Read-more button opens modal
         const readBtn = card.querySelector(".read-more-btn");
         if (readBtn) {
           readBtn.addEventListener("click", (ev) => {
@@ -177,66 +161,32 @@
           });
         }
 
-        // Make entire card clickable optionally (not required)
+        // Keyboard accessibility
         card.addEventListener("keydown", (ev) => {
-          // open on Enter or Space for accessibility
-          if ((ev.key === "Enter" || ev.key === " ") && document.activeElement === card) {
+          if (
+            (ev.key === "Enter" || ev.key === " ") &&
+            document.activeElement === card
+          ) {
             ev.preventDefault();
             openModal(idx);
           }
         });
       });
 
-      // Modal controls (with guards)
       if (btnClose) btnClose.addEventListener("click", (ev) => { ev.stopPropagation(); closeModal(); });
       if (btnPrev) btnPrev.addEventListener("click", (ev) => { ev.stopPropagation(); showPrev(); });
       if (btnNext) btnNext.addEventListener("click", (ev) => { ev.stopPropagation(); showNext(); });
 
-      // Close when clicking the overlay background
       modal.addEventListener("click", (ev) => {
         if (ev.target === modal) closeModal();
       });
 
-      // Keyboard navigation inside modal: Esc to close, left/right for prev/next
       document.addEventListener("keydown", (ev) => {
         if (!modal.classList.contains("open")) return;
-        if (ev.key === "Escape") {
-          closeModal();
-        } else if (ev.key === "ArrowLeft") {
-          showPrev();
-        } else if (ev.key === "ArrowRight") {
-          showNext();
-        }
+        if (ev.key === "Escape") closeModal();
+        else if (ev.key === "ArrowLeft") showPrev();
+        else if (ev.key === "ArrowRight") showNext();
       });
     }
-
-    // If modal exists but there are no cards, remove it or keep hidden
-    // (no action necessary)
-
-    // ---------- OPTIONAL: Copy-link handler for news-style .news-card where the earlier code expected it ----------
-    // (If you use the same places.js on news page, this will handle .news-card .copy-link clicks + hash-on-load highlight)
-    document.querySelectorAll(".news-card .copy-link").forEach(btn => {
-      btn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const article = btn.closest("article.news-card");
-        if (!article) return;
-        const url = buildHashUrlForElement(article, "/news/");
-        if (!url) return alert("Unable to build link");
-        try {
-          await copyToClipboard(url);
-          btn.classList.add("copied");
-          const prev = btn.textContent;
-          btn.textContent = "✔️";
-          setTimeout(() => {
-            btn.classList.remove("copied");
-            btn.textContent = prev || "🔗";
-          }, 1500);
-        } catch (err) {
-          alert("Copy failed — please copy manually: " + url);
-        }
-      });
-    });
-
-  }); // DOMContentLoaded close
-
+  }); // DOMContentLoaded
 })();
