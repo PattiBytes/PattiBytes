@@ -44,16 +44,17 @@
           return;
         }
 
-        // Prefer explicit data-url (set in template)
-        let url = btn.dataset.url;
-        if (!url) {
-          // fallback: build from id + path if available
-          const id = article.dataset.id || article.id;
-          if (id) {
-            let basePath = article.dataset.path || window.location.pathname;
-            url = `${window.location.origin}${basePath}#${id}`;
-          }
-        }
+        // Use data-path and id to create a fragment URL
+        const id = article.id || article.dataset.id;
+        const basePath = article.dataset.path || window.location.pathname;
+
+        // **UPDATED LOGIC**
+        let url = `${window.location.origin}${basePath}#/${basePath.replace(/\//g, "")}/${id}`;
+        
+        // Ensure the path doesn't have double slashes
+        url = url.replace(/([^:]\/)\/+/g, "$1");
+        // Remove trailing slash from base path if it exists
+        url = url.replace(/\/+(\s*#)/, "$1").trim();
 
         if (!url) {
           console.error("copy-link: no URL to copy");
@@ -81,7 +82,9 @@
     const initialHash = window.location.hash.slice(1);
     if (initialHash) {
       setTimeout(() => {
-        const target = document.getElementById(initialHash);
+        // Find the element by the full path fragment
+        const fullHashPath = initialHash.split('/').pop();
+        const target = document.getElementById(fullHashPath);
         if (target) {
           target.scrollIntoView({ behavior: "smooth", block: "start" });
           flashHighlight(target, "highlighted", 2000);
@@ -114,7 +117,9 @@
 
       if (modalMedia) {
         modalMedia.innerHTML = imgSrc
-          ? `<img src="${imgSrc}" alt="${card.dataset.title || card.querySelector("h3")?.textContent || ""}" loading="lazy" style="max-width:100%;">`
+          ? `<img src="${imgSrc}" alt="${
+              card.dataset.title || card.querySelector("h3")?.textContent || ""
+            }" loading="lazy" style="max-width:100%;">`
           : "";
       }
       if (modalText) {
@@ -127,6 +132,12 @@
       lastFocusedElement = document.activeElement;
       if (btnClose) btnClose.focus();
       document.documentElement.classList.add("modal-open");
+
+      // Update the URL to the fragment path
+      const articleId = card.id || card.dataset.id;
+      const basePath = card.dataset.path || window.location.pathname;
+      const newUrl = `${basePath}#/${basePath.replace(/\//g, "")}/${articleId}`;
+      window.history.pushState(null, "", newUrl);
     }
 
     function closeModal() {
@@ -140,6 +151,7 @@
         lastFocusedElement.focus();
       }
       document.documentElement.classList.remove("modal-open");
+      window.history.pushState(null, "", window.location.pathname);
     }
 
     function showPrev() {
