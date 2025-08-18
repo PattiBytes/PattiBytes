@@ -113,69 +113,94 @@ permalink: /news/
   </header>
   <div class="header-spacer"></div>
 
-  <main>
-    <section class="latest-news" aria-labelledby="latest-news-heading">
-      <div class="container">
-        <h2 id="latest-news-heading" class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</h2>
-        <div class="news-grid">
-          {% assign sorted_news = site.news | sort: "date" | reverse %}
-          {% for article in sorted_news %}
-            <article id="{{ article.id }}"
-                     class="news-card{% if article.featured %} featured-card{% endif %}"
-                     data-id="{{ article.id }}"
-                     data-title="{{ article.title | escape }}"
-                     data-preview="{{ article.preview | escape }}"
-                     data-content="{{ article.content | xml_escape }}"
-                     {% if article.image %}data-image="{{ article.image }}"{% endif %}>
-              {% if article.image %}
-                <div class="media-container">
-                  <button class="enlarge-btn" aria-label="Enlarge image">🔍</button>
-                  <img src="{{ article.image }}"
-                       alt="{{ article.title | escape }}"
-                       loading="lazy" width="600" height="400" />
-                </div>
-              {% endif %}
-              <div class="news-content{% unless article.image %} no-media{% endunless %}">
-                <h3><a href="{{ article.url | default: '#' }}" aria-label="Read {{ article.title }}">{{ article.title }}</a></h3>
-                <p class="card-preview">{{ article.preview }}</p>
-                <div class="news-actions">
-                  <a class="read-more-btn" href="{{ article.url | default: '#' }}">ਪੂਰਾ ਪੜ੍ਹੋ →</a>
-                  <button class="copy-link" title="Copy Link" data-url="{{ site.url }}{{ article.url }}">🔗</button>
-                </div>
+ <main>
+  <section class="latest-news" aria-labelledby="latest-news-heading">
+    <div class="container">
+      <h2 id="latest-news-heading" class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</h2>
+      <div class="news-grid" role="list">
+        {% assign sorted_news = site.news | sort: "date" | reverse %}
+        {% for article in sorted_news %}
+          <article
+            id="{{ article.id }}"
+            class="news-card{% if article.featured %} featured-card{% endif %}"
+            role="article"
+            aria-labelledby="title-{{ article.id }}"
+            data-id="{{ article.id }}"
+            data-title="{{ article.title | escape }}"
+            data-preview="{{ article.preview | escape }}"
+            data-content="{{ article.content | xml_escape }}"
+            {% if article.image %}data-image="{{ article.image }}"{% endif %}
+            {% if article.url %}data-url="{{ site.url }}{{ article.url }}"{% endif %}
+          >
+            {% if article.image %}
+              <div class="media-container">
+                <button class="enlarge-btn" aria-label="Enlarge image">🔍</button>
+                <img
+                  src="{{ article.image }}"
+                  alt="{{ article.title | escape }}"
+                  loading="lazy"
+                  <!-- optional: add width & height if known -->
+                />
               </div>
-            </article>
-          {% endfor %}
-        </div>
-      </div>
+            {% endif %}
 
-      <!-- ======================
-           News-Text Modal
-           ====================== -->
-      <div id="news-modal" class="modal-overlay" aria-hidden="true">
-        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-          <button id="modal-close" class="modal-close" aria-label="Close">&times;</button>
-          <div class="modal-body">
-            <p id="modal-id" class="modal-id" hidden></p>
-            <h3 id="modal-title" class="modal-title"></h3>
-            <p id="modal-preview" class="modal-preview"></p>
-            <div id="modal-media" class="modal-media"></div>
-            <div id="modal-text" class="modal-content-text"></div>
-          </div>
+            <div class="news-content{% unless article.image %} no-media{% endunless %}">
+              <h3 id="title-{{ article.id }}">{{ article.title }}</h3>
+
+              {% if article.date %}
+                <p class="meta">
+                  <time datetime="{{ article.date | date_to_xmlschema }}">{{ article.date | date: "%d %b %Y" }}</time>
+                </p>
+              {% endif %}
+
+              <p class="card-preview">{{ article.preview }}</p>
+
+              <div class="news-actions">
+                <!-- Use a proper link so crawlers and ad systems can follow to a full article page -->
+                <a href="{{ article.url | default: '#' }}" class="read-more-btn" rel="bookmark">ਪੂਰਾ ਪੜ੍ਹੋ →</a>
+
+                <!-- Keep copy-link as a button but attach the URL so JS can copy it -->
+                <button class="copy-link" title="Copy Link" data-url="{{ site.url }}{{ article.url }}">🔗</button>
+              </div>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- ======================
+         News-Text Modal
+         ====================== -->
+    <div id="news-modal" class="modal-overlay" aria-hidden="true">
+      <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <button id="modal-close" class="modal-close" aria-label="Close">&times;</button>
+        <div class="modal-body">
+          <!-- NEW: Show the ID -->
+          <p id="modal-id" class="modal-id" hidden></p>
+          <!-- Title -->
+          <h3 id="modal-title" class="modal-title"></h3>
+          <!-- Preview snippet -->
+          <p id="modal-preview" class="modal-preview"></p>
+          <!-- Media -->
+          <div id="modal-media" class="modal-media"></div>
+          <!-- Full content -->
+          <div id="modal-text" class="modal-content-text"></div>
         </div>
       </div>
-   <!-- =================================
-           Image-Lightbox Modal
-           ================================= -->
-      <div id="image-modal" class="modal-overlay image-modal" aria-hidden="true">
-        <div class="modal-content" role="dialog" aria-modal="true">
-          <button id="image-modal-close" class="modal-close" aria-label="Close">&times;</button>
-          <div class="modal-body image-modal-body">
-            <img id="modal-image" src="" alt="" />
-          </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="image-modal" class="modal-overlay image-modal" aria-hidden="true">
+      <div class="modal-content" role="dialog" aria-modal="true">
+        <button id="image-modal-close" class="modal-close" aria-label="Close">&times;</button>
+        <div class="modal-body image-modal-body">
+          <img id="modal-image" src="" alt="" />
         </div>
       </div>
-    </section>
-  </main>
+    </div>
+  </section>
+</main>
+
 
  <!-- Shared Footer (unchanged) -->
   <footer class="site-footer">
