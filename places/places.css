@@ -149,6 +149,18 @@
   transform: translateY(-2px) scale(1.03);
 }
 
+.media-container {
+    /* Set the desired size for your container */
+    width: 100%;
+    height: 200px; /* Example height, you can adjust this */
+    overflow: hidden; /* This is crucial for cropping */
+}
+
+.media-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
 /* ===========================================
    5) Modal Overlay & Content
 =========================================== */
