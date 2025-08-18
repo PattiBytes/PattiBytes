@@ -124,6 +124,7 @@ permalink: /places/
           {% for place in sorted_places %}
             <article
               class="place-card"
+              id="{{ place.id }}"
               data-id="{{ place.id }}"
               data-title="{{ place.title | escape }}"
               data-preview="{{ place.preview | escape }}"
