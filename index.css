@@ -277,3 +277,27 @@
   color: #666;
   text-align: center;
 }
+/* Styles for the map container */
+.map-container {
+    width: 100%;
+    /* Creates a 16:9 aspect ratio */
+    padding-bottom: 56.25%; 
+    position: relative;
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.map-container iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
+.map-container h4 {
+    text-align: center;
+    margin-bottom: 10px;
+}
