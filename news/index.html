@@ -59,11 +59,22 @@ permalink: /news/
     <button id="hamburger" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="mobile-menu" type="button">☰</button>
     <nav id="mobile-menu" class="site-nav" aria-hidden="true" role="navigation">
       <ul class="nav-list">
-        <li class="nav-item"><a href="/">ਮੁੱਖ ਪੰਨਾ</a></li>
+        <li class="nav-item has-dropdown">
+          <div class="home-with-toggle">
+            <a href="/">ਮੁੱਖ ਪੰਨਾ</a>
+            <button class="dropdown-toggle" aria-label="Toggle submenu for ਮੁੱਖ ਪੰਨਾ" aria-expanded="false" type="button">▼</button>
+          </div>
+          <ul class="dropdown" role="menu" aria-label="ਮੁੱਖ ਪੰਨਾ submenu">
+            <li role="none"><a href="/#history" role="menuitem">ਇਤਿਹਾਸ</a></li>
+            <li role="none"><a href="/#about" role="menuitem">ਬਾਰੇ</a></li>
+            <li role="none"><a href="/#why" role="menuitem">ਕਿਉਂ PattiBytes?</a></li>
+            <li role="none"><a href="/#achievements" role="menuitem">ਉਪਲਬਧੀਆਂ</a></li>
+          </ul>
+        </li>
         <li class="nav-item"><a href="/news">ਖ਼ਬਰਾਂ</a></li>
         <li class="nav-item"><a href="/places">ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ</a></li>
-        <li class="nav-item"><a href="/shop">ਦੁਕਾਨ</a></li>
         <li class="nav-item"><a href="/#collaboration">ਸੰਪਰਕ ਕਰੋ</a></li>
+        <li class="nav-item"><a href="/shop">ਦੁਕਾਨ</a></li>
       </ul>
     </nav>
   </header>
