@@ -44,11 +44,10 @@
           return;
         }
 
-        // Use data-path and id to create a fragment URL
-        const id = article.id || article.dataset.id;
+        const id = article.id;
         const basePath = article.dataset.path || window.location.pathname;
 
-        // **UPDATED LOGIC**
+        // Construct the fragment URL
         let url = `${window.location.origin}${basePath}#/${basePath.replace(/\//g, "")}/${id}`;
         
         // Ensure the path doesn't have double slashes
@@ -81,10 +80,12 @@
     // ---------- HASH ON LOAD: scroll + highlight ----------
     const initialHash = window.location.hash.slice(1);
     if (initialHash) {
+      // Correctly parse the ID from the fragment
+      const hashParts = initialHash.split('/');
+      const targetId = hashParts[hashParts.length - 1];
+
       setTimeout(() => {
-        // Find the element by the full path fragment
-        const fullHashPath = initialHash.split('/').pop();
-        const target = document.getElementById(fullHashPath);
+        const target = document.getElementById(targetId);
         if (target) {
           target.scrollIntoView({ behavior: "smooth", block: "start" });
           flashHighlight(target, "highlighted", 2000);
@@ -134,7 +135,7 @@
       document.documentElement.classList.add("modal-open");
 
       // Update the URL to the fragment path
-      const articleId = card.id || card.dataset.id;
+      const articleId = card.id;
       const basePath = card.dataset.path || window.location.pathname;
       const newUrl = `${basePath}#/${basePath.replace(/\//g, "")}/${articleId}`;
       window.history.pushState(null, "", newUrl);
