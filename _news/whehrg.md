@@ -11,7 +11,9 @@ image: /assets/uploads/1000025194.jpg
 tags:
   - news
 ---
-![babushahi.com/full-news....](https://images.openai.com/thumbnails/url/t0_kHnicu1mUUVJSUGylr5-al1xUWVCSmqJbkpRnoJdeXJJYkpmsl5yfq5-Zm5ieWmxfaAuUsXL0S7F0Tw70qiwwiLc0Nk_TDS4xL_IyS_E2sCgocHTMLs3Nd69ILDaO8HQOynEr13WLiEoqsyzLCwpPM_U1DjNVKwYAr-koiw)
+
+
+![](https://images.openai.com/thumbnails/url/t0_kHnicu1mUUVJSUGylr5-al1xUWVCSmqJbkpRnoJdeXJJYkpmsl5yfq5-Zm5ieWmxfaAuUsXL0S7F0Tw70qiwwiLc0Nk_TDS4xL_IyS_E2sCgocHTMLs3Nd69ILDaO8HQOynEr13WLiEoqsyzLCwpPM_U1DjNVKwYAr-koiw)
 
 # ਪ੍ਰਸਿੱਧ ਕਾਮੇਡੀਅਨ ਜਸਵਿੰਦਰ ਭੱਲਾ ਦੀ ਮੌਤ, ਕ੍ਰੇਮੇਸ਼ਨ 23 ਅਗਸਤ ਨੂੰ ਬਲੋਂਗੀ ਮੋਹਾਲੀ 'ਚ
 
