@@ -11,7 +11,7 @@ image: /assets/uploads/1000025194.jpg
 tags:
   - news
 ---
-[![babushahi.com/full-news....](https://images.openai.com/thumbnails/url/t0_kHnicu1mUUVJSUGylr5-al1xUWVCSmqJbkpRnoJdeXJJYkpmsl5yfq5-Zm5ieWmxfaAuUsXL0S7F0Tw70qiwwiLc0Nk_TDS4xL_IyS_E2sCgocHTMLs3Nd69ILDaO8HQOynEr13WLiEoqsyzLCwpPM_U1DjNVKwYAr-koiw)](https://www.babushahi.com/full-news.php?id=209455)
+![babushahi.com/full-news....](https://images.openai.com/thumbnails/url/t0_kHnicu1mUUVJSUGylr5-al1xUWVCSmqJbkpRnoJdeXJJYkpmsl5yfq5-Zm5ieWmxfaAuUsXL0S7F0Tw70qiwwiLc0Nk_TDS4xL_IyS_E2sCgocHTMLs3Nd69ILDaO8HQOynEr13WLiEoqsyzLCwpPM_U1DjNVKwYAr-koiw)
 
 # ਪ੍ਰਸਿੱਧ ਕਾਮੇਡੀਅਨ ਜਸਵਿੰਦਰ ਭੱਲਾ ਦੀ ਮੌਤ, ਕ੍ਰੇਮੇਸ਼ਨ 23 ਅਗਸਤ ਨੂੰ ਬਲੋਂਗੀ ਮੋਹਾਲੀ 'ਚ
 
@@ -29,8 +29,6 @@ tags:
 ਸਮਾਜਿਕ ਮੀਡੀਆ 'ਤੇ ਫਿਲਮੀ ਦੁਨੀਆ ਦੇ ਕਈ ਸਿਤਾਰਿਆਂ ਨੇ ਭੱਲਾ ਜੀ ਨੂੰ ਅਪਵਾਦਹੁਕ (tributes) ਦਿੱਤੇ ਅਤੇ ਉਨ੍ਹਾਂ ਨੂੰ ਅਨੇਕਾਂ ਲਈ ਮਿਟਾਉਣਯੋਗ ਅਸਥਾਨ ਤੇ ਮਾਰਗਦਰਸ਼ਕ ਵਜੋਂ ਯਾਦ ਕੀਤਾ। ਗਿੱਪੀ ਗਰੇਵਲ, ਨੀਰੂ ਬਾਜਵਾ ਅਤੇ ਹੋਰ ਕਈ ਦिगਗਜਾਂ ਨੇ ਆਪਣਾ ਦੁੱਖ ਪ੍ਰਗਟ ਕੀਤਾ। 
 
 ਭੱਲਾ ਜੀ ਪਰਿਵਾਰ-ਮੁਖੀ ਰੂਪ ਵਿੱਚ ਪਤਨੀ ਪਰਮਦੀਪ ਭੱਲਾ ਅਤੇ ਪੁੱਤਰ ਪੁਖਰਾਜ ਭੱਲਾ ਵਰਗੇ ਸੰਬੰਧੀਆਂ ਨਾਲ ਜਾਣੇ ਜਾਂਦੇ ਸਨ; ਪੁਖਰਾਜ ਖੁਦ ਵੀ ਮਨੋਰੰਜਨ ਉਦਯੋਗ ਨਾਲ ਜੁੜੇ ਰਹੇ ਹਨ। 
-
-
 
 ਪੰਜਾਬੀ ਫਿਲਮ ਅਤੇ ਕਾਮੇਡੀ ਮੈਂਟੋਰਸ਼ਿਪ ਵਿੱਚ ਜਸਵਿੰਦਰ ਭੱਲਾ ਦੀ ਛਾਪ ਦਿਖਾਈ ਦੇਵੇਗੀ — ਉਹ ਆਪਣੀ ਵਿਲੱਖਣ ਸਟਾਈਲ, ਸੈਟਾਇਰ ਅਤੇ ਅਕਸਰ ਆਮ ਲੋਕਾਂ ਦੀ ਬੋਲੀ/ਜੀਵਨ ਸਾਂਝ ਦੇ ਰੂਪ ਵਿੱਚ ਹਾਸੇ ਦੇ ਨਾਮ ਨਾਲ ਯਾਦ ਰਹਿਣਗੇ। ਅੰਤਰਰਾਸ਼ਟਰੀ ਦਰਸ਼ਕਾਂ ਤੱਕ ਪਹੁੰਚਣ ਵਾਲੇ ਉਨ੍ਹਾਂ ਦੇ ਦਿਲਚਸਪ ਰੋਲ ਅਤੇ ਮੰਚੀ ਪ੍ਰਦਰਸ਼ਨਾਂ ਨੇ ਉਹਨਾਂ ਨੂੰ ਪੰਜਾਬੀ ਮਨੋਰੰਜਨ ਦਾ ਮੋਹਰੀ ਚਿਹਰਾ ਬਣਾਇਆ।
 
