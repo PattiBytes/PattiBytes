@@ -93,7 +93,7 @@ permalink: /news/
   data-id="{{ article.id | default: article.slug | slugify }}"
   data-title="{{ article.title | escape }}"
   data-preview="{{ article.preview | escape }}"
-  data-content="{{ article.body | xml_escape }}"
+  data-content="{{ article.content | xml_escape }}"
   data-date="{{ article.date | date_to_xmlschema }}"
   data-author="{{ article.author | default: site.author.name | escape }}"
   data-tags="{{ article.tags | join: ' ' }}"
