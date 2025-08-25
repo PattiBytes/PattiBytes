@@ -301,3 +301,116 @@
     text-align: center;
     margin-bottom: 10px;
 }
+.timeline {
+  position: relative;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px 0;
+}
+.timeline::after {
+  content: '';
+  position: absolute;
+  width: 2px;
+  background-color: #e0e0e0;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  margin-left: -1px;
+}
+.timeline-item {
+  padding: 10px 40px;
+  position: relative;
+  background-color: inherit;
+  width: 50%;
+  cursor: pointer;
+  transition: transform 0.3s ease-in-out;
+}
+.timeline-item:hover {
+  transform: scale(1.03);
+}
+.timeline-item:nth-child(odd) {
+  left: 0;
+  text-align: right;
+  border-right: 2px solid #e0e0e0;
+}
+.timeline-item:nth-child(even) {
+  left: 50%;
+  text-align: left;
+  border-left: 2px solid #e0e0e0;
+}
+.timeline-dot {
+  padding: 8px;
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  right: -8px;
+  background-color: #6a1b9a;
+  border: 2px solid white;
+  top: 15px;
+  border-radius: 50%;
+  z-index: 1;
+  transition: background-color 0.3s ease;
+}
+.timeline-item:nth-child(even) .timeline-dot {
+  left: -8px;
+}
+.timeline-item:hover .timeline-dot {
+  background-color: #ff9800;
+}
+.timeline-content {
+  padding: 15px;
+  background-color: #f7f7f7;
+  border-radius: 6px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+.timeline-item:hover .timeline-content {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+@media (max-width: 768px) {
+  .timeline::after {
+    left: 15px;
+  }
+  .timeline-item {
+    width: 100%;
+    padding-left: 40px;
+    padding-right: 10px;
+  }
+  .timeline-item:nth-child(odd), .timeline-item:nth-child(even) {
+    left: 0;
+    text-align: left;
+    border-right: none;
+    border-left: 2px solid #e0e0e0;
+  }
+  .timeline-item:nth-child(odd) .timeline-dot, .timeline-item:nth-child(even) .timeline-dot {
+    left: 7px;
+    right: auto;
+  }
+}
+.modal-navigation {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.nav-btn {
+  background-color: #6a1b9a;
+  color: #fff;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  font-size: 1rem;
+}
+
+.nav-btn:hover {
+  background-color: #5d1587;
+  transform: translateY(-2px);
+}
+
+.nav-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+  transform: none;
+}
