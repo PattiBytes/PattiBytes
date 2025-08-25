@@ -8,6 +8,7 @@ preview: >
   ਸੋਗ ਦੀ ਲਹਿਰ ਹੈ। ਉਨ੍ਹਾਂ ਦੀ ਜ਼ਿੰਦਗੀ, ਕਰੀਅਰ ਅਤੇ ਵਿਰਾਸਤ ਬਾਰੇ ਪੂਰਾ ਵੇਰਵਾ ਹੇਠਾਂ
   ਦਿੱਤਾ ਗਿਆ ਹੈ—ਪੂਰਾ ਪੜ੍ਹੋ।
 image: /assets/uploads/1000025194.jpg
+author: Abhay Dhillon
 tags:
   - news
 ---
