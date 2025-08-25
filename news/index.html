@@ -87,35 +87,48 @@ permalink: /news/
         <div class="news-grid">
     {% assign sorted_news = site.news | sort: "date" | reverse %}
 {% for article in sorted_news %}
-  <article
-    id="{{ article.id }}"
-    class="news-card{% if article.featured %} featured-card{% endif %}"
-    data-id="{{ article.id }}"
-    data-title="{{ article.title | escape }}"
-    data-preview="{{ article.preview | escape }}"
-    data-content="{{ article.content | xml_escape }}"
-    {% if article.image %}data-image="{{ article.image }}"{% endif %}
-  >
-    {% if article.image %}
-      <div class="media-container">
-        <button class="enlarge-btn" aria-label="Enlarge image" type="button">🔍</button>
-        <img
-          src="{{ article.image }}"
-          alt="{{ article.title | escape }}"
-          loading="lazy"
-        />
-      </div>
-    {% endif %}
-    <div class="news-content{% unless article.image %} no-media{% endunless %}">
-      <h4>{{ article.title }}</h4>
-      <p class="card-preview">{{ article.preview }}</p>
-      <div class="news-actions">
-        <button class="read-more-btn" type="button" data-url="{{ article.url | default: '#' }}">ਪੂਰਾ ਪੜ੍ਹੋ →</button>
-        <button class="copy-link" type="button" title="Copy Link" data-url="{{ site.url }}{{ article.url }}">🔗</button>
-      </div>
+<article
+  id="{{ article.id | default: article.slug | slugify }}"
+  class="news-card{% if article.featured %} featured-card{% endif %}"
+  data-id="{{ article.id | default: article.slug | slugify }}"
+  data-title="{{ article.title | escape }}"
+  data-preview="{{ article.preview | escape }}"
+  data-content="{{ article.body | xml_escape }}"
+  data-date="{{ article.date | date_to_xmlschema }}"
+  data-author="{{ article.author | default: site.author.name | escape }}"
+  data-tags="{{ article.tags | join: ' ' }}"
+  {% if article.image %}data-image="{{ article.image }}"{% endif %}
+>
+  {% if article.image %}
+    <div class="media-container">
+      <button class="enlarge-btn" aria-label="Enlarge image" type="button">🔍</button>
+      <img src="{{ article.image }}" alt="{{ article.title | escape }}" loading="lazy" />
     </div>
-  </article>
+  {% endif %}
+
+  <div class="news-content{% unless article.image %} no-media{% endunless %}">
+    <h4 class="news-title">{{ article.title }}</h4>
+
+    <!-- meta: date + author + read time (JS will fill read-time) -->
+    <div class="news-meta" aria-hidden="false">
+      <time class="published" datetime="{{ article.date | date_to_xmlschema }}">
+        {{ article.date | date: "%b %d, %Y" }}
+      </time>
+      <span class="author">· {{ article.author | default: site.author.name }}</span>
+      <span class="dot">·</span>
+      <span class="read-time"></span>
+    </div>
+
+    <p class="card-preview">{{ article.preview }}</p>
+
+    <div class="news-actions">
+      <button class="read-more-btn" type="button" data-url="{{ article.url | default: '#' }}">ਪੂਰਾ ਪੜ੍ਹੋ →</button>
+      <button class="copy-link" type="button" title="Copy Link" data-url="{{ site.url }}{{ article.url }}">🔗</button>
+    </div>
+  </div>
+</article>
 {% endfor %}
+
 
 
         </div>
@@ -216,19 +229,10 @@ permalink: /news/
 
   <!-- Back to top, GTranslate, etc. -->
   <button id="back-to-top" aria-label="Back to top" type="button">↑</button>
-  <div class="gtranslate_wrapper"></div>
-  <script>
-    window.gtranslateSettings = {
-      default_language: "pa",
-      native_language_names: true,
-      languages: ["pa","en"],
-      wrapper_selector: ".gtranslate_wrapper",
-      flag_size: 24,
-      switcher_horizontal_position: "right",
-      flag_style: "3d"
-    };
-  </script>
-  <script src="https://cdn.gtranslate.net/widgets/latest/dwf.js" defer></script>
+  <!-- GTranslate widget -->
+<div class="gtranslate_wrapper"></div>
+<script>window.gtranslateSettings = {"default_language":"pa","languages":["pa","en"],"wrapper_selector":".gtranslate_wrapper","switcher_horizontal_position":"right","flag_style":"3d","alt_flags":{"en":"usa"}}</script>
+<script src="https://cdn.gtranslate.net/widgets/latest/float.js" defer></script>
 
   <!-- Global + Page-specific JS -->
   <script defer src="/script.js"></script>
