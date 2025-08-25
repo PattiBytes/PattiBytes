@@ -9,7 +9,7 @@ preview: ਪੰਜਾਬ ਦੇ ਸ਼ਹਿਰੀ ਨਿਕਾਇਆਂ ਨੇ 
   ਹੈ। ਡਿਪਟੀ ਕਮਿਸ਼ਨਰ/ਨਗਰ ਨਿਗਮ ਅਧਿਕਾਰੀਆਂ ਦੇ ਅਨੁਸਾਰ, ਆਨਲਾਈਨ ਅਤੇ ਆਫਲਾਈਨ ਦੋਹਾਂ ਮੋਡ
   ਉਪਲਬਧ ਹਨ।
 image: /assets/uploads/1000025509.jpg
-author: abhay dhillon
+author: Abhay Dhillon
 tags:
   - news
 ---
