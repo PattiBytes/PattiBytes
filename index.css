@@ -1,4 +1,3 @@
-
 /* ===========================================
    11) History Section
 =========================================== */
@@ -6,6 +5,7 @@
   background-color: rgba(255,255,255,0.85);
   padding: 4rem 0;
   border-bottom: 1px solid rgba(0,0,0,0.05);
+  transition: background-color 300ms ease, transform 300ms ease;
 }
 .history-section p,
 .history-preview {
@@ -16,10 +16,28 @@
   margin: 0 auto 1rem auto;
   text-align: center;
   animation: fadeIn 1.2s ease-out both;
+  will-change: transform, opacity;
 }
 .btn-read-more {
   display: block;
   margin: 1.5rem auto 0 auto;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: var(--accent-color);
+  color: #fff;
+  transition: transform 220ms ease, box-shadow 220ms ease;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.08);
+}
+.btn-read-more:hover,
+.btn-read-more:focus {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+  outline: none;
+}
+.btn-read-more:focus {
+  box-shadow: 0 10px 24px rgba(0,0,0,0.18), 0 0 0 4px rgba(106,27,154,0.12);
 }
 
 /* ===========================================
@@ -39,9 +57,11 @@
   animation: fadeIn 1.2s ease-out both;
 }
 .owner-name {
-  font-weight: bold;
+  font-weight: 700;
   color: var(--accent-color);
   animation: fadeIn 1.4s ease-out both;
+  display: inline-block;
+  padding: 0.15rem 0.35rem;
 }
 
 /* ===========================================
@@ -62,7 +82,7 @@
   background-color: #f9f9f9;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
   animation: fadeIn 1.2s ease-out both;
   text-align: center;
 }
@@ -76,24 +96,41 @@
   border: none;
   outline: none;
   cursor: pointer;
-  transition: background-color var(--transition-speed), transform var(--transition-speed);
+  transition: background-color var(--transition-speed), transform var(--transition-speed), box-shadow 220ms ease;
   border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
-.faq-question:hover {
+.faq-question:hover,
+.faq-question:focus {
   background-color: var(--accent-color);
-  transform: scale(1.03);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.08);
 }
+.faq-question:focus {
+  box-shadow: 0 8px 18px rgba(0,0,0,0.12), 0 0 0 4px rgba(6,95,70,0.06);
+}
+
+/* Open/close using aria-expanded attribute on button */
+.faq-question[aria-expanded="true"] + .faq-answer {
+  max-height: 900px; /* large enough to contain content */
+  padding: 1rem 1.5rem;
+}
+
+/* Collapsed state */
 .faq-answer {
   max-height: 0;
   overflow: hidden;
-  transition: max-height 0.5s ease;
+  transition: max-height 420ms cubic-bezier(.2,.9,.2,1), padding 300ms ease;
   background-color: #fff;
   padding: 0 1.5rem;
   text-align: center;
 }
 .faq-answer p {
-  padding: 1rem 0;
-   margin: 0.4rem 0;
+  padding: 0.6rem 0;
+  margin: 0.4rem 0;
   color: var(--text-color);
   line-height: 1.6;
 }
@@ -110,11 +147,15 @@
   color: #0d3b66;
   text-decoration: none;
   font-weight: 500;
+  transition: transform 180ms ease, color 180ms ease;
+}
+.why-section .collab-link:hover,
+.why-section .collab-link:focus {
+  text-decoration: underline;
+  transform: translateY(-2px);
+  outline: none;
 }
 
-.why-section .collab-link:hover {
-  text-decoration: underline;
-}
 /* Responsive tweaks */
 @media (max-width: 768px) {
   .why-section .section-title {
@@ -122,11 +163,16 @@
   }
   .faq-question {
     font-size: 1.05rem;
+    padding: 0.95rem 1.1rem;
   }
   .faq-answer {
     font-size: 0.95rem;
   }
+  .faq-question[aria-expanded="true"] + .faq-answer {
+    max-height: 1200px;
+  }
 }
+
 /* ===========================================
    14) Achievements Section (Auto-Scroll Only Images + Captions)
 =========================================== */
@@ -146,7 +192,7 @@
   -ms-overflow-style: none;  /* IE 10+ */
 }
 .achievements-scroll-wrapper::-webkit-scrollbar {
-  display: none;             /* Chrome, Safari, Opera */
+  display: none;
 }
 .achievements-scroll {
   display: flex;
@@ -155,11 +201,12 @@
   animation: scrollAchievements 20s linear infinite;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  will-change: transform;
 }
-.achievements-scroll::-webkit-scrollbar {
-  display: none;
+.achievements-scroll:hover,
+.achievements-scroll:focus-within {
+  animation-play-state: paused; /* pause auto-scroll on hover/focus */
 }
-
 .achievement-card {
   flex: 0 0 auto;
   width: 180px;
@@ -171,10 +218,13 @@
   display: flex;
   flex-direction: column;
   transition: transform var(--transition-speed), box-shadow var(--transition-speed);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
-.achievement-card:hover {
-  transform: translateY(-4px) scale(1.05);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+.achievement-card:hover,
+.achievement-card:focus-within {
+  transform: translateY(-6px) scale(1.06);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.14);
 }
 .achievement-card img {
   width: 100%;
@@ -192,13 +242,17 @@
 .card-icon {
   font-size: 2.5rem;
   margin-bottom: 0.6rem;
+  transition: transform 240ms ease, color 240ms ease;
+}
+.achievement-card:hover .card-icon {
+  transform: translateY(-4px) scale(1.03);
+  color: var(--accent-color);
 }
 .achievement-caption {
   font-size: 1rem;
   line-height: 1.5;
   color: #333333;
 }
-
 .achievement-caption strong {
   color: #054e64;
 }
@@ -211,7 +265,7 @@
    15) Collaboration / Email Form Section
 =========================================== */
 .collaboration-section {
-  background-color: rgba(255,255,255,0.85);
+  background-color: rgba(255,255,255,0.95);
   padding: 4rem 0;
 }
 .collaboration-section .section-title {
@@ -220,11 +274,16 @@
 .collab-form {
   max-width: 600px;
   margin: 0 auto;
-  background-color: #f9f9f9;
+  background-color: #fbfbfb;
   padding: 2rem;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   animation: fadeIn 1.2s ease-out both;
+  transition: transform 260ms ease, box-shadow 260ms ease;
+}
+.collab-form:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.06);
 }
 .collab-form .form-group {
   margin-bottom: 1rem;
@@ -237,39 +296,46 @@
 }
 .collab-form input[type="text"],
 .collab-form input[type="email"],
-.collab-form textarea {
+.collab-form input[type="tel"],
+.collab-form textarea,
+.collab-form select {
   width: 100%;
   padding: 0.75rem;
   border: 1px solid #ccc;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 1rem;
   color: var(--text-color);
-  transition: border-color var(--transition-speed), transform var(--transition-speed);
+  transition: border-color var(--transition-speed), transform var(--transition-speed), box-shadow 220ms ease;
   margin-left: auto;
   margin-right: auto;
   display: block;
 }
 .collab-form input[type="text"]:focus,
 .collab-form input[type="email"]:focus,
-.collab-form textarea:focus {
+.collab-form input[type="tel"]:focus,
+.collab-form textarea:focus,
+.collab-form select:focus {
   border-color: var(--accent-color);
   outline: none;
   transform: scale(1.01);
-  box-shadow: 0 0 0 2px rgba(255,45,149,0.2);
+  box-shadow: 0 0 0 3px rgba(106,27,154,0.07);
 }
 .btn-submit {
   background-color: var(--accent-color);
   color: #fff;
   padding: 0.75rem 1.5rem;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 1rem;
   cursor: pointer;
-  transition: background-color var(--transition-speed), transform var(--transition-speed);
+  transition: background-color var(--transition-speed), transform var(--transition-speed), box-shadow 220ms ease;
+  display: inline-block;
 }
-.btn-submit:hover {
+.btn-submit:hover,
+.btn-submit:focus {
   background-color: var(--highlight-color);
-  transform: translateY(-2px) scale(1.05);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.12);
 }
 .note {
   margin-top: 0.75rem;
@@ -277,30 +343,31 @@
   color: #666;
   text-align: center;
 }
+
 /* Styles for the map container */
 .map-container {
-    width: 100%;
-    /* Creates a 16:9 aspect ratio */
-    padding-bottom: 56.25%; 
-    position: relative;
-    margin-top: 1.5rem;
-    margin-bottom: 1.5rem;
+  width: 100%;
+  /* Creates a 16:9 aspect ratio */
+  padding-bottom: 56.25%;
+  position: relative;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
 }
-
 .map-container iframe {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border: 1px solid #ddd;
-    border-radius: 8px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+.map-container h4 {
+  text-align: center;
+  margin-bottom: 10px;
 }
 
-.map-container h4 {
-    text-align: center;
-    margin-bottom: 10px;
-}
+/* Timeline */
 .timeline {
   position: relative;
   max-width: 800px;
@@ -323,10 +390,12 @@
   background-color: inherit;
   width: 50%;
   cursor: pointer;
-  transition: transform 0.3s ease-in-out;
+  transition: transform 260ms cubic-bezier(.2,.9,.2,1), box-shadow 260ms ease;
+  will-change: transform, box-shadow;
 }
 .timeline-item:hover {
-  transform: scale(1.03);
+  transform: translateY(-6px) scale(1.01);
+  z-index: 2;
 }
 .timeline-item:nth-child(odd) {
   left: 0;
@@ -349,23 +418,42 @@
   top: 15px;
   border-radius: 50%;
   z-index: 1;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.3s ease, transform 260ms ease, box-shadow 260ms ease;
+  box-shadow: 0 2px 8px rgba(106,27,154,0.12);
 }
 .timeline-item:nth-child(even) .timeline-dot {
   left: -8px;
+  right: auto;
 }
 .timeline-item:hover .timeline-dot {
   background-color: #ff9800;
+  transform: scale(1.14);
+  box-shadow: 0 8px 22px rgba(255,152,0,0.12);
+}
+/* subtle ripple on hover */
+.timeline-dot::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 300ms ease, transform 420ms ease;
+}
+.timeline-item:hover .timeline-dot::after {
+  opacity: 0.06;
+  transform: scale(1.5);
+  background: radial-gradient(circle, rgba(255,152,0,0.12) 0%, transparent 60%);
 }
 .timeline-content {
   padding: 15px;
   background-color: #f7f7f7;
   border-radius: 6px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.3s ease, transform 260ms ease;
 }
 .timeline-item:hover .timeline-content {
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
 }
 @media (max-width: 768px) {
   .timeline::after {
@@ -387,12 +475,13 @@
     right: auto;
   }
 }
+
+/* Modal navigation */
 .modal-navigation {
   display: flex;
   justify-content: space-between;
   margin-top: 20px;
 }
-
 .nav-btn {
   background-color: #6a1b9a;
   color: #fff;
@@ -400,56 +489,128 @@
   padding: 10px 15px;
   border-radius: 5px;
   cursor: pointer;
-  transition: background-color 0.3s ease, transform 0.2s ease;
+  transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 200ms ease;
   font-size: 1rem;
 }
-
-.nav-btn:hover {
+.nav-btn:hover,
+.nav-btn:focus {
   background-color: #5d1587;
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.12);
 }
-
 .nav-btn:disabled {
   background-color: #ccc;
   cursor: not-allowed;
   transform: none;
 }
+
 /* --- New Styles for Modals --- */
 .modal-media {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 20px;
 }
-
 .modal-media img {
-    width: 100%;
-    height: auto;
-    border-radius: 8px;
-    object-fit: cover;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  object-fit: cover;
 }
-
 .modal-media iframe.map {
-    width: 100%;
-    height: 300px;
-    border: none;
-    border-radius: 8px;
+  width: 100%;
+  height: 300px;
+  border: none;
+  border-radius: 8px;
 }
 
 /* Ensure GTranslate widget doesn't cover navigation buttons */
 .modal-overlay {
-    z-index: 1000; /* Ensure modal is on top */
+  z-index: 1000; /* Ensure modal is on top */
+  display: none; /* will be toggled via JS; keep hidden by default */
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+.modal-overlay[aria-hidden="false"] {
+  display: flex;
 }
 
 /* Reposition the translation widget to not block the modal navigation */
 .gtranslate_wrapper {
-    bottom: auto !important;
-    top: 10px !important;
-    right: 10px !important;
-    z-index: 999; /* Below the modal overlay */
+  bottom: auto !important;
+  top: 10px !important;
+  right: 10px !important;
+  z-index: 999; /* Below the modal overlay */
+}
+.modal-navigation {
+  position: relative;
+  z-index: 1001; /* Above the GTranslate widget */
 }
 
-.modal-navigation {
-    position: relative;
-    z-index: 1001; /* Above the GTranslate widget */
+/* Back to top button */
+#back-to-top {
+  position: fixed;
+  right: 18px;
+  bottom: 20px;
+  z-index: 999;
+  background: var(--accent-color);
+  color: #fff;
+  border: none;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+  transition: transform 200ms ease, opacity 200ms ease;
+  opacity: 0.96;
+}
+#back-to-top:hover,
+#back-to-top:focus {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.16);
+}
+#back-to-top:active {
+  transform: translateY(-1px) scale(0.99);
+}
+
+/* Small devices & touch improvements */
+@media (max-width: 420px) {
+  .btn-read-more, .nav-btn, .btn-submit, .faq-question {
+    padding: 0.85rem 1rem;
+    font-size: 0.95rem;
+  }
+  .achievement-card { width: 140px; }
+  .timeline-item { padding: 12px 18px; }
+  .map-container { padding-bottom: 66.66%; } /* slightly taller map */
+}
+
+/* Accessibility: focus-visible */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 3px solid rgba(106,27,154,0.12);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Animation keyframes */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Respect user preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .achievements-scroll,
+  .timeline-item,
+  .achievement-card,
+  .btn-read-more,
+  .collab-form,
+  .timeline-dot,
+  .faq-question {
+    animation: none !important;
+    transition: none !important;
+  }
+  @keyframes fadeIn { from { opacity: 1; transform: none; } to { opacity: 1; transform: none; } }
 }
