@@ -318,3 +318,99 @@
   50%  { background-color: #ffeeba; }
   100% { background-color: transparent; }
 }
+/* Ensure the modal is always on top of the GTranslate widget */
+.modal-overlay {
+  z-index: 9999; /* A very high z-index to be on top of everything */
+}
+.gtranslate_wrapper {
+  z-index: 999; /* Lower z-index so the modal appears over it */
+}
+/* News meta + related + TTS controls */
+.news-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.9rem;
+  color: #556;
+  margin-bottom: 0.5rem;
+}
+.news-meta .published {
+  color: #444;
+  font-weight: 600;
+}
+.news-meta .author {
+  color: #666;
+}
+.news-meta .read-time {
+  color: #333;
+  font-weight: 600;
+}
+
+/* Modal related articles */
+.modal-related {
+  margin-top: 1.25rem;
+  border-top: 1px dashed #e5e5e5;
+  padding-top: 1rem;
+}
+.modal-related h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+}
+.related-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+.related-card {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.related-card img {
+  width: 64px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 5px;
+  flex: 0 0 64px;
+}
+.related-card .related-info {
+  font-size: 0.9rem;
+}
+.related-card .related-title {
+  font-weight: 600;
+  margin-bottom: .25rem;
+}
+.related-card .related-meta {
+  color: #666;
+  font-size: 0.85rem;
+}
+
+/* TTS controls */
+.tts-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+.tts-controls button,
+.tts-controls select {
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.tts-controls button:hover { transform: translateY(-2px); }
+.tts-status { font-size: 0.9rem; color: #444; margin-left: .5rem; }
+
+/* small responsive */
+@media (max-width: 640px) {
+  .related-list { grid-template-columns: repeat(2, 1fr); }
+  .news-meta { font-size: 0.85rem; }
+}
