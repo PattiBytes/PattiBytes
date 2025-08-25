@@ -1,3 +1,4 @@
+
 backend:
   name: git-gateway
   branch: main
@@ -17,6 +18,8 @@ collections:
       - { label: "Date", name: "date", widget: "datetime", hint: "Click On Now to auto-generate.", format: "YYYY-MM-DD HH:mm", required: true }
       - { label: "khabar not in detail", name: "preview", widget: "text", required: true }
       - { label: "Image", name: "image", widget: "image", required: false, media_library: { allow_multiple: false } }
+      - { label: "Author / Byline", name: "author", widget: "string", required: false, hint: "e.g. 'Patti Bytes Desk' or reporter name" }
+# optional: read_time if you want editors to override
       - { label: "Tags (auto)", name: "tags", widget: "list", required: true, default: ["news"] }
       - label: "Poori News/Khabar"
         name: "body"
