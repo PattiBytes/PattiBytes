@@ -1,29 +1,26 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Data for each historical era, including image and map
+    // Data for each historical era
     const historyData = {
         'ancient': {
             title: 'ਪੁਰਾਤਨ ਅਤੇ ਮੱਧਕਾਲੀਨ ਕਾਲ',
             content: `
                 <p>ਪੱਟੀ ਸ਼ਹਿਰ, ਜੋ ਤਰਨਤਾਰਨ ਜ਼ਿਲ੍ਹੇ ਵਿੱਚ ਸਥਿਤ ਹੈ, ਪੁਰਾਤਨ ਸਮਿਆਂ ਤੋਂ ਹੀ ਵਪਾਰਕ ਤੇ ਆਰਥਿਕ ਮਹੱਤਤਾ ਲਈ ਪ੍ਰਸਿੱਧ ਰਿਹਾ ਹੈ। ਇੱਥੇ ਦੇ ਹਰ ਪਾਸੇ ਪ੍ਰਾਚੀਨ ਇਤਿਹਾਸ ਦੀਆਂ ਝਲਕਾਂ ਮਿਲਦੀਆਂ ਹਨ। ਸ਼ੁਰੂ ਵਿੱਚ ਇਸਨੂੰ "ਪੱਟੀ-ਹੈਬਤਪੁਰਾ" ਕਿਹਾ ਜਾਂਦਾ ਸੀ। ਪੰਜਾਬੀ ਭਾਸ਼ਾ ਵਿੱਚ "ਪੱਟੀ" ਦਾ ਅਰਥ ਆਮ ਤੌਰ 'ਤੇ ਜ਼ਮੀਨ ਦੀ ਪੱਟੀ ਜਾਂ ਇੱਕ ਖੇਤਰ ਹੁੰਦਾ ਹੈ, ਜਦੋਂ ਕਿ ਇੱਥੇ ਇਸਦਾ ਸੰਬੰਧ ਸ਼ਹਿਰ ਦੀ ਬਣਤਰ (ਗਲੀਆਂ ਵਾਲੇ ਮੁਹੱਲੇ) ਜਾਂ ਪੇਂਡੂ ਭਾਈਚਾਰੇ ਨਾਲ ਵੀ ਜੋੜਿਆ ਜਾਂਦਾ ਹੈ। ਮੰਨਿਆ ਜਾਂਦਾ ਹੈ ਕਿ ਪੱਟੀ ਦਾ ਨਾਂ ਲੋਦੀ-ਸ਼ਾਸਨ ਵਾਲੇ ਹਾਇਬਤ ਖ਼ਾਨ ("ਹੈਬਤਪੁਰਾ") ਤੋਂ ਲਿਆ ਗਿਆ, ਪਰ ਬਾਅਦ ਵਿੱਚ ਲੋਕ ਸੌਖੀ ਤਰੀਕੇ ਨਾਲ ਸਿਰਫ਼ "ਪੱਟੀ" ਕਹਿਣ ਲੱਗੇ। ਮੱਧਕਾਲੀਨ ਦੌਰ ਵਿੱਚ ਇਹ ਸ਼ਹਿਰ ਆਪਣੀ ਆਰਥਿਕ ਸਮਰੱਥਾ ਕਾਰਨ "ਨੌ ਲੱਖੀ ਪੱਟੀ" ਵਜੋਂ ਜਾਣਿਆ ਗਿਆ, ਜਿਸਦਾ ਮਤਲਬ ਸੀ ਕਿ ਇੱਥੋਂ ਦੀ ਸਾਲਾਨਾ ਭੂਮੀ ਮਾਲੀਆ (land revenue) ਲਗਭਗ ਨੌ ਲੱਖ ਰੁਪਏ ਤੋਂ ਵੱਧ ਸੀ। ਇਹ ਇਸਦੇ ਵੱਡੇ ਆਰਥਿਕ ਮਹੱਤਵ ਨੂੰ ਦਰਸਾਉਂਦਾ ਸੀ, ਨਾ ਕਿ ਸ਼ਹਿਰ ਦੀ ਕੁੱਲ ਕਮਾਈ ਨੂੰ। ਇਸ ਵੱਡੀ ਆਰਥਿਕ ਸਮਰੱਥਾ ਕਾਰਨ ਇੱਥੋਂ ਦੇ ਜ਼ਮੀਨਦਾਰਾਂ ਦਾ ਰਾਜਨੀਤਿਕ ਰਸੂਖ ਵਧ ਗਿਆ ਅਤੇ ਕਈ ਵਪਾਰਕ ਰਾਹਦਾਰੀਆਂ ਇੱਥੋਂ ਲੰਘਦੀਆਂ ਸਨ।</p>
             `,
-            image: "https://i.ibb.co/L5Q2Z6g/patti-history-old.jpg",
-            map: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d113813.4357288737!2d74.60678393529341!3d31.332306236965646!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3918a03239a5f781%3A0x62957f920f2694b7!2sPatti%2C%20Punjab!5e0!3m2!1sen!2sin!4v1716382024765!5m2!1sen!2sin"
+            map: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d27233.84138791328!2d74.86949983238525!3d31.1937777812888!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x391a7bc88a09f1cf%3A0x947c8934934efc8f!2sPatti%2C%20Punjab%20143416!5e0!3m2!1sen!2sin!4v1708548734338!5m2!1sen!2sin"
         },
         'mughal': {
             title: 'ਮੁਗਲ ਕਾਲ',
             content: `
                 <p>ਮੁਗਲ ਸ਼ਾਸਨ ਦੌਰਾਨ (16ਵੀਂ–18ਵੀਂ ਸਦੀ), ਪੱਟੀ ਸੂਬੇ ਦੇ ਮੁਗਲ ਗਵਰਨਰਾਂ ਦੀ ਰਹਾਇਸ਼ ਦਾ ਪ੍ਰਮੁੱਖ ਥਾਂ ਹੋ ਗਿਆ। ਗਵਰਨਰ ਇੱਥੇ ਟੈਕਸ ਵਸੂਲਦੇ, ਕਾਨੂੰਨ-ਵਿਵਸਥਾ ਚਲਾਉਂਦੇ ਅਤੇ ਲੋਕਾਂ ਵਿੱਚ ਮੁਗਲ ਸਰਕਾਰ ਦੀ ਹਿੱਕ ਲਗਾਉਂਦੇ। 1755–56 ਵਿੱਚ ਇੱਥੇ ਇੱਟਾਂ ਨਾਲ ਇਤਿਹਾਸਕ ਮੁਗਲ ਕਿਲ੍ਹਾ ਬਣਾਇਆ ਗਿਆ, ਜੋ ਬਾਅਦ ਵਿੱਚ ਲੰਬੇ ਸਮੇਂ ਲਈ ਪੁਲਿਸ ਥਾਣੇ ਵਜੋਂ ਵਰਤਿਆ ਗਿਆ। ਸ਼ਹਿਰ ਦੀ ਬਾਹਰੀ ਕੰਧ ਵੀ ਉਸ ਸਮੇਂ ਸ਼ਹਿਰ ਦੀ ਹੱਦ ਦਰਸਾਉਣਦੀ ਸੀ, ਪਰ ਹੁਣ ਇਹ ਢਿੱਗ-ਫੁਟੀਆਂ ਹਾਲਤ ਵਿੱਚ ਹੈ ਕਿਉਂਕਿ ਸਰਕਾਰੀ ਤੌਰ ’ਤੇ ਇਸ ਦੀ ਸੰਭਾਲ ਠੀਕ ਤਰ੍ਹਾਂ ਨਹੀਂ ਕੀਤੀ ਗਈ। ਇਸ ਦੇ ਨਾਲ-ਨਾਲ ਕਈ ਹੋਰ ਮੁਗਲ-ਯੁੱਗ ਦੀਆਂ ਇਮਾਰਤਾਂ ਜਿਵੇਂ ਮਸਜ਼ਿਦਾਂ, ਮਕਬਰੇ ਵੀ ਇੱਟਾਂ ਦੇ ਟੁਕੜਿਆਂ ਵਾਂਗ ਕੁਝ ਕੁ ਹੀ ਬਚੇ ਹਨ, ਪਰ ਉਹ ਵੀ ਖਰਾਬ ਹਾਲਤ ਵਿੱਚ ਹਨ ਕਿਉਂਕਿ ਸਰਕਾਰੀ ਧਿਆਨ ਇਨ੍ਹਾਂ ਉੱਤੇ ਕਮ ਹੈ।</p>
             `,
-            image: "https://i.ibb.co/3WfJ9Hk/mughal-era.jpg",
-            map: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d113813.4357288737!2d74.60678393529341!3d31.332306236965646!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3918a03239a5f781%3A0x62957f920f2694b7!2sPatti%2C%20Punjab!5e0!3m2!1sen!2sin!4v1716382024765!5m2!1sen!2sin"
+            map: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d27233.84138791328!2d74.86949983238525!3d31.1937777812888!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x391a7bc88a09f1cf%3A0x947c8934934efc8f!2sPatti%2C%20Punjab%20143416!5e0!3m2!1sen!2sin!4v1708548734338!5m2!1sen!2sin"
         },
         'sikh': {
             title: 'ਸਿੱਖ ਰਾਜ',
             content: `
                 <p>18ਵੀਂ ਸਦੀ ਦੇ ਆਖਰੀ ਪੀਰੀਅਡ ‘ਚ ਮੁਗਲ ਸ਼ਕਤੀ ਕਮਜ਼ੋਰ ਹੋ ਗਿਆ, ਤਦ ਪੱਟੀ ਸਿੱਖ ਫ਼ੈਸਲਪੁਰੀਆ ਮਿਸਲ ਦੀ ਰਾਜਨੀਤਕ ਲੜਾਈ ਦਾ ਹਿੱਸਾ ਬਣਿਆ। 1755 ਵਿੱਚ ਖ਼ੁਸ਼ਾਲ ਸਿੰਘ ਨੇ ਪੱਟੀ ‘ਤੇ ਫ਼ਤਹ ਕੀਤੀ ਸੀ, ਪਰ ਅਖੀਰਕਾਰ 1811 ਵਿੱਚ ਮਹਾਰਾਜਾ ਰਣਜੀਤ ਸਿੰਘ ਦੀ ਫੌਜ ਨੇ ਸ਼ਹਿਰ ਨੂੰ ਆਪਣੇ ਸਿੱਖ ਸਾਮਰਾਜ ਵਿੱਚ ਜੋੜ ਲਿਆ। ਇਸ ਹਮਲੇ ਦੌਰਾਨ ਕਿਲ੍ਹੇ ਦੀ ਬਾਹਰੀ ਕੰਧ ਵੀ ਤਬਾਹ ਹੋ ਗਈ। ਉਸੇ ਦੌਰਾਨ ਇੱਥੇ ਰਹਿ ਰਹੇ ਮਿਰਜ਼ੇ ਪਰਿਵਾਰ ਦੀ ਹਾਲਤ ਬਦਲੀ; ਉਨ੍ਹਾਂ ਦੀਆਂ ਵੱਡੀਆਂ ਹਵੈਲੀਆਂ ਟੁੱਟਣੀਆਂ ਪਈਆਂ। ਬਾਅਦ ਵਿੱਚ ਮਿਰਜ਼ੇ ਪਾਕਿਸਤਾਨ ਵੱਲ ਚਲੇ ਗਏ ਤੇ ਉਨ੍ਹਾਂ ਦੀਆਂ ਹਵੈਲੀਆਂ ਖੇਤੀ ਲਈ ਤੋੜੀਆਂ ਗਈਆਂ। ਇਸ ਤਬਦੀਲੀ ਨੇ ਪੱਟੀ ਦੀ ਧਾਰਮਿਕ ਤੇ ਸਮਾਜਿਕ ਸਫ਼ਤਾਂ ‘ਚ ਵੱਡੇ ਫਰਕ ਲਿਆਏ।</p>
             `,
-            image: "https://i.ibb.co/CQt4XhR/sikh-era.jpg",
-            map: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d113813.4357288737!2d74.60678393529341!3d31.332306236965646!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3918a03239a5f781%3A0x62957f920f2694b7!2sPatti%2C%20Punjab!5e0!3m2!1sen!2sin!4v1716382024765!5m2!1sen!2sin"
+            map: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d27233.84138791328!2d74.86949983238525!3d31.1937777812888!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x391a7bc88a09f1cf%3A0x947c8934934efc8f!2sPatti%2C%20Punjab%20143416!5e0!3m2!1sen!2sin!4v1708548734338!5m2!1sen!2sin"
         },
         'british': {
             title: 'ਬ੍ਰਿਟਿਸ਼ ਹਕੂਮਤ',
@@ -32,8 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <h4>ਭਾਰਤ-ਪਾਕਿਸਤਾਨ ਵੰਡ (1947)</h4>
                 <p>1947 ਵਿੱਚ ਹੋਈ ਭਾਰਤ-ਪਾਕਿਸਤਾਨ ਦੀ ਵੰਡ ਨੇ ਪੱਟੀ ਦੇ ਲੋਕਾਂ ਦੇ ਜੀਵਨ ਤੇ ਧਾਰਮਿਕ ਸਥਿਤੀਆਂ ਵਿੱਚ ਡੂੰਘਾ ਅਸਰ ਕੀਤਾ। ਵੰਡ ਤੱਕ, ਪੱਟੀ ਲਾਹੌਰ ਜ਼ਿਲ੍ਹੇ ਦੀ ਇੱਕ ਤਹਿਸੀਲ ਸੀ, ਪਰ ਵੰਡ ਤੋਂ ਬਾਅਦ ਇਹ ਅੰਮ੍ਰਿਤਸਰ ਜ਼ਿਲ੍ਹੇ ਦੀ ਮਾਨਕ ਤਹਿਸੀਲ ਬਣ ਗਿਆ। ਕਈ ਮੁਸਲਿਮ ਪਰਿਵਾਰ, ਖ਼ਾਸ ਕਰਕੇ ਮਿਰਜ਼ੇ ਅਤੇ ਗਿਲਾਨੀ ਪਰਿਵਾਰ, ਪਾਕਿਸਤਾਨ ਚਲੇ ਗਏ, ਜਿਸ ਕਰਕੇ ਇੱਥੋਂ ਦੀ ਲੋਕਸੰਖਿਆ ਅਤੇ ਧਾਰਮਿਕ ਸੰਘਟਨਾਅ ‘ਚ ਸੰਕੋਚ ਆਇਆ। ਬਾਅਦ ਵਿੱਚ 2006 ਵਿੱਚ ਤਰਨਤਾਰਨ ਜ਼ਿਲ੍ਹਾ ਬਣਨ ‘ਤੇ ਪੱਟੀ ਇਸ ਦਾ ਹਿੱਸਾ ਬਣ ਗਿਆ। ਇਸ ਤਬਦੀਲੀ ਨੇ ਪੱਟੀ ਨੂੰ ਨਵਾਂ ਰੂਪ ਦਿੱਤਾ, ਜਿੱਥੇ ਲੋਕ ਖੇਤੀ-ਬਾੜੀ ਦੇ ਨਾਲ-ਨਾਲ ਸਿੱਖਿਆ ਅਤੇ ਵਪਾਰ ਵਿੱਚ ਵੀ ਅੱਗੇ ਵਧਣ ਲੱਗੇ।</p>
             `,
-            image: "https://i.ibb.co/hV723zY/british-raj.jpg",
-            map: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d113813.4357288737!2d74.60678393529341!3d31.332306236965646!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3918a03239a5f781%3A0x62957f920f2694b7!2sPatti%2C%20Punjab!5e0!3m2!1sen!2sin!4v1716382024765!5m2!1sen!2sin"
+            map: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d27233.84138791328!2d74.86949983238525!3d31.1937777812888!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x391a7bc88a09f1cf%3A0x947c8934934efc8f!2sPatti%2C%20Punjab%20143416!5e0!3m2!1sen!2sin!4v1708548734338!5m2!1sen!2sin"
         },
         'modern': {
             title: 'ਆਧੁਨਿਕ ਕਾਲ',
@@ -48,8 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </ul>
                 <p>ਅੰਤ ਵਿੱਚ, ਪੱਟੀ ਦਾ ਇਤਿਹਾਸ ਲਗਭਗ ਹਜ਼ਾਰ ਸਾਲ ਮਿੱਟੀ ਨਾਲ ਜੁੜਿਆ ਰਹਿਆ...</p>
             `,
-            image: "https://i.ibb.co/9qZJ65P/patti-modern.jpg",
-            map: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d113813.4357288737!2d74.60678393529341!3d31.332306236965646!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3918a03239a5f781%3A0x62957f920f2694b7!2sPatti%2C%20Punjab!5e0!3m2!1sen!2sin!4v1716382024765!5m2!1sen!2sin"
+            map: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d27233.84138791328!2d74.86949983238525!3d31.1937777812888!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x391a7bc88a09f1cf%3A0x947c8934934efc8f!2sPatti%2C%20Punjab%20143416!5e0!3m2!1sen!2sin!4v1708548734338!5m2!1sen!2sin"
         }
     };
 
@@ -57,8 +52,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const modal = document.getElementById('history-modal');
     const modalTitle = document.getElementById('modal-title');
     const modalContentDiv = document.getElementById('modal-text-content');
-    const modalImageContainer = document.getElementById('modal-image-container');
-    const modalMapContainer = document.getElementById('modal-map-container');
+    const modalImageContainer = document.getElementById('modal-image-container'); // Still keeping these IDs
+    const modalMapContainer = document.getElementById('modal-map-container');     // in case you want to add them back later
     const closeModalBtn = document.getElementById('modal-close');
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
@@ -67,15 +62,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentEraIndex = 0;
 
     function updateModalContent(eraIndex) {
-        const era = eras[eraIndex];
-        const data = historyData[era];
+        const era = eras[`${eraIndex}`];
+        const data = historyData[`${era}`];
         modalTitle.textContent = data.title;
         modalContentDiv.innerHTML = data.content;
-        modalImageContainer.innerHTML = `<img src="${data.image}" alt="${data.title}">`;
-        modalMapContainer.innerHTML = `<iframe class="map" src="${data.map}" allowfullscreen="" loading="lazy"></iframe>`;
 
         prevBtn.disabled = eraIndex === 0;
         nextBtn.disabled = eraIndex === eras.length - 1;
+
+        // Optionally, you can still add a map for each era below the text:
+        modalMapContainer.innerHTML = `<iframe class="map" src="${data.map}" width="100%" height="250" style="border:0;" allowfullscreen="" loading="lazy"></iframe>`;
     }
 
     function showModal() {
@@ -148,7 +144,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!startTimestamp) startTimestamp = timestamp;
                     const progress = timestamp - startTimestamp;
                     const currentNumber = Math.min(progress / duration * endValue, endValue);
-                    target.textContent = Math.floor(currentNumber).toLocaleString() + (format ? format : '');
+                   const formattedNumber = Math.floor(currentNumber).toLocaleString();
+target.textContent = formattedNumber + (format ? format : '');
                     if (progress < duration) {
                         window.requestAnimationFrame(step);
                     } else {
