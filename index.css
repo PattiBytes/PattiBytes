@@ -414,3 +414,42 @@
   cursor: not-allowed;
   transform: none;
 }
+/* --- New Styles for Modals --- */
+.modal-media {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.modal-media img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.modal-media iframe.map {
+    width: 100%;
+    height: 300px;
+    border: none;
+    border-radius: 8px;
+}
+
+/* Ensure GTranslate widget doesn't cover navigation buttons */
+.modal-overlay {
+    z-index: 1000; /* Ensure modal is on top */
+}
+
+/* Reposition the translation widget to not block the modal navigation */
+.gtranslate_wrapper {
+    bottom: auto !important;
+    top: 10px !important;
+    right: 10px !important;
+    z-index: 999; /* Below the modal overlay */
+}
+
+.modal-navigation {
+    position: relative;
+    z-index: 1001; /* Above the GTranslate widget */
+}
