@@ -222,7 +222,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         ttsToggleBtn.addEventListener("click", () => {
             ttsWrap.style.display = ttsWrap.style.display === "none" ? "" : "none";
-            if (ttsWrap.style.display !== "none") ttsWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+            if (ttsWrap.style.display !== "none") {
+                setTimeout(() => {
+                    ttsWrap.scrollIntoView({ behavior: "smooth", block: "center" });
+                }, 100); // Small delay to allow element to render and occupy space
+            }
         });
 
         initTTSControls(ttsWrap, modalText, langPref);
@@ -372,6 +376,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let synth = window.speechSynthesis;
     let voiceList = [];
     let ttsUtterance = null;
+    let ttsPlaying = false; // Correct state variable
 
     function ensureVoicesLoaded(timeout = 2500) {
         return new Promise((resolve) => {
@@ -400,8 +405,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const stopBtn = wrapper.querySelector(".tts-stop");
         const select = wrapper.querySelector("#tts-voices");
         const statusSpan = wrapper.querySelector(".tts-status");
-        const progressEl = wrapper.querySelector(".tts-progress");
-
+        
         voiceList = await ensureVoicesLoaded();
 
         function populateVoices() {
@@ -435,6 +439,7 @@ document.addEventListener("DOMContentLoaded", () => {
         populateVoices();
 
         function prepareTextForReading() {
+            // Remove previous tts word spans
             qa(".tts-word-span", modalTextContainer).forEach((s) => {
                 if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
             });
@@ -467,49 +472,60 @@ document.addEventListener("DOMContentLoaded", () => {
             modalTextContainer.appendChild(newContent);
         }
         
-        // core speak routine
-        let currentUtterance = null;
         let wordSpans = [];
-        let currentWordIndex = -1;
         
         function speakAllText() {
             if (!synth) {
                 statusSpan.textContent = "TTS not supported.";
                 return;
             }
-
+            
             prepareTextForReading();
             wordSpans = qa(".tts-word-span", modalTextContainer);
             const fullText = wordSpans.map(span => span.textContent).join('');
-
-            currentUtterance = new SpeechSynthesisUtterance(fullText);
+            
+            ttsUtterance = new SpeechSynthesisUtterance(fullText);
             const sel = select.value;
             const chosen = voiceList.find(v => `${v.name}||${v.lang}` === sel);
             if (chosen) {
-                currentUtterance.voice = chosen;
-                currentUtterance.lang = chosen.lang;
+                ttsUtterance.voice = chosen;
+                ttsUtterance.lang = chosen.lang;
             } else {
-                currentUtterance.lang = langPref;
+                ttsUtterance.lang = langPref;
             }
-            currentUtterance.rate = 1.05;
-            currentUtterance.pitch = 1;
-
-            currentWordIndex = 0;
-            currentUtterance.onboundary = (ev) => {
+            ttsUtterance.rate = 1.05;
+            ttsUtterance.pitch = 1;
+            
+            let charIndex = 0;
+            ttsUtterance.onboundary = (ev) => {
                 if (ev.name === 'word') {
-                    if (currentWordIndex > 0) {
-                        wordSpans[currentWordIndex - 1].classList.remove('tts-highlight');
+                    qa(".tts-highlight", modalTextContainer).forEach(s => s.classList.remove('tts-highlight'));
+                    let wordFound = false;
+                    for (const span of wordSpans) {
+                        const wordText = span.textContent;
+                        if (ev.charIndex >= charIndex && ev.charIndex < charIndex + wordText.length) {
+                            span.classList.add('tts-highlight');
+                            span.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            wordFound = true;
+                            break;
+                        }
+                        charIndex += wordText.length;
                     }
-                    wordSpans[currentWordIndex].classList.add('tts-highlight');
-                    wordSpans[currentWordIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    currentWordIndex++;
+                    if (!wordFound) {
+                        charIndex = 0; // Reset if boundary event doesn't map correctly
+                    }
                 }
             };
-            currentUtterance.onend = () => {
+            
+            ttsUtterance.onend = () => {
                 stopTTS();
             };
-
-            synth.speak(currentUtterance);
+            
+            synth.speak(ttsUtterance);
+            ttsPlaying = true; // Set state to playing
+            playBtn.textContent = '⏸️ Pause';
+            playBtn.setAttribute('aria-pressed', 'true');
+            statusSpan.textContent = 'Playing...';
         }
         
         function pauseTTS() {
@@ -518,6 +534,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 playBtn.textContent = '▶️ Play';
                 playBtn.setAttribute('aria-pressed', 'false');
                 statusSpan.textContent = 'Paused...';
+                ttsPlaying = false; // Set state to paused
             }
         }
         
@@ -527,6 +544,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 playBtn.textContent = '⏸️ Pause';
                 playBtn.setAttribute('aria-pressed', 'true');
                 statusSpan.textContent = 'Playing...';
+                ttsPlaying = true; // Set state to playing
             }
         }
         
@@ -534,24 +552,24 @@ document.addEventListener("DOMContentLoaded", () => {
             if (synth.speaking) {
                 synth.cancel();
             }
-            currentUtterance = null;
-            currentWordIndex = -1;
+            ttsUtterance = null;
             qa(".tts-highlight", modalTextContainer).forEach(s => s.classList.remove('tts-highlight'));
             playBtn.textContent = '▶️ Play';
             playBtn.setAttribute('aria-pressed', 'false');
             statusSpan.textContent = 'Stopped';
+            ttsPlaying = false; // Set state to stopped
         }
 
+        // Toggle button logic
         playBtn.addEventListener("click", () => {
-            if (synth.speaking && !synth.paused) {
+            if (ttsPlaying) {
                 pauseTTS();
-            } else if (synth.paused) {
-                resumeTTS();
             } else {
-                speakAllText();
-                playBtn.textContent = '⏸️ Pause';
-                playBtn.setAttribute('aria-pressed', 'true');
-                statusSpan.textContent = 'Playing...';
+                if (synth.paused) {
+                    resumeTTS();
+                } else {
+                    speakAllText();
+                }
             }
         });
         
