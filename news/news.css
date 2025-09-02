@@ -2,12 +2,42 @@
     Variables and Global Settings
 =========================================== */
 :root {
-  --transition-speed: 0.3s;
+  --transition-speed: 0.4s;
   --text-color: #333;
   --accent-color: #ff2d95;
   --secondary-color: #0d3b66;
   --highlight-color: #e91e63;
   --background-color: #f9f9f9;
+  --shadow-primary: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-hover: 0 12px 24px rgba(0, 0, 0, 0.15);
+  --pulse-color: #fffacd;
+}
+
+/* ===========================================
+    New Global Animations
+=========================================== */
+
+@keyframes fadeInFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
 }
 
 /* ===========================================
@@ -19,7 +49,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   grid-auto-rows: auto;
-  gap: 1.75rem;
+  gap: 2rem;
   padding: 1rem 0;
 }
 
@@ -27,16 +57,25 @@
 .latest-news .news-card {
   overflow: hidden;
   border: 2px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
+  border-radius: 16px;
   background-color: #ffffff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  box-shadow: var(--shadow-primary);
+  transition: transform var(--transition-speed) ease, box-shadow var(--transition-speed) ease, border-color var(--transition-speed) ease;
+  will-change: transform, box-shadow;
+  animation: fadeInFromBottom 0.6s ease-out forwards;
 }
+
 .latest-news .news-card:hover,
 .latest-news .news-card:focus-within {
-  transform: translateY(-6px) scale(1.02);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  transform: translateY(-10px) scale(1.03);
+  box-shadow: var(--shadow-hover);
   border-color: var(--accent-color);
+  z-index: 1;
+}
+
+/* Add a slight rotation and float effect on hover */
+.latest-news .news-card:hover {
+  animation: float 2s ease-in-out infinite, fadeInFromBottom 0.6s ease-out forwards;
 }
 
 /* 3) Card Media Container & Enlarge Button */
@@ -51,78 +90,110 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
+
+.latest-news .news-card:hover .media-container {
+  transform: scale(1.05) rotate(1deg);
+}
+
 .latest-news .news-card .media-container img,
 .latest-news .news-card .media-container iframe {
   width: 100%;
   height: auto;
   display: block;
-  object-fit: contain;
+  object-fit: cover;
+  transition: transform 0.5s ease-in-out;
+}
+
+.latest-news .news-card:hover .media-container img {
+  transform: scale(1.1);
 }
 
 .enlarge-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 34px;
-  height: 34px;
+  top: 12px;
+  right: 12px;
+  width: 38px;
+  height: 38px;
   border: none;
   border-radius: 50%;
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   line-height: 1;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.7);
   color: #fff;
   z-index: 2;
   cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.3s ease;
+  will-change: transform;
 }
 .enlarge-btn:hover,
 .enlarge-btn:focus {
-  background: rgba(255, 255, 255, 0.8);
-  color: #000;
-  transform: scale(1.1);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--accent-color);
+  transform: scale(1.2) rotate(10deg);
+  box-shadow: 0 0 15px var(--accent-color);
 }
 
 /* 4) News Content & Read More */
 .latest-news .news-card .news-content {
   display: flex;
   flex-direction: column;
-  padding: 1.25rem;
+  padding: 1.5rem;
 }
+
 .latest-news .news-card .news-content h4 {
-  font-size: 1.25rem;
-  color: var(--primary-color);
+  font-size: 1.4rem;
+  color: var(--secondary-color);
   margin-bottom: 0.75rem;
-  transition: color 0.3s ease;
+  transition: color var(--transition-speed) ease;
 }
+
 .latest-news .news-card:hover .news-content h4,
 .latest-news .news-card:focus-within .news-content h4 {
   color: var(--accent-color);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
 }
+
 .latest-news .news-card .news-content p {
-  font-size: 0.95rem;
-  line-height: 1.5;
+  font-size: 1rem;
+  line-height: 1.6;
   color: var(--text-color);
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
   flex-grow: 1;
 }
+
+.news-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
 .latest-news .news-card .read-more-btn {
-  padding: 0.6rem 1.4rem;
+  padding: 0.7rem 1.6rem;
   border: none;
   border-radius: 30px;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #fff;
   text-align: center;
-  background-color: var(--accent-color);
+  background: var(--accent-color);
   cursor: pointer;
-  transition: background-color 0.3s ease, transform 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  flex-grow: 1;
 }
+
 .latest-news .news-card .read-more-btn:hover,
 .latest-news .news-card .read-more-btn:focus {
-  background-color: var(--highlight-color);
-  transform: translateY(-2px) scale(1.03);
+  background: var(--highlight-color);
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
 }
+
 .latest-news .news-card .media-container:empty {
   display: none;
 }
@@ -130,30 +201,38 @@
 /* Reusable News Text Modal */
 .modal-overlay {
   padding: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  animation: fadeIn 0.4s ease-out;
 }
+
 .modal-content {
-  width: 100vw;
-  height: 100vh;
-  margin: 0;
-  padding: 1rem;
+  width: 90%;
+  max-width: 900px;
+  height: 90%;
+  max-height: 90vh;
+  margin: 5vh auto;
+  padding: 2.5rem;
   overflow: auto;
   background-color: #fff;
-  box-shadow: none;
-  border-radius: 0;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  border-radius: 20px;
+  animation: slideInFromTop 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
+
 .modal-title {
-  font-size: 1.75rem;
+  font-size: 2rem;
   color: var(--secondary-color);
   text-align: center;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
   transition: color var(--transition-speed);
 }
+
 .modal-content-text {
-  font-size: 1rem;
-  line-height: 1.6;
+  font-size: 1.1rem;
+  line-height: 1.7;
   color: var(--text-color);
   text-align: justify;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 /* Reusable Image Lightbox */
@@ -162,7 +241,7 @@
   height: 100vh;
   margin: 0;
   padding: 0;
-  overflow: auto;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -170,58 +249,62 @@
   border-radius: 0;
   box-shadow: none;
 }
+
 .image-modal .modal-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
+  position: fixed;
+  top: 20px;
+  right: 20px;
   background: rgba(0, 0, 0, 0.6);
   color: #fff;
-  transition: background 0.2s ease, transform 0.2s ease;
+  width: 44px;
+  height: 44px;
+  font-size: 1.8rem;
+  border-radius: 50%;
+  transition: background 0.3s ease, transform 0.3s ease;
+  z-index: 10000;
 }
+
 .image-modal .modal-close:hover,
 .image-modal .modal-close:focus {
-  background: rgba(255, 255, 255, 0.8);
-  color: #000;
-  transform: scale(1.1);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--accent-color);
+  transform: scale(1.1) rotate(90deg);
 }
+
 .image-modal-body {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: auto;
+  overflow: hidden;
 }
-#modal-image,
-.image-modal-body iframe {
-  max-width: none;
-  max-height: none;
-  width: auto;
-  height: auto;
-}
-.media-container img {
-  max-width: 100%;
-  max-height: 100%;
+
+#modal-image {
+  max-width: 95%;
+  max-height: 95%;
   object-fit: contain;
+  animation: zoomIn 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
 }
+
 /* Responsive Adjustments for News */
 @media (max-width: 768px) {
   .latest-news .news-grid {
     grid-template-columns: 1fr;
-    gap: 1rem;
+    gap: 1.5rem;
   }
   .latest-news .news-card {
     display: flex;
     flex-direction: column;
   }
   .latest-news .news-card .media-container {
-    max-height: 160px;
+    max-height: 200px;
   }
   .latest-news .news-card .news-content {
-    padding: 1rem;
+    padding: 1.2rem;
   }
   .latest-news .news-card .news-content h4 {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     margin-bottom: 0.5rem;
   }
   .latest-news .news-card .news-content p {
@@ -229,78 +312,69 @@
     margin-bottom: 1rem;
   }
   .latest-news .news-card .read-more-btn {
-    padding: 0.5rem 1rem;
-    font-size: 0.9rem;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.95rem;
   }
   .modal-content,
   .image-modal .modal-content {
-    width: 100vw;
-    height: 100vh;
-    padding: 0.5rem;
+    width: 95vw;
+    height: 95vh;
+    padding: 1rem;
+    margin: 2.5vh auto;
   }
   .modal-title {
-    font-size: 1.5rem;
-    margin-bottom: 0.75rem;
-  }
-  .modal-content-text {
-    font-size: 0.95rem;
+    font-size: 1.7rem;
     margin-bottom: 1rem;
   }
-  .modal-content-text ul {
-    padding-left: 1rem;
+  .modal-content-text {
+    font-size: 1rem;
+    margin-bottom: 1rem;
   }
-  .image-modal-body {
-    padding: 0;
-  }
-  #modal-image,
-  .image-modal-body iframe {
-    max-width: 100%;
-    max-height: 100%;
+  .image-modal .modal-close {
+    width: 40px;
+    height: 40px;
+    font-size: 1.5rem;
   }
 }
+
 /* ----------------------------
     Buttons Container
     ---------------------------- */
 .news-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   margin-top: 0.5rem;
 }
 
 /* ----------------------------
     Copy-Link Button
     ---------------------------- */
-.news-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 0.5rem;
-}
-
 .copy-link {
-  background: #1e1e2f;
+  background: var(--secondary-color);
   color: #fff;
   border: none;
   border-radius: 50%;
-  width: 30px;
-  height: 30px;
-  font-size: 16px;
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s, background-color 0.3s;
+  transition: transform 0.3s, background-color 0.3s, box-shadow 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 .copy-link:hover {
-  background-color: #007bff;
-  transform: scale(1.1) rotate(5deg);
+  background-color: var(--accent-color);
+  transform: scale(1.15) rotate(15deg);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
 .copy-link.copied {
   background-color: #28a745 !important;
-  transform: none !important;
+  transform: scale(1) rotate(0deg) !important;
   cursor: default;
 }
 
@@ -309,23 +383,22 @@
 }
 @keyframes flash {
   0% {
-    background-color: #fff3cd;
+    background-color: var(--pulse-color);
   }
   50% {
-    background-color: #ffeeba;
-  }
-  100% {
     background-color: transparent;
   }
+  100% {
+    background-color: var(--pulse-color);
+  }
 }
+
 /* Ensure the modal is always on top of the GTranslate widget */
 .modal-overlay {
   z-index: 9999;
-  /* A very high z-index to be on top of everything */
 }
 .gtranslate_wrapper {
   z-index: 999;
-  /* Lower z-index so the modal appears over it */
 }
 
 /* --- UPDATED STYLES --- */
@@ -336,251 +409,130 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #555;
-  margin-bottom: 0.75rem;
-  gap: 0.2rem;
+  margin-bottom: 1rem;
+  gap: 0.5rem;
 }
+
 .news-meta .dot,
 .modal-meta .dot {
   font-size: 1.2em;
   line-height: 1;
-  color: #888;
+  color: #aaa;
   margin: 0 0.2rem;
 }
+
 .news-meta .published,
 .modal-meta .published {
-  font-weight: 600;
+  font-weight: 700;
   color: #444;
 }
+
 .news-meta .author,
 .modal-meta .author {
   color: #666;
+  font-style: italic;
 }
+
 .news-meta .read-time,
 .modal-meta .read-time {
-  color: #333;
-  font-weight: 600;
+  color: var(--accent-color);
+  font-weight: 700;
 }
 
 /* Modal related articles (re-styled) */
 .modal-related {
-  margin-top: 2rem;
-  padding-top: 1rem;
-  border-top: 1px dashed #e5e5e5;
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 2px dashed #e5e5e5;
   animation: fadeIn 0.8s ease-out;
 }
+
 .modal-related h4 {
-  margin: 0 0 1rem 0;
-  font-size: 1.15rem;
+  margin: 0 0 1.5rem 0;
+  font-size: 1.35rem;
   color: var(--secondary-color);
-  border-bottom: 2px solid var(--accent-color);
-  padding-bottom: 0.25rem;
+  border-bottom: 3px solid var(--accent-color);
+  padding-bottom: 0.5rem;
   display: inline-block;
 }
+
 .related-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  display: grid;
+  gap: 1.2rem;
 }
+
 .related-card {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  border-radius: 10px;
+  gap: 1.25rem;
+  padding: 1rem;
+  border-radius: 12px;
   background: #f8f8f8;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: all 0.2s ease-in-out;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation: slideInFromRight 0.5s ease-out forwards;
 }
+
 .related-card:hover {
   background: #f0f0f0;
-  transform: translateY(-2px);
+  transform: translateX(10px) translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
 }
+
 .related-card img {
-  width: 80px;
-  height: 60px;
+  width: 100px;
+  height: 80px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: 8px;
   flex-shrink: 0;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease;
 }
+
+.related-card:hover img {
+  transform: scale(1.05);
+}
+
 .related-card .related-info {
   flex-grow: 1;
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
+
 .related-card .related-title {
-  font-weight: 600;
-  margin-bottom: 0.25rem;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
   color: var(--secondary-color);
+  transition: color 0.3s;
 }
+
+.related-card:hover .related-title {
+  color: var(--accent-color);
+}
+
 .related-card .related-meta {
   color: #666;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   line-height: 1.3;
 }
+
 .related-open {
   background: var(--accent-color);
   color: #fff;
   border: none;
   border-radius: 20px;
-  padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
+
 .related-open:hover {
   background-color: var(--highlight-color);
-}
-
-/* TTS controls (re-styled) */
-.tts-controls {
-  display: none;
-  /* Initially hidden */
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.25rem;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  margin-top: 1.5rem;
-  animation: fadeInFromTop 0.5s ease-out forwards;
-}
-.tts-controls.show {
-  display: flex;
-}
-.tts-controls-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.tts-controls button,
-.tts-controls select {
-  padding: 0.6rem 1rem;
-  border-radius: 8px;
-  border: 1px solid #ddd;
-  background: #fff;
-  cursor: pointer;
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--secondary-color);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.tts-controls button:hover,
-.tts-controls select:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-}
-.tts-controls .tts-play {
-  background: var(--accent-color);
-  color: #fff;
-}
-
-.tts-controls .tts-play.tts-play-active {
-  background: var(--secondary-color);
-}
-
-.tts-controls .tts-play:hover {
-  background: var(--highlight-color);
-}
-
-.tts-controls .tts-play.tts-play-active:hover {
-  background: #092d4d;
-}
-
-.tts-status {
-  font-size: 0.9rem;
-  color: #444;
-  flex-grow: 1;
-  text-align: right;
-  padding-left: 0.5rem;
-}
-.tts-toggle-btn {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 50%;
-  background: var(--accent-color);
-  color: #fff;
-  font-size: 1.2rem;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 10;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-}
-.tts-toggle-btn:hover {
-  background: var(--highlight-color);
-  transform: scale(1.05);
-}
-.tts-highlight {
-  background-color: #fffacd;
-  transition: background-color 0.2s;
-  border-radius: 4px;
-  padding: 2px;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-}
-
-/* New CSS for TTS word highlighting animation */
-@keyframes highlightPulse {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.02);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-.tts-highlight {
-  background-color: #fffacd;
-  transition: background-color 0.2s;
-  border-radius: 4px;
-  padding: 2px;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-  animation: highlightPulse 0.6s ease-in-out;
-}
-
-/* New CSS for related articles animation */
-@keyframes slideInFromRight {
-  0% {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.modal-related {
-  margin-top: 2rem;
-  padding-top: 1rem;
-  border-top: 1px dashed #e5e5e5;
-  animation: fadeIn 0.8s ease-out;
-}
-
-.related-card {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  border-radius: 10px;
-  background: #f8f8f8;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: all 0.2s ease-in-out;
-  animation: slideInFromRight 0.5s ease-out forwards;
+  transform: translateY(-1px);
 }
 
 /* To stagger the animation */
@@ -599,16 +551,16 @@
 
 /* Small screen adjustments */
 @media (max-width: 640px) {
-  .related-list {
-    flex-direction: column;
-  }
   .related-card {
     flex-wrap: wrap;
     text-align: center;
     justify-content: center;
+    padding: 0.75rem;
   }
   .related-card img {
     margin-bottom: 0.5rem;
+    width: 90%;
+    height: auto;
   }
   .tts-controls {
     justify-content: center;
@@ -616,10 +568,10 @@
 }
 
 /* New animations */
-@keyframes fadeInFromTop {
+@keyframes slideInFromTop {
   from {
     opacity: 0;
-    transform: translateY(-20px);
+    transform: translateY(-50px);
   }
   to {
     opacity: 1;
@@ -629,12 +581,130 @@
 
 @keyframes highlightPulse {
   0% {
-    transform: scale(1);
+    background-color: var(--pulse-color);
   }
   50% {
-    transform: scale(1.02);
+    background-color: transparent;
   }
   100% {
-    transform: scale(1);
+    background-color: var(--pulse-color);
   }
+}
+
+@keyframes zoomIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.tts-highlight {
+  background-color: var(--pulse-color);
+  transition: background-color 0.2s;
+  border-radius: 4px;
+  padding: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  animation: highlightPulse 1.2s ease-in-out infinite;
+}
+
+/* TTS controls (re-styled) */
+.tts-controls {
+  display: none;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f0f4f8 0%, #e0e8f0 100%);
+  border-radius: 15px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  margin-top: 2rem;
+  animation: fadeInFromTop 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  border: 1px solid #d4d4d4;
+  backdrop-filter: blur(5px);
+}
+.tts-controls.show {
+  display: flex;
+}
+.tts-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.tts-controls button,
+.tts-controls select {
+  padding: 0.8rem 1.2rem;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--secondary-color);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.tts-controls button:hover,
+.tts-controls select:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+.tts-controls .tts-play {
+  background: var(--accent-color);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(255, 45, 149, 0.4);
+}
+.tts-controls .tts-play:hover {
+  background: var(--highlight-color);
+  box-shadow: 0 6px 15px rgba(233, 30, 99, 0.5);
+}
+.tts-controls .tts-play.tts-play-active {
+  background: var(--secondary-color);
+  box-shadow: 0 4px 10px rgba(13, 59, 102, 0.4);
+}
+.tts-controls .tts-play.tts-play-active:hover {
+  background: #092d4d;
+  box-shadow: 0 6px 15px rgba(9, 45, 77, 0.5);
+}
+.tts-status {
+  font-size: 0.95rem;
+  color: #444;
+  flex-grow: 1;
+  text-align: right;
+  padding-left: 0.5rem;
+}
+.tts-toggle-btn {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  width: 45px;
+  height: 45px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-color);
+  color: #fff;
+  font-size: 1.4rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  will-change: transform, box-shadow;
+}
+.tts-toggle-btn:hover {
+  background: var(--highlight-color);
+  transform: scale(1.1) rotate(5deg);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+.tts-toggle-btn.active {
+  background: var(--secondary-color);
+  transform: scale(1.1) rotate(-5deg);
 }
