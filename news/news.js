@@ -1,584 +1,222 @@
-/* news.js — PattiBytes
-    Features:
-    - copy-link (existing)
-    - populate read-time and relative date on cards
-    - pagination / infinite scroll (IntersectionObserver)
-    - accessible modal for full article (with related articles)
-    - image modal (existing)
-    - TTS (Web Speech API) for modal content (play/pause/stop + voice select)
-*/
-
-document.addEventListener("DOMContentLoaded", () => {
-  /* ---------- Utilities ---------- */
-  const q = (sel, ctx=document) => ctx.querySelector(sel);
-  const qa = (sel, ctx=document) => Array.from(ctx.querySelectorAll(sel));
-  const stripHtml = (html) => {
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html || '';
-    return tmp.textContent || tmp.innerText || '';
-  };
-  const wordCount = (text) => (text || '').trim().split(/\s+/).filter(Boolean).length;
-  const readMinutes = (words, wpm = 200) => Math.max(1, Math.round(words / wpm));
-
-  function timeAgo(isoDate) {
-    if (!isoDate) return '';
-    const then = new Date(isoDate);
-    if (isNaN(then)) return '';
-    const now = new Date();
-    const sec = Math.floor((now - then) / 1000);
-    if (sec < 60) return `${sec} sec ਪਹਿਲਾਂ`;
-    const min = Math.floor(sec / 60);
-    if (min < 60) return `${min} ਮਿੰਟ ਪਹਿਲਾਂ`;
-    const hr = Math.floor(min / 24);
-    if (hr < 24) return `${hr} ਘੰਟੇ ਪਹਿਲਾਂ`;
-    const days = Math.floor(hr / 24);
-    if (days < 7) return `${days} ਦਿਨ ਪਹਿਲਾਂ`;
-    // fallback to formatted date with full month name
-    return then.toLocaleDateString('pa-IN', { year: 'numeric', month:'long', day:'numeric' });
-  }
-
-  function decodeHtmlEntities(str) {
-    // some dataset values might be HTML-encoded; decode safely
-    const ta = document.createElement('textarea');
-    ta.innerHTML = str || '';
-    return ta.value;
-  }
-
-  /* ---------- Elements ---------- */
-  const allCards = qa('.news-card');
-  const newsGrid = q('.news-grid');
-  const newsModal = q('#news-modal');
-  const modalTitle = q('#modal-title');
-  const modalMedia = q('#modal-media');
-  const modalText = q('#modal-text');
-  const modalIdEl = q('#modal-id');
-  const modalCloseBtn = q('#modal-close');
-  const imageModal = q('#image-modal');
-  const imageModalClose = q('#image-modal-close');
-  const modalImage = q('#modal-image');
-
-  /* ---------- 1) Copy link (keeps your behavior) ---------- */
-  qa('.copy-link').forEach((btn) => {
-    btn.addEventListener('click', async (ev) => {
-      const article = btn.closest('article.news-card');
-      if (!article || !article.id) return;
-      const url = `${window.location.origin}${window.location.pathname}#${article.id}`;
-      try {
-        await navigator.clipboard.writeText(url);
-      } catch (err) {
-        const ta = document.createElement('textarea');
-        ta.value = url; document.body.appendChild(ta);
-        ta.select(); document.execCommand('copy');
-        document.body.removeChild(ta);
-      }
-      btn.classList.add('copied');
-      const prev = btn.textContent;
-      btn.textContent = '✔️';
-      setTimeout(()=> { btn.classList.remove('copied'); btn.textContent = prev; }, 1500);
-    });
-  });
-
-  /* ---------- 2) populate card meta: read-time and relative date ---------- */
-  allCards.forEach(card => {
-    // read time from preview (best-effort)
-    const preview = card.dataset.preview || '';
-    const words = wordCount(preview);
-    const minutes = readMinutes(words);
-    const readTimeEl = card.querySelector('.read-time');
-    if (readTimeEl) readTimeEl.textContent = `${minutes} ਮਿੰਟ ਪੜ੍ਹਨ ਲਈ`;
-
-    // published date (relative)
-    const dateISO = card.dataset.date;
-    const publishedEl = card.querySelector('.published');
-    if (publishedEl && dateISO) {
-      publishedEl.setAttribute('datetime', dateISO);
-      publishedEl.title = new Date(dateISO).toLocaleString('pa-IN', { year: 'numeric', month: 'long', day: 'numeric' });
-      // show relative if space below title
-      const rel = timeAgo(dateISO);
-      // append relative to meta
-      const relSpan = document.createElement('span');
-      relSpan.className = 'published-relative';
-      relSpan.textContent = ` (${rel})`;
-      publishedEl.parentNode.insertBefore(relSpan, publishedEl.nextSibling);
-    }
-  });
-
-  /* ---------- 3) Pagination / Infinite scroll ---------- */
-  const PAGE_SIZE = 6;
-  let pageIndex = 0;
-  const totalCards = allCards.length;
-
-  // hide all then show slice
-  allCards.forEach(c => c.style.display = 'none');
-
-  function showNextPage() {
-    const start = pageIndex * PAGE_SIZE;
-    const end = start + PAGE_SIZE;
-    const slice = allCards.slice(start, end);
-    slice.forEach(c => c.style.display = '');
-    pageIndex++;
-    // if all shown, remove sentinel
-    if (pageIndex * PAGE_SIZE >= totalCards && sentinel) {
-      observer.unobserve(sentinel);
-      sentinel.remove();
-    }
-  }
-
-  // initial page
-  showNextPage();
-
-  // sentinel element
-  const sentinel = document.createElement('div');
-  sentinel.className = 'scroll-sentinel';
-  sentinel.style.height = '2px';
-  newsGrid.after(sentinel);
-
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        showNextPage();
-      }
-    });
-  }, { root: null, rootMargin: '200px', threshold: 0.01 });
-
-  observer.observe(sentinel);
-
-  /* ---------- 4) Modal open / close (article full text) ---------- */
-  // helper to trap focus minimally
-  let lastFocusBeforeModal = null;
-  function openNewsModal(card) {
-    if (!card) return;
-    lastFocusBeforeModal = document.activeElement;
-
-    const title = card.dataset.title || '';
-    const author = card.dataset.author || '';
-    const dateISO = card.dataset.date || '';
-    const image = card.dataset.image || '';
-    const rawContent = card.dataset.content || ''; // may be escaped
-    const contentHtml = decodeHtmlEntities(rawContent);
-    // populate modal
-    modalIdEl.textContent = `ID: ${card.id || ''}`;
-    modalTitle.textContent = title;
-    modalMedia.innerHTML = '';
-    if (image) {
-      const img = document.createElement('img');
-      img.src = image; img.alt = title;
-      img.loading = 'lazy';
-      img.style.maxWidth = '100%';
-      img.style.borderRadius = '8px';
-      modalMedia.appendChild(img);
-    }
-    // insert content
-    modalText.innerHTML = contentHtml;
-
-    // meta: add author & date & read-time
-    const metaWrap = modalText.querySelector('.modal-meta') || document.createElement('div');
-    metaWrap.className = 'modal-meta';
-    metaWrap.innerHTML = `<p style="margin:0 0 .5rem 0;"><strong>${author}</strong> · ${new Date(dateISO).toLocaleString('pa-IN', { year: 'numeric', month: 'long', day: 'numeric' })}</p>`;
-    modalText.prepend(metaWrap);
-
-    // related articles
-    populateRelated(card);
-
-    // add TTS controls area (if not present) and the toggle button
-    if (!modalText.parentNode.querySelector('.tts-controls')) {
-      const ttsToggleBtn = document.createElement('button');
-      ttsToggleBtn.className = 'tts-toggle-btn';
-      ttsToggleBtn.innerHTML = '🔊';
-      ttsToggleBtn.title = 'Toggle Text-to-Speech Controls';
-      ttsToggleBtn.type = 'button';
-      modalCloseBtn.after(ttsToggleBtn);
-
-      const ttsWrap = document.createElement('div');
-      ttsWrap.className = 'tts-controls';
-      ttsWrap.innerHTML = `
-        <div class="tts-controls-row">
-            <button class="tts-play" aria-pressed="false" title="Play article">▶️ Play</button>
-            <button class="tts-pause" title="Pause">⏸️</button>
-            <button class="tts-stop" title="Stop">⏹️</button>
+---
+layout: null
+permalink: /news/
+---
+<!DOCTYPE html>
+<html lang="pa">
+<head>
+    <script src="https://cmp.gatekeeperconsent.com/min.js" data-cfasync="false"></script>
+    <script src="https://the.gatekeeperconsent.com/cmp.min.js" data-cfasync="false"></script>
+    <script async src="//www.ezojs.com/ezoic/sa.min.js"></script>
+    <script>
+      window.ezstandalone = window.ezstandalone || {};
+      ezstandalone.cmd = ezstandalone.cmd || [];
+    </script>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5755659850244383" crossorigin="anonymous"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="google-adsense-account" content="ca-pub-5755659850244383">
+    <title class="notranslate">ਪੱਟੀ ਬਾਈਟਸ | ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</title>
+    <meta name="description" content="ਪੱਟੀ ਬਾਈਟਸ: ਪੱਟੀ ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ ਇੱਥੇ ਪੜ੍ਹੋ।" />
+    <meta name="keywords" content="ਪੱਟੀ ਬਾਈਟਸ, Patti Bytes news, Patti News, ਖਬਰਾਂ, ਅਪਡੇਟਸ, ਪੰਜਾਬੀ ਖਬਰਾਂ" />
+    <!-- Favicon & touch icon -->
+    <link rel="icon" href="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg" sizes="32x32" type="image/jpg" />
+    <link rel="apple-touch-icon" href="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg" />
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+      new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+      j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+      'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-5WKZPF3F');</script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-NS67B8VKCZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-NS67B8VKCZ');
+    </script>
+    <!-- Global + Page-specific CSS -->
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="news.css" />
+</head>
+<body>
+    <!-- GTM noscript -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5WKZPF3F"
+      height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- Shared Header -->
+    <header class="site-header" role="banner">
+      <div class="container branding">
+        <a href="/" aria-label="Go to Patti Bytes Home" rel="home">
+          <img src="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg"
+               alt="ਪੱਟੀ ਬਾਈਟਸ Logo" class="logo" width="50" height="50" loading="lazy">
+        </a>
+        <h1 class="site-title"><span class="notranslate" translate="no">ਪੱਟੀ ਬਾਈਟਸ</span></h1>
+      </div>
+      <button id="hamburger" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="mobile-menu" type="button">☰</button>
+      <nav id="mobile-menu" class="site-nav" aria-hidden="true" role="navigation">
+        <ul class="nav-list">
+          <li class="nav-item has-dropdown">
+            <div class="home-with-toggle">
+              <a href="/">ਮੁੱਖ ਪੰਨਾ</a>
+              <button class="dropdown-toggle" aria-label="Toggle submenu for ਮੁੱਖ ਪੰਨਾ" aria-expanded="false" type="button">▼</button>
+            </div>
+            <ul class="dropdown" role="menu" aria-label="ਮੁੱਖ ਪੰਨਾ submenu">
+              <li role="none"><a href="/#history" role="menuitem">ਇਤਿਹਾਸ</a></li>
+              <li role="none"><a href="/#about" role="menuitem">ਬਾਰੇ</a></li>
+              <li role="none"><a href="/#why" role="menuitem">ਕਿਉਂ PattiBytes?</a></li>
+              <li role="none"><a href="/#achievements" role="menuitem">ਉਪਲਬਧੀਆਂ</a></li>
+            </ul>
+          </li>
+          <li class="nav-item"><a href="/news">ਖ਼ਬਰਾਂ</a></li>
+          <li class="nav-item"><a href="/places">ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ</a></li>
+          <li class="nav-item"><a href="/#collaboration">ਸੰਪਰਕ ਕਰੋ</a></li>
+          <li class="nav-item"><a href="/shop">ਦੁਕਾਨ</a></li>
+        </ul>
+      </nav>
+    </header>
+    <div class="header-spacer"></div>
+    <main>
+      <section class="latest-news" aria-labelledby="latest-news-heading">
+        <div class="container">
+          <h2 id="latest-news-heading" class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</h2>
+          <div class="news-grid">
+            {% assign sorted_news = site.news | sort: "date" | reverse %}
+            {% for article in sorted_news %}
+            <article
+              id="{{ article.id | default: article.slug | slugify }}"
+              class="news-card{% if article.featured %} featured-card{% endif %}"
+              data-id="{{ article.id | default: article.slug | slugify }}"
+              data-title="{{ article.title | escape }}"
+              data-preview="{{ article.preview | escape }}"
+              data-content="{{ article.content | xml_escape }}"
+              data-date="{{ article.date | date_to_xmlschema }}"
+              data-author="{{ article.author | default: site.author.name | escape }}"
+              data-tags="{{ article.tags | join: ' ' }}"
+              {% if article.image %}data-image="{{ article.image }}"{% endif %}
+            >
+              {% if article.image %}
+                <div class="media-container">
+                  <button class="enlarge-btn" aria-label="Enlarge image" type="button">🔍</button>
+                  <img src="{{ article.image }}" alt="{{ article.title | escape }}" loading="lazy" />
+                </div>
+              {% endif %}
+              <div class="news-content{% unless article.image %} no-media{% endunless %}">
+                <h4 class="news-title">{{ article.title }}</h4>
+                <!-- meta: date + author + read time (JS will fill read-time) -->
+                <div class="news-meta" aria-hidden="false">
+                  <time class="published" datetime="{{ article.date | date_to_xmlschema }}">
+                    {{ article.date | date: "%b %d, %Y" }}
+                  </time>
+                  <span class="author">· {{ article.author | default: site.author.name }}</span>
+                  <span class="dot">·</span>
+                  <span class="read-time"></span>
+                </div>
+                <p class="card-preview">{{ article.preview }}</p>
+                <div class="news-actions">
+                  <button class="read-more-btn" type="button" data-url="{{ article.url | default: '#' }}">ਪੂਰਾ ਪੜ੍ਹੋ →</button>
+                  <button class="copy-link" type="button" title="Copy Link" data-url="{{ site.url }}{{ article.url }}">🔗</button>
+                </div>
+              </div>
+            </article>
+            {% endfor %}
+          </div>
         </div>
-        <div class="tts-controls-row">
-            <label for="tts-voices" class="sr-only">Voice</label>
-            <select id="tts-voices" aria-label="Choose voice"></select>
-            <span class="tts-status" aria-live="polite"></span>
+        <!-- ======================
+              News-Text Modal
+              ====================== -->
+        <div id="news-modal" class="modal-overlay" aria-hidden="true">
+          <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+            <button id="modal-close" class="modal-close" aria-label="Close" type="button">&times;</button>
+            <div class="modal-body">
+              <!-- Title -->
+              <h3 id="modal-title" class="modal-title"></h3>
+              <!-- Media -->
+              <div id="modal-media" class="modal-media"></div>
+              <!-- Full content -->
+              <div id="modal-text" class="modal-content-text"></div>
+            </div>
+          </div>
         </div>
-      `;
-      modalText.parentNode.insertBefore(ttsWrap, modalText.nextSibling);
-
-      // add click listener for the new toggle button
-      ttsToggleBtn.addEventListener('click', () => {
-        ttsWrap.classList.toggle('show');
-      });
-      initTTSControls(ttsWrap, modalText);
-    }
-
-    // show modal
-    newsModal.setAttribute('aria-hidden','false');
-    newsModal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-
-    // focus management
-    modalCloseBtn.focus();
-    document.addEventListener('keydown', modalKeyHandler);
-  }
-
-  function closeNewsModal() {
-    newsModal.setAttribute('aria-hidden','true');
-    newsModal.style.display = 'none';
-    document.body.style.overflow = '';
-    document.removeEventListener('keydown', modalKeyHandler);
-    // stop any TTS
-    stopTTS();
-    if (lastFocusBeforeModal) lastFocusBeforeModal.focus();
-    // remove highlight
-    qa('.tts-highlight').forEach(s => {
-      const parent = s.parentNode;
-      parent.replaceChild(document.createTextNode(s.textContent), s);
-      parent.normalize();
-    });
-  }
-
-  function modalKeyHandler(e) {
-    if (e.key === 'Escape') closeNewsModal();
-    if (e.key === 'Tab') {
-      // minimal focus trap: keep focus inside modal close button and next tabbables
-      const focusables = qa('#news-modal button, #news-modal a, #news-modal [tabindex]:not([tabindex="-1"])');
-      if (focusables.length === 0) return;
-      const first = focusables[0], last = focusables[focusables.length -1];
-      if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
-      else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
-    }
-  }
-
-  // open modal on read-more click
-  qa('.read-more-btn').forEach(btn => {
-    btn.addEventListener('click', (ev) => {
-      const card = btn.closest('article.news-card');
-      openNewsModal(card);
-    });
-  });
-
-  // close modal
-  modalCloseBtn.addEventListener('click', closeNewsModal);
-  newsModal.addEventListener('click', (e) => {
-    if (e.target === newsModal) closeNewsModal();
-  });
-
-  /* ---------- 5) Image modal (open when enlarge clicked) ---------- */
-  qa('.enlarge-btn').forEach(b => {
-    b.addEventListener('click', (ev) => {
-      const card = b.closest('article.news-card');
-      const imgSrc = card.dataset.image;
-      if (!imgSrc) return;
-      modalImage.src = imgSrc;
-      modalImage.alt = card.dataset.title || '';
-      imageModal.setAttribute('aria-hidden','false');
-      imageModal.style.display = 'flex';
-      document.body.style.overflow = 'hidden';
-      imageModalClose.focus();
-    });
-  });
-
-  imageModalClose.addEventListener('click', () => {
-    imageModal.setAttribute('aria-hidden','true');
-    imageModal.style.display = 'none';
-    modalImage.src = '';
-    document.body.style.overflow = '';
-  });
-  imageModal.addEventListener('click', (e) => {
-    if (e.target === imageModal) {
-      imageModal.setAttribute('aria-hidden','true');
-      imageModal.style.display = 'none';
-      modalImage.src = '';
-      document.body.style.overflow = '';
-    }
-  });
-
-  /* ---------- 6) Related articles (simple tag-based + title overlap) ---------- */
-  function populateRelated(activeCard) {
-    // remove old related
-    const existing = modalText.parentNode.querySelector('.modal-related');
-    if (existing) existing.remove();
-
-    const tags = (activeCard.dataset.tags || '').split(/\s+/).filter(Boolean);
-    const titleWords = (activeCard.dataset.title || '').toLowerCase().split(/\W+/).filter(Boolean);
-
-    const scores = [];
-    allCards.forEach(c => {
-      if (c === activeCard) return;
-      // only consider visible cards (we may hide due to pagination) — still allow
-      let score = 0;
-      const otherTags = (c.dataset.tags||'').split(/\s+/).filter(Boolean);
-      const tagOverlap = otherTags.filter(t => tags.includes(t)).length;
-      score += tagOverlap * 10;
-      // title overlap
-      const otherTitleWords = (c.dataset.title||'').toLowerCase().split(/\W+/).filter(Boolean);
-      const titleOverlap = otherTitleWords.filter(w => titleWords.includes(w)).length;
-      score += titleOverlap * 3;
-      // small boost for featured
-      if (c.classList.contains('featured-card')) score += 2;
-      if (score > 0) scores.push({ card: c, score });
-    });
-
-    scores.sort((a,b)=> b.score - a.score);
-    const top = scores.slice(0,4).map(s => s.card);
-    if (top.length === 0) return; // nothing related
-
-    const wrap = document.createElement('div');
-    wrap.className = 'modal-related';
-    wrap.innerHTML = `<h4>ਤੁਹਾਨੂੰ ਇਹ ਵੀ ਪਸੰਦ ਆ ਸਕਦਾ ਹੈ</h4>`;
-    const list = document.createElement('div');
-    list.className = 'related-list';
-
-    top.forEach(c => {
-      const thumb = c.dataset.image || '';
-      const cardTitle = c.dataset.title || '';
-      const preview = c.dataset.preview || '';
-      const rel = document.createElement('div');
-      rel.className = 'related-card';
-      rel.innerHTML = `
-        ${thumb ? `<img src="${thumb}" alt="${cardTitle}" loading="lazy"/>` : ''}
-        <div class="related-info">
-          <div class="related-title">${cardTitle}</div>
-          <div class="related-meta">${preview.slice(0,80)}…</div>
-          <div style="margin-top:.5rem"><button class="related-open" data-id="${c.id}">ਖੋਲੋ</button></div>
+        <!-- Image Modal -->
+        <div id="image-modal" class="modal-overlay image-modal" aria-hidden="true">
+          <div class="modal-content" role="dialog" aria-modal="true">
+            <button id="image-modal-close" class="modal-close" aria-label="Close" type="button">&times;</button>
+            <div class="modal-body image-modal-body">
+              <img id="modal-image" src="" alt="" />
+            </div>
+          </div>
         </div>
-      `;
-      list.appendChild(rel);
-    });
-
-    wrap.appendChild(list);
-    modalText.parentNode.appendChild(wrap);
-
-    // attach clicks
-    qa('.related-open', wrap).forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = btn.dataset.id;
-        const target = document.getElementById(id);
-        if (target) {
-          // either open target in modal or scroll to it
-          closeNewsModal();
-          target.scrollIntoView({behavior:'smooth', block:'center'});
-          target.classList.add('highlighted');
-          setTimeout(()=> target.classList.remove('highlighted'), 1600);
-        }
-      });
-    });
-  }
-
-  /* ---------- 7) TTS (Web Speech API) ---------- */
-  let synth = window.speechSynthesis;
-  let ttsUtterance = null;
-  let availableVoices = [];
-  let ttsPlaying = false;
-  let ttsStatusSpan = null;
-  let ttsPlayBtn = null;
-  let ttsTextElement = null;
-  let wordSpans = [];
-  let currentWordIndex = -1;
-
-  function populateVoices(selectEl) {
-    const currentLang = document.documentElement.lang;
-    availableVoices = (synth.getVoices() || []).filter(voice =>
-      voice.lang.startsWith(currentLang) || voice.lang.startsWith('en')
-    );
-    selectEl.innerHTML = '';
-    
-    if (availableVoices.length === 0) {
-      const opt = document.createElement('option');
-      opt.textContent = 'Default';
-      selectEl.appendChild(opt);
-    } else {
-      availableVoices.forEach((v, idx) => {
-        const opt = document.createElement('option');
-        opt.value = idx;
-        opt.textContent = `${v.name} (${v.lang})`;
-        opt.lang = v.lang;
-        selectEl.appendChild(opt);
-      });
-    }
-  }
-
-  function highlightAndScroll() {
-      if (currentWordIndex >= 0 && currentWordIndex < wordSpans.length) {
-          // Remove highlight from previous word
-          if (currentWordIndex > 0) {
-              const prevWordSpan = wordSpans[currentWordIndex - 1];
-              if (prevWordSpan) prevWordSpan.classList.remove('tts-highlight');
-          }
-          // Highlight current word and scroll
-          const currentWordSpan = wordSpans[currentWordIndex];
-          if (currentWordSpan) {
-              currentWordSpan.classList.add('tts-highlight');
-              // Using a minimal scroll to keep the text in view
-              const rect = currentWordSpan.getBoundingClientRect();
-              const container = ttsTextElement.parentNode;
-              if (rect.top < container.offsetTop || rect.bottom > container.offsetTop + container.clientHeight) {
-                  currentWordSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }
-          }
-      }
-  }
-
-  function initTTSControls(wrapper, modalTextContainer) {
-    ttsTextElement = modalTextContainer;
-    ttsPlayBtn = wrapper.querySelector('.tts-play');
-    const pauseBtn = wrapper.querySelector('.tts-pause');
-    const stopBtn = wrapper.querySelector('.tts-stop');
-    const select = wrapper.querySelector('#tts-voices');
-    ttsStatusSpan = wrapper.querySelector('.tts-status');
-
-    // voices may load later
-    populateVoices(select);
-    if (speechSynthesis.onvoiceschanged !== undefined) {
-      speechSynthesis.onvoiceschanged = () => populateVoices(select);
-    }
-
-    function prepareTextForReading() {
-      // First, remove old spans if they exist
-      qa('.tts-highlight').forEach(s => {
-          const parent = s.parentNode;
-          parent.replaceChild(document.createTextNode(s.textContent), s);
-          parent.normalize();
-      });
-
-      const text = ttsTextElement.textContent;
-      const paragraphs = text.split('\n\n').filter(p => p.trim() !== '');
-      ttsTextElement.innerHTML = ''; // Clear content
-      wordSpans = [];
-      paragraphs.forEach(pText => {
-          const p = document.createElement('p');
-          const words = pText.split(/\s+/);
-          words.forEach((word, index) => {
-              const span = document.createElement('span');
-              span.textContent = word + ' ';
-              wordSpans.push(span);
-              p.appendChild(span);
-          });
-          ttsTextElement.appendChild(p);
-      });
-    }
-
-    playBtn.addEventListener('click', () => {
-      if (!synth) {
-        ttsStatusSpan.textContent = 'TTS not supported in this browser';
-        return;
-      }
-      if (ttsPlaying && ttsUtterance && synth.paused) {
-        synth.resume();
-        ttsStatusSpan.textContent = 'Resumed';
-        return;
-      }
-      if (ttsPlaying) return;
-
-      prepareTextForReading();
-      const text = wordSpans.map(s => s.textContent).join('');
-      if (!text) { ttsStatusSpan.textContent = 'No text to read'; return; }
-      
-      ttsUtterance = new SpeechSynthesisUtterance(text);
-      const vIdx = parseInt(select.value, 10);
-      if (!isNaN(vIdx) && availableVoices[vIdx]) ttsUtterance.voice = availableVoices[vIdx];
-      // Set language automatically
-      ttsUtterance.lang = document.documentElement.lang || 'en-US';
-      ttsUtterance.rate = 1.05; // slightly faster
-      ttsUtterance.pitch = 1;
-
-      let charIndex = 0;
-      ttsUtterance.onboundary = (event) => {
-          if (event.name === 'word') {
-              const boundaryIndex = event.charIndex;
-              let tempIndex = 0;
-              for (let i = 0; i < wordSpans.length; i++) {
-                  const spanText = wordSpans[i].textContent;
-                  if (boundaryIndex >= tempIndex && boundaryIndex < tempIndex + spanText.length) {
-                      if (currentWordIndex >= 0 && wordSpans[currentWordIndex]) {
-                          wordSpans[currentWordIndex].classList.remove('tts-highlight');
-                      }
-                      currentWordIndex = i;
-                      wordSpans[currentWordIndex].classList.add('tts-highlight');
-                      wordSpans[currentWordIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      break;
-                  }
-                  tempIndex += spanText.length;
-              }
-          }
-      };
-
-      ttsUtterance.onstart = () => { 
-          ttsPlaying = true; 
-          ttsStatusSpan.textContent = 'Playing...'; 
-          ttsPlayBtn.setAttribute('aria-pressed','true'); 
-      };
-      ttsUtterance.onend = () => { 
-          ttsPlaying = false; 
-          ttsStatusSpan.textContent = 'Finished'; 
-          ttsPlayBtn.setAttribute('aria-pressed','false'); 
-          qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
-      };
-      ttsUtterance.onerror = (e) => { 
-          ttsPlaying = false; 
-          ttsStatusSpan.textContent = 'Playback error'; 
-          ttsPlayBtn.setAttribute('aria-pressed','false'); 
-      };
-      
-      synth.speak(ttsUtterance);
-    });
-
-    pauseBtn.addEventListener('click', () => {
-      if (!synth || !ttsPlaying) return;
-      if (synth.speaking && !synth.paused) {
-        synth.pause();
-        ttsStatusSpan.textContent = 'Paused';
-      } else if (synth.paused) {
-        synth.resume();
-        ttsStatusSpan.textContent = 'Resumed';
-      }
-    });
-
-    stopBtn.addEventListener('click', () => {
-      if (!synth) return;
-      synth.cancel();
-      ttsPlaying = false;
-      ttsStatusSpan.textContent = 'Stopped';
-      ttsPlayBtn.setAttribute('aria-pressed','false');
-      qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
-    });
-  }
-
-  function stopTTS() {
-    if (synth && synth.speaking) {
-      synth.cancel();
-    }
-    ttsPlaying = false;
-    if (ttsStatusSpan) ttsStatusSpan.textContent = 'Stopped';
-    if (ttsPlayBtn) ttsPlayBtn.setAttribute('aria-pressed','false');
-    qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
-  }
-
-  /* ---------- 8) On-load highlight from hash (you already had this) ---------- */
-  const hash = window.location.hash.slice(1);
-  if (hash) {
-    const target = document.getElementById(hash);
-    if (target) {
-      setTimeout(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
-        target.classList.add("highlighted");
-        setTimeout(() => target.classList.remove("highlighted"), 2000);
-      }, 300);
-    }
-  }
-
-  /* ---------- 9) Small accessibility: close modals with Escape (global) ---------- */
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      // close any open modal overlays
-      qa('.modal-overlay[aria-hidden="false"]').forEach(m => {
-        m.setAttribute('aria-hidden','true');
-        m.style.display = 'none';
-        document.body.style.overflow = '';
-      });
-      stopTTS();
-    }
-  });
-
-}); // DOMContentLoaded end
+      </section>
+    </main>
+    <!-- Shared Footer (unchanged) -->
+    <footer class="site-footer">
+      <div class="footer-container container">
+        <div class="footer-links">
+          <h4 class="footer-heading">Navigate</h4>
+          <ul class="footer-nav">
+           <li><a href="/">Home</a></li>
+            <li><a href="/shop">Shop</a></li>
+            <li><a href="/news">News</a></li>
+            <li><a href="/places">Places</a></li>
+            <li><a href="/#about">About Us</a></li>
+            <li><a href="/#collaboration">Contact Us</a></li>
+            <li><a href="/privacy-policy">Privacy Policy</a></li>
+          </ul>
+        </div>
+        <div class="footer-social">
+          <h4 class="footer-heading">Follow Us</h4>
+          <ul class="social-icons">
+            <li>
+              <a href="https://instagram.com/patti_bytes" class="social-link" target="_blank" aria-label="Instagram" rel="noopener">
+                <svg class="icon icon-instagram" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 2.163c3.204 0 3.584.012 4.849.07 1.366.062 2.633.36 3.608 1.335.975.975 1.274 2.242 1.335 3.608.058 1.265.07 1.645.07 4.849s-.012 3.584-.07 4.849c-.062 1.366-.36 2.633-1.335 3.608-.975.975-2.242 1.274-3.608 1.335-1.265.058-1.645.07-4.849.07s-3.584-.012-4.849-.07c-1.366-.062-2.633-.36-3.608-1.335-.975-.975-1.274-2.242-1.335-3.608C2.175 15.584 2.163 15.204 2.163 12s.012-3.584.07-4.849c.062-1.366.36-2.633 1.335-3.608.975-.975 2.242-1.274 3.608-1.335C8.416 2.175 8.796 2.163 12 2.163m0-2.163C8.741 0 8.332.014 7.052.072 5.76.13 4.597.443 3.607 1.433 2.616 2.424 2.303 3.587 2.245 4.879 2.187 6.159 2.173 6.568 2.173 12s.014 5.841.072 7.121c.058 1.292.371 2.455 1.362 3.446.991.991 2.154 1.304 3.446 1.362 1.28.058 1.689.072 7.121.072s5.841-.014 7.121-.072c1.292-.058 2.455-.371 3.446-1.362.991-.991 1.304-2.154 1.362-3.446.058-1.292.072-1.689.072-7.121s-.014-5.841-.072-7.121c-.058-1.292-.371-2.455-1.362-3.446C19.455.443 18.292.13 17 .072 15.719.014 15.31 0 12 0z" />
+                  <path d="M12 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zm0 10.162a3.999 3.999 0 1 1 0-7.998 3.999 3.999 0 0 1 0 7.998z" />
+                  <circle cx="18.406" cy="5.594" r="1.44" />
+                </svg>
+              </a>
+            </li>
+            <li>
+              <a href="https://www.facebook.com/ipattibytes/" class="social-link" target="_blank" aria-label="Facebook" rel="noopener">
+                <svg class="icon icon-facebook" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M22.675 0h-21.35C.597 0 0 .597 0 1.333V22.67C0 23.403.597 24 1.325 24H12.82v-9.333H9.692V11.08h3.128V8.413c0-3.1 1.893-4.788 4.66-4.788 1.325 0 2.463.097 2.795.142v3.24h-1.918c-1.504 0-1.796.715-1.796 1.763v2.31h3.59l-.467 3.587h-3.123V24h6.116c.728 0 1.325-.597 1.325-1.333V1.333C24 .597 23.403 0 22.675 0z" />
+                </svg>
+              </a>
+            </li>
+            <li>
+              <a href="https://whatsapp.com/channel/0029Vb6x0b7EQIaxR4fDe72X" class="social-link" target="_blank" aria-label="WhatsApp" rel="noopener">
+                <svg class="icon icon-whatsapp" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20.523 3.478A11.937 11.937 0 0 0 12 0C5.372 0 0 5.373 0 12c0 2.087.56 4.04 1.54 5.726L0 24l6.484-1.508A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12 0-3.204-1.222-6.202-3.477-8.522zM12 21.75a9.75 9.75 0 0 1-4.98-1.405l-.357-.213-3.85.896.972-3.747-.232-.374A9.725 9.725 0 0 1 2.25 12 9.75 9.75 0 1 1 12 21.75zm5.386-7.176c-.085-.143-.303-.23-.633-.403-.328-.176-1.943-.958-2.244-1.066s-.524-.176-.742.176c-.219.352-.848 1.066-1.04 1.276-.19.214-.377.241-.705.085-.328-.154-1.383-.51-2.635-1.623-.975-.868-1.633-1.94-1.824-2.27-.19-.328-.02-.506.144-.68.148-.147.328-.382.492-.574.163-.192.219-.328.328-.547.112-.219.056-.41-.028-.575-.085-.143-.742-1.792-1.016-2.459-.268-.643-.54-.557-.742-.564-.19-.007-.41-.007-.63-.007-.219 0-.575.083-.876.41s-1.15 1.127-1.15 2.744c0 1.616 1.177 3.178 1.342 3.402.164.219 2.317 3.547 5.617 4.971.786.339 1.398.541 1.877.693.789.254 1.508.218 2.078.132.634-.091 1.943-.793 2.217-1.557.273-.766.273-1.423.191-1.557z" />
+                </svg>
+              </a>
+            </li>
+          </ul>
+        </div>
+        <!-- Footer Credits -->
+        <div class="footer-copy">
+          <p class="copyright">
+            <span class="notranslate" translate="no"> © ਪੱਟੀ ਬਾਈਟਸ</span> 2025 – All rights reserved.
+          </p>
+          <p class="made-with">
+            Made with <span class="heart">❤️</span> by
+            <a href="https://www.instagram.com/thrillyverse/" target="_blank" rel="noopener">
+              Thrillyverse
+            </a>
+          </p>
+        </div>
+      </div>
+    </footer>
+    <!-- Back to top, GTranslate, etc. -->
+    <button id="back-to-top" aria-label="Back to top" type="button">↑</button>
+    <!-- GTranslate widget -->
+    <div class="gtranslate_wrapper"></div>
+    <script>window.gtranslateSettings = {"default_language":"pa","languages":["pa","en"],"wrapper_selector":".gtranslate_wrapper","switcher_horizontal_position":"right","flag_style":"3d","alt_flags":{"en":"usa"}}</script>
+    <script src="https://cdn.gtranslate.net/widgets/latest/float.js" defer></script>
+    <!-- Global + Page-specific JS -->
+    <script src="/script.js"></script>
+    <script src="news.js"></script>
+    <!-- WebPushr (inside body) -->
+    <script>
+      (function(w,d, s, id) {if(typeof(w.webpushr)!=='undefined') return;w.webpushr=w.webpushr||function(){(w.webpushr.q=w.webpushr.q||[]).push(arguments)};var js, fjs = d.getElementsByTagName(s)[0];js = d.createElement(s); js.id = id;js.async=1;js.src = "https://cdn.webpushr.com/app.min.js";fjs.parentNode.appendChild(js);}(window,document, 'script', 'webpushr-jssdk'));
+      webpushr('setup',{'key':'BIjFOm22G8Kw4ly2HJqOzxzWT4pSy2rdbTQ7us8u6Hos7DrFlhNYCVu23gvyArllAkrV1QKoV4hjRZQV6tUj6yM' ,'integration':'popup' });
+    </script>
+</body>
+</html>
