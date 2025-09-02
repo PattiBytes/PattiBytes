@@ -81,42 +81,47 @@ permalink: /news/
           <div class="news-grid">
             {% assign sorted_news = site.news | sort: "date" | reverse %}
             {% for article in sorted_news %}
-            <article
-              id="{{ article.id | default: article.slug | slugify }}"
-              class="news-card{% if article.featured %} featured-card{% endif %}"
-              data-id="{{ article.id | default: article.slug | slugify }}"
-              data-title="{{ article.title | escape }}"
-              data-preview="{{ article.preview | escape }}"
-              data-content="{{ article.content | xml_escape }}"
-              data-date="{{ article.date | date_to_xmlschema }}"
-              data-author="{{ article.author | default: site.author.name | escape }}"
-              data-tags="{{ article.tags | join: ' ' }}"
-              {% if article.image %}data-image="{{ article.image }}"{% endif %}
-            >
-              {% if article.image %}
-                <div class="media-container">
-                  <button class="enlarge-btn" aria-label="Enlarge image" type="button">🔍</button>
-                  <img src="{{ article.image }}" alt="{{ article.title | escape }}" loading="lazy" />
-                </div>
-              {% endif %}
-              <div class="news-content{% unless article.image %} no-media{% endunless %}">
-                <h4 class="news-title">{{ article.title }}</h4>
-                <!-- meta: date + author + read time (JS will fill read-time) -->
-                <div class="news-meta" aria-hidden="false">
-                  <time class="published" datetime="{{ article.date | date_to_xmlschema }}">
-                    {{ article.date | date: "%b %d, %Y" }}
-                  </time>
-                  <span class="author">· {{ article.author | default: site.author.name }}</span>
-                  <span class="dot">·</span>
-                  <span class="read-time"></span>
-                </div>
-                <p class="card-preview">{{ article.preview }}</p>
-                <div class="news-actions">
-                  <button class="read-more-btn" type="button" data-url="{{ article.url | default: '#' }}">ਪੂਰਾ ਪੜ੍ਹੋ →</button>
-                  <button class="copy-link" type="button" title="Copy Link" data-url="{{ site.url }}{{ article.url }}">🔗</button>
-                </div>
-              </div>
-            </article>
+           <article
+  id="{{ article.id | default: article.slug | slugify }}"
+  class="news-card{% if article.featured %} featured-card{% endif %}"
+  data-id="{{ article.id | default: article.slug | slugify }}"
+  data-title="{{ article.title | escape }}"
+  data-preview="{{ article.preview | escape }}"
+  data-content="{{ article.content | xml_escape }}"
+  data-date="{{ article.date | date_to_xmlschema }}"
+  data-lang="{{ article.lang | default: site.lang | default: 'pa-IN' }}"
+  data-author="{{ article.author | default: site.author.name | escape }}"
+  data-tags="{{ article.tags | join: ' ' }}"
+  {% if article.image %}data-image="{{ article.image }}"{% endif %}
+>
+  {% if article.image %}
+    <div class="media-container">
+      <button class="enlarge-btn" aria-label="Enlarge image" type="button">🔍</button>
+      <img src="{{ article.image }}" alt="{{ article.title | escape }}" loading="lazy" />
+    </div>
+  {% endif %}
+
+  <div class="news-content{% unless article.image %} no-media{% endunless %}">
+    <h4 class="news-title">{{ article.title }}</h4>
+
+    <div class="news-meta" aria-hidden="false">
+      <time class="published" datetime="{{ article.date | date_to_xmlschema }}">
+        {{ article.date | date: "%B %d, %Y" }}
+      </time>
+      <span class="author">· {{ article.author | default: site.author.name }}</span>
+      <span class="dot">·</span>
+      <span class="read-time"></span>
+    </div>
+
+    <p class="card-preview">{{ article.preview }}</p>
+
+    <div class="news-actions">
+      <button class="read-more-btn" type="button" data-url="{{ article.url | default: '#' }}">ਪੂਰਾ ਪੜ੍ਹੋ →</button>
+      <button class="copy-link" type="button" title="Copy Link" data-url="{{ site.url }}{{ article.url }}">🔗</button>
+    </div>
+  </div>
+</article>
+
             {% endfor %}
           </div>
         </div>
