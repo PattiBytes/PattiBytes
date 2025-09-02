@@ -29,12 +29,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (sec < 60) return `${sec} sec ਪਹਿਲਾਂ`;
     const min = Math.floor(sec / 60);
     if (min < 60) return `${min} ਮਿੰਟ ਪਹਿਲਾਂ`;
-    const hr = Math.floor(min / 60);
+    const hr = Math.floor(min / 24);
     if (hr < 24) return `${hr} ਘੰਟੇ ਪਹਿਲਾਂ`;
     const days = Math.floor(hr / 24);
     if (days < 7) return `${days} ਦਿਨ ਪਹਿਲਾਂ`;
-    // fallback to formatted date
-    return then.toLocaleDateString('pa-IN', { year: 'numeric', month:'short', day:'numeric' });
+    // fallback to formatted date with full month name
+    return then.toLocaleDateString('pa-IN', { year: 'numeric', month:'long', day:'numeric' });
   }
 
   function decodeHtmlEntities(str) {
@@ -49,9 +49,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const newsGrid = q('.news-grid');
   const newsModal = q('#news-modal');
   const modalTitle = q('#modal-title');
-  const modalPreview = q('#modal-preview');
-  const modalText = q('#modal-text');
   const modalMedia = q('#modal-media');
+  const modalText = q('#modal-text');
   const modalIdEl = q('#modal-id');
   const modalCloseBtn = q('#modal-close');
   const imageModal = q('#image-modal');
@@ -93,7 +92,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const publishedEl = card.querySelector('.published');
     if (publishedEl && dateISO) {
       publishedEl.setAttribute('datetime', dateISO);
-      publishedEl.title = new Date(dateISO).toLocaleString('pa-IN');
+      publishedEl.title = new Date(dateISO).toLocaleString('pa-IN', { year: 'numeric', month: 'long', day: 'numeric' });
       // show relative if space below title
       const rel = timeAgo(dateISO);
       // append relative to meta
@@ -152,7 +151,6 @@ document.addEventListener("DOMContentLoaded", () => {
     lastFocusBeforeModal = document.activeElement;
 
     const title = card.dataset.title || '';
-    const preview = card.dataset.preview || '';
     const author = card.dataset.author || '';
     const dateISO = card.dataset.date || '';
     const image = card.dataset.image || '';
@@ -161,7 +159,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // populate modal
     modalIdEl.textContent = `ID: ${card.id || ''}`;
     modalTitle.textContent = title;
-    modalPreview.textContent = preview;
     modalMedia.innerHTML = '';
     if (image) {
       const img = document.createElement('img');
@@ -177,25 +174,41 @@ document.addEventListener("DOMContentLoaded", () => {
     // meta: add author & date & read-time
     const metaWrap = modalText.querySelector('.modal-meta') || document.createElement('div');
     metaWrap.className = 'modal-meta';
-    metaWrap.innerHTML = `<p style="margin:0 0 .5rem 0;"><strong>${author}</strong> · ${new Date(dateISO).toLocaleString('pa-IN')}</p>`;
+    metaWrap.innerHTML = `<p style="margin:0 0 .5rem 0;"><strong>${author}</strong> · ${new Date(dateISO).toLocaleString('pa-IN', { year: 'numeric', month: 'long', day: 'numeric' })}</p>`;
     modalText.prepend(metaWrap);
 
     // related articles
     populateRelated(card);
 
-    // add TTS controls area (if not present)
+    // add TTS controls area (if not present) and the toggle button
     if (!modalText.parentNode.querySelector('.tts-controls')) {
+      const ttsToggleBtn = document.createElement('button');
+      ttsToggleBtn.className = 'tts-toggle-btn';
+      ttsToggleBtn.innerHTML = '🔊';
+      ttsToggleBtn.title = 'Toggle Text-to-Speech Controls';
+      ttsToggleBtn.type = 'button';
+      modalCloseBtn.after(ttsToggleBtn);
+
       const ttsWrap = document.createElement('div');
       ttsWrap.className = 'tts-controls';
       ttsWrap.innerHTML = `
-        <button class="tts-play" aria-pressed="false" title="Play article">▶️ Play</button>
-        <button class="tts-pause" title="Pause">⏸️</button>
-        <button class="tts-stop" title="Stop">⏹️</button>
-        <label for="tts-voices" class="sr-only">Voice</label>
-        <select id="tts-voices" aria-label="Choose voice"></select>
-        <span class="tts-status" aria-live="polite"></span>
+        <div class="tts-controls-row">
+            <button class="tts-play" aria-pressed="false" title="Play article">▶️ Play</button>
+            <button class="tts-pause" title="Pause">⏸️</button>
+            <button class="tts-stop" title="Stop">⏹️</button>
+        </div>
+        <div class="tts-controls-row">
+            <label for="tts-voices" class="sr-only">Voice</label>
+            <select id="tts-voices" aria-label="Choose voice"></select>
+            <span class="tts-status" aria-live="polite"></span>
+        </div>
       `;
       modalText.parentNode.insertBefore(ttsWrap, modalText.nextSibling);
+
+      // add click listener for the new toggle button
+      ttsToggleBtn.addEventListener('click', () => {
+        ttsWrap.classList.toggle('show');
+      });
       initTTSControls(ttsWrap, modalText);
     }
 
@@ -217,6 +230,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // stop any TTS
     stopTTS();
     if (lastFocusBeforeModal) lastFocusBeforeModal.focus();
+    // remove highlight
+    qa('.tts-highlight').forEach(s => {
+      const parent = s.parentNode;
+      parent.replaceChild(document.createTextNode(s.textContent), s);
+      parent.normalize();
+    });
   }
 
   function modalKeyHandler(e) {
@@ -352,11 +371,16 @@ document.addEventListener("DOMContentLoaded", () => {
   let ttsUtterance = null;
   let availableVoices = [];
   let ttsPlaying = false;
+  let ttsStatusSpan = null;
+  let ttsPlayBtn = null;
+  let ttsTextElement = null;
+  let wordSpans = [];
+  let currentWordIndex = -1;
 
   function populateVoices(selectEl) {
-    // Filter for Punjabi (pa) and English (en) voices
+    const currentLang = document.documentElement.lang;
     availableVoices = (synth.getVoices() || []).filter(voice =>
-      voice.lang.startsWith('en') || voice.lang.startsWith('pa')
+      voice.lang.startsWith(currentLang) || voice.lang.startsWith('en')
     );
     selectEl.innerHTML = '';
     
@@ -369,17 +393,40 @@ document.addEventListener("DOMContentLoaded", () => {
         const opt = document.createElement('option');
         opt.value = idx;
         opt.textContent = `${v.name} (${v.lang})`;
+        opt.lang = v.lang;
         selectEl.appendChild(opt);
       });
     }
   }
 
+  function highlightAndScroll() {
+      if (currentWordIndex >= 0 && currentWordIndex < wordSpans.length) {
+          // Remove highlight from previous word
+          if (currentWordIndex > 0) {
+              const prevWordSpan = wordSpans[currentWordIndex - 1];
+              if (prevWordSpan) prevWordSpan.classList.remove('tts-highlight');
+          }
+          // Highlight current word and scroll
+          const currentWordSpan = wordSpans[currentWordIndex];
+          if (currentWordSpan) {
+              currentWordSpan.classList.add('tts-highlight');
+              // Using a minimal scroll to keep the text in view
+              const rect = currentWordSpan.getBoundingClientRect();
+              const container = ttsTextElement.parentNode;
+              if (rect.top < container.offsetTop || rect.bottom > container.offsetTop + container.clientHeight) {
+                  currentWordSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+          }
+      }
+  }
+
   function initTTSControls(wrapper, modalTextContainer) {
-    const playBtn = wrapper.querySelector('.tts-play');
+    ttsTextElement = modalTextContainer;
+    ttsPlayBtn = wrapper.querySelector('.tts-play');
     const pauseBtn = wrapper.querySelector('.tts-pause');
     const stopBtn = wrapper.querySelector('.tts-stop');
     const select = wrapper.querySelector('#tts-voices');
-    const statusSpan = wrapper.querySelector('.tts-status');
+    ttsStatusSpan = wrapper.querySelector('.tts-status');
 
     // voices may load later
     populateVoices(select);
@@ -387,33 +434,93 @@ document.addEventListener("DOMContentLoaded", () => {
       speechSynthesis.onvoiceschanged = () => populateVoices(select);
     }
 
-    function getTextToSpeak() {
-      // prefer the visible text (modalTextContainer) — strip html
-      const txt = stripHtml(modalTextContainer.innerHTML);
-      return txt;
+    function prepareTextForReading() {
+      // First, remove old spans if they exist
+      qa('.tts-highlight').forEach(s => {
+          const parent = s.parentNode;
+          parent.replaceChild(document.createTextNode(s.textContent), s);
+          parent.normalize();
+      });
+
+      const text = ttsTextElement.textContent;
+      const paragraphs = text.split('\n\n').filter(p => p.trim() !== '');
+      ttsTextElement.innerHTML = ''; // Clear content
+      wordSpans = [];
+      paragraphs.forEach(pText => {
+          const p = document.createElement('p');
+          const words = pText.split(/\s+/);
+          words.forEach((word, index) => {
+              const span = document.createElement('span');
+              span.textContent = word + ' ';
+              wordSpans.push(span);
+              p.appendChild(span);
+          });
+          ttsTextElement.appendChild(p);
+      });
     }
 
     playBtn.addEventListener('click', () => {
       if (!synth) {
-        statusSpan.textContent = 'TTS not supported in this browser';
+        ttsStatusSpan.textContent = 'TTS not supported in this browser';
         return;
       }
       if (ttsPlaying && ttsUtterance && synth.paused) {
         synth.resume();
-        statusSpan.textContent = 'Resumed';
+        ttsStatusSpan.textContent = 'Resumed';
         return;
       }
       if (ttsPlaying) return;
-      const text = getTextToSpeak();
-      if (!text) { statusSpan.textContent = 'No text to read'; return; }
+
+      prepareTextForReading();
+      const text = wordSpans.map(s => s.textContent).join('');
+      if (!text) { ttsStatusSpan.textContent = 'No text to read'; return; }
+      
       ttsUtterance = new SpeechSynthesisUtterance(text);
       const vIdx = parseInt(select.value, 10);
       if (!isNaN(vIdx) && availableVoices[vIdx]) ttsUtterance.voice = availableVoices[vIdx];
-      ttsUtterance.rate = 1.02; // slightly faster
+      // Set language automatically
+      ttsUtterance.lang = document.documentElement.lang || 'en-US';
+      ttsUtterance.rate = 1.05; // slightly faster
       ttsUtterance.pitch = 1;
-      ttsUtterance.onstart = () => { ttsPlaying = true; statusSpan.textContent = 'Playing...'; playBtn.setAttribute('aria-pressed','true'); };
-      ttsUtterance.onend = () => { ttsPlaying = false; statusSpan.textContent = 'Finished'; playBtn.setAttribute('aria-pressed','false'); };
-      ttsUtterance.onerror = (e) => { ttsPlaying = false; statusSpan.textContent = 'Playback error'; playBtn.setAttribute('aria-pressed','false'); };
+
+      let charIndex = 0;
+      ttsUtterance.onboundary = (event) => {
+          if (event.name === 'word') {
+              const boundaryIndex = event.charIndex;
+              let tempIndex = 0;
+              for (let i = 0; i < wordSpans.length; i++) {
+                  const spanText = wordSpans[i].textContent;
+                  if (boundaryIndex >= tempIndex && boundaryIndex < tempIndex + spanText.length) {
+                      if (currentWordIndex >= 0 && wordSpans[currentWordIndex]) {
+                          wordSpans[currentWordIndex].classList.remove('tts-highlight');
+                      }
+                      currentWordIndex = i;
+                      wordSpans[currentWordIndex].classList.add('tts-highlight');
+                      wordSpans[currentWordIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      break;
+                  }
+                  tempIndex += spanText.length;
+              }
+          }
+      };
+
+      ttsUtterance.onstart = () => { 
+          ttsPlaying = true; 
+          ttsStatusSpan.textContent = 'Playing...'; 
+          ttsPlayBtn.setAttribute('aria-pressed','true'); 
+      };
+      ttsUtterance.onend = () => { 
+          ttsPlaying = false; 
+          ttsStatusSpan.textContent = 'Finished'; 
+          ttsPlayBtn.setAttribute('aria-pressed','false'); 
+          qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
+      };
+      ttsUtterance.onerror = (e) => { 
+          ttsPlaying = false; 
+          ttsStatusSpan.textContent = 'Playback error'; 
+          ttsPlayBtn.setAttribute('aria-pressed','false'); 
+      };
+      
       synth.speak(ttsUtterance);
     });
 
@@ -421,10 +528,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!synth || !ttsPlaying) return;
       if (synth.speaking && !synth.paused) {
         synth.pause();
-        statusSpan.textContent = 'Paused';
+        ttsStatusSpan.textContent = 'Paused';
       } else if (synth.paused) {
         synth.resume();
-        statusSpan.textContent = 'Resumed';
+        ttsStatusSpan.textContent = 'Resumed';
       }
     });
 
@@ -432,14 +539,20 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!synth) return;
       synth.cancel();
       ttsPlaying = false;
-      statusSpan.textContent = 'Stopped';
-      playBtn.setAttribute('aria-pressed','false');
+      ttsStatusSpan.textContent = 'Stopped';
+      ttsPlayBtn.setAttribute('aria-pressed','false');
+      qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
     });
   }
 
   function stopTTS() {
-    if (synth && synth.speaking) synth.cancel();
+    if (synth && synth.speaking) {
+      synth.cancel();
+    }
     ttsPlaying = false;
+    if (ttsStatusSpan) ttsStatusSpan.textContent = 'Stopped';
+    if (ttsPlayBtn) ttsPlayBtn.setAttribute('aria-pressed','false');
+    qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
   }
 
   /* ---------- 8) On-load highlight from hash (you already had this) ---------- */
