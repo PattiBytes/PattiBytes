@@ -476,9 +476,19 @@
   background: var(--accent-color);
   color: #fff;
 }
+
+.tts-controls .tts-play.tts-play-active {
+  background: var(--secondary-color);
+}
+
 .tts-controls .tts-play:hover {
   background: var(--highlight-color);
 }
+
+.tts-controls .tts-play.tts-play-active:hover {
+  background: #092d4d;
+}
+
 .tts-status {
   font-size: 0.9rem;
   color: #444;
