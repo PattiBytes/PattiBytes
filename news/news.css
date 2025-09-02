@@ -1,6 +1,6 @@
 /* ===========================================
     Variables and Global Settings
-=========================================== */ 
+=========================================== */
 :root {
   --transition-speed: 0.3s;
   --text-color: #333;
@@ -143,7 +143,7 @@
 }
 .modal-title {
   font-size: 1.75rem;
-  color: var(--primary-color);
+  color: var(--secondary-color);
   text-align: center;
   margin-bottom: 1rem;
   transition: color var(--transition-speed);
@@ -308,22 +308,31 @@
   animation: flash 1.5s ease-in-out;
 }
 @keyframes flash {
-  0%   { background-color: #fff3cd; }
-  50%  { background-color: #ffeeba; }
-  100% { background-color: transparent; }
+  0% {
+    background-color: #fff3cd;
+  }
+  50% {
+    background-color: #ffeeba;
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 /* Ensure the modal is always on top of the GTranslate widget */
 .modal-overlay {
-  z-index: 9999; /* A very high z-index to be on top of everything */
+  z-index: 9999;
+  /* A very high z-index to be on top of everything */
 }
 .gtranslate_wrapper {
-  z-index: 999; /* Lower z-index so the modal appears over it */
+  z-index: 999;
+  /* Lower z-index so the modal appears over it */
 }
 
 /* --- UPDATED STYLES --- */
 
 /* News meta (re-styled) */
-.news-meta, .modal-meta {
+.news-meta,
+.modal-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -332,20 +341,24 @@
   margin-bottom: 0.75rem;
   gap: 0.2rem;
 }
-.news-meta .dot, .modal-meta .dot {
+.news-meta .dot,
+.modal-meta .dot {
   font-size: 1.2em;
   line-height: 1;
   color: #888;
   margin: 0 0.2rem;
 }
-.news-meta .published, .modal-meta .published {
+.news-meta .published,
+.modal-meta .published {
   font-weight: 600;
   color: #444;
 }
-.news-meta .author, .modal-meta .author {
+.news-meta .author,
+.modal-meta .author {
   color: #666;
 }
-.news-meta .read-time, .modal-meta .read-time {
+.news-meta .read-time,
+.modal-meta .read-time {
   color: #333;
   font-weight: 600;
 }
@@ -355,6 +368,7 @@
   margin-top: 2rem;
   padding-top: 1rem;
   border-top: 1px dashed #e5e5e5;
+  animation: fadeIn 0.8s ease-out;
 }
 .modal-related h4 {
   margin: 0 0 1rem 0;
@@ -376,7 +390,7 @@
   padding: 0.75rem;
   border-radius: 10px;
   background: #f8f8f8;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   transition: all 0.2s ease-in-out;
 }
 .related-card:hover {
@@ -420,13 +434,14 @@
 
 /* TTS controls (re-styled) */
 .tts-controls {
-  display: none; /* Initially hidden */
+  display: none;
+  /* Initially hidden */
   flex-direction: column;
   gap: 0.75rem;
   padding: 1.25rem;
   background: #fff;
   border-radius: 10px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   margin-top: 1.5rem;
   animation: fadeInFromTop 0.5s ease-out forwards;
 }
@@ -455,7 +470,7 @@
 .tts-controls button:hover,
 .tts-controls select:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
 }
 .tts-controls .tts-play {
   background: var(--accent-color);
@@ -488,7 +503,7 @@
   justify-content: center;
   cursor: pointer;
   z-index: 10;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
 }
 .tts-toggle-btn:hover {
@@ -506,9 +521,15 @@
 
 /* New CSS for TTS word highlighting animation */
 @keyframes highlightPulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.02); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .tts-highlight {
@@ -523,8 +544,14 @@
 
 /* New CSS for related articles animation */
 @keyframes slideInFromRight {
-  0% { opacity: 0; transform: translateX(20px); }
-  100% { opacity: 1; transform: translateX(0); }
+  0% {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .modal-related {
@@ -541,21 +568,63 @@
   padding: 0.75rem;
   border-radius: 10px;
   background: #f8f8f8;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   transition: all 0.2s ease-in-out;
   animation: slideInFromRight 0.5s ease-out forwards;
 }
 
 /* To stagger the animation */
-.related-card:nth-child(1) { animation-delay: 0s; }
-.related-card:nth-child(2) { animation-delay: 0.1s; }
-.related-card:nth-child(3) { animation-delay: 0.2s; }
-.related-card:nth-child(4) { animation-delay: 0.3s; }
+.related-card:nth-child(1) {
+  animation-delay: 0s;
+}
+.related-card:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.related-card:nth-child(3) {
+  animation-delay: 0.2s;
+}
+.related-card:nth-child(4) {
+  animation-delay: 0.3s;
+}
 
 /* Small screen adjustments */
 @media (max-width: 640px) {
-  .related-list { flex-direction: column; }
-  .related-card { flex-wrap: wrap; text-align: center; justify-content: center; }
-  .related-card img { margin-bottom: 0.5rem; }
-  .tts-controls { justify-content: center; }
+  .related-list {
+    flex-direction: column;
+  }
+  .related-card {
+    flex-wrap: wrap;
+    text-align: center;
+    justify-content: center;
+  }
+  .related-card img {
+    margin-bottom: 0.5rem;
+  }
+  .tts-controls {
+    justify-content: center;
+  }
+}
+
+/* New animations */
+@keyframes fadeInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes highlightPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
