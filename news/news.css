@@ -708,3 +708,303 @@
   background: var(--secondary-color);
   transform: scale(1.1) rotate(-5deg);
 }
+/* ---------------------------
+   Modal positioning & basic fixes
+   --------------------------- */
+.modal-content {
+  position: relative; /* required so .tts-toggle-btn can be positioned reliably */
+  width: 90%;
+  max-width: 900px;
+  height: 90%;
+  max-height: 90vh;
+  margin: 5vh auto;
+  padding: 2.5rem;
+  overflow: auto;
+  background-color: #fff;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+  border-radius: 20px;
+  animation: slideInFromTop 0.5s cubic-bezier(0.25,0.46,0.45,0.94);
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ---------------------------
+   TTS Toggle Button (circular)
+   --------------------------- */
+.tts-toggle-btn {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-color);
+  color: #fff;
+  font-size: 1.25rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 40;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+  transition: transform var(--transition-speed), box-shadow var(--transition-speed), background var(--transition-speed);
+}
+.tts-toggle-btn:hover,
+.tts-toggle-btn:focus {
+  transform: scale(1.08) rotate(6deg);
+  outline: none;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.22);
+}
+.tts-toggle-btn.active {
+  background: var(--secondary-color);
+  transform: scale(1.06) rotate(-6deg);
+}
+
+/* ---------------------------
+   TTS Controls (panel)
+   --------------------------- */
+.tts-controls {
+  display: none; /* toggled by .show class in JS */
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg,#f0f4f8 0%,#e9eef6 100%);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+  margin-top: 1.5rem;
+  border: 1px solid #d8dfe8;
+  backdrop-filter: blur(4px);
+  animation: fadeInFromBottom 0.36s ease-out;
+}
+.tts-controls.show { display: flex; }
+
+/* each row inside tts-controls */
+.tts-controls-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+/* Play/Pause/Stop buttons */
+.tts-controls .tts-play,
+.tts-controls .tts-pause,
+.tts-controls .tts-stop {
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 50%;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1.05rem;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+}
+
+/* circular styles and colors */
+.tts-controls .tts-play {
+  background: var(--accent-color);
+  color: #fff;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+}
+.tts-controls .tts-pause {
+  background: #fff;
+  color: var(--secondary-color);
+  width: 48px;
+  height: 48px;
+}
+.tts-controls .tts-stop {
+  background: #fff;
+  color: #c62828;
+  width: 48px;
+  height: 48px;
+}
+.tts-controls .tts-play:hover,
+.tts-controls .tts-pause:hover,
+.tts-controls .tts-stop:hover {
+  transform: translateY(-4px);
+}
+
+/* active play state (changes color to indicate playing) */
+.tts-controls .tts-play.tts-play-active {
+  background: var(--secondary-color);
+  box-shadow: 0 8px 22px rgba(13,59,102,0.18);
+  color: #fff;
+}
+
+/* label + voice select */
+.tts-controls select,
+.tts-controls .tts-rate,
+.tts-controls .tts-pitch,
+.tts-controls input[type="range"] {
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #cfd8e3;
+  background: #fff;
+  font-weight: 600;
+  color: var(--secondary-color);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.04);
+}
+
+/* range sliders visual */
+.tts-controls input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  width: 150px;
+  background: linear-gradient(90deg,var(--accent-color) 0%, #ddd 100%);
+  border-radius: 6px;
+  outline: none;
+}
+.tts-controls input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--secondary-color);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+}
+.tts-controls input[type="range"]::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--secondary-color);
+}
+
+/* status and progress */
+.tts-status {
+  font-size: 0.95rem;
+  color: #444;
+  margin-left: auto;
+  text-align: right;
+}
+.tts-progress {
+  font-size: 0.95rem;
+  color: #333;
+  min-width: 36px;
+  text-align: left;
+  padding-left: 0.25rem;
+}
+
+/* ---------------------------
+   TTS Prepared content & word spans
+   --------------------------- */
+.tts-read-wrap { /* wrapper created by JS */
+  display: block;
+  line-height: 1.7;
+}
+.tts-read-wrap > * {
+  margin-bottom: 0.6rem;
+  line-height: 1.7;
+}
+
+/* each word span (wrapping & highlight-friendly) */
+.tts-word-span {
+  display: inline-block;
+  white-space: pre-wrap;
+  line-height: 1.7;
+  transition: background-color 0.18s ease, transform 0.12s ease;
+  padding: 0 0.1rem;
+  margin: 0;
+  border-radius: 4px;
+}
+
+/* highlighted current word */
+.tts-highlight {
+  background: var(--pulse-color);
+  color: #000;
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* subtle fade on finished word (non-intrusive) */
+.tts-word-span.finished {
+  opacity: 0.9;
+}
+
+/* small help text for accessibility */
+.sr-only {
+  position: absolute !important;
+  height: 1px; width: 1px;
+  overflow: hidden; clip: rect(1px,1px,1px,1px);
+  white-space: nowrap; border: 0; padding: 0; margin: -1px;
+}
+
+/* ---------------------------
+   Related open button (link style)
+   --------------------------- */
+.related-open {
+  background: var(--accent-color);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+}
+.related-open:hover,
+.related-open:focus {
+  transform: translateY(-3px);
+  background: var(--highlight-color);
+  outline: none;
+}
+
+/* ---------------------------
+   Copy link button focus states + accessibility
+   --------------------------- */
+.copy-link:focus,
+.read-more-btn:focus,
+.related-open:focus,
+.tts-toggle-btn:focus,
+.tts-controls .tts-play:focus,
+.tts-controls .tts-pause:focus,
+.tts-controls .tts-stop:focus {
+  outline: 3px solid rgba(13,59,102,0.12);
+  box-shadow: 0 6px 18px rgba(13,59,102,0.12);
+  border-radius: 12px;
+}
+
+/* ---------------------------
+   Animations & motion preferences
+   --------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  .tts-controls { transition: none !important; }
+}
+
+/* ---------------------------
+   Responsive tweaks for TTS panel
+   --------------------------- */
+@media (max-width: 640px) {
+  .tts-controls { padding: 1rem; gap: 0.6rem; }
+  .tts-controls-row { justify-content: center; }
+  .tts-controls input[type="range"] { width: 120px; }
+  .tts-toggle-btn { top: 12px; left: 12px; width: 42px; height: 42px; font-size: 1.1rem; }
+  .modal-content { padding: 1.2rem; width: 95vw; height: 95vh; margin: 2.5vh auto; }
+}
+
+/* ---------------------------
+   Small niceties: scroll snapping for modal content
+   --------------------------- */
+.modal-content {
+  scroll-behavior: smooth;
+}
+
+/* ---------------------------
+   Finish — small utility helpers
+   --------------------------- */
+.hidden { display: none !important; }
+.visually-hidden { position: absolute !important; left: -9999px !important; top: auto; width: 1px; height: 1px; overflow: hidden; }
+
+/* EOF */
