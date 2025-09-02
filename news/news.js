@@ -203,7 +203,6 @@ document.addEventListener("DOMContentLoaded", () => {
       ttsWrap.innerHTML = `
         <div class="tts-controls-row">
             <button class="tts-play" aria-pressed="false" title="Play article">▶️ Play</button>
-            <button class="tts-pause" title="Pause">⏸️</button>
             <button class="tts-stop" title="⏹️"></button>
         </div>
         <div class="tts-controls-row">
@@ -476,7 +475,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function initTTSControls(wrapper, modalTextContainer) {
     ttsTextElement = modalTextContainer;
     ttsPlayBtn = wrapper.querySelector('.tts-play');
-    const pauseBtn = wrapper.querySelector('.tts-pause');
     const stopBtn = wrapper.querySelector('.tts-stop');
     const select = wrapper.querySelector('#tts-voices');
     ttsStatusSpan = wrapper.querySelector('.tts-status');
@@ -488,123 +486,121 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     ttsPlayBtn.addEventListener('click', () => {
-      if (!synth) {
-        ttsStatusSpan.textContent = 'TTS not supported in this browser';
-        return;
-      }
-      if (ttsPlaying && ttsUtterance && synth.paused) {
-        synth.resume();
-        ttsStatusSpan.textContent = 'Resumed';
-        return;
-      }
-      if (ttsPlaying) return;
-
-      prepareTextForReading();
-      
-      let fullText = '';
-      const utteranceQueue = [];
-      wordSpans.forEach(span => {
-          const text = span.textContent.trim() + ' ';
-          const isInfluential = span.classList.contains('tts-influential');
-          
-          if (isInfluential) {
-              if (fullText) {
-                  utteranceQueue.push({ text: fullText, isInfluential: false });
-                  fullText = '';
-              }
-              utteranceQueue.push({ text: text, isInfluential: true });
-          } else {
-              fullText += text;
-          }
-      });
-      if (fullText) {
-          utteranceQueue.push({ text: fullText, isInfluential: false });
-      }
-
-      currentWordIndex = 0;
-      function speakNextUtterance() {
-        if (utteranceQueue.length === 0) {
-          stopTTS();
-          return;
+        if (!synth) {
+            ttsStatusSpan.textContent = 'TTS not supported in this browser';
+            return;
         }
 
-        const nextPart = utteranceQueue.shift();
-        ttsUtterance = new SpeechSynthesisUtterance(nextPart.text);
-        
-        const vIdx = parseInt(select.value, 10);
-        if (!isNaN(vIdx) && availableVoices[vIdx]) ttsUtterance.voice = availableVoices[vIdx];
-        ttsUtterance.lang = document.documentElement.lang || 'en-US';
-        
-        // Influence settings for bold words
-        if (nextPart.isInfluential) {
-            ttsUtterance.rate = 0.9; 
-            ttsUtterance.pitch = 1.2; 
+        if (synth.speaking && !synth.paused) {
+            // currently speaking, so pause
+            synth.pause();
+            ttsPlaying = false;
+            ttsPlayBtn.innerHTML = '▶️ Play';
+            ttsPlayBtn.classList.remove('tts-play-active');
+            ttsStatusSpan.textContent = 'Paused...';
+        } else if (synth.paused) {
+            // currently paused, so resume
+            synth.resume();
+            ttsPlaying = true;
+            ttsPlayBtn.innerHTML = '⏸️ Pause';
+            ttsPlayBtn.classList.add('tts-play-active');
+            ttsStatusSpan.textContent = 'Resumed...';
         } else {
-            ttsUtterance.rate = 1.05; 
-            ttsUtterance.pitch = 1;
+            // not speaking, start from scratch
+            startTTS();
         }
-
-        ttsUtterance.onboundary = (event) => {
-            if (event.name === 'word') {
-                if (currentWordIndex > 0) {
-                    wordSpans[currentWordIndex - 1].classList.remove('tts-highlight');
-                }
-                wordSpans[currentWordIndex].classList.add('tts-highlight');
-                const container = ttsTextElement.closest('.modal-content');
-                if (container) {
-                    const rect = wordSpans[currentWordIndex].getBoundingClientRect();
-                    const containerRect = container.getBoundingClientRect();
-                    if (rect.top < containerRect.top + 50 || rect.bottom > containerRect.bottom - 50) {
-                        wordSpans[currentWordIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                }
-                currentWordIndex++;
-            }
-        };
-
-        ttsUtterance.onend = () => {
-          speakNextUtterance();
-        };
-        
-        synth.speak(ttsUtterance);
-      }
-      
-      ttsUtterance.onstart = () => {
-        ttsPlaying = true;
-        ttsStatusSpan.textContent = 'Playing...';
-        ttsPlayBtn.setAttribute('aria-pressed', 'true');
-      };
-
-      ttsUtterance.onerror = (e) => {
-        console.error('TTS Error:', e);
-        ttsPlaying = false;
-        ttsStatusSpan.textContent = 'Playback error';
-        ttsPlayBtn.setAttribute('aria-pressed', 'false');
-      };
-      
-      speakNextUtterance();
-    });
-
-    pauseBtn.addEventListener('click', () => {
-      if (!synth || !ttsPlaying) return;
-      if (synth.speaking && !synth.paused) {
-        synth.pause();
-        ttsStatusSpan.textContent = 'Paused';
-      } else if (synth.paused) {
-        synth.resume();
-        ttsStatusSpan.textContent = 'Resumed';
-      }
     });
 
     stopBtn.addEventListener('click', () => {
-      if (!synth) return;
-      synth.cancel();
-      ttsPlaying = false;
-      ttsStatusSpan.textContent = 'Stopped';
-      ttsPlayBtn.setAttribute('aria-pressed', 'false');
-      qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
+        if (!synth) return;
+        stopTTS();
     });
-  }
+
+    function startTTS() {
+        if (!synth) return;
+
+        prepareTextForReading();
+
+        let fullText = '';
+        const utteranceQueue = [];
+        wordSpans.forEach(span => {
+            const text = span.textContent.trim() + ' ';
+            const isInfluential = span.classList.contains('tts-influential');
+
+            if (isInfluential) {
+                if (fullText) {
+                    utteranceQueue.push({ text: fullText, isInfluential: false });
+                    fullText = '';
+                }
+                utteranceQueue.push({ text: text, isInfluential: true });
+            } else {
+                fullText += text;
+            }
+        });
+        if (fullText) {
+            utteranceQueue.push({ text: fullText, isInfluential: false });
+        }
+
+        currentWordIndex = 0;
+        function speakNextUtterance() {
+            if (utteranceQueue.length === 0) {
+                stopTTS();
+                return;
+            }
+
+            const nextPart = utteranceQueue.shift();
+            ttsUtterance = new SpeechSynthesisUtterance(nextPart.text);
+
+            const vIdx = parseInt(select.value, 10);
+            if (!isNaN(vIdx) && availableVoices[vIdx]) ttsUtterance.voice = availableVoices[vIdx];
+            ttsUtterance.lang = document.documentElement.lang || 'en-US';
+
+            // Influence settings for bold words
+            if (nextPart.isInfluential) {
+                ttsUtterance.rate = 0.9;
+                ttsUtterance.pitch = 1.2;
+            } else {
+                ttsUtterance.rate = 1.05;
+                ttsUtterance.pitch = 1;
+            }
+
+            ttsUtterance.onboundary = (event) => {
+                if (event.name === 'word') {
+                    if (currentWordIndex > 0) {
+                        wordSpans[currentWordIndex - 1].classList.remove('tts-highlight');
+                    }
+                    if (wordSpans[currentWordIndex]) {
+                        wordSpans[currentWordIndex].classList.add('tts-highlight');
+                        const container = ttsTextElement.closest('.modal-content');
+                        if (container) {
+                            const rect = wordSpans[currentWordIndex].getBoundingClientRect();
+                            const containerRect = container.getBoundingClientRect();
+                            if (rect.top < containerRect.top + 50 || rect.bottom > containerRect.bottom - 50) {
+                                wordSpans[currentWordIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }
+                    }
+                    currentWordIndex++;
+                }
+            };
+
+            ttsUtterance.onend = () => {
+                speakNextUtterance();
+            };
+
+            synth.speak(ttsUtterance);
+        }
+
+        ttsPlaying = true;
+        ttsPlayBtn.innerHTML = '⏸️ Pause';
+        ttsPlayBtn.classList.add('tts-play-active');
+        ttsPlayBtn.setAttribute('aria-pressed', 'true');
+        ttsStatusSpan.textContent = 'Playing...';
+
+        speakNextUtterance();
+    }
+}
+
 
   function stopTTS() {
     if (synth && synth.speaking) {
@@ -612,7 +608,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     ttsPlaying = false;
     if (ttsStatusSpan) ttsStatusSpan.textContent = 'Stopped';
-    if (ttsPlayBtn) ttsPlayBtn.setAttribute('aria-pressed', 'false');
+    if (ttsPlayBtn) {
+        ttsPlayBtn.innerHTML = '▶️ Play';
+        ttsPlayBtn.classList.remove('tts-play-active');
+        ttsPlayBtn.setAttribute('aria-pressed', 'false');
+    }
     qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
   }
 
