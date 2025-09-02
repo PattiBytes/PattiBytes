@@ -1,6 +1,6 @@
 /* ===========================================
     Variables and Global Settings
-=========================================== */
+=========================================== */ 
 :root {
   --transition-speed: 0.3s;
   --text-color: #333;
@@ -46,13 +46,18 @@
   overflow: hidden;
   background-color: #000;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 .latest-news .news-card .media-container img,
 .latest-news .news-card .media-container iframe {
   width: 100%;
   height: auto;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .enlarge-btn {
@@ -194,21 +199,10 @@
   width: auto;
   height: auto;
 }
-.media-container {
-    /* Sets the container's aspect ratio, adjust as needed */
-    aspect-ratio: 16 / 9;
-    width: 100%;
-    /* Centers the image if there's any empty space */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
 .media-container img {
-    /* Ensures the entire image is visible, scaling it down if necessary */
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 /* Responsive Adjustments for News */
 @media (max-width: 768px) {
@@ -434,6 +428,7 @@
   border-radius: 10px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.1);
   margin-top: 1.5rem;
+  animation: fadeInFromTop 0.5s ease-out forwards;
 }
 .tts-controls.show {
   display: flex;
@@ -508,6 +503,54 @@
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
+
+/* New CSS for TTS word highlighting animation */
+@keyframes highlightPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.tts-highlight {
+  background-color: #fffacd;
+  transition: background-color 0.2s;
+  border-radius: 4px;
+  padding: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  animation: highlightPulse 0.6s ease-in-out;
+}
+
+/* New CSS for related articles animation */
+@keyframes slideInFromRight {
+  0% { opacity: 0; transform: translateX(20px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+.modal-related {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #e5e5e5;
+  animation: fadeIn 0.8s ease-out;
+}
+
+.related-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: #f8f8f8;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  transition: all 0.2s ease-in-out;
+  animation: slideInFromRight 0.5s ease-out forwards;
+}
+
+/* To stagger the animation */
+.related-card:nth-child(1) { animation-delay: 0s; }
+.related-card:nth-child(2) { animation-delay: 0.1s; }
+.related-card:nth-child(3) { animation-delay: 0.2s; }
+.related-card:nth-child(4) { animation-delay: 0.3s; }
 
 /* Small screen adjustments */
 @media (max-width: 640px) {
