@@ -82,50 +82,52 @@ permalink: /news/
 
   <main>
     <section class="latest-news" aria-labelledby="latest-news-heading">
-      <div class="container">
-        <h2 id="latest-news-heading" class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</h2>
-        <div class="news-grid">
-    {% assign sorted_news = site.news | sort: "date" | reverse %}
+<div class="container">
+<h2 id="latest-news-heading" class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</h2>
+<div class="news-grid">
+<!-- Jekyll loop: articles are rendered server-side. Cards include dataset attributes used by JS. -->
+{% assign sorted_news = site.news | sort: "date" | reverse %}
 {% for article in sorted_news %}
 <article
-  id="{{ article.id | default: article.slug | slugify }}"
-  class="news-card{% if article.featured %} featured-card{% endif %}"
-  data-id="{{ article.id | default: article.slug | slugify }}"
-  data-title="{{ article.title | escape }}"
-  data-preview="{{ article.preview | escape }}"
-  data-content="{{ article.content | xml_escape }}"
-  data-date="{{ article.date | date_to_xmlschema }}"
-  data-author="{{ article.author | default: site.author.name | escape }}"
-  data-tags="{{ article.tags | join: ' ' }}"
-  {% if article.image %}data-image="{{ article.image }}"{% endif %}
+id="{{ article.id | default: article.slug | slugify }}"
+class="news-card{% if article.featured %} featured-card{% endif %}"
+data-id="{{ article.id | default: article.slug | slugify }}"
+data-title="{{ article.title | escape }}"
+data-preview="{{ article.preview | escape }}"
+data-content="{{ article.content | xml_escape }}"
+data-date="{{ article.date | date_to_xmlschema }}"
+data-author="{{ article.author | default: site.author.name | escape }}"
+data-tags="{{ article.tags | join: ' ' }}"
+{% if article.image %}data-image="{{ article.image }}"{% endif %}
 >
-  {% if article.image %}
-    <div class="media-container">
-      <button class="enlarge-btn" aria-label="Enlarge image" type="button">🔍</button>
-      <img src="{{ article.image }}" alt="{{ article.title | escape }}" loading="lazy" />
-    </div>
-  {% endif %}
+{% if article.image %}
+<div class="media-container">
+<button class="enlarge-btn" aria-label="Enlarge image" type="button">🔍</button>
+<img src="{{ article.image }}" alt="{{ article.title | escape }}" loading="lazy" />
+</div>
+{% endif %}
 
-  <div class="news-content{% unless article.image %} no-media{% endunless %}">
-    <h4 class="news-title">{{ article.title }}</h4>
 
-    <!-- meta: date + author + read time (JS will fill read-time) -->
-    <div class="news-meta" aria-hidden="false">
-      <time class="published" datetime="{{ article.date | date_to_xmlschema }}">
-        {{ article.date | date: "%b %d, %Y" }}
-      </time>
-      <span class="author">· {{ article.author | default: site.author.name }}</span>
-      <span class="dot">·</span>
-      <span class="read-time"></span>
-    </div>
+<div class="news-content{% unless article.image %} no-media{% endunless %}">
+<h4 class="news-title">{{ article.title }}</h4>
+<div class="news-meta" aria-hidden="false">
+<time class="published" datetime="{{ article.date | date_to_xmlschema }}">
+{{ article.date | date: "%b %d, %Y" }}
+</time>
+<span class="author">· {{ article.author | default: site.author.name }}</span>
+<span class="dot">·</span>
+<span class="read-time"></span>
+</div>
 
-    <p class="card-preview">{{ article.preview }}</p>
 
-    <div class="news-actions">
-      <button class="read-more-btn" type="button" data-url="{{ article.url | default: '#' }}">ਪੂਰਾ ਪੜ੍ਹੋ →</button>
-      <button class="copy-link" type="button" title="Copy Link" data-url="{{ site.url }}{{ article.url }}">🔗</button>
-    </div>
-  </div>
+<p class="card-preview">{{ article.preview }}</p>
+
+
+<div class="news-actions">
+<button class="read-more-btn" type="button" data-url="{{ article.url | default: '#' }}">ਪੂਰਾ ਪੜ੍ਹੋ →</button>
+<button class="copy-link" type="button" title="Copy Link" data-url="{{ site.url }}{{ article.url }}">🔗</button>
+</div>
+</div>
 </article>
 {% endfor %}
 
@@ -141,14 +143,14 @@ permalink: /news/
         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
           <button id="modal-close" class="modal-close" aria-label="Close" type="button">&times;</button>
           <div class="modal-body">
-            <!-- NEW: Show the ID -->
-            <p id="modal-id" class="modal-id"></p>
+            
             <!-- Title -->
             <h3 id="modal-title" class="modal-title"></h3>
+              <!-- Media -->
+            <div id="modal-media" class="modal-media"></div>
             <!-- Preview snippet -->
             <p id="modal-preview" class="modal-preview"></p>
-            <!-- Media -->
-            <div id="modal-media" class="modal-media"></div>
+          
             <!-- Full content -->
             <div id="modal-text" class="modal-content-text"></div>
           </div>
