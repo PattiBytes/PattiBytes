@@ -1,11 +1,11 @@
 /* news.js — PattiBytes
-   Features:
-   - copy-link (existing)
-   - populate read-time and relative date on cards
-   - pagination / infinite scroll (IntersectionObserver)
-   - accessible modal for full article (with related articles)
-   - image modal (existing)
-   - TTS (Web Speech API) for modal content (play/pause/stop + voice select)
+    Features:
+    - copy-link (existing)
+    - populate read-time and relative date on cards
+    - pagination / infinite scroll (IntersectionObserver)
+    - accessible modal for full article (with related articles)
+    - image modal (existing)
+    - TTS (Web Speech API) for modal content (play/pause/stop + voice select)
 */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -354,18 +354,23 @@ document.addEventListener("DOMContentLoaded", () => {
   let ttsPlaying = false;
 
   function populateVoices(selectEl) {
-    availableVoices = synth.getVoices() || [];
+    // Filter for Punjabi (pa) and English (en) voices
+    availableVoices = (synth.getVoices() || []).filter(voice =>
+      voice.lang.startsWith('en') || voice.lang.startsWith('pa')
+    );
     selectEl.innerHTML = '';
-    availableVoices.forEach((v, idx) => {
-      const opt = document.createElement('option');
-      opt.value = idx;
-      opt.textContent = `${v.name} ${v.lang}`;
-      selectEl.appendChild(opt);
-    });
+    
     if (availableVoices.length === 0) {
       const opt = document.createElement('option');
       opt.textContent = 'Default';
       selectEl.appendChild(opt);
+    } else {
+      availableVoices.forEach((v, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.textContent = `${v.name} (${v.lang})`;
+        selectEl.appendChild(opt);
+      });
     }
   }
 
