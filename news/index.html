@@ -127,12 +127,27 @@ permalink: /news/
           <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
             <button id="modal-close" class="modal-close" aria-label="Close" type="button">&times;</button>
             <div class="modal-body">
+              <div class="modal-meta">
+                <time id="modal-date"></time>
+                <span class="author">By <span id="modal-author"></span></span>
+                <button id="tts-btn" class="tts-button" aria-label="Text-to-Speech" type="button">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 5v2.857a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2zM18 10v2.857a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2zM22 15v2.857a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2V15a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  <span class="tts-text">Listen to this article</span>
+                </button>
+              </div>
               <!-- Title -->
               <h3 id="modal-title" class="modal-title"></h3>
               <!-- Media -->
               <div id="modal-media" class="modal-media"></div>
               <!-- Full content -->
               <div id="modal-text" class="modal-content-text"></div>
+              <!-- Suggested News Section -->
+              <div class="suggested-news-container">
+                  <h4 class="suggested-news-title">Suggested Reads</h4>
+                  <div id="suggested-news-list" class="suggested-news-list"></div>
+              </div>
             </div>
           </div>
         </div>
