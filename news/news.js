@@ -1,7 +1,9 @@
-/* news.js — PattiBytes (Fixes: date/time, TTS reliability, voice loading)
-   - Robust timeAgo (handles future/invalid dates and shows full month)
-   - TTS: safe voice loader, language-pref, fallback, better highlights
-   - Keeps: copy-link, infinite scroll, image modal, related articles
+/* news.js — PattiBytes (quick fixes)
+   - fixes date display (forces full month names)
+   - robust timeAgo (no negative sec output)
+   - TTS toggle now uses classList.toggle('show') to match CSS
+   - ensures modal has relative position (see CSS below)
+   - safer voice loading and TTS initialization
 */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -15,18 +17,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const wordCount = (text) => (text || "").trim().split(/\s+/).filter(Boolean).length;
   const readMinutes = (words, wpm = 200) => Math.max(1, Math.round(words / wpm));
 
+  /* ---------- date helpers ---------- */
   function timeAgo(isoDate) {
     if (!isoDate) return "";
     const then = new Date(isoDate);
-    if (isNaN(then.getTime())) return ""; // invalid date
+    if (isNaN(then.getTime())) return "";
     const now = new Date();
-    const diffMs = now.getTime() - then.getTime();
-    const sec = Math.round(diffMs / 1000);
-    // if the date is in the future
-    if (sec < 0) {
-      // very small future (within 60s): treat as 'just now'
+    const diff = now.getTime() - then.getTime();
+    const sec = Math.round(diff / 1000);
+    if (sec < 0) { // future date
       if (Math.abs(sec) <= 60) return `ਹੁਣੇ ਹੀ`;
-      // otherwise show formatted date (full month)
       return then.toLocaleDateString("pa-IN", { year: "numeric", month: "long", day: "numeric" });
     }
     if (sec < 60) return `${sec} sec ਪਹਿਲਾਂ`;
@@ -50,7 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return String(code).split(/[-_]/)[0].toLowerCase();
   }
 
-  /* Elements */
+  /* ---------- elements ---------- */
   const allCards = qa(".news-card");
   const newsGrid = q(".news-grid");
   const newsModal = q("#news-modal");
@@ -62,15 +62,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const imageModalClose = q("#image-modal-close");
   const modalImage = q("#modal-image");
 
-  /* 1) Copy link */
-  qa(".copy-link").forEach((btn) => {
+  /* ---------- copy link ---------- */
+  qa(".copy-link").forEach((btn) =>
     btn.addEventListener("click", async () => {
       const article = btn.closest("article.news-card");
       if (!article || !article.id) return;
       const url = `${window.location.origin}${window.location.pathname}#${article.id}`;
       try {
         await navigator.clipboard.writeText(url);
-      } catch (err) {
+      } catch {
         const ta = document.createElement("textarea");
         ta.value = url;
         document.body.appendChild(ta);
@@ -84,11 +84,11 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(() => {
         btn.classList.remove("copied");
         btn.textContent = prev;
-      }, 1500);
-    });
-  });
+      }, 1400);
+    })
+  );
 
-  /* 2) populate read-time + relative date */
+  /* ---------- populate read-time + formatted date ---------- */
   allCards.forEach((card) => {
     const contentRaw = decodeHtmlEntities(card.dataset.content || "");
     const words = wordCount(contentRaw || card.dataset.preview || "");
@@ -99,10 +99,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const dateISO = card.dataset.date;
     const publishedEl = card.querySelector(".published");
     if (publishedEl && dateISO) {
-      const d = new Date(dateISO);
-      if (!isNaN(d.getTime())) {
+      const dateObj = new Date(dateISO);
+      if (!isNaN(dateObj.getTime())) {
+        // overwrite the visible published text with full-month format
+        publishedEl.textContent = dateObj.toLocaleDateString("pa-IN", {
+          month: "long",
+          day: "2-digit",
+          year: "numeric",
+        });
         publishedEl.setAttribute("datetime", dateISO);
-        publishedEl.title = d.toLocaleDateString("pa-IN", { year: "numeric", month: "long", day: "numeric" });
+        publishedEl.title = dateObj.toLocaleString("pa-IN", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
         const rel = timeAgo(dateISO);
         const relSpan = document.createElement("span");
         relSpan.className = "published-relative";
@@ -112,11 +122,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  /* 3) Pagination / infinite scroll */
+  /* ---------- pagination / infinite scroll ---------- */
   const PAGE_SIZE = 6;
   let pageIndex = 0;
   const totalCards = allCards.length;
   allCards.forEach((c) => (c.style.display = "none"));
+
   function showNextPage() {
     const start = pageIndex * PAGE_SIZE;
     const end = start + PAGE_SIZE;
@@ -128,6 +139,7 @@ document.addEventListener("DOMContentLoaded", () => {
       sentinel.remove();
     }
   }
+
   showNextPage();
   const sentinel = document.createElement("div");
   sentinel.className = "scroll-sentinel";
@@ -143,8 +155,9 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   observer.observe(sentinel);
 
-  /* 4) Modal open / close */
+  /* ---------- modal open / close ---------- */
   let lastFocusBeforeModal = null;
+
   function openNewsModal(card) {
     if (!card) return;
     lastFocusBeforeModal = document.activeElement;
@@ -154,7 +167,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const dateISO = card.dataset.date || "";
     const image = card.dataset.image || "";
     const rawContent = card.dataset.content || "";
-    const contentHtml = decodeHtmlEntities(rawContent);
+    const contentHtml = decodeHtmlEntities(rawContent || "");
 
     modalTitle.textContent = title;
     modalMedia.innerHTML = "";
@@ -170,7 +183,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     modalText.innerHTML = contentHtml || `<p>${card.dataset.preview || ""}</p>`;
 
-    // meta
+    // prepend meta block
     const metaWrap = document.createElement("div");
     metaWrap.className = "modal-meta";
     const d = new Date(dateISO);
@@ -182,22 +195,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     populateRelated(card);
 
-    // remove previous TTS UI to avoid duplicates
-    const existingTts = newsModal.querySelector(".tts-controls, .tts-toggle-btn");
-    if (existingTts) existingTts.remove();
+    // cleanup any prior TTS UI to avoid duplicates
+    const prevTTS = newsModal.querySelectorAll(".tts-controls, .tts-toggle-btn");
+    prevTTS.forEach((n) => n.remove());
 
-    // add toggle and controls
+    // ensure modal-content is positioned (CSS change also suggested)
+    // add TTS toggle button (absolute inside modal-content)
     const ttsToggleBtn = document.createElement("button");
     ttsToggleBtn.className = "tts-toggle-btn";
-    ttsToggleBtn.innerHTML = "🔊";
-    ttsToggleBtn.title = "Toggle Text-to-Speech Controls";
     ttsToggleBtn.type = "button";
-    ttsToggleBtn.style.marginLeft = "8px";
+    ttsToggleBtn.title = "Toggle Text-to-Speech Controls";
+    ttsToggleBtn.innerHTML = "🔊";
+    // place after close button
     modalCloseBtn.after(ttsToggleBtn);
 
+    // create controls container (initially hidden — controlled by .show class)
     const ttsWrap = document.createElement("div");
     ttsWrap.className = "tts-controls";
-    ttsWrap.style.display = "none";
     ttsWrap.innerHTML = `
       <div class="tts-controls-row" style="display:flex;gap:.5rem;align-items:center;">
         <button class="tts-play" aria-pressed="false" title="Play article">▶️ Play</button>
@@ -211,19 +225,24 @@ document.addEventListener("DOMContentLoaded", () => {
         <span class="tts-status" aria-live="polite" style="margin-left:.5rem;"></span>
       </div>
     `;
+    // insert after article content
     modalText.parentNode.insertBefore(ttsWrap, modalText.nextSibling);
 
+    // language pref (from article or doc)
     const cardLang = card.dataset.lang || document.documentElement.lang || "pa-IN";
     const langPref = getLangCode(cardLang);
 
+    // toggle via class to match CSS
     ttsToggleBtn.addEventListener("click", () => {
-      ttsWrap.style.display = ttsWrap.style.display === "none" ? "" : "none";
-      if (ttsWrap.style.display !== "none") ttsWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+      ttsWrap.classList.toggle("show");
+      // if now visible, scroll it into view
+      if (ttsWrap.classList.contains("show")) ttsWrap.scrollIntoView({ behavior: "smooth", block: "start" });
     });
 
-    // init TTS controls (safe loader)
+    // init TTS controls
     initTTSControls(ttsWrap, modalText, langPref);
 
+    // show modal
     newsModal.setAttribute("aria-hidden", "false");
     newsModal.style.display = "flex";
     document.body.style.overflow = "hidden";
@@ -238,8 +257,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.removeEventListener("keydown", modalKeyHandler);
     stopTTS();
     if (lastFocusBeforeModal) lastFocusBeforeModal.focus();
-
-    // restore: replace any tts spans with text nodes
+    // restore any tts spans => plain text
     qa(".tts-word-span").forEach((s) => {
       if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
     });
@@ -274,7 +292,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target === newsModal) closeNewsModal();
   });
 
-  /* 5) image modal */
+  /* ---------- image modal ---------- */
   qa(".enlarge-btn").forEach((b) =>
     b.addEventListener("click", () => {
       const card = b.closest("article.news-card");
@@ -288,7 +306,6 @@ document.addEventListener("DOMContentLoaded", () => {
       imageModalClose.focus();
     })
   );
-
   imageModalClose.addEventListener("click", () => {
     imageModal.setAttribute("aria-hidden", "true");
     imageModal.style.display = "none";
@@ -304,12 +321,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  /* 6) related */
+  /* ---------- related articles ---------- */
   function populateRelated(activeCard) {
     const existing = modalText.parentNode.querySelector(".modal-related");
     if (existing) existing.remove();
+
     const tags = (activeCard.dataset.tags || "").split(/\s+/).filter(Boolean);
     const titleWords = (activeCard.dataset.title || "").toLowerCase().split(/\W+/).filter(Boolean);
+
     const scores = [];
     allCards.forEach((c) => {
       if (c === activeCard) return;
@@ -321,14 +340,17 @@ document.addEventListener("DOMContentLoaded", () => {
       if (c.classList.contains("featured-card")) score += 2;
       if (score > 0) scores.push({ card: c, score });
     });
+
     scores.sort((a, b) => b.score - a.score);
     const top = scores.slice(0, 4).map((s) => s.card);
     if (top.length === 0) return;
+
     const wrap = document.createElement("div");
     wrap.className = "modal-related";
     wrap.innerHTML = `<h4>ਤੁਹਾਨੂੰ ਇਹ ਵੀ ਪਸੰਦ ਆ ਸਕਦਾ ਹੈ</h4>`;
     const list = document.createElement("div");
     list.className = "related-list";
+
     top.forEach((c) => {
       const thumb = c.dataset.image || "";
       const cardTitle = c.dataset.title || "";
@@ -345,8 +367,10 @@ document.addEventListener("DOMContentLoaded", () => {
       `;
       list.appendChild(rel);
     });
+
     wrap.appendChild(list);
     modalText.parentNode.appendChild(wrap);
+
     qa(".related-open", wrap).forEach((btn) =>
       btn.addEventListener("click", () => {
         const id = btn.dataset.id;
@@ -361,52 +385,41 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   }
 
-  /* 7) TTS improvements */
+  /* ---------- TTS (simple, reliable) ---------- */
   let synth = window.speechSynthesis;
   let voiceList = [];
+
   function ensureVoicesLoaded(timeout = 2000) {
     return new Promise((resolve) => {
-      const voices = synth ? synth.getVoices() : [];
-      if (voices && voices.length > 0) {
-        voiceList = voices;
-        resolve(voices);
-        return;
-      }
-      let resolved = false;
-      const onVoices = () => {
-        if (resolved) return;
-        const v = synth.getVoices();
-        voiceList = v || [];
-        resolved = true;
-        resolve(voiceList);
-      };
-      if (speechSynthesis && "onvoiceschanged" in speechSynthesis) {
-        speechSynthesis.onvoiceschanged = onVoices;
-      }
-      // fallback polling
-      const t0 = performance.now();
-      (function poll() {
-        const v = synth.getVoices();
+      try {
+        const v = synth ? synth.getVoices() : [];
         if (v && v.length > 0) {
           voiceList = v;
-          resolved = true;
-          resolve(voiceList);
-          return;
+          return resolve(v);
         }
-        if (performance.now() - t0 > timeout) {
-          // timeout: resolve with whatever we have (maybe empty)
-          voiceList = v || [];
+      } catch (e) {}
+      let resolved = false;
+      const start = performance.now();
+      function poll() {
+        const vs = synth ? synth.getVoices() : [];
+        if (!resolved && vs && vs.length) {
+          voiceList = vs;
           resolved = true;
-          resolve(voiceList);
-          return;
+          return resolve(vs);
+        }
+        if (performance.now() - start > timeout) {
+          voiceList = vs || [];
+          resolved = true;
+          return resolve(voiceList);
         }
         setTimeout(poll, 120);
-      })();
+      }
+      poll();
     });
   }
 
   async function initTTSControls(wrapper, modalTextContainer, langPref) {
-    // langPref: 'pa' or 'en' etc.
+    // wrapper DOM is already inserted and hidden (CSS .tts-controls)
     const playBtn = wrapper.querySelector(".tts-play");
     const pauseBtn = wrapper.querySelector(".tts-pause");
     const stopBtn = wrapper.querySelector(".tts-stop");
@@ -414,53 +427,47 @@ document.addEventListener("DOMContentLoaded", () => {
     const statusSpan = wrapper.querySelector(".tts-status");
     const progressEl = wrapper.querySelector(".tts-progress");
 
-    await ensureVoicesLoaded(2500); // wait up to 2.5s for voices
+    await ensureVoicesLoaded(2500);
     const voices = voiceList || [];
 
-    function populateVoices() {
-      select.innerHTML = "";
-      // prefer langPref
-      const preferred = voices.filter((v) => getLangCode(v.lang) === langPref);
-      const english = voices.filter((v) => getLangCode(v.lang) === "en" && getLangCode(v.lang) !== langPref);
-      const others = voices.filter((v) => !preferred.includes(v) && !english.includes(v));
-      function addGroup(label, arr) {
-        if (!arr.length) return;
-        const og = document.createElement("optgroup");
-        og.label = label;
-        arr.forEach((v) => {
-          const opt = document.createElement("option");
-          // use voice.name+"|"+voice.lang as value to find voice later
-          opt.value = `${v.name}||${v.lang}`;
-          opt.textContent = `${v.name} (${v.lang})`;
-          og.appendChild(opt);
-        });
-        select.appendChild(og);
-      }
-      addGroup("Preferred", preferred);
-      addGroup("English", english);
-      addGroup("Other voices", others);
-      if (!select.options.length) {
-        const o = document.createElement("option");
-        o.value = "__default__";
-        o.textContent = "Default";
-        select.appendChild(o);
-      }
+    // populate select (preferred lang first)
+    select.innerHTML = "";
+    const preferred = voices.filter((v) => getLangCode(v.lang) === langPref);
+    const english = voices.filter((v) => getLangCode(v.lang) === "en" && getLangCode(v.lang) !== langPref);
+    const others = voices.filter((v) => !preferred.includes(v) && !english.includes(v));
+    function addGroup(label, arr) {
+      if (!arr.length) return;
+      const og = document.createElement("optgroup");
+      og.label = label;
+      arr.forEach((v) => {
+        const opt = document.createElement("option");
+        opt.value = `${v.name}||${v.lang}`;
+        opt.textContent = `${v.name} (${v.lang})`;
+        og.appendChild(opt);
+      });
+      select.appendChild(og);
+    }
+    addGroup("Preferred", preferred);
+    addGroup("English", english);
+    addGroup("Other voices", others);
+    if (!select.options.length) {
+      const o = document.createElement("option");
+      o.value = "__default__";
+      o.textContent = "Default";
+      select.appendChild(o);
     }
 
-    populateVoices();
-
+    // helper to create highlight spans
     function prepareTextForReading() {
-      // remove previous spans
       qa(".tts-word-span", modalTextContainer).forEach((s) => {
         if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
       });
 
-      // nodes to read
       const nodes = Array.from(modalTextContainer.querySelectorAll("p, h1, h2, h3, h4, li")).filter(
         (el) => el.textContent.trim() !== ""
       );
-      const readContainer = document.createElement("div");
-      readContainer.className = "tts-read-container";
+      const container = document.createElement("div");
+      container.className = "tts-read-container";
       nodes.forEach((el) => {
         const newEl = document.createElement(el.tagName);
         const text = el.textContent.replace(/\s+/g, " ").trim();
@@ -471,82 +478,73 @@ document.addEventListener("DOMContentLoaded", () => {
           span.textContent = w + (i < words.length - 1 ? " " : "");
           newEl.appendChild(span);
         });
-        readContainer.appendChild(newEl);
+        container.appendChild(newEl);
       });
       const meta = modalTextContainer.querySelector(".modal-meta");
       modalTextContainer.innerHTML = "";
       if (meta) modalTextContainer.appendChild(meta);
-      modalTextContainer.appendChild(readContainer);
+      modalTextContainer.appendChild(container);
     }
 
-    // core speak routine: chunked queue
+    // queue & play chunked utterances
     let queue = [];
-    let queuePos = 0;
+    let queueIndex = 0;
     let wordSpans = [];
     let currentWord = 0;
     function buildQueue() {
       const readContainer = modalTextContainer.querySelector(".tts-read-container");
       if (!readContainer) return;
       queue = Array.from(readContainer.children).map((el) => el.textContent.trim()).filter(Boolean);
-      queuePos = 0;
+      queueIndex = 0;
     }
 
-    function findVoiceByValue(val) {
+    function pickVoiceFromSelect(val) {
       const [name, lang] = (val || "").split("||");
       return voices.find((v) => v.name === name && v.lang === lang) || null;
     }
 
-    function speakNextChunk() {
+    function speakNext() {
       if (!speechSynthesis) return;
-      if (queuePos >= queue.length) {
-        stopTTS();
+      if (queueIndex >= queue.length) {
+        // finished
+        stopLocal();
         return;
       }
-      const text = queue[queuePos++];
-      const utter = new SpeechSynthesisUtterance(text);
-      // choose selected voice
-      const sel = select.value;
-      const chosen = findVoiceByValue(sel);
-      if (chosen) utter.voice = chosen;
-      else {
-        utter.lang = langPref ? `${langPref}` : document.documentElement.lang || "pa-IN";
-      }
-      utter.rate = 1.02;
-      utter.pitch = 1.0;
-
-      // boundary highlighting (best-effort)
-      utter.onboundary = (ev) => {
+      const text = queue[queueIndex++];
+      const ut = new SpeechSynthesisUtterance(text);
+      const chosen = pickVoiceFromSelect(select.value);
+      if (chosen) ut.voice = chosen;
+      else ut.lang = langPref || document.documentElement.lang || "pa-IN";
+      ut.rate = 1.02;
+      ut.pitch = 1.0;
+      ut.onboundary = (ev) => {
         if (ev.name === "word") {
-          // map charIndex to span roughly
+          // charIndex mapping best-effort
           highlightByCharIndex(ev.charIndex);
         }
       };
-
-      utter.onend = () => {
-        // update approximate progress
+      ut.onend = () => {
+        // approximate progress update
+        const words = text.split(/\s+/).length;
+        currentWord = Math.min((qa(".tts-word-span", modalTextContainer).length || 1), currentWord + words);
         if (progressEl) {
           const total = qa(".tts-word-span", modalTextContainer).length || 1;
-          currentWord = Math.min(total, currentWord + (text.split(/\s+/).length));
-          const pct = Math.round((currentWord / total) * 100);
-          progressEl.textContent = ` ${pct}%`;
+          progressEl.textContent = ` ${Math.round((currentWord / total) * 100)}%`;
         }
-        setTimeout(() => speakNextChunk(), 80);
+        setTimeout(() => speakNext(), 80);
       };
-
-      speechSynthesis.speak(utter);
+      speechSynthesis.speak(ut);
     }
 
     function highlightByCharIndex(charIndex) {
       wordSpans = qa(".tts-word-span", modalTextContainer);
       if (!wordSpans.length) return;
-      // build cumulative map
       let total = 0;
       for (let i = 0; i < wordSpans.length; i++) {
         const len = (wordSpans[i].textContent || "").length;
         const start = total;
         const end = total + len;
         if (charIndex >= start && charIndex <= end) {
-          // remove old
           qa(".tts-highlight", modalTextContainer).forEach((el) => el.classList.remove("tts-highlight"));
           wordSpans[i].classList.add("tts-highlight");
           wordSpans[i].scrollIntoView({ behavior: "smooth", block: "center" });
@@ -557,28 +555,28 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    function startTTS() {
+    function startLocal() {
       if (!speechSynthesis) {
-        statusSpan.textContent = "TTS 지원되지 않음";
+        statusSpan.textContent = "TTS not supported";
         return;
       }
       prepareTextForReading();
       wordSpans = qa(".tts-word-span", modalTextContainer);
       if (!wordSpans.length) {
-        statusSpan.textContent = "ਕੋਈ ਪਾਠ ਨਹੀਂ";
+        statusSpan.textContent = "No text";
         return;
       }
       buildQueue();
+      queueIndex = 0;
       currentWord = 0;
-      queuePos = 0;
       ttsPlaying = true;
       statusSpan.textContent = "ਬੋਲ ਰਹੇ ਹਨ...";
       playBtn.textContent = "⏸️ Pause";
       playBtn.setAttribute("aria-pressed", "true");
-      speakNextChunk();
+      speakNext();
     }
 
-    function pauseTTS() {
+    function pauseLocal() {
       if (speechSynthesis && speechSynthesis.speaking && !speechSynthesis.paused) {
         speechSynthesis.pause();
         ttsPlaying = false;
@@ -586,7 +584,7 @@ document.addEventListener("DOMContentLoaded", () => {
         playBtn.textContent = "▶️ Play";
       }
     }
-    function resumeTTS() {
+    function resumeLocal() {
       if (speechSynthesis && speechSynthesis.paused) {
         speechSynthesis.resume();
         ttsPlaying = true;
@@ -594,7 +592,7 @@ document.addEventListener("DOMContentLoaded", () => {
         playBtn.textContent = "⏸️ Pause";
       }
     }
-    function stopTTS() {
+    function stopLocal() {
       if (speechSynthesis) speechSynthesis.cancel();
       ttsPlaying = false;
       qa(".tts-highlight", modalTextContainer).forEach((s) => s.classList.remove("tts-highlight"));
@@ -604,28 +602,18 @@ document.addEventListener("DOMContentLoaded", () => {
       if (progressEl) progressEl.textContent = "";
     }
 
-    // wire UI
     playBtn.addEventListener("click", () => {
-      if (speechSynthesis && speechSynthesis.speaking && !speechSynthesis.paused) {
-        pauseTTS();
-      } else if (speechSynthesis && speechSynthesis.paused) {
-        resumeTTS();
-      } else {
-        startTTS();
-      }
+      if (speechSynthesis && speechSynthesis.speaking && !speechSynthesis.paused) pauseLocal();
+      else if (speechSynthesis && speechSynthesis.paused) resumeLocal();
+      else startLocal();
     });
-    pauseBtn.addEventListener("click", () => pauseTTS());
-    stopBtn.addEventListener("click", () => stopTTS());
+    pauseBtn.addEventListener("click", pauseLocal);
+    stopBtn.addEventListener("click", stopLocal);
 
-    // expose stop to outer scope by storing wrapper on node (optional)
-    wrapper._cleanupStop = stopTTS;
-    wrapper._cleanupReset = () => {
-      // remove highlights and cancel
-      stopTTS();
-    };
-  }
+    // store cleanup reference if needed
+    wrapper._ttsStop = stopLocal;
+  } // initTTSControls
 
-  // outer stopTTS that other parts call
   function stopTTS() {
     if (speechSynthesis) speechSynthesis.cancel();
     qa(".tts-highlight").forEach((s) => s.classList.remove("tts-highlight"));
@@ -637,7 +625,7 @@ document.addEventListener("DOMContentLoaded", () => {
     qa(".tts-progress").forEach((el) => (el.textContent = ""));
   }
 
-  /* 8) hash highlight */
+  /* ---------- on-load hash highlight ---------- */
   const hash = window.location.hash.slice(1);
   if (hash) {
     const target = document.getElementById(hash);
@@ -650,7 +638,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /* 9) global Escape closes modals */
+  /* ---------- escape closes modals ---------- */
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       qa(".modal-overlay[aria-hidden='false']").forEach((m) => {
@@ -661,5 +649,4 @@ document.addEventListener("DOMContentLoaded", () => {
       stopTTS();
     }
   });
-});
- 
+}); // DOMContentLoaded end
