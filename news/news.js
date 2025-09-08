@@ -1,8 +1,8 @@
-/* news.js — PattiBytes (Updated: copy-link, related "go to", hash-driven modal open, robust TTS)
-   - Produces canonical copy links like https://www.pattibytes.com/news/#article-id/
-   - Visiting that URL opens the modal + highlights the article
-   - Related "Go to" buttons update hash and open modal
-   - TTS: voice, rate, pitch controls; excludes meta (author/date); immediate effect on control changes
+/* news.js — PattiBytes (Merged related buttons, lazy TTS init on toggle, remove double dates)
+   - Canonical links: https://www.pattibytes.com/news/#<id>/
+   - Single related "Open" button updates hash + opens the modal
+   - TTS controls load only when the toggle button is clicked; cleaned up on close
+   - Avoid inserting duplicate date metadata into modal if the content already contains it
 */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -60,21 +60,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const imageModalClose = q("#image-modal-close");
   const modalImage = q("#modal-image");
 
-  /* --- COPY LINK --- */
-  // Build canonical news base path: prefer /news/ for site
-  const newsBasePath = "/news/"; // keep this stable (change if your site uses different path)
+  /* Canonical news path (change if your path differs) */
+  const newsBasePath = "/news/";
 
+  /* COPY LINK */
   qa(".copy-link").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const article = btn.closest("article.news-card");
       if (!article || !article.id) return;
-      // Build canonical link: origin + newsBasePath + '#' + id + '/'
       const id = encodeURIComponent(article.id);
       const url = `${window.location.origin}${newsBasePath}#${id}/`;
       try {
         await navigator.clipboard.writeText(url);
       } catch (err) {
-        // fallback
         const ta = document.createElement("textarea");
         ta.value = url;
         document.body.appendChild(ta);
@@ -92,7 +90,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  /* --- READ TIME + RELATIVE DATE --- */
+  /* READ TIME + RELATIVE DATE (on cards) */
   allCards.forEach((card) => {
     const contentRaw = decodeHtmlEntities(card.dataset.content || "");
     const words = wordCount(contentRaw || card.dataset.preview || "");
@@ -111,12 +109,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const relSpan = document.createElement("span");
         relSpan.className = "published-relative";
         relSpan.textContent = ` (${rel})`;
-        publishedEl.parentNode.insertBefore(relSpan, publishedEl.nextSibling);
+        // Only append if a sibling relative hasn't already been added
+        if (!publishedEl.nextSibling || !publishedEl.nextSibling.classList || !publishedEl.nextSibling.classList.contains("published-relative")) {
+          publishedEl.parentNode.insertBefore(relSpan, publishedEl.nextSibling);
+        }
       }
     }
   });
 
-  /* --- PAGINATION / INFINITE SCROLL --- */
+  /* PAGINATION / INFINITE SCROLL */
   const PAGE_SIZE = 6;
   let pageIndex = 0;
   const totalCards = allCards.length;
@@ -147,14 +148,13 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   observer.observe(sentinel);
 
-  /* --- MODAL OPEN/CLOSE & HASH HANDLING --- */
+  /* MODAL OPEN/CLOSE & HASH HANDLING */
   let lastFocusBeforeModal = null;
 
-  // Helper: normalize hash string (strip leading # and trailing slashes)
   function normalizeHash(h) {
     if (!h) return "";
     let s = h.replace(/^#/, "");
-    s = s.replace(/\/+$/, ""); // remove trailing slashes
+    s = s.replace(/\/+$/, "");
     return decodeURIComponent(s);
   }
 
@@ -167,36 +167,32 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // When hash is present on load or changes, open modal (if matching id)
+  function ensureCardPageVisible(target) {
+    const idx = allCards.indexOf(target);
+    if (idx >= 0) {
+      const requiredPage = Math.floor(idx / PAGE_SIZE) + 1;
+      while (pageIndex < requiredPage) showNextPage();
+    }
+  }
+
   function handleHashOpen() {
     const rawHash = window.location.hash || "";
     const id = normalizeHash(rawHash);
     if (id) {
-      // ensure card is on the page (might be lazy-loaded via pagination)
       const target = document.getElementById(id);
       if (target) {
-        // ensure its page is shown by expanding pagination to include it
-        const idx = allCards.indexOf(target);
-        if (idx >= 0) {
-          const requiredPage = Math.floor(idx / PAGE_SIZE) + 1;
-          while (pageIndex < requiredPage) showNextPage();
-        }
-        // scroll and highlight then open modal
+        ensureCardPageVisible(target);
         setTimeout(() => {
           target.scrollIntoView({ behavior: "smooth", block: "center" });
           target.classList.add("highlighted");
           setTimeout(() => target.classList.remove("highlighted"), 2000);
           openNewsModal(target);
         }, 250);
-      } else {
-        // if not found (maybe different path), still attempt to scroll when available
-        // do nothing else
       }
     }
   }
 
   window.addEventListener("hashchange", handleHashOpen, false);
-  // on load, if there's a hash — open modal
   setTimeout(handleHashOpen, 350);
 
   function openNewsModal(card) {
@@ -222,22 +218,22 @@ document.addEventListener("DOMContentLoaded", () => {
       modalMedia.appendChild(img);
     }
 
-    // Fill modal text (raw HTML) first
+    // Fill modal text (raw HTML)
     modalText.innerHTML = contentHtml || `<p>${card.dataset.preview || ""}</p>`;
 
-    // meta (author/date) — we add it but TTS will explicitly ignore this element
-    const metaWrap = document.createElement("div");
-    metaWrap.className = "modal-meta";
+    // meta (author/date) — insert only if not already present in content
     const d = new Date(dateISO);
     const dateStr = !isNaN(d.getTime())
       ? d.toLocaleDateString("pa-IN", { year: "numeric", month: "long", day: "numeric" })
       : "";
-    // show author and date but we do not want TTS to read it
-    metaWrap.innerHTML = `<p style="margin:0 0 .5rem 0;"><strong>${author}</strong> · ${dateStr}</p>`;
-
-    // place meta before content for visual reasons
-    if (modalText.firstChild) modalText.insertBefore(metaWrap, modalText.firstChild);
-    else modalText.appendChild(metaWrap);
+    const alreadyHasPublished = !!modalText.querySelector(".published") || (dateStr && modalText.textContent.includes(dateStr));
+    if (!alreadyHasPublished) {
+      const metaWrap = document.createElement("div");
+      metaWrap.className = "modal-meta";
+      metaWrap.innerHTML = `<p style="margin:0 0 .5rem 0;"><strong>${author}</strong> · ${dateStr}</p>`;
+      if (modalText.firstChild) modalText.insertBefore(metaWrap, modalText.firstChild);
+      else modalText.appendChild(metaWrap);
+    }
 
     populateRelated(card);
 
@@ -245,7 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const existingTts = newsModal.querySelector(".tts-controls, .tts-toggle-btn");
     if (existingTts) existingTts.remove();
 
-    // add toggle and controls
+    // add toggle and an empty controls container (controls will be initialized lazily)
     const ttsToggleBtn = document.createElement("button");
     ttsToggleBtn.className = "tts-toggle-btn";
     ttsToggleBtn.innerHTML = "🔊";
@@ -257,7 +253,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const ttsWrap = document.createElement("div");
     ttsWrap.className = "tts-controls";
     ttsWrap.style.display = "none";
-    // Added rate & pitch controls for immediate effect
     ttsWrap.innerHTML = `
       <div class="tts-controls-row" style="display:flex;gap:.5rem;align-items:center;">
         <button class="tts-play" aria-pressed="false" title="Play article">▶️ Play</button>
@@ -280,16 +275,36 @@ document.addEventListener("DOMContentLoaded", () => {
     const cardLang = card.dataset.lang || document.documentElement.lang || "pa-IN";
     const langPref = getLangCode(cardLang);
 
+    // lazy init: only call initTTSControls when user opens the TTS UI
+    let ttsInstance = null;
     ttsToggleBtn.addEventListener("click", () => {
-      ttsWrap.style.display = ttsWrap.style.display === "none" ? "" : "none";
-      if (ttsWrap.style.display !== "none") ttsWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+      const opening = ttsWrap.style.display === "none";
+      if (opening) {
+        ttsWrap.style.display = "";
+        // init only once
+        if (!ttsInstance) {
+          ttsInstance = initTTSControls(ttsWrap, modalText, langPref);
+          // store reference for cleanup
+          ttsWrap._cleanup = ttsInstance;
+        }
+        // focus the play button when opened
+        const pb = ttsWrap.querySelector(".tts-play");
+        if (pb) pb.focus();
+        ttsWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        // closing: cleanup if there is an instance
+        if (ttsInstance && ttsInstance.stop) {
+          try {
+            ttsInstance.stop();
+          } catch (e) {}
+        }
+        // remove highlights and reset any spans
+        qa(".tts-highlight", modalText).forEach((s) => s.classList.remove("tts-highlight"));
+        ttsWrap.style.display = "none";
+      }
     });
 
-    // init TTS controls (safe loader) - returns cleanup functions
-    const cleanup = initTTSControls(ttsWrap, modalText, langPref);
-    // store for cleanup on modal close
-    ttsWrap._cleanup = cleanup;
-
+    // show modal
     newsModal.setAttribute("aria-hidden", "false");
     newsModal.style.display = "flex";
     document.body.style.overflow = "hidden";
@@ -310,10 +325,9 @@ document.addEventListener("DOMContentLoaded", () => {
     qa(".tts-controls").forEach((wrap) => {
       if (wrap._cleanup) {
         try {
-          wrap._cleanup();
+          wrap._cleanup.stop && wrap._cleanup.stop();
         } catch (e) {}
       }
-      // remove element to avoid duplicates next time
       if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
     });
     qa(".tts-toggle-btn").forEach((b) => b.remove());
@@ -343,13 +357,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  /* read-more: open modal and update canonical hash */
   qa(".read-more-btn").forEach((btn) =>
     btn.addEventListener("click", () => {
       const card = btn.closest("article.news-card");
-      // Also update URL hash so copy links are same pattern
       if (card && card.id) {
         const id = encodeURIComponent(card.id);
-        history.replaceState(null, "", `${newsBasePath}#${id}/`);
+        history.pushState(null, "", `${newsBasePath}#${id}/`);
       }
       openNewsModal(card);
     })
@@ -360,7 +374,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target === newsModal) closeNewsModal();
   });
 
-  /* --- IMAGE MODAL --- */
+  /* IMAGE MODAL */
   qa(".enlarge-btn").forEach((b) =>
     b.addEventListener("click", () => {
       const card = b.closest("article.news-card");
@@ -390,7 +404,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  /* --- RELATED ARTICLES --- */
+  /* RELATED ARTICLES (single merged "Open" button) */
   function populateRelated(activeCard) {
     const existing = modalText.parentNode.querySelector(".modal-related");
     if (existing) existing.remove();
@@ -426,7 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="related-info">
           <div class="related-title">${cardTitle}</div>
           <div class="related-meta">${preview.slice(0, 80)}…</div>
-          <div style="margin-top:.5rem"><button class="related-open" data-id="${c.id}">ਖੋਲੋ</button> <button class="related-goto" data-id="${c.id}">Go to</button></div>
+          <div style="margin-top:.5rem"><button class="related-open" data-id="${c.id}">ਖੋਲੋ</button></div>
         </div>
       `;
       list.appendChild(rel);
@@ -434,12 +448,18 @@ document.addEventListener("DOMContentLoaded", () => {
     wrap.appendChild(list);
     modalText.parentNode.appendChild(wrap);
 
-    // "Open" opens modal (close current and open)
     qa(".related-open", wrap).forEach((btn) =>
       btn.addEventListener("click", () => {
         const id = btn.dataset.id;
+        if (!id) return;
+        const encoded = encodeURIComponent(id);
+        // push canonical URL
+        history.pushState(null, "", `${newsBasePath}#${encoded}/`);
         const target = document.getElementById(id);
         if (target) {
+          // ensure pagination shows the target
+          ensureCardPageVisible(target);
+          // close current modal (if open) and open the target after a moment
           closeNewsModal();
           setTimeout(() => {
             target.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -450,22 +470,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       })
     );
-
-    // "Go to" updates hash to canonical link and opens modal on same page (so copied link behaves the same)
-    qa(".related-goto", wrap).forEach((btn) =>
-      btn.addEventListener("click", () => {
-        const id = btn.dataset.id;
-        if (!id) return;
-        const encoded = encodeURIComponent(id);
-        // push state so URL is canonical (doesn't reload)
-        history.pushState(null, "", `${newsBasePath}#${encoded}/`);
-        // then open modal (hashchange handler will also pick it up, but call directly)
-        openNewsModalById(id);
-      })
-    );
   }
 
-  /* --- TTS IMPROVEMENTS --- */
+  /* TTS (voices loader + controls) */
   let synth = window.speechSynthesis;
   let voiceList = [];
 
@@ -509,7 +516,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // outer stop (global)
   function stopTTS() {
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     qa(".tts-highlight").forEach((s) => s.classList.remove("tts-highlight"));
@@ -521,9 +527,8 @@ document.addEventListener("DOMContentLoaded", () => {
     qa(".tts-progress").forEach((el) => (el.textContent = ""));
   }
 
-  // initialize tts controls for a given wrapper + modalTextContainer
   function initTTSControls(wrapper, modalTextContainer, langPref) {
-    // returns cleanup function object
+    // returns { stop, reset } - same as before but safe to call lazily
     const playBtn = wrapper.querySelector(".tts-play");
     const pauseBtn = wrapper.querySelector(".tts-pause");
     const stopBtn = wrapper.querySelector(".tts-stop");
@@ -540,7 +545,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let queue = [];
     let queuePos = 0;
     let wordSpans = [];
-    let currentWord = 0; // absolute across all wordSpans
+    let currentWord = 0;
     let pauseRequested = false;
 
     function findVoiceByValue(val) {
@@ -549,10 +554,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return voices.find((v) => v.name === name && v.lang === lang) || null;
     }
 
-    // populate select once voices are loaded
     async function loadVoices() {
       voices = await ensureVoicesLoaded(2500);
-      // prioritize langPref
       function addGroup(label, arr) {
         if (!arr.length) return;
         const og = document.createElement("optgroup");
@@ -581,14 +584,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function prepareTextForReading() {
-      // Replace any existing tts spans with text nodes first
       qa(".tts-word-span", modalTextContainer).forEach((s) => {
         if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
       });
 
-      // We'll gather nodes to read but explicitly exclude .modal-meta
+      // exclude modal-meta and any .published elements from reading
       const nodes = Array.from(modalTextContainer.querySelectorAll("p, h1, h2, h3, h4, li")).filter(
-        (el) => el.textContent.trim() !== "" && !el.closest(".modal-meta")
+        (el) => el.textContent.trim() !== "" && !el.closest(".modal-meta") && !el.closest(".published")
       );
 
       const readContainer = document.createElement("div");
@@ -608,7 +610,6 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       const meta = modalTextContainer.querySelector(".modal-meta");
-      // wipe container and append meta (if present) but we will not include it in readContainer
       modalTextContainer.innerHTML = "";
       if (meta) modalTextContainer.appendChild(meta);
       modalTextContainer.appendChild(readContainer);
@@ -617,17 +618,13 @@ document.addEventListener("DOMContentLoaded", () => {
     function buildQueue() {
       const readContainer = modalTextContainer.querySelector(".tts-read-container");
       if (!readContainer) return;
-      // Each child element becomes one chunk (keeps chunk lengths reasonable)
-      queue = Array.from(readContainer.children)
-        .map((el) => el.textContent.trim())
-        .filter(Boolean);
+      queue = Array.from(readContainer.children).map((el) => el.textContent.trim()).filter(Boolean);
       queuePos = 0;
     }
 
     function highlightByCharIndex(charIndex) {
       wordSpans = qa(".tts-word-span", modalTextContainer);
       if (!wordSpans.length) return;
-      // build cumulative map
       let total = 0;
       for (let i = 0; i < wordSpans.length; i++) {
         const len = (wordSpans[i].textContent || "").length;
@@ -636,7 +633,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (charIndex >= start && charIndex <= end) {
           qa(".tts-highlight", modalTextContainer).forEach((el) => el.classList.remove("tts-highlight"));
           wordSpans[i].classList.add("tts-highlight");
-          // keep focused text visible
           try {
             wordSpans[i].scrollIntoView({ behavior: "smooth", block: "center" });
           } catch (e) {}
@@ -653,7 +649,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       if (queuePos >= queue.length) {
-        // finished
         stopLocal();
         return;
       }
@@ -662,27 +657,21 @@ document.addEventListener("DOMContentLoaded", () => {
       const sel = select.value;
       const chosen = findVoiceByValue(sel);
       if (chosen) utter.voice = chosen;
-      else {
-        // set lang explicitly if no chosen voice
-        utter.lang = langPref ? `${langPref}` : document.documentElement.lang || "pa-IN";
-      }
+      else utter.lang = langPref ? `${langPref}` : document.documentElement.lang || "pa-IN";
       utter.rate = utterRate;
       utter.pitch = utterPitch;
 
-      // highlight by boundary when supported
       utter.onboundary = (ev) => {
         if (ev.name === "word") highlightByCharIndex(ev.charIndex);
       };
 
       utter.onend = () => {
-        // approximate progress update
         if (progressEl) {
           const total = qa(".tts-word-span", modalTextContainer).length || 1;
           currentWord = Math.min(total, currentWord + (text.split(/\s+/).length));
           const pct = Math.round((currentWord / total) * 100);
           progressEl.textContent = ` ${pct}%`;
         }
-        // small gap between chunks
         setTimeout(() => {
           if (!pauseRequested) speakNextChunk();
         }, 80);
@@ -692,7 +681,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function computeChunkIndexForWordIndex(wordIndex) {
-      // returns chunk index (queue index) that contains the wordIndex
       const readContainer = modalTextContainer.querySelector(".tts-read-container");
       if (!readContainer) return 0;
       const children = Array.from(readContainer.children);
@@ -749,7 +737,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     function resumeTTS() {
       if (window.speechSynthesis && window.speechSynthesis.paused) {
-        // resume
         window.speechSynthesis.resume();
         ttsPlaying = true;
         pauseRequested = false;
@@ -758,23 +745,19 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // If controls change and we're speaking, restart from currentWord with new settings
     function restartFromCurrentWord() {
-      // compute chunk index inclusive of the currentWord
       const chunkIdx = computeChunkIndexForWordIndex(currentWord || 1);
       if (chunkIdx >= 0) {
         if (window.speechSynthesis) window.speechSynthesis.cancel();
         queuePos = chunkIdx;
-        // remove old highlights
         qa(".tts-highlight", modalTextContainer).forEach((s) => s.classList.remove("tts-highlight"));
-        // resume speaking from that chunk
         setTimeout(() => {
           speakNextChunk();
         }, 120);
       }
     }
 
-    // Wire UI
+    // wire UI
     playBtn.addEventListener("click", () => {
       if (window.speechSynthesis && window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
         pauseTTS();
@@ -785,12 +768,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
     pauseBtn.addEventListener("click", () => pauseTTS());
-    stopBtn.addEventListener("click", () => {
-      stopLocal();
-    });
+    stopBtn.addEventListener("click", () => stopLocal());
 
     select.addEventListener("change", () => {
-      // immediate effect: if playing, restart from current word with new voice
       if (window.speechSynthesis && window.speechSynthesis.speaking) {
         restartFromCurrentWord();
       }
@@ -798,7 +778,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     rateInput.addEventListener("input", (e) => {
       utterRate = parseFloat(e.target.value) || 1.02;
-      // Immediate effect: restart from current word if speaking
       if (window.speechSynthesis && window.speechSynthesis.speaking) restartFromCurrentWord();
     });
     pitchInput.addEventListener("input", (e) => {
@@ -806,10 +785,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (window.speechSynthesis && window.speechSynthesis.speaking) restartFromCurrentWord();
     });
 
-    // initial load
     loadVoices().catch(() => {});
 
-    // expose cleanup functions so caller can cancel when modal closed
     return {
       stop: () => {
         try {
@@ -817,7 +794,6 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (e) {}
       },
       reset: () => {
-        // remove highlights and cancel
         try {
           stopLocal();
           qa(".tts-word-span", modalTextContainer).forEach((s) => {
@@ -828,10 +804,9 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  /* --- HASH HIGHLIGHT ON PAGE LOAD (if not opening modal) --- */
+  /* HASH HIGHLIGHT ON LOAD (fallback) */
   const hash = normalizeHash(window.location.hash.slice(1));
   if (hash) {
-    // if modal already handled via handleHashOpen, this will be a no-op, but keep fallback
     const target = document.getElementById(hash);
     if (target) {
       setTimeout(() => {
@@ -842,7 +817,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /* --- GLOBAL ESC CLOSES MODALS --- */
+  /* GLOBAL ESC CLOSES MODALS */
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       qa(".modal-overlay[aria-hidden='false']").forEach((m) => {
