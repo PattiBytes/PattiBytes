@@ -242,67 +242,70 @@ document.addEventListener("DOMContentLoaded", () => {
     if (existingTts) existingTts.remove();
 
     // add toggle and an empty controls container (controls will be initialized lazily)
-    const ttsToggleBtn = document.createElement("button");
-    ttsToggleBtn.className = "tts-toggle-btn";
-    ttsToggleBtn.innerHTML = "🔊";
-    ttsToggleBtn.title = "Toggle Text-to-Speech Controls";
-    ttsToggleBtn.type = "button";
-    ttsToggleBtn.style.marginLeft = "8px";
-    modalCloseBtn.after(ttsToggleBtn);
+    // Replace the existing tts-toggle + ttsWrap creation & listener with this snippet.
+// (This uses class toggling: JS will add/remove the 'show' class which your CSS handles.)
+const ttsToggleBtn = document.createElement("button");
+ttsToggleBtn.className = "tts-toggle-btn";
+ttsToggleBtn.innerHTML = "🔊";
+ttsToggleBtn.title = "Toggle Text-to-Speech Controls";
+ttsToggleBtn.type = "button";
+modalCloseBtn.after(ttsToggleBtn);
 
-    const ttsWrap = document.createElement("div");
-    ttsWrap.className = "tts-controls";
-    ttsWrap.style.display = "none";
-    ttsWrap.innerHTML = `
-      <div class="tts-controls-row" style="display:flex;gap:.5rem;align-items:center;">
-        <button class="tts-play" aria-pressed="false" title="Play article">▶️ Play</button>
-        <button class="tts-pause" title="Pause">⏸️ Pause</button>
-        <button class="tts-stop" title="Stop">⏹️ Stop</button>
-        <div class="tts-progress" aria-hidden="true" style="margin-left:0.5rem;"></div>
-      </div>
-      <div class="tts-controls-row" style="margin-top:.5rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
-        <label for="tts-voices" class="sr-only">Voice</label>
-        <select id="tts-voices" aria-label="Choose voice"></select>
-        <label for="tts-rate" class="sr-only">Rate</label>
-        <input id="tts-rate" type="range" min="0.5" max="2.0" step="0.05" value="1.02" aria-label="Speech rate" style="width:120px;">
-        <label for="tts-pitch" class="sr-only">Pitch</label>
-        <input id="tts-pitch" type="range" min="0.5" max="2.0" step="0.05" value="1.0" aria-label="Speech pitch" style="width:120px;">
-        <span class="tts-status" aria-live="polite" style="margin-left:.5rem;"></span>
-      </div>
-    `;
-    modalText.parentNode.insertBefore(ttsWrap, modalText.nextSibling);
+// create wrapper WITHOUT inline display styles (CSS controls visibility via .show)
+const ttsWrap = document.createElement("div");
+ttsWrap.className = "tts-controls";
+ttsWrap.innerHTML = `
+  <div class="tts-controls-row" style="display:flex;gap:.5rem;align-items:center;">
+    <button class="tts-play" aria-pressed="false" title="Play article">▶️ Play</button>
+    <button class="tts-pause" title="Pause">⏸️ Pause</button>
+    <button class="tts-stop" title="Stop">⏹️ Stop</button>
+    <div class="tts-progress" aria-hidden="true" style="margin-left:0.5rem;"></div>
+  </div>
+  <div class="tts-controls-row" style="margin-top:.5rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+    <label for="tts-voices" class="sr-only">Voice</label>
+    <select id="tts-voices" aria-label="Choose voice"></select>
+    <label for="tts-rate" class="sr-only">Rate</label>
+    <input id="tts-rate" type="range" min="0.5" max="2.0" step="0.05" value="1.02" aria-label="Speech rate" style="width:120px;">
+    <label for="tts-pitch" class="sr-only">Pitch</label>
+    <input id="tts-pitch" type="range" min="0.5" max="2.0" step="0.05" value="1.0" aria-label="Speech pitch" style="width:120px;">
+    <span class="tts-status" aria-live="polite" style="margin-left:.5rem;"></span>
+  </div>
+`;
+modalText.parentNode.insertBefore(ttsWrap, modalText.nextSibling);
 
-    const cardLang = card.dataset.lang || document.documentElement.lang || "pa-IN";
-    const langPref = getLangCode(cardLang);
+const cardLang = card.dataset.lang || document.documentElement.lang || "pa-IN";
+const langPref = getLangCode(cardLang);
 
-    // lazy init: only call initTTSControls when user opens the TTS UI
-    let ttsInstance = null;
-    ttsToggleBtn.addEventListener("click", () => {
-      const opening = ttsWrap.style.display === "none";
-      if (opening) {
-        ttsWrap.style.display = "";
-        // init only once
-        if (!ttsInstance) {
-          ttsInstance = initTTSControls(ttsWrap, modalText, langPref);
-          // store reference for cleanup
-          ttsWrap._cleanup = ttsInstance;
-        }
-        // focus the play button when opened
-        const pb = ttsWrap.querySelector(".tts-play");
-        if (pb) pb.focus();
-        ttsWrap.scrollIntoView({ behavior: "smooth", block: "start" });
-      } else {
-        // closing: cleanup if there is an instance
-        if (ttsInstance && ttsInstance.stop) {
-          try {
-            ttsInstance.stop();
-          } catch (e) {}
-        }
-        // remove highlights and reset any spans
-        qa(".tts-highlight", modalText).forEach((s) => s.classList.remove("tts-highlight"));
-        ttsWrap.style.display = "none";
-      }
-    });
+// lazy init instance
+let ttsInstance = null;
+
+ttsToggleBtn.addEventListener("click", () => {
+  const opening = !ttsWrap.classList.contains("show");
+  if (opening) {
+    // open UI
+    ttsWrap.classList.add("show");
+    ttsToggleBtn.classList.add("active");
+    // init controls only once
+    if (!ttsInstance) {
+      ttsInstance = initTTSControls(ttsWrap, modalText, langPref);
+      ttsWrap._cleanup = ttsInstance;
+    }
+    // focus the play button for accessibility
+    const pb = ttsWrap.querySelector(".tts-play");
+    if (pb) pb.focus();
+    ttsWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else {
+    // close UI & cleanup
+    ttsWrap.classList.remove("show");
+    ttsToggleBtn.classList.remove("active");
+    if (ttsInstance && ttsInstance.stop) {
+      try { ttsInstance.stop(); } catch (e) {}
+    }
+    // remove any highlighting
+    qa(".tts-highlight", modalText).forEach((s) => s.classList.remove("tts-highlight"));
+  }
+});
+
 
     // show modal
     newsModal.setAttribute("aria-hidden", "false");
