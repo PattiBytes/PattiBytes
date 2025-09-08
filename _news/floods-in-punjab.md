@@ -17,6 +17,7 @@ author: Patti Bytes
 tags:
   - news
 send_notification: true
+push_message: new news
 ---
 
 
