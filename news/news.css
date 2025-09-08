@@ -702,11 +702,12 @@
 }
 
 /* Toggle button - moved to top-right so it doesn't clash with close button */
-/* TTS Toggle Button (Top-Left Corner) */
+/* Toggle button — place at top-left of the modal (replace existing .tts-toggle-btn block) */
 .tts-toggle-btn {
-  position: fixed;
+  position: absolute;
   top: 15px;
-  left: 15px;
+  left: 15px;      /* moved to top-left */
+  right: auto;     /* ensure no conflict with previous right setting */
   width: 45px;
   height: 45px;
   border: none;
@@ -714,26 +715,36 @@
   background: var(--accent-color);
   color: #fff;
   font-size: 1.4rem;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 11000; /* stays above modal */
+  z-index: 10;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
+  will-change: transform, box-shadow;
 }
-
 .tts-toggle-btn:hover {
   background: var(--highlight-color);
   transform: scale(1.1) rotate(5deg);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
 }
-
 .tts-toggle-btn.active {
   background: var(--secondary-color);
   transform: scale(1.1) rotate(-5deg);
 }
 
+/* small-screen tweak (optional) */
+@media (max-width: 480px) {
+  .tts-toggle-btn {
+    top: 12px;
+    left: 12px;
+    width: 42px;
+    height: 42px;
+    font-size: 1.2rem;
+  }
+}
 
 /* focus states for accessibility */
 button:focus,
