@@ -1,15 +1,14 @@
-name: Send Webpushr notification on new post
-
+name: Send Webpushr Notifications (on _notifications changes)
 on:
   push:
     paths:
-      - '_news/**'
+      - '_notifications/**'
 
 jobs:
-  notify:
+  send-notifications:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
@@ -24,26 +23,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyyaml requests
 
-      - name: Send Webpushr notification for new/updated posts
+      - name: Find changed _notifications files
+        id: changed
+        run: |
+          echo "FILES<<$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | grep '^_notifications/' || true)" >> $GITHUB_OUTPUT
+
+      - name: Send notifications (Python)
         env:
           WEBPUSHR_KEY: ${{ secrets.WEBPUSHR_KEY }}
           WEBPUSHR_AUTH: ${{ secrets.WEBPUSHR_AUTH }}
           SITE_URL: ${{ secrets.SITE_URL }}
         run: |
-          # get changed files in this commit
-          changed_files=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | grep '^_news/' || true)
-          if [ -z "$changed_files" ]; then
-            echo "No changed files in _news/ - exiting."
-            exit 0
-          fi
-          echo "Changed files:"
-          echo "$changed_files"
-
-          # For each changed file, parse frontmatter and send notification if allowed
           python - <<'PY'
-import os, re, yaml, requests, sys
-files = """${changed_files}""".strip().splitlines()
+import os, re, yaml, requests, sys, json, textwrap
+files_raw = os.getenv('FILES', None)
+# GitHub new-output uses FILES variable via ${{ steps.changed.outputs.FILES }} but we can't access here; instead re-run detection:
+import subprocess
+changed = subprocess.check_output(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", os.environ['GITHUB_SHA']]).decode().splitlines()
+files = [f for f in changed if f.startswith('_notifications/')]
 if not files:
+    print("No changed notification files - exiting")
     sys.exit(0)
 
 WEBPUSHR_KEY = os.environ['WEBPUSHR_KEY']
@@ -51,46 +50,48 @@ WEBPUSHR_AUTH = os.environ['WEBPUSHR_AUTH']
 SITE_URL = os.environ['SITE_URL'].rstrip('/')
 
 def parse_frontmatter(path):
-    with open(path, 'r', encoding='utf-8') as f:
-        text = f.read()
-    m = re.match(r'---\s*\n(.*?\n)---\s*\n', text, re.S)
+    with open(path, 'r', encoding='utf-8') as fh:
+        txt = fh.read()
+    m = re.match(r'---\s*\n(.*?\n)---\s*\n', txt, re.S)
     if not m:
         return {}
-    fm = yaml.safe_load(m.group(1))
-    return fm or {}
+    return yaml.safe_load(m.group(1)) or {}
 
 for p in files:
     if not os.path.exists(p):
-        print("file not present:", p)
+        print("Skipped (not found):", p)
         continue
     fm = parse_frontmatter(p)
-    title = fm.get('title') or 'ਨਵੀਂ ਖ਼ਬਰ'
-    # slug: prefer id from frontmatter, else use filename without extension
-    slug = fm.get('id') or os.path.splitext(os.path.basename(p))[0]
-    preview = fm.get('preview') or fm.get('push_message') or ''
-    send = fm.get('send_notification')
-    # default to True if field missing
-    if send is False:
-        print("send_notification is false; skipping:", p)
+    print("Processing:", p, "frontmatter:", json.dumps(fm, ensure_ascii=False))
+    send_now = fm.get('send_now', True)  # default True
+    if not send_now:
+        print("send_now false — skipping", p)
         continue
+    audience = fm.get('audience', 'all')
+    title = fm.get('title', 'Patti Bytes')
+    message = fm.get('message') or fm.get('preview') or title
+    target = fm.get('target_url') or '/'
+    if not target.startswith('http'):
+        target = SITE_URL + target
 
-    push_message = fm.get('push_message') or preview or (title + " - Read now")
-    target = f"{SITE_URL}/news/{slug}"   # adjust if your site routes differently
-
-    payload = {
-        "title": title,
-        "message": push_message,
-        "target_url": target
-    }
+    payload = {"title": title, "message": message, "target_url": target}
     headers = {
         "webpushrKey": WEBPUSHR_KEY,
         "webpushrAuthToken": WEBPUSHR_AUTH,
         "Content-Type": "application/json"
     }
 
-    print("Sending push for:", p, "->", target)
-    r = requests.post("https://api.webpushr.com/v1/notification/send/all", json=payload, headers=headers, timeout=30)
-    print("status:", r.status_code, r.text)
-    if r.status_code not in (200, 201):
-        print("Warning: webpushr returned non-OK for", p)
+    if audience == 'all':
+        url = "https://api.webpushr.com/v1/notification/send/all"
+        print("Sending to ALL subscribers:", json.dumps(payload, ensure_ascii=False))
+        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        print("HTTP", resp.status_code)
+        try:
+            print(resp.text)
+        except Exception as e:
+            print("Response print error:", e)
+    else:
+        # For non-all audiences, log and skip. Implement segment/specific per Webpushr docs.
+        print("Audience is", audience, "- this action currently supports 'all' only. Skipping", p)
+        print("If you want segments/specific-subscribers, we can add that — Webpushr docs needed.")
 PY
