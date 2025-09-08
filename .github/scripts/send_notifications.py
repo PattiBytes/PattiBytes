@@ -1,52 +1,63 @@
 #!/usr/bin/env python3
 """
-Send pushes when _notifications, _news or _places files change.
-Called from GitHub Actions. Uses env vars:
- - WEBPUSHR_KEY (required)
- - WEBPUSHR_AUTH (required)
- - SITE_URL (required)
- - BEFORE_COMMIT (optional)
- - AFTER_COMMIT (required)
+Robust Webpushr sender for _notifications, _news and _places.
+Put this file at .github/scripts/send_notifications.py and make it executable.
 """
 
-import os, sys, re, json, subprocess, time
-from typing import List
+import os
+import sys
+import re
+import json
+import time
+import subprocess
+from typing import List, Optional
+
 import requests
 import yaml
 
-WEBPUSHR_KEY = os.getenv('WEBPUSHR_KEY')
-WEBPUSHR_AUTH = os.getenv('WEBPUSHR_AUTH')
-SITE_URL = (os.getenv('SITE_URL') or '').rstrip('/')
-BEFORE = os.getenv('BEFORE_COMMIT')
-AFTER = os.getenv('AFTER_COMMIT') or os.getenv('GITHUB_SHA')
+# --- Config / env ---
+WEBPUSHR_KEY = os.getenv("WEBPUSHR_KEY")
+WEBPUSHR_AUTH = os.getenv("WEBPUSHR_AUTH")
+SITE_URL = (os.getenv("SITE_URL") or "").rstrip("/")
+BEFORE = os.getenv("BEFORE_COMMIT")  # may be 0000.. or empty
+AFTER = os.getenv("AFTER_COMMIT") or os.getenv("GITHUB_SHA")
+DRY_RUN = os.getenv("DRY_RUN", "false").lower() in ("1", "true", "yes")
 
 if not WEBPUSHR_KEY or not WEBPUSHR_AUTH or not SITE_URL:
-    print("ERROR: Missing one of required env vars: WEBPUSHR_KEY, WEBPUSHR_AUTH, SITE_URL", file=sys.stderr)
+    print("ERROR: Required env vars WEBPUSHR_KEY, WEBPUSHR_AUTH and SITE_URL must be set", file=sys.stderr)
     sys.exit(1)
+
 if not AFTER:
-    print("ERROR: AFTER_COMMIT not provided", file=sys.stderr)
+    print("ERROR: AFTER_COMMIT / GITHUB_SHA not provided", file=sys.stderr)
     sys.exit(1)
 
+FRONT_RE = re.compile(r"^---\s*\n(.*?\n)---\s*\n", re.S)
 
-FRONT_RE = re.compile(r'^---\s*\n(.*?\n)---\s*\n', re.S)
 
-def git_changed_files(before: str, after: str) -> List[str]:
+# ---------------- helpers ----------------
+def run_git(cmd: List[str]) -> str:
     try:
-        if not before or re.match(r'^0+$', before):
-            out = subprocess.check_output(['git', 'diff-tree', '--no-commit-id', '--name-only', '-r', after], text=True)
-        else:
-            out = subprocess.check_output(['git', 'diff', '--name-only', before, after], text=True)
-        files = [l.strip() for l in out.splitlines() if l.strip()]
-        # only those we care about
-        files = [f for f in files if f.startswith('_notifications/') or f.startswith('_news/') or f.startswith('_places/')]
-        return files
+        out = subprocess.check_output(cmd, text=True)
+        return out
     except subprocess.CalledProcessError as e:
-        print("git command failed:", e, file=sys.stderr)
-        return []
+        print(f"git command failed: {e}", file=sys.stderr)
+        return ""
+
+
+def git_changed_files(before: Optional[str], after: str) -> List[str]:
+    if not before or re.match(r"^0+$", before):
+        # initial commit or before not provided — list files changed in that commit
+        out = run_git(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", after])
+    else:
+        out = run_git(["git", "diff", "--name-only", before, after])
+    files = [ln.strip() for ln in out.splitlines() if ln.strip()]
+    # keep only interesting paths
+    return [f for f in files if f.startswith("_notifications/") or f.startswith("_news/") or f.startswith("_places/")]
+
 
 def parse_frontmatter(path: str) -> dict:
     try:
-        with open(path, 'r', encoding='utf-8') as fh:
+        with open(path, "r", encoding="utf-8") as fh:
             txt = fh.read()
     except Exception as e:
         print(f"Failed to read {path}: {e}", file=sys.stderr)
@@ -60,180 +71,229 @@ def parse_frontmatter(path: str) -> dict:
         print(f"YAML parse error in {path}: {e}", file=sys.stderr)
         return {}
 
-def slugify(s: str) -> str:
-    s = str(s or '')
-    s = s.lower()
-    s = re.sub(r'[^a-z0-9]+', '-', s)
-    s = s.strip('-')
-    return s or 'item'
 
-def build_target_url_for_collection(coll: str, fm: dict, filepath: str) -> str:
-    # Use explicit target_url if provided
-    raw = fm.get('target_url')
+def slugify(s: str) -> str:
+    s = str(s or "")
+    s = s.strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = s.strip("-")
+    return s or "item"
+
+
+def build_target_for_news(fm: dict, filepath: str) -> str:
+    # Prefer explicit target_url in frontmatter
+    raw = fm.get("target_url")
     if raw:
         raw = str(raw).strip()
-        if raw.startswith('http://') or raw.startswith('https://'):
+        if raw.startswith("http://") or raw.startswith("https://"):
             return raw
-        if raw.startswith('/'):
+        if raw.startswith("/"):
             return SITE_URL + raw
-        return SITE_URL + '/' + raw
+        return SITE_URL + "/" + raw
+    # Otherwise construct anchor style: /news/#news-<slug>/
+    slug = fm.get("id") or fm.get("slug") or os.path.splitext(os.path.basename(filepath))[0]
+    s = slugify(slug)
+    return f"{SITE_URL}/news/#news-{s}/"
 
-    # Otherwise build a sensible default from collection and slug/id/filename
-    ident = fm.get('id') or fm.get('slug') or None
-    if not ident:
-        # fallback to filename without extension
-        ident = os.path.splitext(os.path.basename(filepath))[0]
-    if coll == 'news':
-        return SITE_URL + '/news/' + slugify(ident)
-    if coll == 'places':
-        return SITE_URL + '/places/' + slugify(ident)
-    # default
-    return SITE_URL + '/'
 
-def normalize_icon(img_field):
+def build_target_for_places(fm: dict, filepath: str) -> str:
+    raw = fm.get("target_url")
+    if raw:
+        raw = str(raw).strip()
+        if raw.startswith("http://") or raw.startswith("https://"):
+            return raw
+        if raw.startswith("/"):
+            return SITE_URL + raw
+        return SITE_URL + "/" + raw
+    slug = fm.get("id") or fm.get("slug") or os.path.splitext(os.path.basename(filepath))[0]
+    s = slugify(slug)
+    # follow your example: /places/#/places/<slug>
+    return f"{SITE_URL}/places/#/places/{s}"
+
+
+def normalize_icon(img_field: Optional[str]) -> Optional[str]:
     if not img_field:
         return None
     img = str(img_field).strip()
-    if img.startswith('http://') or img.startswith('https://'):
+    if img.startswith("http://") or img.startswith("https://"):
         return img
-    if img.startswith('/'):
+    if img.startswith("/"):
         return SITE_URL + img
-    return SITE_URL + '/' + img
+    return SITE_URL + "/" + img
 
-def send_post(url: str, payload: dict):
+
+# Robust POST with retries
+def post_with_retries(url: str, payload: dict, headers: dict, max_retries: int = 3):
+    backoff = 1.0
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            return resp
+        except Exception as e:
+            last_exc = e
+            print(f"Attempt {attempt} failed: {e}", file=sys.stderr)
+            time.sleep(backoff)
+            backoff *= 2
+    print("All attempts failed; last exception:", last_exc, file=sys.stderr)
+    return None
+
+
+def send_payload(url: str, payload: dict):
     headers = {
         "webpushrKey": WEBPUSHR_KEY,
         "webpushrAuthToken": WEBPUSHR_AUTH,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
-    try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=30)
-        print("POST", url)
-        print("PAYLOAD:", json.dumps(payload, ensure_ascii=False))
-        print("HTTP", resp.status_code, resp.text)
-        return resp
-    except Exception as e:
-        print("Request error:", e, file=sys.stderr)
+    # Show full request in log for debugging
+    print("=== Sending push ===")
+    print("URL:", url)
+    print("HEADERS:", json.dumps({k: v for k, v in headers.items() if k != "webpushrAuthToken"}, ensure_ascii=False))
+    print("PAYLOAD:", json.dumps(payload, ensure_ascii=False))
+    if DRY_RUN:
+        print("DRY_RUN enabled — not actually sending.")
         return None
 
+    resp = post_with_retries(url, payload, headers)
+    if resp is None:
+        print("No response (network error).", file=sys.stderr)
+        return None
+
+    # Print response details for debugging
+    print("Response status:", resp.status_code)
+    try:
+        print("Response headers:", dict(resp.headers))
+    except Exception:
+        pass
+    try:
+        print("Response body:", resp.text)
+    except Exception:
+        pass
+
+    # Non-2xx -> log as error but continue
+    if resp.status_code < 200 or resp.status_code >= 300:
+        print("Non-success HTTP status from Webpushr", resp.status_code, file=sys.stderr)
+    return resp
+
+
+# ---------------- handlers ----------------
 def handle_notification_file(path: str):
     fm = parse_frontmatter(path)
     print("Notification frontmatter:", json.dumps(fm, ensure_ascii=False))
-    send_now = fm.get('send_now', True) or fm.get('send_notification', False)
+    send_now = fm.get("send_now", True) or fm.get("send_notification", False)
     if not send_now:
         print("send_now false — skipping", path)
         return
-    audience = (fm.get('audience') or 'all').lower()
-    title = fm.get('title') or "Patti Bytes"
-    message = fm.get('message') or fm.get('preview') or title
-    target = build_target_url_for_collection('notification', fm, path)
-    icon = normalize_icon(fm.get('image'))
 
-    if audience == 'all':
-        url = "https://api.webpushr.com/v1/notification/send/all"
-        payload = {"title": title, "message": message, "target_url": target}
-        if icon: payload["icon"] = icon
-        send_post(url, payload)
-    elif audience == 'segment':
-        seg = fm.get('segment_tag') or fm.get('segment')
+    title = fm.get("title") or "Patti Bytes"
+    message = fm.get("message") or fm.get("preview") or title
+    target = fm.get("target_url") or f"{SITE_URL}/"
+    # normalize target (allow full url or path)
+    target = target if target.startswith("http") else SITE_URL + (target if target.startswith("/") else ("/" + target))
+    icon = normalize_icon(fm.get("image"))
+
+    payload = {"title": title, "message": message, "target_url": target}
+    # add image in multiple common fields to maximize compatibility
+    if icon:
+        payload["icon"] = icon
+        payload["image"] = icon
+        payload["thumbnail"] = icon
+
+    audience = (fm.get("audience") or "all").lower()
+    if audience == "all":
+        send_payload("https://api.webpushr.com/v1/notification/send/all", payload)
+    elif audience == "segment":
+        seg = fm.get("segment_tag") or fm.get("segment")
         if not seg:
             print("Missing segment_tag — skipping", path)
             return
-        url = "https://api.webpushr.com/v1/notification/send/segment"
-        payload = {"title": title, "message": message, "target_url": target, "segment": seg}
-        if icon: payload["icon"] = icon
-        send_post(url, payload)
-    elif audience == 'specific':
-        subs = fm.get('specific_subscribers') or []
-        sids = []
+        payload["segment"] = seg
+        send_payload("https://api.webpushr.com/v1/notification/send/segment", payload)
+    elif audience == "specific":
+        subs = fm.get("specific_subscribers") or []
         for item in subs:
-            if isinstance(item, dict):
-                v = item.get('subscriber')
-            else:
-                v = item
-            if v:
-                sids.append(str(v).strip())
-        if not sids:
-            print("No specific subscriber ids — skipping", path)
-            return
-        for sid in sids:
-            url = "https://api.webpushr.com/v1/notification/send/sid"
-            payload = {"title": title, "message": message, "target_url": target, "sid": sid}
-            if icon: payload["icon"] = icon
-            send_post(url, payload)
-            time.sleep(0.5)
+            sid = item.get("subscriber") if isinstance(item, dict) else item
+            if not sid:
+                continue
+            p = dict(payload)
+            p["sid"] = str(sid)
+            send_payload("https://api.webpushr.com/v1/notification/send/sid", p)
     else:
         print("Unknown audience:", audience)
+
 
 def handle_content_file(path: str, coll: str):
     fm = parse_frontmatter(path)
-    print(f"Content file ({coll}) frontmatter:", json.dumps(fm, ensure_ascii=False))
-    # News uses 'send_notification', notifications use 'send_now'
-    send_flag = fm.get('send_notification') or fm.get('send_now') or False
-    if not send_flag:
-        print("send_notification/send_now not true — skipping content file", path)
+    print(f"Content ({coll}) frontmatter:", json.dumps(fm, ensure_ascii=False))
+    # Default behavior: send by default unless explicitly false
+    send_flag = fm.get("send_notification") if "send_notification" in fm else fm.get("send_now", True)
+    if send_flag is False:
+        print("send_notification/send_now explicitly false — skipping", path)
         return
 
-    # Build title/message/target
-    title = fm.get('title') or "Patti Bytes"
-    message = fm.get('push_message') or fm.get('message') or fm.get('preview') or title
-    target = build_target_url_for_collection(coll, fm, path)
-    icon = normalize_icon(fm.get('image'))
+    title = fm.get("title") or "Patti Bytes"
+    # push_message preferred; then preview; then title
+    message = fm.get("push_message") or fm.get("message") or fm.get("preview") or title
 
-    # Send to all by default (edit frontmatter to include audience/segment if needed)
-    audience = (fm.get('audience') or 'all').lower()
-    if audience == 'all':
-        url = "https://api.webpushr.com/v1/notification/send/all"
-        payload = {"title": title, "message": message, "target_url": target}
-        if icon: payload["icon"] = icon
-        send_post(url, payload)
-    elif audience == 'segment':
-        seg = fm.get('segment_tag') or fm.get('segment')
+    if coll == "news":
+        target = build_target_for_news(fm, path)
+    elif coll == "places":
+        target = build_target_for_places(fm, path)
+    else:
+        target = SITE_URL + "/"
+
+    icon = normalize_icon(fm.get("image"))
+
+    payload = {"title": title, "message": message, "target_url": target}
+    if icon:
+        payload["icon"] = icon
+        payload["image"] = icon
+        payload["thumbnail"] = icon
+
+    # Audience support
+    audience = (fm.get("audience") or "all").lower()
+    if audience == "all":
+        send_payload("https://api.webpushr.com/v1/notification/send/all", payload)
+    elif audience == "segment":
+        seg = fm.get("segment_tag") or fm.get("segment")
         if not seg:
-            print("Missing segment_tag for content file — skipping", path)
+            print("Missing segment_tag — skipping", path)
             return
-        url = "https://api.webpushr.com/v1/notification/send/segment"
-        payload = {"title": title, "message": message, "target_url": target, "segment": seg}
-        if icon: payload["icon"] = icon
-        send_post(url, payload)
-    elif audience == 'specific':
-        subs = fm.get('specific_subscribers') or []
-        sids = []
+        payload["segment"] = seg
+        send_payload("https://api.webpushr.com/v1/notification/send/segment", payload)
+    elif audience == "specific":
+        subs = fm.get("specific_subscribers") or []
         for item in subs:
-            if isinstance(item, dict):
-                v = item.get('subscriber')
-            else:
-                v = item
-            if v:
-                sids.append(str(v).strip())
-        if not sids:
-            print("No subscriber IDs for specific audience — skipping", path)
-            return
-        for sid in sids:
-            url = "https://api.webpushr.com/v1/notification/send/sid"
-            payload = {"title": title, "message": message, "target_url": target, "sid": sid}
-            if icon: payload["icon"] = icon
-            send_post(url, payload)
-            time.sleep(0.5)
+            sid = item.get("subscriber") if isinstance(item, dict) else item
+            if not sid:
+                continue
+            p = dict(payload)
+            p["sid"] = str(sid)
+            send_payload("https://api.webpushr.com/v1/notification/send/sid", p)
     else:
         print("Unknown audience:", audience)
 
+
+# --------------- main ---------------
 def main():
     files = git_changed_files(BEFORE, AFTER)
     if not files:
         print("No changed files to process.")
         return
     print("Changed files:", files)
+
     for f in files:
-        if f.startswith('_notifications/'):
+        if f.startswith("_notifications/"):
             handle_notification_file(f)
-        elif f.startswith('_news/'):
-            handle_content_file(f, 'news')
-        elif f.startswith('_places/'):
-            handle_content_file(f, 'places')
+        elif f.startswith("_news/"):
+            handle_content_file(f, "news")
+        elif f.startswith("_places/"):
+            handle_content_file(f, "places")
         else:
             print("Ignoring file:", f)
-    print("Finished.")
 
-if __name__ == '__main__':
+    print("Finished processing notifications.")
+
+
+if __name__ == "__main__":
     main()
