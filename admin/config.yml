@@ -19,7 +19,7 @@ collections:
       - { label: "Image", name: "image", widget: "image", required: false, media_library: { allow_multiple: false } }
       - { label: "Author / Byline", name: "author", widget: "string", required: false, hint: "e.g. 'Patti Bytes Desk' or reporter name" }
       - { label: "Tags (auto)", name: "tags", widget: "list", required: true, default: ["news"] }
-      - { label: "Send push on publish (optional)", name: "send_notification", widget: "boolean", default: false, hint: "If true, publishing this news will trigger a push notification (GitHub Action must be configured)." }
+      - { label: "Send push on publish (optional)", name: "send_notification", widget: "boolean", default: true, hint: "If true, publishing this news will trigger a push notification (GitHub Action must be configured)." }
       - { label: "Push message (optional)", name: "push_message", widget: "string", required: false, hint: "Short message to use for the push body. If empty, preview/title used." }
       - label: "Poori News/Khabar"
         name: "body"
@@ -48,7 +48,7 @@ collections:
       - { label: "place baare 1-2 glaan", name: "preview", widget: "text", required: true }
       - { label: "Image", name: "image", widget: "image", required: false, media_library: { allow_multiple: false } }
       - { label: "Tags (auto)", name: "tags", widget: "list", required: true, default: ["places"] }
-      - { label: "Send push on publish (optional)", name: "send_notification", widget: "boolean", default: false, hint: "If true, publishing this place will trigger a push notification (GitHub Action must be configured)." }
+      - { label: "Send push on publish (optional)", name: "send_notification", widget: "boolean", default: true, hint: "If true, publishing this place will trigger a push notification (GitHub Action must be configured)." }
       - { label: "Push message (optional)", name: "push_message", widget: "string", required: false, hint: "Short message for the push body. If empty, preview/title used." }
       - label: "saari detail uss place baare"
         name: "body"
