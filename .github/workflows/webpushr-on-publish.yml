@@ -1,6 +1,5 @@
 name: Send Webpushr Notifications (on _notifications changes)
 
-# Trigger only when _notifications/ files are changed on push to main
 on:
   push:
     branches: [ "main" ]
@@ -10,12 +9,11 @@ on:
 jobs:
   send-notifications:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo (full history)
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # full history makes diffs reliable
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -30,9 +28,7 @@ jobs:
       - name: Find changed _notifications files
         id: changed
         run: |
-          # use git diff between commit range to list changed files under _notifications/
           files=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" | grep '^_notifications/' || true)
-          # export as multiline output
           echo "files<<EOF" >> $GITHUB_OUTPUT
           echo "$files" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -41,7 +37,7 @@ jobs:
         env:
           WEBPUSHR_KEY: ${{ secrets.WEBPUSHR_KEY }}
           WEBPUSHR_AUTH: ${{ secrets.WEBPUSHR_AUTH }}
-          SITE_URL: ${{ secrets.SITE_URL }}   # e.g. https://pattibytes.com
+          SITE_URL: ${{ secrets.SITE_URL }}
           FILES: ${{ steps.changed.outputs.files }}
         run: |
           python - <<'PY'
@@ -80,7 +76,6 @@ def build_target_url(raw):
         return raw
     if raw.startswith('/'):
         return SITE_URL + raw
-    # assume path
     return SITE_URL + '/' + raw
 
 def send_post(url, payload):
@@ -98,7 +93,6 @@ def send_post(url, payload):
         print("Request error for", url, e)
         return None
 
-# iterate files (one-per-line)
 for p in FILES.splitlines():
     p = p.strip()
     if not p:
@@ -110,19 +104,18 @@ for p in FILES.splitlines():
     fm = parse_frontmatter(p)
     print("Processing:", p, "frontmatter:", json.dumps(fm, ensure_ascii=False))
 
-    # Backwards-compat / field names from your admin/config.yml:
+    # support both names
     send_now = fm.get('send_now', True) or fm.get('send_notification', False)
     if not send_now:
         print("send_now false — skipping", p)
         continue
 
     audience = (fm.get('audience') or 'all').lower()
-    title = fm.get('title') or fm.get('Notification Title') or "Patti Bytes"
+    title = fm.get('title') or "Patti Bytes"
     message = fm.get('message') or fm.get('push_message') or fm.get('preview') or title
     target = build_target_url(fm.get('target_url') or '/')
     icon = None
     if fm.get('image'):
-        # if image is relative path (Netlify CMS), ensure SITE_URL prefix
         img = str(fm.get('image'))
         if img.startswith('http'):
             icon = img
@@ -131,29 +124,24 @@ for p in FILES.splitlines():
         else:
             icon = SITE_URL + '/' + img
 
-    # Send according to audience
     if audience == 'all':
         url = "https://api.webpushr.com/v1/notification/send/all"
         payload = {"title": title, "message": message, "target_url": target}
-        if icon:
-            payload["icon"] = icon
+        if icon: payload["icon"] = icon
         send_post(url, payload)
 
     elif audience == 'segment':
-        seg = fm.get('segment_tag') or fm.get('segment') or fm.get('segmentName')
+        seg = fm.get('segment_tag') or fm.get('segment')
         if not seg:
-            print("No 'segment_tag' found in frontmatter — skipping segment send for", p)
+            print("No 'segment_tag' found — skipping segment send for", p)
             continue
         url = "https://api.webpushr.com/v1/notification/send/segment"
         payload = {"title": title, "message": message, "target_url": target, "segment": seg}
-        if icon:
-            payload["icon"] = icon
+        if icon: payload["icon"] = icon
         send_post(url, payload)
 
     elif audience == 'specific':
-        # expects frontmatter field specific_subscribers: list of objects or strings
         subs = fm.get('specific_subscribers') or []
-        # support both list-of-strings and list-of-dicts with 'subscriber'
         sids = []
         for item in subs:
             if isinstance(item, dict):
@@ -162,19 +150,15 @@ for p in FILES.splitlines():
                 v = item
             if v is None:
                 continue
-            vs = str(v).strip()
-            # Webpushr expects sid numeric id; we'll try to send each as sid
-            sids.append(vs)
+            sids.append(str(v).strip())
         if not sids:
-            print("No subscriber IDs found in specific_subscribers for", p)
+            print("No subscriber IDs found — skipping specific send for", p)
             continue
         for sid in sids:
             url = "https://api.webpushr.com/v1/notification/send/sid"
             payload = {"title": title, "message": message, "target_url": target, "sid": sid}
-            if icon:
-                payload["icon"] = icon
+            if icon: payload["icon"] = icon
             send_post(url, payload)
-            # be gentle with the API (avoid hitting rate limits)
             time.sleep(0.5)
     else:
         print("Unknown audience:", audience, " — skipping", p)
