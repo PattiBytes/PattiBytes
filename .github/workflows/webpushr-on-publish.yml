@@ -2,34 +2,95 @@ name: Send Webpushr notification on new post
 
 on:
   push:
-    # adjust these paths to the folder where Netlify CMS commits posts
     paths:
-      - 'content/posts/**'
-      - 'posts/**'
-      - 'blog/**'
+      - '_news/**'
 
 jobs:
-  webpushr_notify:
+  notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Determine changed files
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: Send Webpushr notification
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml requests
+
+      - name: Send Webpushr notification for new/updated posts
         env:
           WEBPUSHR_KEY: ${{ secrets.WEBPUSHR_KEY }}
           WEBPUSHR_AUTH: ${{ secrets.WEBPUSHR_AUTH }}
           SITE_URL: ${{ secrets.SITE_URL }}
         run: |
-          # Optionally parse the commit to obtain the new post filename/slug.
-          # For simplicity this example sends a generic notification.
-          curl -X POST \
-            -H "webpushrKey: $WEBPUSHR_KEY" \
-            -H "webpushrAuthToken: $WEBPUSHR_AUTH" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "title":"ਨਵੀਂ ਖ਼ਬਰ on Patti Bytes",
-              "message":"A new article has been published. Click to read.",
-              "target_url":"'"$SITE_URL"'"
-            }' \
-            https://api.webpushr.com/v1/notification/send/all
+          # get changed files in this commit
+          changed_files=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | grep '^_news/' || true)
+          if [ -z "$changed_files" ]; then
+            echo "No changed files in _news/ - exiting."
+            exit 0
+          fi
+          echo "Changed files:"
+          echo "$changed_files"
+
+          # For each changed file, parse frontmatter and send notification if allowed
+          python - <<'PY'
+import os, re, yaml, requests, sys
+files = """${changed_files}""".strip().splitlines()
+if not files:
+    sys.exit(0)
+
+WEBPUSHR_KEY = os.environ['WEBPUSHR_KEY']
+WEBPUSHR_AUTH = os.environ['WEBPUSHR_AUTH']
+SITE_URL = os.environ['SITE_URL'].rstrip('/')
+
+def parse_frontmatter(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        text = f.read()
+    m = re.match(r'---\s*\n(.*?\n)---\s*\n', text, re.S)
+    if not m:
+        return {}
+    fm = yaml.safe_load(m.group(1))
+    return fm or {}
+
+for p in files:
+    if not os.path.exists(p):
+        print("file not present:", p)
+        continue
+    fm = parse_frontmatter(p)
+    title = fm.get('title') or 'ਨਵੀਂ ਖ਼ਬਰ'
+    # slug: prefer id from frontmatter, else use filename without extension
+    slug = fm.get('id') or os.path.splitext(os.path.basename(p))[0]
+    preview = fm.get('preview') or fm.get('push_message') or ''
+    send = fm.get('send_notification')
+    # default to True if field missing
+    if send is False:
+        print("send_notification is false; skipping:", p)
+        continue
+
+    push_message = fm.get('push_message') or preview or (title + " - Read now")
+    target = f"{SITE_URL}/news/{slug}"   # adjust if your site routes differently
+
+    payload = {
+        "title": title,
+        "message": push_message,
+        "target_url": target
+    }
+    headers = {
+        "webpushrKey": WEBPUSHR_KEY,
+        "webpushrAuthToken": WEBPUSHR_AUTH,
+        "Content-Type": "application/json"
+    }
+
+    print("Sending push for:", p, "->", target)
+    r = requests.post("https://api.webpushr.com/v1/notification/send/all", json=payload, headers=headers, timeout=30)
+    print("status:", r.status_code, r.text)
+    if r.status_code not in (200, 201):
+        print("Warning: webpushr returned non-OK for", p)
+PY
