@@ -16,6 +16,7 @@ image: data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxMTEhUTExIWFh
 author: Patti Bytes
 tags:
   - news
+send_notification: true
 ---
 
 
