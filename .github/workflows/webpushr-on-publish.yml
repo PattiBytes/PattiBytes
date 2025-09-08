@@ -34,5 +34,6 @@ jobs:
           SITE_URL: ${{ secrets.SITE_URL }}
           BEFORE_COMMIT: ${{ github.event.before }}
           AFTER_COMMIT: ${{ github.sha }}
+          DRY_RUN: "false"   # set to "true" to only log payloads without sending
         run: |
           python .github/scripts/send_notifications.py
