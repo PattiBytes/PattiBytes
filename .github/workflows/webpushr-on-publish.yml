@@ -1,4 +1,4 @@
-name: Test Workflow (Python inline)
+name: Send Webpushr Notifications (on _notifications changes)
 
 on:
   push:
@@ -7,12 +7,30 @@ on:
       - '_notifications/**'
 
 jobs:
-  test:
+  send-notifications:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repo (full history)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Run simple python
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Python dependencies
         run: |
-          python -c "print('Hello from Python!')"
+          python -m pip install --upgrade pip
+          pip install pyyaml requests
+
+      - name: Run notifications script
+        env:
+          WEBPUSHR_KEY: ${{ secrets.WEBPUSHR_KEY }}
+          WEBPUSHR_AUTH: ${{ secrets.WEBPUSHR_AUTH }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          BEFORE_COMMIT: ${{ github.event.before }}
+          AFTER_COMMIT: ${{ github.sha }}
+        run: |
+          python .github/scripts/send_notifications.py
