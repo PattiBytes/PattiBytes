@@ -38,7 +38,8 @@ jobs:
           FILES: ${{ steps.changed.outputs.files }}
         run: |
           python - <<'PY'
-import os, re, yaml, requests, sys, json
+import os, re, yaml, requests, sys, json, subprocess
+
 files = os.getenv('FILES','').split()
 if not files:
     print("No changed notification files - exiting")
@@ -62,11 +63,12 @@ for p in files:
     if not os.path.exists(p):
         continue
     fm = parse_frontmatter(p)
-    print("Frontmatter from", p, ":", json.dumps(fm, ensure_ascii=False))
+    print("Processing:", p, "frontmatter:", json.dumps(fm, ensure_ascii=False))
     if not fm.get('send_now', True):
-        print("send_now is false → skipping", p)
+        print("send_now false — skipping", p)
         continue
 
+    audience = fm.get('audience', 'all')
     title = fm.get('title', 'Patti Bytes')
     message = fm.get('message') or fm.get('preview') or title
     target = fm.get('target_url') or '/'
@@ -80,8 +82,11 @@ for p in files:
         "Content-Type": "application/json"
     }
 
-    print("Sending notification:", json.dumps(payload, ensure_ascii=False))
-    resp = requests.post("https://api.webpushr.com/v1/notification/send/all",
-                         json=payload, headers=headers, timeout=30)
-    print("HTTP", resp.status_code, resp.text)
+    if audience == 'all':
+        url = "https://api.webpushr.com/v1/notification/send/all"
+        print("Sending to ALL subscribers:", json.dumps(payload, ensure_ascii=False))
+        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        print("HTTP", resp.status_code, resp.text)
+    else:
+        print("Audience is", audience, "- currently only 'all' is supported in this workflow.")
 PY
