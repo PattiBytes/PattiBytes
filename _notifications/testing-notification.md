@@ -1,5 +1,5 @@
 ---
-title: PATTI BYTES NOTIFICATION SENDING TEST..
+title: PATTI BYTES NOTIFICATION SENDING TEST...
 id: testing notification
 message: We Are Going Live Soon
 target_url: https://pattibytes.com/news
