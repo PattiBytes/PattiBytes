@@ -38,6 +38,7 @@ jobs:
         run: |
           python - <<'PY'
 import os, re, yaml, requests, sys, json, textwrap
+
 files = os.getenv('FILES','').split()
 if not files:
     print("No changed notification files - exiting")
@@ -89,7 +90,7 @@ for p in files:
         except Exception as e:
             print("Response print error:", e)
     else:
-        # For non-all audiences, log and skip. Implement segment/specific per Webpushr docs.
+        # For non-all audiences, log and skip.
         print("Audience is", audience, "- this action currently supports 'all' only. Skipping", p)
         print("If you want segments/specific-subscribers, we can add that — Webpushr docs needed.")
 PY
