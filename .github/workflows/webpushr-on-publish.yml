@@ -1,0 +1,35 @@
+name: Send Webpushr notification on new post
+
+on:
+  push:
+    # adjust these paths to the folder where Netlify CMS commits posts
+    paths:
+      - 'content/posts/**'
+      - 'posts/**'
+      - 'blog/**'
+
+jobs:
+  webpushr_notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine changed files
+        uses: actions/checkout@v4
+
+      - name: Send Webpushr notification
+        env:
+          WEBPUSHR_KEY: ${{ secrets.WEBPUSHR_KEY }}
+          WEBPUSHR_AUTH: ${{ secrets.WEBPUSHR_AUTH }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          # Optionally parse the commit to obtain the new post filename/slug.
+          # For simplicity this example sends a generic notification.
+          curl -X POST \
+            -H "webpushrKey: $WEBPUSHR_KEY" \
+            -H "webpushrAuthToken: $WEBPUSHR_AUTH" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "title":"ਨਵੀਂ ਖ਼ਬਰ on Patti Bytes",
+              "message":"A new article has been published. Click to read.",
+              "target_url":"'"$SITE_URL"'"
+            }' \
+            https://api.webpushr.com/v1/notification/send/all
