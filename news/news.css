@@ -634,104 +634,148 @@
 /* --- Enhanced TTS controller styling --- */
 /* Paste into your CSS (replaces previous .tts-controls / .tts-play styles) */
 
+/* Base container for the TTS controls */
 .tts-controls {
-  display: none; /* JS toggles .show */
+  display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1.2rem;
+  gap: 1.5rem;
+  padding: 1.8rem; /* Increased padding for a more spacious feel */
   background: linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
-  border-radius: 14px;
+  border-radius: 20px; /* More modern, softer corners */
   border: 1px solid #e3e8ee;
-  box-shadow: 0 10px 30px rgba(6, 24, 44, 0.08);
-  margin-top: 1.5rem;
-  transition: opacity 260ms ease, transform 260ms ease;
-  transform: translateY(-6px);
+  box-shadow: 0 15px 40px rgba(6, 24, 44, 0.12); /* Deeper, more refined shadow */
+  margin-top: 2rem;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  transform: translateY(-10px);
   opacity: 0;
 }
+
+/* Visibility for JavaScript interaction */
 .tts-controls.show {
   display: flex;
   transform: translateY(0);
   opacity: 1;
 }
 
-/* big central row for primary controls */
-.tts-controls .tts-controls-row.primary {
+/* Primary control row with a unified play/pause/stop button */
+.tts-controls-row.primary {
   display: flex;
   align-items: center;
-  gap: 12px;
   justify-content: center;
+  gap: 2rem;
 }
 
-/* Big circular play button */
-.tts-controls .tts-play {
-  width: 64px;
-  height: 64px;
+/* Main action button (Play/Pause/Stop) */
+.tts-controls .tts-play-toggle {
+  width: 75px; /* Larger button for better tap target */
+  height: 75px;
   border-radius: 50%;
-  font-size: 22px;
+  border: none;
+  font-size: 26px; /* Larger icon */
+  color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(180deg, var(--accent-color), #d12f8a);
-  color: #fff;
-  border: none;
-  box-shadow: 0 8px 22px rgba(255, 45, 149, 0.18);
+  box-shadow: 0 10px 30px rgba(255, 45, 149, 0.25);
   cursor: pointer;
-  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 }
-.tts-controls .tts-play:hover { transform: translateY(-4px) scale(1.03); }
-.tts-controls .tts-play.tts-play-active {
+
+/* Hover/Focus States for the main button */
+.tts-play-toggle:hover, .tts-play-toggle:focus {
+  transform: translateY(-5px) scale(1.05);
+  box-shadow: 0 15px 40px rgba(255, 45, 149, 0.4);
+}
+
+/* Active (Playing) State for the main button */
+.tts-play-toggle.tts-playing {
   background: linear-gradient(180deg, var(--secondary-color), #07243f);
-  box-shadow: 0 8px 24px rgba(9, 45, 77, 0.2);
+  box-shadow: 0 10px 30px rgba(9, 45, 77, 0.3);
+  animation: pulseButton 1.5s infinite ease-in-out;
 }
 
-/* smaller square secondary buttons */
-.tts-controls .tts-pause,
-.tts-controls .tts-stop {
-  padding: 0.6rem 0.9rem;
-  border-radius: 10px;
-  background: #fff;
-  border: 1px solid #d0d7e0;
-  color: var(--secondary-color);
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(6, 24, 44, 0.04);
-}
-.tts-controls .tts-pause:hover,
-.tts-controls .tts-stop:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 16px rgba(6, 24, 44, 0.06);
+/* Button pulsing animation for active state */
+@keyframes pulseButton {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
 }
 
-/* voice, rate, pitch row */
-.tts-controls .tts-controls-row.settings {
+/* Secondary controls (voice and speed settings) */
+.tts-controls-row.settings {
   display: flex;
-  gap: 0.75rem;
   align-items: center;
   justify-content: space-between;
+  gap: 1.5rem;
   flex-wrap: wrap;
 }
+
+/* Select and range inputs with modern styling */
 .tts-controls select,
 .tts-controls input[type="range"] {
+  flex: 1;
   background: #fff;
   border: 1px solid #dde6ef;
-  border-radius: 10px;
-  padding: 0.45rem 0.6rem;
-  min-width: 160px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  min-width: 150px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+  appearance: none; /* Reset default browser styles */
+  -webkit-appearance: none;
+  transition: all 0.2s ease;
 }
 
-/* progress bar */
-.tts-controls .tts-progress {
+/* Focus state for inputs */
+.tts-controls select:focus,
+.tts-controls input[type="range"]:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(255, 45, 149, 0.2);
+}
+
+/* Customizing the range slider thumb */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: var(--accent-color);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  margin-top: -6px; /* Center the thumb vertically */
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: var(--highlight-color);
+  transform: scale(1.1);
+}
+
+/* Customizing the range slider track */
+input[type="range"]::-webkit-slider-runnable-track {
   width: 100%;
-  height: 10px;
-  background: linear-gradient(90deg, #edf2f7 0%, #f6f9fc 100%);
+  height: 8px;
+  cursor: pointer;
+  background: #e9eef6;
+  border-radius: 4px;
+}
+
+/* Progress bar styling */
+.tts-progress {
+  width: 100%;
+  height: 12px;
+  background: #edf2f7;
   border-radius: 999px;
   overflow: hidden;
   position: relative;
-  margin-top: 6px;
+  margin-top: 1rem;
   border: 1px solid #e9eef6;
 }
-.tts-controls .tts-progress::after {
+
+.tts-progress::after {
   content: "";
   position: absolute;
   left: 0;
@@ -739,31 +783,43 @@
   bottom: 0;
   width: 0%;
   background: linear-gradient(90deg, var(--accent-color), var(--secondary-color));
-  transition: width 220ms linear;
+  transition: width 0.22s linear;
 }
 
-/* when JS updates percent, also set data-percent attr for fallback text */
-.tts-controls .tts-progress[data-percent]::after {
-  width: attr(data-percent percentage); /* not widely supported; JS should set style.width */
-}
-
-/* textual status */
-.tts-controls .tts-status {
+/* Status text */
+.tts-status {
   font-size: 0.95rem;
-  color: #334155;
+  color: #555;
   text-align: center;
-  margin-top: 6px;
-  font-weight: 600;
+  margin-top: 0.5rem;
+  font-weight: 500;
 }
 
-/* small screen tweaks */
+/* Responsive adjustments for a perfect fit on all devices */
 @media (max-width: 640px) {
-  .tts-controls .tts-play { width: 56px; height: 56px; font-size: 20px; }
-  .tts-controls select { min-width: 130px; }
-  .tts-controls .tts-progress { height: 8px; }
+  .tts-controls {
+    padding: 1.2rem;
+    gap: 1.2rem;
+  }
+  .tts-play-toggle {
+    width: 65px;
+    height: 65px;
+    font-size: 24px;
+  }
+  .tts-controls select,
+  .tts-controls input[type="range"] {
+    min-width: unset;
+    flex: 1 1 100%;
+    padding: 0.6rem 0.8rem;
+  }
+  .tts-controls-row.settings {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .tts-progress {
+    height: 10px;
+  }
 }
-
-
 /* Toggle button - moved to top-right so it doesn't clash with close button */
 /* Toggle button — place at top-left of the modal (replace existing .tts-toggle-btn block) */
 .tts-toggle-btn {
