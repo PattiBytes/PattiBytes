@@ -1,4 +1,4 @@
-name: Test Workflow
+name: Test Workflow (Python inline)
 
 on:
   push:
@@ -13,8 +13,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Test Python block
+      - name: Run simple python
         run: |
-          python - <<'PY'
-print("Hello from Python!")
-PY
+          python -c "print('Hello from Python!')"
