@@ -1,4 +1,3 @@
-
 backend:
   name: git-gateway
   branch: main
@@ -19,8 +18,9 @@ collections:
       - { label: "khabar not in detail", name: "preview", widget: "text", required: true }
       - { label: "Image", name: "image", widget: "image", required: false, media_library: { allow_multiple: false } }
       - { label: "Author / Byline", name: "author", widget: "string", required: false, hint: "e.g. 'Patti Bytes Desk' or reporter name" }
-# optional: read_time if you want editors to override
       - { label: "Tags (auto)", name: "tags", widget: "list", required: true, default: ["news"] }
+      - { label: "Send push on publish (optional)", name: "send_notification", widget: "boolean", default: false, hint: "If true, publishing this news will trigger a push notification (GitHub Action must be configured)." }
+      - { label: "Push message (optional)", name: "push_message", widget: "string", required: false, hint: "Short message to use for the push body. If empty, preview/title used." }
       - label: "Poori News/Khabar"
         name: "body"
         widget: "markdown"
@@ -62,3 +62,39 @@ collections:
           - bulleted-list
           - numbered-list
         editor_components: []
+
+  - name: "notifications"
+    label: "Notifications"
+    folder: "_notifications"
+    create: true
+    slug: "{{id | slug}}"
+    preview_path: "{{target_url}}"
+    fields:
+      - { label: "Notification Title", name: "title", widget: "string", required: true, hint: "Shown as the notification title." }
+      - { label: "ID / Slug", name: "id", widget: "string", required: false, hint: "Optional unique id/slug. If empty, filename used." }
+      - { label: "Short Message (body)", name: "message", widget: "text", required: true, hint: "Short text shown in the notification body." }
+      - { label: "Target URL / Path", name: "target_url", widget: "string", required: false, hint: "Full URL or path to open when clicked (e.g., /news/slug or https://pattibytes.com/news/slug)." }
+      - { label: "Notification Image (optional)", name: "image", widget: "image", required: false, hint: "Optional image/icon to include in rich notifications." }
+      - label: "Audience"
+        name: "audience"
+        widget: "select"
+        default: "all"
+        options:
+          - { label: "All Subscribers (default)", value: "all" }
+          - { label: "Webpushr Segment / Tag", value: "segment" }
+          - { label: "Specific Subscribers (IDs / Emails)", value: "specific" }
+      - { label: "Segment Tag (if 'Webpushr Segment')", name: "segment_tag", widget: "string", required: false, hint: "Use the exact Webpushr tag/segment name." }
+      - label: "Specific Subscribers (if 'Specific Subscribers')"
+        name: "specific_subscribers"
+        widget: "list"
+        required: false
+        fields:
+          - { label: "Subscriber ID or Email", name: "subscriber", widget: "string" }
+      - { label: "Send now on publish", name: "send_now", widget: "boolean", default: true, hint: "If true, publishing this entry will trigger the GitHub Action to send the notification." }
+      - { label: "Schedule send (optional)", name: "schedule_datetime", widget: "datetime", required: false, format: "YYYY-MM-DD HH:mm", hint: "If set, use a scheduled job to send at this time (requires extra automation)." }
+      - { label: "Who created", name: "author", widget: "string", required: false }
+      - { label: "Internal preview / notes", name: "preview", widget: "text", required: false, hint: "Optional short note for editors." }
+      - label: "Rich Body (optional)"
+        name: "body"
+        widget: "markdown"
+        required: false
