@@ -1,8 +1,8 @@
-/* news.js — PattiBytes (Merged related buttons, lazy TTS init on toggle, remove double dates)
-   - Canonical links: https://www.pattibytes.com/news/#<id>/
-   - Single related "Open" button updates hash + opens the modal
-   - TTS controls load only when the toggle button is clicked; cleaned up on close
-   - Avoid inserting duplicate date metadata into modal if the content already contains it
+/* news.js — PattiBytes
+   - Mobile friendly: tapping outside modal closes it
+   - Back button handling: open modal pushes history state; back closes modal
+   - Single Play/Pause TTS button (no separate Pause/Stop)
+   - TTS controls lazy-init when toggle opened; closing modal stops TTS
 */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -63,6 +63,10 @@ document.addEventListener("DOMContentLoaded", () => {
   /* Canonical news path (change if your path differs) */
   const newsBasePath = "/news/";
 
+  /* STATE for history/back handling */
+  let modalOpen = false;
+  let hadPushedState = false;
+
   /* COPY LINK */
   qa(".copy-link").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -109,7 +113,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const relSpan = document.createElement("span");
         relSpan.className = "published-relative";
         relSpan.textContent = ` (${rel})`;
-        // Only append if a sibling relative hasn't already been added
         if (!publishedEl.nextSibling || !publishedEl.nextSibling.classList || !publishedEl.nextSibling.classList.contains("published-relative")) {
           publishedEl.parentNode.insertBefore(relSpan, publishedEl.nextSibling);
         }
@@ -148,23 +151,12 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   observer.observe(sentinel);
 
-  /* MODAL OPEN/CLOSE & HASH HANDLING */
-  let lastFocusBeforeModal = null;
-
+  /* HELPERS for hash/id */
   function normalizeHash(h) {
     if (!h) return "";
     let s = h.replace(/^#/, "");
     s = s.replace(/\/+$/, "");
     return decodeURIComponent(s);
-  }
-
-  function openNewsModalById(id) {
-    const normalized = id ? String(id) : "";
-    if (!normalized) return;
-    const target = document.getElementById(normalized);
-    if (target) {
-      openNewsModal(target);
-    }
   }
 
   function ensureCardPageVisible(target) {
@@ -175,6 +167,27 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function openNewsModalById(id) {
+    if (!id) return;
+    const target = document.getElementById(String(id));
+    if (target) openNewsModal(target);
+  }
+
+  /* POPSTATE handling — back button behavior */
+  window.addEventListener("popstate", (e) => {
+    // If modal is open, close it on back
+    if (modalOpen) {
+      // internal close (do not call history.back() again)
+      internalCloseModal();
+      // hadPushedState should now be false
+      hadPushedState = false;
+      modalOpen = false;
+    } else {
+      // no modal open: default behavior
+    }
+  });
+
+  /* Hash & initial open handling (e.g. someone shared link with #id) */
   function handleHashOpen() {
     const rawHash = window.location.hash || "";
     const id = normalizeHash(rawHash);
@@ -191,14 +204,66 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
   }
-
   window.addEventListener("hashchange", handleHashOpen, false);
   setTimeout(handleHashOpen, 350);
 
+  /* CORE: internal close that DOES NOT manipulate history (used by popstate) */
+  function internalCloseModal() {
+    // hide UI quickly
+    newsModal.setAttribute("aria-hidden", "true");
+    newsModal.style.display = "none";
+    document.body.style.overflow = "";
+
+    // stop TTS and cleanup TTS UI if present (without calling history.back())
+    stopTTS();
+
+    qa(".tts-controls").forEach((wrap) => {
+      if (wrap._cleanup) {
+        try {
+          wrap._cleanup.stop && wrap._cleanup.stop();
+        } catch (e) {}
+      }
+      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+    });
+    qa(".tts-toggle-btn").forEach((b) => b.remove());
+
+    // focus restoration
+    if (lastFocusBeforeModal) lastFocusBeforeModal.focus();
+
+    // replace any word spans with plain text nodes
+    qa(".tts-word-span").forEach((s) => {
+      if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
+    });
+  }
+
+  /* CLOSE modal wrapper — respects history/back state */
+  function closeNewsModal() {
+    // If we previously pushed a history state, go back — popstate handler will call internalCloseModal
+    if (hadPushedState) {
+      try {
+        history.back();
+      } catch (e) {
+        // fallback: directly close if history.back fails
+        internalCloseModal();
+        hadPushedState = false;
+        modalOpen = false;
+      }
+      return;
+    }
+    // otherwise nothing was pushed — just close directly
+    internalCloseModal();
+    modalOpen = false;
+    hadPushedState = false;
+  }
+
+  /* Open modal: push state so back button closes it */
+  let lastFocusBeforeModal = null;
   function openNewsModal(card) {
     if (!card) return;
+
     lastFocusBeforeModal = document.activeElement;
 
+    const idEncoded = encodeURIComponent(card.id);
     const title = card.dataset.title || "";
     const author = card.dataset.author || "";
     const dateISO = card.dataset.date || "";
@@ -218,10 +283,10 @@ document.addEventListener("DOMContentLoaded", () => {
       modalMedia.appendChild(img);
     }
 
-    // Fill modal text (raw HTML)
+    // fill modal content
     modalText.innerHTML = contentHtml || `<p>${card.dataset.preview || ""}</p>`;
 
-    // meta (author/date) — insert only if not already present in content
+    // meta (author/date) — only insert if not already in content
     const d = new Date(dateISO);
     const dateStr = !isNaN(d.getTime())
       ? d.toLocaleDateString("pa-IN", { year: "numeric", month: "long", day: "numeric" })
@@ -237,147 +302,107 @@ document.addEventListener("DOMContentLoaded", () => {
 
     populateRelated(card);
 
-    // remove previous TTS UI to avoid duplicates
+    // remove previous TTS UI elements (if any)
     const existingTts = newsModal.querySelector(".tts-controls, .tts-toggle-btn");
     if (existingTts) existingTts.remove();
 
-    // add toggle and an empty controls container (controls will be initialized lazily)
-    // Replace the existing tts-toggle + ttsWrap creation & listener with this snippet.
-// (This uses class toggling: JS will add/remove the 'show' class which your CSS handles.)
-const ttsToggleBtn = document.createElement("button");
-ttsToggleBtn.className = "tts-toggle-btn";
-ttsToggleBtn.innerHTML = "🔊";
-ttsToggleBtn.title = "Toggle Text-to-Speech Controls";
-ttsToggleBtn.type = "button";
-modalCloseBtn.after(ttsToggleBtn);
+    // Create TTS toggle and empty controls (controls lazy-init).  Only Play/Pause button included.
+    const ttsToggleBtn = document.createElement("button");
+    ttsToggleBtn.className = "tts-toggle-btn";
+    ttsToggleBtn.innerHTML = "🔊";
+    ttsToggleBtn.title = "Toggle Text-to-Speech Controls";
+    ttsToggleBtn.type = "button";
+    // attach after close button so it sits top-left (CSS controls exact position)
+    modalCloseBtn.after(ttsToggleBtn);
 
-// create wrapper WITHOUT inline display styles (CSS controls visibility via .show)
-const ttsWrap = document.createElement("div");
-ttsWrap.className = "tts-controls";
-ttsWrap.innerHTML = `
-  <div class="tts-controls-row" style="display:flex;gap:.5rem;align-items:center;">
-    <button class="tts-play" aria-pressed="false" title="Play article">▶️ Play</button>
-    <button class="tts-pause" title="Pause">⏸️ Pause</button>
-    <button class="tts-stop" title="Stop">⏹️ Stop</button>
-    <div class="tts-progress" aria-hidden="true" style="margin-left:0.5rem;"></div>
-  </div>
-  <div class="tts-controls-row" style="margin-top:.5rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
-    <label for="tts-voices" class="sr-only">Voice</label>
-    <select id="tts-voices" aria-label="Choose voice"></select>
-    <label for="tts-rate" class="sr-only">Rate</label>
-    <input id="tts-rate" type="range" min="0.5" max="2.0" step="0.05" value="1.02" aria-label="Speech rate" style="width:120px;">
-    <label for="tts-pitch" class="sr-only">Pitch</label>
-    <input id="tts-pitch" type="range" min="0.5" max="2.0" step="0.05" value="1.0" aria-label="Speech pitch" style="width:120px;">
-    <span class="tts-status" aria-live="polite" style="margin-left:.5rem;"></span>
-  </div>
-`;
-modalText.parentNode.insertBefore(ttsWrap, modalText.nextSibling);
+    const ttsWrap = document.createElement("div");
+    ttsWrap.className = "tts-controls";
+    ttsWrap.innerHTML = `
+      <div class="tts-controls-row" style="display:flex;gap:.5rem;align-items:center;">
+        <button class="tts-play" aria-pressed="false" title="Play/Pause article">▶️ Play</button>
+        <div class="tts-progress" aria-hidden="true" style="margin-left:0.5rem;"></div>
+      </div>
+      <div class="tts-controls-row" style="margin-top:.5rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+        <label for="tts-voices" class="sr-only">Voice</label>
+        <select id="tts-voices" aria-label="Choose voice"></select>
+        <label for="tts-rate" class="sr-only">Rate</label>
+        <input id="tts-rate" type="range" min="0.5" max="2.0" step="0.05" value="1.02" aria-label="Speech rate" style="width:120px;">
+        <label for="tts-pitch" class="sr-only">Pitch</label>
+        <input id="tts-pitch" type="range" min="0.5" max="2.0" step="0.05" value="1.0" aria-label="Speech pitch" style="width:120px;">
+        <span class="tts-status" aria-live="polite" style="margin-left:.5rem;"></span>
+      </div>
+    `;
+    modalText.parentNode.insertBefore(ttsWrap, modalText.nextSibling);
 
-const cardLang = card.dataset.lang || document.documentElement.lang || "pa-IN";
-const langPref = getLangCode(cardLang);
+    const cardLang = card.dataset.lang || document.documentElement.lang || "pa-IN";
+    const langPref = getLangCode(cardLang);
 
-// lazy init instance
-let ttsInstance = null;
+    // lazy init instance
+    let ttsInstance = null;
 
-ttsToggleBtn.addEventListener("click", () => {
-  const opening = !ttsWrap.classList.contains("show");
-  if (opening) {
-    // open UI
-    ttsWrap.classList.add("show");
-    ttsToggleBtn.classList.add("active");
-    // init controls only once
-    if (!ttsInstance) {
-      ttsInstance = initTTSControls(ttsWrap, modalText, langPref);
-      ttsWrap._cleanup = ttsInstance;
-    }
-    // focus the play button for accessibility
-    const pb = ttsWrap.querySelector(".tts-play");
-    if (pb) pb.focus();
-    ttsWrap.scrollIntoView({ behavior: "smooth", block: "start" });
-  } else {
-    // close UI & cleanup
-    ttsWrap.classList.remove("show");
-    ttsToggleBtn.classList.remove("active");
-    if (ttsInstance && ttsInstance.stop) {
-      try { ttsInstance.stop(); } catch (e) {}
-    }
-    // remove any highlighting
-    qa(".tts-highlight", modalText).forEach((s) => s.classList.remove("tts-highlight"));
-  }
-});
+    ttsToggleBtn.addEventListener("click", () => {
+      const opening = !ttsWrap.classList.contains("show");
+      if (opening) {
+        ttsWrap.classList.add("show");
+        ttsToggleBtn.classList.add("active");
+        if (!ttsInstance) {
+          ttsInstance = initTTSControls(ttsWrap, modalText, langPref);
+          ttsWrap._cleanup = ttsInstance;
+        }
+        const pb = ttsWrap.querySelector(".tts-play");
+        if (pb) pb.focus();
+        ttsWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        ttsWrap.classList.remove("show");
+        ttsToggleBtn.classList.remove("active");
+        if (ttsInstance && ttsInstance.stop) {
+          try { ttsInstance.stop(); } catch (e) {}
+        }
+        qa(".tts-highlight", modalText).forEach((s) => s.classList.remove("tts-highlight"));
+      }
+    });
 
-
-    // show modal
+    // Show modal visually
     newsModal.setAttribute("aria-hidden", "false");
     newsModal.style.display = "flex";
     document.body.style.overflow = "hidden";
     modalCloseBtn.focus();
+
+    // Push history state so Back closes modal rather than navigating away immediately
+    try {
+      history.pushState({ newsModal: String(card.id) }, "", `${newsBasePath}#${idEncoded}/`);
+      hadPushedState = true;
+    } catch (e) {
+      hadPushedState = false;
+    }
+    modalOpen = true;
+
+    // keyboard/touch accessibility
     document.addEventListener("keydown", modalKeyHandler);
   }
 
-  function closeNewsModal() {
-    newsModal.setAttribute("aria-hidden", "true");
-    newsModal.style.display = "none";
-    document.body.style.overflow = "";
-    document.removeEventListener("keydown", modalKeyHandler);
-
-    // stop TTS globally
-    stopTTS();
-
-    // cleanup TTS UI if present
-    qa(".tts-controls").forEach((wrap) => {
-      if (wrap._cleanup) {
-        try {
-          wrap._cleanup.stop && wrap._cleanup.stop();
-        } catch (e) {}
-      }
-      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-    });
-    qa(".tts-toggle-btn").forEach((b) => b.remove());
-
-    if (lastFocusBeforeModal) lastFocusBeforeModal.focus();
-
-    // restore: replace any tts spans with text nodes (cleanup highlight)
-    qa(".tts-word-span").forEach((s) => {
-      if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
-    });
-  }
-
-  function modalKeyHandler(e) {
-    if (e.key === "Escape") closeNewsModal();
-    if (e.key === "Tab") {
-      const focusables = qa("#news-modal button, #news-modal a, #news-modal [tabindex]:not([tabindex='-1'])");
-      if (focusables.length === 0) return;
-      const first = focusables[0],
-        last = focusables[focusables.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        last.focus();
-        e.preventDefault();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        first.focus();
-        e.preventDefault();
-      }
-    }
-  }
-
-  /* read-more: open modal and update canonical hash */
+  /* Read-more: open modal and update canonical hash */
   qa(".read-more-btn").forEach((btn) =>
     btn.addEventListener("click", () => {
       const card = btn.closest("article.news-card");
       if (card && card.id) {
-        const id = encodeURIComponent(card.id);
-        history.pushState(null, "", `${newsBasePath}#${id}/`);
+        // pushState will be done inside openNewsModal
       }
       openNewsModal(card);
     })
   );
 
+  /* Close handlers */
   modalCloseBtn.addEventListener("click", closeNewsModal);
+
+  // Clicking/tapping outside modal content closes modal (mobile-friendly)
   newsModal.addEventListener("click", (e) => {
-    if (e.target === newsModal) closeNewsModal();
+    if (e.target === newsModal) {
+      closeNewsModal();
+    }
   });
 
-  /* IMAGE MODAL */
+  /* IMAGE LIGHTBOX */
   qa(".enlarge-btn").forEach((b) =>
     b.addEventListener("click", () => {
       const card = b.closest("article.news-card");
@@ -456,14 +481,13 @@ ttsToggleBtn.addEventListener("click", () => {
         const id = btn.dataset.id;
         if (!id) return;
         const encoded = encodeURIComponent(id);
-        // push canonical URL
-        history.pushState(null, "", `${newsBasePath}#${encoded}/`);
+        // push canonical URL and open target
+        try { history.pushState({ newsModal: id }, "", `${newsBasePath}#${encoded}/`); hadPushedState = true; } catch (e) { hadPushedState = false; }
         const target = document.getElementById(id);
         if (target) {
-          // ensure pagination shows the target
           ensureCardPageVisible(target);
-          // close current modal (if open) and open the target after a moment
-          closeNewsModal();
+          // close current modal via internalClose (we will re-open new one)
+          internalCloseModal();
           setTimeout(() => {
             target.scrollIntoView({ behavior: "smooth", block: "center" });
             target.classList.add("highlighted");
@@ -475,7 +499,9 @@ ttsToggleBtn.addEventListener("click", () => {
     );
   }
 
-  /* TTS (voices loader + controls) */
+  /* ------------------------------
+     TTS: voices loader + single Play/Pause control
+     ------------------------------ */
   let synth = window.speechSynthesis;
   let voiceList = [];
 
@@ -531,10 +557,8 @@ ttsToggleBtn.addEventListener("click", () => {
   }
 
   function initTTSControls(wrapper, modalTextContainer, langPref) {
-    // returns { stop, reset } - same as before but safe to call lazily
+    // Single Play/Pause button version (no separate pause/stop buttons)
     const playBtn = wrapper.querySelector(".tts-play");
-    const pauseBtn = wrapper.querySelector(".tts-pause");
-    const stopBtn = wrapper.querySelector(".tts-stop");
     const select = wrapper.querySelector("#tts-voices");
     const statusSpan = wrapper.querySelector(".tts-status");
     const progressEl = wrapper.querySelector(".tts-progress");
@@ -544,7 +568,6 @@ ttsToggleBtn.addEventListener("click", () => {
     let voices = [];
     let utterRate = parseFloat(rateInput ? rateInput.value : 1.02) || 1.02;
     let utterPitch = parseFloat(pitchInput ? pitchInput.value : 1.0) || 1.0;
-    let ttsPlaying = false;
     let queue = [];
     let queuePos = 0;
     let wordSpans = [];
@@ -591,7 +614,7 @@ ttsToggleBtn.addEventListener("click", () => {
         if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
       });
 
-      // exclude modal-meta and any .published elements from reading
+      // exclude modal-meta and .published
       const nodes = Array.from(modalTextContainer.querySelectorAll("p, h1, h2, h3, h4, li")).filter(
         (el) => el.textContent.trim() !== "" && !el.closest(".modal-meta") && !el.closest(".published")
       );
@@ -636,9 +659,7 @@ ttsToggleBtn.addEventListener("click", () => {
         if (charIndex >= start && charIndex <= end) {
           qa(".tts-highlight", modalTextContainer).forEach((el) => el.classList.remove("tts-highlight"));
           wordSpans[i].classList.add("tts-highlight");
-          try {
-            wordSpans[i].scrollIntoView({ behavior: "smooth", block: "center" });
-          } catch (e) {}
+          try { wordSpans[i].scrollIntoView({ behavior: "smooth", block: "center" }); } catch (e) {}
           currentWord = i + 1;
           return;
         }
@@ -698,8 +719,6 @@ ttsToggleBtn.addEventListener("click", () => {
 
     function stopLocal() {
       if (window.speechSynthesis) window.speechSynthesis.cancel();
-      ttsPlaying = false;
-      pauseRequested = false;
       qa(".tts-highlight", modalTextContainer).forEach((s) => s.classList.remove("tts-highlight"));
       playBtn.textContent = "▶️ Play";
       playBtn.setAttribute("aria-pressed", "false");
@@ -721,7 +740,6 @@ ttsToggleBtn.addEventListener("click", () => {
       buildQueue();
       currentWord = 0;
       queuePos = 0;
-      ttsPlaying = true;
       pauseRequested = false;
       statusSpan.textContent = "ਬੋਲ ਰਹੇ ਹਨ...";
       playBtn.textContent = "⏸️ Pause";
@@ -732,19 +750,20 @@ ttsToggleBtn.addEventListener("click", () => {
     function pauseTTS() {
       if (window.speechSynthesis && window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
         window.speechSynthesis.pause();
-        ttsPlaying = false;
         pauseRequested = true;
         statusSpan.textContent = "ਰੁਕਿਆ";
         playBtn.textContent = "▶️ Play";
+        playBtn.setAttribute("aria-pressed", "false");
       }
     }
+
     function resumeTTS() {
       if (window.speechSynthesis && window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
-        ttsPlaying = true;
         pauseRequested = false;
         statusSpan.textContent = "ਜਾਰੀ...";
         playBtn.textContent = "⏸️ Pause";
+        playBtn.setAttribute("aria-pressed", "true");
       }
     }
 
@@ -754,13 +773,11 @@ ttsToggleBtn.addEventListener("click", () => {
         if (window.speechSynthesis) window.speechSynthesis.cancel();
         queuePos = chunkIdx;
         qa(".tts-highlight", modalTextContainer).forEach((s) => s.classList.remove("tts-highlight"));
-        setTimeout(() => {
-          speakNextChunk();
-        }, 120);
+        setTimeout(() => speakNextChunk(), 120);
       }
     }
 
-    // wire UI
+    // UI wiring: playBtn toggles start/pause/resume. closing modal stops via stopLocal (no separate stop button)
     playBtn.addEventListener("click", () => {
       if (window.speechSynthesis && window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
         pauseTTS();
@@ -770,8 +787,6 @@ ttsToggleBtn.addEventListener("click", () => {
         startTTS();
       }
     });
-    pauseBtn.addEventListener("click", () => pauseTTS());
-    stopBtn.addEventListener("click", () => stopLocal());
 
     select.addEventListener("change", () => {
       if (window.speechSynthesis && window.speechSynthesis.speaking) {
@@ -790,11 +805,10 @@ ttsToggleBtn.addEventListener("click", () => {
 
     loadVoices().catch(() => {});
 
+    // exposed cleanup functions
     return {
       stop: () => {
-        try {
-          stopLocal();
-        } catch (e) {}
+        try { stopLocal(); } catch (e) {}
       },
       reset: () => {
         try {
@@ -819,17 +833,35 @@ ttsToggleBtn.addEventListener("click", () => {
       }, 300);
     }
   }
-  
 
-  /* GLOBAL ESC CLOSES MODALS */
+  /* KEYBOARD: ESC closes modal (and triggers history back if we pushed) */
+  function modalKeyHandler(e) {
+    if (e.key === "Escape") closeNewsModal();
+    if (e.key === "Tab") {
+      const focusables = qa("#news-modal button, #news-modal a, #news-modal [tabindex]:not([tabindex='-1'])");
+      if (focusables.length === 0) return;
+      const first = focusables[0],
+        last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        last.focus();
+        e.preventDefault();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        first.focus();
+        e.preventDefault();
+      }
+    }
+  }
+
+  // Global ESC close also covered here (defensive)
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       qa(".modal-overlay[aria-hidden='false']").forEach((m) => {
-        m.setAttribute("aria-hidden", "true");
-        m.style.display = "none";
-        document.body.style.overflow = "";
+        // if we have pushed, close via history.back, else internal close
+        if (modalOpen && hadPushedState) history.back();
+        else internalCloseModal();
       });
       stopTTS();
     }
   });
-});
+
+}); // DOMContentLoaded end
