@@ -1,4 +1,5 @@
 name: Send Webpushr Notifications (on _notifications changes)
+
 on:
   push:
     paths:
@@ -26,21 +27,19 @@ jobs:
       - name: Find changed _notifications files
         id: changed
         run: |
-          echo "FILES<<$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | grep '^_notifications/' || true)" >> $GITHUB_OUTPUT
+          CHANGED=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | grep '^_notifications/' || true)
+          echo "files=$CHANGED" >> $GITHUB_OUTPUT
 
       - name: Send notifications (Python)
         env:
           WEBPUSHR_KEY: ${{ secrets.WEBPUSHR_KEY }}
           WEBPUSHR_AUTH: ${{ secrets.WEBPUSHR_AUTH }}
           SITE_URL: ${{ secrets.SITE_URL }}
+          FILES: ${{ steps.changed.outputs.files }}
         run: |
           python - <<'PY'
-import os, re, yaml, requests, sys, json, textwrap
-files_raw = os.getenv('FILES', None)
-# GitHub new-output uses FILES variable via ${{ steps.changed.outputs.FILES }} but we can't access here; instead re-run detection:
-import subprocess
-changed = subprocess.check_output(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", os.environ['GITHUB_SHA']]).decode().splitlines()
-files = [f for f in changed if f.startswith('_notifications/')]
+import os, re, yaml, requests, sys, json
+files = os.getenv('FILES','').split()
 if not files:
     print("No changed notification files - exiting")
     sys.exit(0)
@@ -52,22 +51,22 @@ SITE_URL = os.environ['SITE_URL'].rstrip('/')
 def parse_frontmatter(path):
     with open(path, 'r', encoding='utf-8') as fh:
         txt = fh.read()
-    m = re.match(r'---\s*\n(.*?\n)---\s*\n', txt, re.S)
-    if not m:
+    if not txt.startswith('---'):
         return {}
-    return yaml.safe_load(m.group(1)) or {}
+    parts = txt.split('---', 2)
+    if len(parts) < 3:
+        return {}
+    return yaml.safe_load(parts[1]) or {}
 
 for p in files:
     if not os.path.exists(p):
-        print("Skipped (not found):", p)
         continue
     fm = parse_frontmatter(p)
-    print("Processing:", p, "frontmatter:", json.dumps(fm, ensure_ascii=False))
-    send_now = fm.get('send_now', True)  # default True
-    if not send_now:
-        print("send_now false — skipping", p)
+    print("Frontmatter from", p, ":", json.dumps(fm, ensure_ascii=False))
+    if not fm.get('send_now', True):
+        print("send_now is false → skipping", p)
         continue
-    audience = fm.get('audience', 'all')
+
     title = fm.get('title', 'Patti Bytes')
     message = fm.get('message') or fm.get('preview') or title
     target = fm.get('target_url') or '/'
@@ -81,17 +80,8 @@ for p in files:
         "Content-Type": "application/json"
     }
 
-    if audience == 'all':
-        url = "https://api.webpushr.com/v1/notification/send/all"
-        print("Sending to ALL subscribers:", json.dumps(payload, ensure_ascii=False))
-        resp = requests.post(url, json=payload, headers=headers, timeout=30)
-        print("HTTP", resp.status_code)
-        try:
-            print(resp.text)
-        except Exception as e:
-            print("Response print error:", e)
-    else:
-        # For non-all audiences, log and skip. Implement segment/specific per Webpushr docs.
-        print("Audience is", audience, "- this action currently supports 'all' only. Skipping", p)
-        print("If you want segments/specific-subscribers, we can add that — Webpushr docs needed.")
+    print("Sending notification:", json.dumps(payload, ensure_ascii=False))
+    resp = requests.post("https://api.webpushr.com/v1/notification/send/all",
+                         json=payload, headers=headers, timeout=30)
+    print("HTTP", resp.status_code, resp.text)
 PY
