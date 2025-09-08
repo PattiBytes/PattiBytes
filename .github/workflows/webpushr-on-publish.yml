@@ -1,10 +1,12 @@
-name: Send Webpushr Notifications (on _notifications changes)
+name: Send Webpushr Notifications (on content changes)
 
 on:
   push:
     branches: [ "main" ]
     paths:
       - '_notifications/**'
+      - '_news/**'
+      - '_places/**'
 
 jobs:
   send-notifications:
