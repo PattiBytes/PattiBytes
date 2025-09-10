@@ -10,7 +10,7 @@ preview: >-
   ਲਾਂਚ ਹਫ਼ਤੇ ਵਿੱਚ 2,258 ਵੇਖਤਾਂ ਨਾਲ ਮਜ਼ਬੂਤ ਸ਼ੁਰੂਆਤ ਰਿਕਾਰਡ ਹੋਈ—ਪਰ ਸੱਚੀ ਗੱਲ ਇਹ ਹੈ ਕਿ ਅਗਲਾ ਵੱਡਾ ਅਪਡੇਟ ਸਭ ਤੋਂ ਪਹਿਲਾਂ ਕਿਸਦੇ ਫੋਨ ‘ਤੇ ਪਹੁੰਚੇਗਾ, ਇਹ ਫ਼ੈਸਲਾ ਇੱਕ Tap ਨਾਲ ਹੋ ਸਕਦਾ ਹੈ; ਪੂਰਾ ਲੇਖ ਖੋਲ੍ਹੋ ਅਤੇ ਨੋਟੀਫਿਕੇਸ਼ਨ ਔਨ ਕਰੋ।
 
   English ਚ ਪੜ੍ਹਨਾ ਚਾਹੁੰਦੇ ਹੋ ਤਾਂ ਬ੍ਰਾਊਜ਼ਰ ਦੇ Translate ਬਟਨ ਨਾਲ ਇਕ ਕਲਿੱਕ ‘ਚ ਅਨੁਵਾਦ ਕਰੋ।
-image: /assets/uploads/f4acd8cc-9c76-43e0-bba1-58428e8f7f69.jpeg
+image: /assets/uploads/whatsapp-image-2025-09-10-at-18.43.10_ba0ad2d5.jpg
 author: Patti Bytes
 tags:
   - news
@@ -36,10 +36,16 @@ send_notification: true
 
 ![](/assets/uploads/e513013f-3416-4ef6-862b-863163b0f4ac.jpeg)
 
+
+
 <!--EndFragment-->
 
-* pattibytes.com ਖੋਲ੍ਹੋ ਅਤੇ ਬੈਲ ਆਇਕਨ ‘ਤੇ ਟੈਪ ਕਰਕੇ Allow ਦਿਓ ਤਾਂਕਿ ਸਾਈਟ ਨੋਟੀਫਿਕੇਸ਼ਨ ਭੇਜ ਸਕੇ।[](https://support.google.com/chrome/answer/3220216?hl=en&co=GENIE.Platform%3DAndroid)
-* ਜੇ Prompt ਨਾ ਆਵੇ ਤਾਂ Chrome Settings > Site settings > Notifications ਵਿੱਚ ਜਾ ਕੇ pattibytes.com ਨੂੰ Allowed ਕਰੋ।[](https://www.engagelab.com/blog/how-to-enable-chrome-notifications-in-three-ways)
+* pattibytes.com ਖੋਲ੍ਹੋ ਅਤੇ ਬੈਲ ਆਇਕਨ ‘ਤੇ ਟੈਪ ਕਰਕੇ Allow ਦਿਓ ਤਾਂਕਿ ਸਾਈਟ ਨੋਟੀਫਿਕੇਸ਼ਨ ਭੇਜ ਸਕੇ।<!--StartFragment-->
+
+  ![Whats-App-Image-2025-09-10-at-18-57-17-ceca2028](https://i.ibb.co/MyR2nSgN/Whats-App-Image-2025-09-10-at-18-57-17-ceca2028.jpg)
+
+  <!--EndFragment-->
+*   ਜੇ Prompt ਨਾ ਆਵੇ ਤਾਂ Chrome Settings > Site settings > Notifications ਵਿੱਚ ਜਾ ਕੇ pattibytes.com ਨੂੰ Allowed ਕਰੋ।[](https://www.engagelab.com/blog/how-to-enable-chrome-notifications-in-three-ways)
 * Incognito/Private ਮੋਡ ਵਿੱਚ ਪਰਮਿਸ਼ਨ ਸੇਵ ਨਹੀਂ ਹੁੰਦੀ, ਇਸ ਲਈ ਨਾਰਮਲ ਟੈਬ ਵਰਤੋ।[](https://pushalert.co/documentation/browser-support)
 
 ## iPhone/iPad (Safari iOS 16.4+)
@@ -59,6 +65,12 @@ send_notification: true
 * In‑app ਬ੍ਰਾਊਜ਼ਰ, Incognito/Private ਮੋਡ ਅਤੇ Android WebView ਵਿੱਚ Subscribe ਕਰਨ ਦੀ ਕੋਸ਼ਿਸ਼ ਨਾ ਕਰੋ।[](https://developer.clevertap.com/docs/web-push)
 
 ## Site ਨੂੰ English ‘ਚ ਪੜ੍ਹੋ (Translate)
+
+<!--StartFragment-->
+
+![Whats-App-Image-2025-09-10-at-18-47-52-c122f8c9](https://i.ibb.co/nyHxC7s/Whats-App-Image-2025-09-10-at-18-47-52-c122f8c9.jpg)
+
+<!--EndFragment-->
 
 * Chrome ਡੈਸਕਟਾਪ ‘ਤੇ ਐਡਰੈੱਸ‑ਬਾਰ ਦੇ Translate ਆਇਕਨ/ਰਾਈਟ‑ਕਲਿੱਕ “Translate to English” ਨਾਲ ਪੇਜ਼ ਤੁਰੰਤ ਅਨੁਵਾਦ ਕਰੋ।[](https://support.google.com/chrome/answer/173424?hl=en&co=GENIE.Platform%3DDesktop)
 * Android ‘ਤੇ Chrome ਔਨ ਕਰਕੇ ਤਲ੍ਹਾਂ ਆਉਂਦੇ ਬੈਨਰ/ਮੇਨੂ ‘ਚ Translate ਚੁਣੋ।[](https://support.google.com/chrome/answer/173424?hl=en&co=GENIE.Platform%3DAndroid)
