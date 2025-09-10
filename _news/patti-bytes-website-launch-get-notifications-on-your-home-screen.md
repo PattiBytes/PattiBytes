@@ -102,4 +102,11 @@ send_notification: false
 
 ## Call to action
 
-ਪੂਰਾ ਲੇਖ ਪੜ੍ਹੋ ਅਤੇ ਹੁਣੇ Subscribe ਕਰੋ ਤਾਂਕਿ ਅਗਲੀ ਬ੍ਰੇਕਿੰਗ ਖ਼ਬਰ ਸਭ ਤੋਂ ਪਹਿਲਾਂ ਮਿਲੇ; ਜੇ English ਵਿੱਚ ਪੜ੍ਹਨਾ ਚਾਹੁੰਦੇ ਹੋ ਤਾਂ ਉਪਰ ਦਿੱਤੇ Translate ਬਟਨ ਨਾਲ ਇਕ ਕਲਿੱਕ ਕਰੋ।[](https://support.google.com/chrome/answer/173424?hl=en&co=GENIE.Platform%3DDesktop)
+ਪੂਰਾ ਲੇਖ ਪੜ੍ਹੋ ਅਤੇ ਹੁਣੇ Subscribe ਕਰੋ ਤਾਂਕਿ ਅਗਲੀ ਬ੍ਰੇਕਿੰਗ ਖ਼ਬਰ ਸਭ ਤੋਂ ਪਹਿਲਾਂ ਮਿਲੇ; ਜੇ English ਵਿੱਚ ਪੜ੍ਹਨਾ ਚਾਹੁੰਦੇ ਹੋ ਤਾਂ ਉਪਰ ਦਿੱਤੇ Translate ਬਟਨ ਨਾਲ ਇਕ ਕਲਿੱਕ ਕਰੋ।
+
+<!--StartFragment-->
+
+## ਪੂਰੀ ਗਾਈਡ ਤੇ ਸਹਾਇਤਾ
+
+* ਪੂਰਾ ਕਦਮ‑ਦਰ‑ਕਦਮ ਲੇਖ, ਤਸਵੀਰਾਂ/ਵੀਡੀਓ ਸਮੇਤ—ਨੋਟੀਫਿਕੇਸ਼ਨ, Translate, ਅਤੇ TTS ਸਭ ਕੁਝ ਇੱਥੇ ਮਿਲੇਗਾ।[](https://support.google.com/chrome/answer/173424?hl=en&co=GENIE.Platform%3DDesktop)
+* ਕਿਸੇ ਵੀ ਸਮੱਸਿਆ ਲਈ ਇਹ ਫ਼ਾਰਮ ਭਰ ਕੇ ਸੰਪਰਕ ਕਰੋ: [PattiBytes Support](https://www.pattibytes.com/#collaboration)[](https://support.google.com/chrome/answer/173424?hl=en&co=GENIE.Platform%3DDesktop)
