@@ -16,8 +16,6 @@ tags:
   - news
 send_notification: true
 ---
-
-
 ਲੋਕਲ ਡਿਜ਼ਿਟਲ ਪਲੇਟਫਾਰਮ ਪੱਟੀ ਬਾਈਟਸ ਦਾ ਅਧਿਕਾਰਿਕ ਲਾਂਚ ਕਮਿਊਨਟੀ ਚੈਨਲਾਂ ਰਾਹੀਂ ਹੋਇਆ ਅਤੇ ਵੈਬਸਾਈਟ ‘ਤੇ ਬੈਲ ਆਇਕਨ ਰਾਹੀਂ Subscribe ਕਰਨ ਦੀ ਸੁਵਿਧਾ ਐਕਟਿਵ ਹੈ।\
 ਐਨਾਲਿਟਿਕਸ ਗ੍ਰਾਫ ਅਨੁਸਾਰ 3 ਸਤੰਬਰ 2024 ਤੋਂ 10 ਸਤੰਬਰ 2024 ਤੱਕ 2,258 ਵੇਖਤਾਂ ਦਰਜ ਹਨ, ਜੋ ਲਾਂਚ ਤੋਂ ਤੁਰੰਤ ਬਾਅਦ ਵਧਦੇ ਟ੍ਰੈਫਿਕ ਦੀ ਦਲੇਲ ਦਿੰਦੇ ਹਨ।\
 \
@@ -34,15 +32,11 @@ send_notification: true
 
 ## Android (Chrome)
 
-
-
 <!--StartFragment-->
 
-![](blob:https://www.perplexity.ai/e513013f-3416-4ef6-862b-863163b0f4ac)
+![](/assets/uploads/e513013f-3416-4ef6-862b-863163b0f4ac.jpeg)
 
 <!--EndFragment-->
-
-
 
 * pattibytes.com ਖੋਲ੍ਹੋ ਅਤੇ ਬੈਲ ਆਇਕਨ ‘ਤੇ ਟੈਪ ਕਰਕੇ Allow ਦਿਓ ਤਾਂਕਿ ਸਾਈਟ ਨੋਟੀਫਿਕੇਸ਼ਨ ਭੇਜ ਸਕੇ।[](https://support.google.com/chrome/answer/3220216?hl=en&co=GENIE.Platform%3DAndroid)
 * ਜੇ Prompt ਨਾ ਆਵੇ ਤਾਂ Chrome Settings > Site settings > Notifications ਵਿੱਚ ਜਾ ਕੇ pattibytes.com ਨੂੰ Allowed ਕਰੋ।[](https://www.engagelab.com/blog/how-to-enable-chrome-notifications-in-three-ways)
