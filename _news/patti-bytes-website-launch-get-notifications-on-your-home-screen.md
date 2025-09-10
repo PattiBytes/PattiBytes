@@ -14,7 +14,7 @@ image: /assets/uploads/whatsapp-image-2025-09-10-at-18.43.10_ba0ad2d5.jpg
 author: Patti Bytes
 tags:
   - news
-send_notification: true
+send_notification: false
 ---
 ਲੋਕਲ ਡਿਜ਼ਿਟਲ ਪਲੇਟਫਾਰਮ ਪੱਟੀ ਬਾਈਟਸ ਦਾ ਅਧਿਕਾਰਿਕ ਲਾਂਚ ਕਮਿਊਨਟੀ ਚੈਨਲਾਂ ਰਾਹੀਂ ਹੋਇਆ ਅਤੇ ਵੈਬਸਾਈਟ ‘ਤੇ ਬੈਲ ਆਇਕਨ ਰਾਹੀਂ Subscribe ਕਰਨ ਦੀ ਸੁਵਿਧਾ ਐਕਟਿਵ ਹੈ।\
 ਐਨਾਲਿਟਿਕਸ ਗ੍ਰਾਫ ਅਨੁਸਾਰ 3 ਸਤੰਬਰ 2024 ਤੋਂ 10 ਸਤੰਬਰ 2024 ਤੱਕ 2,258 ਵੇਖਤਾਂ ਦਰਜ ਹਨ, ਜੋ ਲਾਂਚ ਤੋਂ ਤੁਰੰਤ ਬਾਅਦ ਵਧਦੇ ਟ੍ਰੈਫਿਕ ਦੀ ਦਲੇਲ ਦਿੰਦੇ ਹਨ।\
@@ -36,16 +36,12 @@ send_notification: true
 
 ![](/assets/uploads/e513013f-3416-4ef6-862b-863163b0f4ac.jpeg)
 
-
-
 <!--EndFragment-->
 
 * pattibytes.com ਖੋਲ੍ਹੋ ਅਤੇ ਬੈਲ ਆਇਕਨ ‘ਤੇ ਟੈਪ ਕਰਕੇ Allow ਦਿਓ ਤਾਂਕਿ ਸਾਈਟ ਨੋਟੀਫਿਕੇਸ਼ਨ ਭੇਜ ਸਕੇ।<!--StartFragment-->
 
   ![Whats-App-Image-2025-09-10-at-18-57-17-ceca2028](https://i.ibb.co/MyR2nSgN/Whats-App-Image-2025-09-10-at-18-57-17-ceca2028.jpg)
-
-  <!--EndFragment-->
-*   ਜੇ Prompt ਨਾ ਆਵੇ ਤਾਂ Chrome Settings > Site settings > Notifications ਵਿੱਚ ਜਾ ਕੇ pattibytes.com ਨੂੰ Allowed ਕਰੋ।[](https://www.engagelab.com/blog/how-to-enable-chrome-notifications-in-three-ways)
+* ਜੇ Prompt ਨਾ ਆਵੇ ਤਾਂ Chrome Settings > Site settings > Notifications ਵਿੱਚ ਜਾ ਕੇ pattibytes.com ਨੂੰ Allowed ਕਰੋ।[](https://www.engagelab.com/blog/how-to-enable-chrome-notifications-in-three-ways)
 * Incognito/Private ਮੋਡ ਵਿੱਚ ਪਰਮਿਸ਼ਨ ਸੇਵ ਨਹੀਂ ਹੁੰਦੀ, ਇਸ ਲਈ ਨਾਰਮਲ ਟੈਬ ਵਰਤੋ।[](https://pushalert.co/documentation/browser-support)
 
 ## iPhone/iPad (Safari iOS 16.4+)
@@ -76,6 +72,33 @@ send_notification: true
 * Android ‘ਤੇ Chrome ਔਨ ਕਰਕੇ ਤਲ੍ਹਾਂ ਆਉਂਦੇ ਬੈਨਰ/ਮੇਨੂ ‘ਚ Translate ਚੁਣੋ।[](https://support.google.com/chrome/answer/173424?hl=en&co=GENIE.Platform%3DAndroid)
 * iPhone ‘ਤੇ Safari ਵਿਚ aA ਬਟਨ > Translate to English ਵਰਤੋ।[](https://www.macrumors.com/how-to/safari-webpage-translation-ios/)
 * ਨੋਟ: ਇਹ ਬ੍ਰਾਊਜ਼ਰ ਦੇ ਅੰਦਰਲਾ Translate ਹੈ; ਸਾਈਟ ਨੂੰ English ‘ਚ ਤੇਜ਼ੀ ਨਾਲ ਪੜ੍ਹਨ ਲਈ ਇਸੇ ਬਟਨ ‘ਤੇ ਟੈਪ ਕਰੋ।[](https://support.apple.com/en-in/guide/iphone/iph1fbef4daa/ios)
+
+<!--StartFragment-->
+
+**TTS (Text‑to‑Speech) ਹੁਣ PattiBytes ਦੇ ਨਿਊਜ਼ ਮੋਡਲ ਵਿੱਚ ਐਕਟਿਵ ਹੈ ਅਤੇ ਜਲਦੀ “Places” ਸੈਕਸ਼ਨ ‘ਚ ਵੀ ਇਹੀ ਸੁਵਿਧਾ ਮਿਲੇਗੀ; ਵਾਇਸ ਬਟਨ ਦਬਾਉਂਦੇ ਹੀ ਸਪੀਚ ਕੰਟਰੋਲ ਖੁੱਲ੍ਹਦੇ ਹਨ ਜਿੱਥੇ ਗਤੀ (Rate) ਅਤੇ ਆਵਾਜ਼(Pitch) ਬਦਲੀ ਜਾ ਸਕਦੀ ਹੈ।**[](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance/pitch)
+
+## TTS/Audio News ਕਿਵੇਂ ਵਰਤਣਾ
+
+
+
+* ਵਾਇਸ/ਸਪੀਕਰ ਆਇਕਨ ‘ਤੇ ਟੈਪ ਕਰੋ; ਉੱਪਰ ਇੱਕ ਕੰਟਰੋਲਰ ਖੁੱਲ੍ਹੇਗਾ ਜਿਸ ਵਿੱਚ Play, Rate ਅਤੇ Pitch ਸਲਾਈਡਰ ਹੋਣਗੇ।[](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API)
+
+![Whats-App-Image-2025-09-10-at-22-16-50-78d92f21](https://i.ibb.co/Kxh1b7Cz/Whats-App-Image-2025-09-10-at-22-16-50-78d92f21.jpg)
+
+
+
+* Rate ਨਾਲ ਆਵਾਜ਼ ਦੀ ਗਤੀ ਤੇਜ਼/ਹੌਲੀ ਹੁੰਦੀ ਹੈ (ਉਦਾਹਰਨ 0.5 ਹੌਲੀ, 2 ਦੂਣੀ ਗਤੀ); Pitch ਨਾਲ ਆਵਾਜ਼ ਉੱਚੀ/ਨੀਵੀ ਬਣਦੀ ਹੈ।[](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisUtterance/pitch)
+* Play ਦਬਾਉਣ ਨਾਲ ਪੜ੍ਹਨਾ ਸ਼ੁਰੂ ਹੋਵੇਗਾ, Pause/Stop ਨਾਲ ਤੁਰੰਤ ਰੁਕ ਜਾਵੇਗਾ; ਇਹ ਕੰਟਰੋਲ Web Speech API ‘ਤੇ ਅਧਾਰਿਤ ਹਨ।[](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis)
+* **ਕੁਝ ਬ੍ਰਾਊਜ਼ਰਾਂ ‘ਚ Punjabi ਆਵਾਜ਼ ਉਪਲਬਧ ਨਹੀਂ ਹੁੰਦੀ, ਇਸ ਲਈ ਪਹਿਲਾਂ ਪੇਜ਼ ਨੂੰ English ‘ਚ Translate ਕਰਕੇ ਫਿਰ Read Aloud/TTS ਵਰਤਣਾ ਵਧੀਆ ਰਹੇਗਾ।**[](https://support.microsoft.com/en-us/topic/use-microsoft-translator-in-microsoft-edge-browser-4ad1c6cb-01a4-4227-be9d-a81e127fcb0b)
+* Microsoft Edge ਦਾ Read Aloud ਅਤੇ Immersive Reader Translate+Read ਦੇ ਨਾਲ ਚੰਗਾ ਕੰਮ ਕਰਦਾ ਹੈ; ਪਹਿਲਾਂ Translate ਕਰੋ, ਫਿਰ Read Aloud ਚਲਾਓ।[](https://www.microsoft.com/en-us/edge/features/read-aloud)
+* ਕੀਬੋਰਡ ਸ਼ਾਰਟਕਟ: ਬਹੁਤ ਸਾਰੇ ਵੈੱਬ ਪਲੇਅਰਾਂ ‘ਚ Spacebar ਨਾਲ Play/Pause ਹੋ ਜਾਂਦਾ ਹੈ, ਇਸ ਲਈ ਰੀਡਰ ਚੱਲ ਰਿਹਾ ਹੋਵੇ ਤਾਂ Space ਦਬਾ ਕੇ ਰੋਕ/ਚਲਾ ਸਕਦੇ ਹੋ।[](https://www.codespeedy.com/play-and-pause-html5-video-by-pressing-space-key-javascript/)
+* ਹਾਈਲਾਈਟਿੰਗ: ਕੁਝ ਬ੍ਰਾਊਜ਼ਰ/ਡਿਵਾਈਸ ਲਾਈਨ‑ਹਾਈਲਾਈਟ ਜਾਂ ਰੀਡਰ ਮੋਡ ‘ਚ ਹਾਈਲਾਈਟ ਦਿਖਾਉਂਦੇ ਹਨ; Edge ਦਾ Read Aloud ਇਥੇ ਮਦਦਗਾਰ ਹੈ।[](https://www.microsoft.com/en-us/edge/features/read-aloud)
+* ਸਕਰੋਲ ਕਰਨ ਵਿੱਚ ਦਿੱਕਤ ਆ ਸਕਦੀ ਹੈ ਜਦੋਂ ਫਲੋਟਿੰਗ ਕੰਟਰੋਲ ਐਕਟਿਵ ਹੁੰਦਾ ਹੈ—ESC ਜਾਂ Back ਦਬਾ ਕੇ ਰੀਡਿੰਗ ਰੋਕੋ ਅਤੇ ਫਿਰ ਪੇਜ਼ ਮੂਵ ਕਰੋ।[](https://stackoverflow.com/questions/34956907/keypress-pause-and-play-audio)
+* ESC ਨਾਲ ਅਕਸਰ ਮੌਡਲ/ਓਵਰਲੇ ਕਲੋਜ਼ ਜਾਂ ਪਿਛਲੀ ਹਾਲਤ ‘ਚ ਵਾਪਸੀ ਹੁੰਦੀ ਹੈ; ਜੇ ਹਾਈਲਾਈਟ ਚੱਲਦੀ ਰਹੇ ਤਾਂ Back ਦਬਾ ਕੇ ਸਕ੍ਰੀਨ ਨੂੰ ਨਾਰਮਲ ਕਰੋ।[](https://www.microsoft.com/en-us/edge/features/read-aloud)
+
+<!--EndFragment-->
+
+
 
 ## Call to action
 
