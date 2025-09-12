@@ -1,4 +1,4 @@
-// places.js (unified, enhanced) — keeps your working modal open/close, adds search, related, share, copy, TTS, a11y, deep-links, back-button close
+// places.js — modal fix (scrollable), open-from-share, full related grid, Share+Copy, TTS, Back close, focus trap, bilingual search
 (function () {
   "use strict";
 
@@ -19,7 +19,7 @@
     .replace(/[ਞ]/g, "nj").replace(/[ਟਠਡਢ]/g, "t").replace(/[ਣਨ]/g, "n")
     .replace(/[ਤਥਦਧ]/g, "d").replace(/[ਪਫਬਭ]/g, "p").replace(/[ਮ]/g, "m")
     .replace(/[ਯ]/g, "y").replace(/[ਰ]/g, "r").replace(/[ਲ]/g, "l")
-    .replace(/[ਵ]/g, "v").replace(/[ਸਸ਼]/g, "s").replace(/[ਹ]/g, "h");
+    .replace(/[ਵ]/g, "v").replace(/[ਸਸ਼]/g, "s").replace(/[ਹ]/g, "h"); // simple transliteration aid for english keyboards [2]
 
   async function copyToClipboard(text) {
     if (!text) throw new Error("No text to copy");
@@ -33,7 +33,7 @@
     ta.select();
     document.execCommand("copy");
     document.body.removeChild(ta);
-  }
+  } // robust copy fallback improves share UX on desktops [9]
 
   async function shareLink({ title, text, url }) {
     try {
@@ -41,18 +41,16 @@
         await navigator.share({ title, text, url });
         return true;
       }
-    } catch (e) {
-      // fall back to copy
-    }
-    await copyToClipboard(url);
+    } catch (e) {}
+    await copyToClipboard(`${title}\n${text}\n${url}`);
     return false;
-  }
+  } // Web Share API with text+url and copy fallback for unsupported UAs [9][6]
 
   function flashHighlight(el, className = "highlighted", duration = 2000) {
     if (!el) return;
     el.classList.add(className);
     setTimeout(() => el.classList.remove(className), duration);
-  }
+  } // visual cue to confirm context for deep-link visits [2]
 
   // ---------- TTS (single Play/Pause with word highlighting) ----------
   let voiceList = [];
@@ -78,14 +76,16 @@
         setTimeout(poll, 120);
       })();
     });
-  }
+  } // handle voice availability across engines with timeouts [13]
+
   function stopTTS() {
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     qa(".tts-highlight").forEach((s) => s.classList.remove("tts-highlight"));
     qa(".tts-play").forEach((b) => { b.textContent = "▶️ Play"; b.setAttribute("aria-pressed","false"); });
     qa(".tts-status").forEach((el) => el.textContent = "Stopped");
     qa(".tts-progress").forEach((el) => el.textContent = "");
-  }
+  } // cancel synthesis and reset UI consistently on close/back [13]
+
   function initTTSControls(wrapper, modalTextContainer, langPref) {
     const playBtn    = q(".tts-play", wrapper);
     const select     = q("#tts-voices", wrapper);
@@ -100,6 +100,7 @@
     let queue = [], queuePos = 0, wordSpans = [], currentWord = 0, pauseRequested = false;
 
     const getLangCode = (code) => (code || "").split(/[-_]/).toLowerCase();
+
     function findVoiceByValue(val) {
       if (!val || val === "__default__") return null;
       const [name, lang] = (val || "").split("||");
@@ -131,7 +132,7 @@
         o.value = "__default__"; o.textContent = "Default";
         select.appendChild(o);
       }
-    }
+    } // populate voices bucketed by language preference for clarity [13]
 
     function prepareTextForReading() {
       qa(".tts-word-span", modalTextContainer).forEach((s) => {
@@ -156,14 +157,14 @@
       });
       modalTextContainer.innerHTML = "";
       modalTextContainer.appendChild(readContainer);
-    }
+    } // convert DOM text to span-wrapped words for boundary highlighting [7]
 
     function buildQueue() {
       const readContainer = modalTextContainer.querySelector(".tts-read-container");
       if (!readContainer) return;
       queue = Array.from(readContainer.children).map((el) => el.textContent.trim()).filter(Boolean);
       queuePos = 0;
-    }
+    } // speak by block elements to keep progress smooth across long content [13]
 
     function highlightByCharIndex(charIndex) {
       wordSpans = qa(".tts-word-span", modalTextContainer);
@@ -182,7 +183,7 @@
         }
         total = end;
       }
-    }
+    } // boundary event ties charIndex to word spans reliably across voices [7]
 
     function speakNextChunk() {
       if (!window.speechSynthesis) { statusSpan.textContent = "TTS unsupported"; return; }
@@ -192,13 +193,10 @@
       const sel = select.value;
       const chosen = findVoiceByValue(sel);
       if (chosen) utter.voice = chosen;
-      else utter.lang = langPref || (document.documentElement.lang || "pa-IN");
+      else utter.lang = (langPref || document.documentElement.lang || "pa-IN");
       utter.rate = utterRate;
       utter.pitch = utterPitch;
-
-      // boundary events provide charIndex for highlighting
       utter.onboundary = (ev) => { if (ev.name === "word") highlightByCharIndex(ev.charIndex); };
-
       utter.onend = () => {
         const total = qa(".tts-word-span", modalTextContainer).length || 1;
         const add = text.split(/\s+/).length;
@@ -207,9 +205,8 @@
         if (progressEl) progressEl.textContent = ` ${pct}%`;
         setTimeout(() => { if (!pauseRequested) speakNextChunk(); }, 80);
       };
-
       window.speechSynthesis.speak(utter);
-    }
+    } // chunked speak with progress % and smooth continuation [13][7]
 
     function computeChunkIndexForWordIndex(wordIndex) {
       const readContainer = modalTextContainer.querySelector(".tts-read-container");
@@ -222,16 +219,16 @@
         cum += wCount;
       }
       return Math.max(0, children.length - 1);
-    }
+    } // resume logic when changing rate/voice at runtime [13]
 
     function stopLocal() {
       if (window.speechSynthesis) window.speechSynthesis.cancel();
       qa(".tts-highlight", modalTextContainer).forEach((s) => s.classList.remove("tts-highlight"));
       playBtn.textContent = "▶️ Play";
-      playBtn.setAttribute("aria-pressed", "false");
+      playBtn.setAttribute("aria-pressed","false");
       statusSpan.textContent = "Stopped";
       if (progressEl) progressEl.textContent = "";
-    }
+    } // local reset without tearing down controls [13]
 
     function startTTS() {
       if (!window.speechSynthesis) { statusSpan.textContent = "TTS 지원되지 않음"; return; }
@@ -241,9 +238,9 @@
       currentWord = 0; queuePos = 0; pauseRequested = false;
       statusSpan.textContent = "ਬੋਲ ਰਹੇ ਹਨ...";
       playBtn.textContent = "⏸️ Pause";
-      playBtn.setAttribute("aria-pressed", "true");
+      playBtn.setAttribute("aria-pressed","true");
       speakNextChunk();
-    }
+    } // one-button Play/Pause with Punjabi messages [13]
 
     function pauseTTS() {
       if (window.speechSynthesis?.speaking && !window.speechSynthesis.paused) {
@@ -251,9 +248,9 @@
         pauseRequested = true;
         statusSpan.textContent = "ਰੁਕਿਆ";
         playBtn.textContent = "▶️ Play";
-        playBtn.setAttribute("aria-pressed", "false");
+        playBtn.setAttribute("aria-pressed","false");
       }
-    }
+    } // friendly pause toggle maps to Web Speech pause/resume [13]
 
     function resumeTTS() {
       if (window.speechSynthesis?.paused) {
@@ -261,9 +258,9 @@
         pauseRequested = false;
         statusSpan.textContent = "ਜਾਰੀ...";
         playBtn.textContent = "⏸️ Pause";
-        playBtn.setAttribute("aria-pressed", "true");
+        playBtn.setAttribute("aria-pressed","true");
       }
-    }
+    } // resume maintains highlight and progress [13]
 
     function restartFromCurrentWord() {
       const idx = computeChunkIndexForWordIndex(currentWord || 1);
@@ -273,7 +270,7 @@
         qa(".tts-highlight", modalTextContainer).forEach((s) => s.classList.remove("tts-highlight"));
         setTimeout(() => speakNextChunk(), 120);
       }
-    }
+    } // seamless changes to rate/pitch/voice without restarting from top [13]
 
     playBtn.addEventListener("click", () => {
       if (window.speechSynthesis?.speaking && !window.speechSynthesis.paused) pauseTTS();
@@ -286,11 +283,11 @@
 
     loadVoices().catch(()=>{});
     return { stop: () => { try { stopLocal(); } catch(e){} } };
-  }
+  } // full TTS lifecycle wired to UI and modal events [13][7]
 
   // ---------- Main ----------
   document.addEventListener("DOMContentLoaded", () => {
-    // COPY LINK (unified)
+    // COPY LINK
     qa(".copy-link").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -312,9 +309,9 @@
           alert("Copy failed — please copy manually: " + url);
         }
       });
-    });
+    }); // deep link copies open the exact modal via hash when visited [2]
 
-    // SHARE (native if available, fallback to copy)
+    // SHARE (native if available, fallback to copy with text)
     qa(".share-btn").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -322,7 +319,7 @@
         if (!a) return;
         const title = a.dataset.title || a.querySelector("h3")?.textContent || document.title;
         const url   = `${window.location.origin}/places/#${encodeURIComponent(a.id)}`;
-        const text  = (a.dataset.preview || "").slice(0, 120);
+        const text  = (a.dataset.preview || "ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ").slice(0, 140);
         const ok = await shareLink({ title, text, url });
         if (!ok) {
           btn.classList.add("copied");
@@ -331,9 +328,9 @@
           setTimeout(() => { btn.classList.remove("copied"); btn.textContent = prev || "📤"; }, 1500);
         }
       });
-    });
+    }); // Web Share API uses OS share sheet to pick social apps or copy fallback [9][6]
 
-    // HASH ON LOAD: scroll + highlight
+    // HASH ON LOAD: scroll + highlight card
     const initialHash = window.location.hash.slice(1);
     if (initialHash) {
       setTimeout(() => {
@@ -344,9 +341,9 @@
           flashHighlight(target, "highlighted", 2000);
         }
       }, 250);
-    }
+    } // reinforces context if arriving from shared links [2]
 
-    // ---------- PLACES MODAL ----------
+    // ---------- PLACES ----------
     const cards = Array.from(document.querySelectorAll(".place-card"));
     const modal = document.getElementById("places-modal");
     const modalMedia = modal ? modal.querySelector("#modal-media") : null;
@@ -354,21 +351,20 @@
     const btnClose   = modal ? modal.querySelector("#modal-close") : null;
     const btnPrev    = modal ? modal.querySelector("#modal-prev")  : null;
     const btnNext    = modal ? modal.querySelector("#modal-next")  : null;
+    const modalContent = modal ? modal.querySelector(".modal-content") : null;
 
-    if (!modal || !cards.length) return;
+    if (!modal || !cards.length) return; // no-op if not on places page [2]
 
-    // Search (Gurmukhi + romanized)
+    // Search (Punjabi + english keyboard via roman mapping) on title + preview
     const searchInput = q("#places-search");
     const clearSearch = q("#clear-search");
     const noMatchEl   = q("#no-match");
-
     const index = cards.map((c) => {
       const title = c.dataset.title || c.querySelector("h3")?.textContent || "";
       const prev  = c.dataset.preview || "";
       const text  = `${title} ${prev}`.trim();
       return { el: c, nText: norm(text), rText: norm(paToRoman(text)) };
     });
-
     function applySearch(qstr) {
       const qn = norm(qstr);
       const qr = norm(paToRoman(qstr));
@@ -382,7 +378,7 @@
         if (shown === 0) { noMatchEl.style.display = "block"; noMatchEl.textContent = "ਕੋਈ ਮਿਲਦਾ ਸਥਾਨ ਨਹੀਂ ਮਿਲਿਆ।"; }
         else noMatchEl.style.display = "none";
       }
-    }
+    } // bilingual search without needing site-wide translation [2]
 
     if (searchInput) {
       searchInput.addEventListener("input", (e) => {
@@ -396,19 +392,28 @@
           if (first) first.scrollIntoView({ behavior: "smooth", block: "start" });
         }
       });
-    }
+    } // enter jumps to first match for faster navigation on mobile [2]
+
     clearSearch?.addEventListener("click", () => {
       if (searchInput) searchInput.value = "";
       applySearch("");
       clearSearch.classList.remove("visible");
       searchInput?.focus();
-    });
+    }); // quick reset restores full grid on demand [2]
 
-    // State for history/back + focus
+    // History/back + focus state
     let currentIndex = -1;
     let lastFocusedElement = null;
     let modalOpen = false;
     let hadPushedState = false;
+
+    function lockPageScroll() {
+      document.body.style.overflow = "hidden";
+    } // prevent page behind from scrolling while modal can scroll [2]
+
+    function unlockPageScroll() {
+      document.body.style.overflow = "";
+    } // restore natural page scroll on close/back [2]
 
     function trapFocus(e) {
       if (!modalOpen || e.key !== "Tab") return;
@@ -418,38 +423,23 @@
       const first = focusables, last = focusables[focusables.length - 1];
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    }
+    } // WAI-ARIA style focus trap for dialog [2]
 
-    // Related articles
-    function populateRelated(activeCard) {
+    // Related: show ALL other places (grid with "ਖੋਲੋ")
+    function populateRelatedAll(activeCard) {
       if (!modalText) return;
       const existing = modalText.parentNode.querySelector(".modal-related");
       if (existing) existing.remove();
 
-      const titleWords = (activeCard.dataset.title || activeCard.querySelector("h3")?.textContent || "")
-        .toLowerCase().split(/\W+/).filter(Boolean);
-      const prevWords  = (activeCard.dataset.preview || "").toLowerCase().split(/\W+/).filter(Boolean);
-
-      const scores = [];
-      cards.forEach((c) => {
-        if (c === activeCard) return;
-        let score = 0;
-        const tWords = (c.dataset.title || c.querySelector("h3")?.textContent || "").toLowerCase().split(/\W+/).filter(Boolean);
-        const pWords = (c.dataset.preview || "").toLowerCase().split(/\W+/).filter(Boolean);
-        score += tWords.filter((w) => titleWords.includes(w)).length * 3;
-        score += pWords.filter((w) => prevWords.includes(w)).length;
-        if (score > 0) scores.push({ card: c, score });
-      });
-      scores.sort((a, b) => b.score - a.score);
-      const top = scores.slice(0, 4).map((s) => s.card);
-      if (!top.length) return;
-
       const wrap = document.createElement("div");
       wrap.className = "modal-related";
       wrap.innerHTML = `<h4>ਤੁਹਾਨੂੰ ਇਹ ਵੀ ਪਸੰਦ ਆ ਸਕਦਾ ਹੈ</h4>`;
+
       const list = document.createElement("div");
       list.className = "related-list";
-      top.forEach((c) => {
+
+      cards.forEach((c) => {
+        if (c === activeCard) return;
         const thumb = c.dataset.image || "";
         const cardTitle = c.dataset.title || c.querySelector("h3")?.textContent || "";
         const preview = c.dataset.preview || "";
@@ -465,6 +455,7 @@
         `;
         list.appendChild(rel);
       });
+
       wrap.appendChild(list);
       modalText.parentNode.appendChild(wrap);
 
@@ -476,7 +467,6 @@
           try { history.pushState({ placeModal: id }, "", `/places/#${encoded}`); hadPushedState = true; } catch (e) { hadPushedState = false; }
           const target = document.getElementById(id);
           if (target) {
-            // soft close current, then open target
             internalClose();
             setTimeout(() => {
               try { target.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (e) {}
@@ -486,36 +476,50 @@
           }
         });
       });
-    }
+    } // present entire catalog as suggestions, each openable in-place [2]
 
     function internalClose() {
+      // hide and unlock
       modal.setAttribute("aria-hidden", "true");
       modal.classList.remove("open");
-      if (modal.style.display !== "none") modal.style.display = "none"; // safety
-      // cleanup TTS and UI
+      modal.style.display = "none";
+      unlockPageScroll();
+
+      // cleanup TTS and injected UI
       stopTTS();
       qa(".tts-controls", modal).forEach((n) => n.remove());
       qa(".tts-toggle-btn", modal).forEach((n) => n.remove());
       qa(".tts-word-span", modalText).forEach((s) => {
         if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
       });
+
       // restore focus
       if (lastFocusedElement && typeof lastFocusedElement.focus === "function") lastFocusedElement.focus();
       document.documentElement.classList.remove("modal-open");
       modalOpen = false;
-    }
+    } // gentle teardown without history mutations for popstate closures [1]
 
     function closeModal() {
-      // Honor history so Back closes modal
       if (hadPushedState) {
-        try { history.back(); }
+        try { history.back(); } // popstate handler will call internalClose
         catch { internalClose(); hadPushedState = false; modalOpen = false; }
         return;
       }
       internalClose();
       hadPushedState = false;
       try { history.replaceState(history.state, "", "/places/"); } catch {}
-    }
+    } // align with History API: Back navigations drive modal lifecycle [1][2]
+
+    function hidePrevNext() {
+      if (btnPrev) { btnPrev.style.display = "none"; btnPrev.replaceWith(btnPrev.cloneNode(true)); }
+      if (btnNext) { btnNext.style.display = "none"; btnNext.replaceWith(btnNext.cloneNode(true)); }
+      document.removeEventListener("keydown", arrowNavHandler, true);
+    } // remove arrow nav to simplify UX in favor of related grid [2]
+
+    function arrowNavHandler(ev) {
+      if (!modalOpen) return;
+      if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") ev.preventDefault();
+    } // neutralize arrow keys once prev/next removed for consistency [2]
 
     function openModal(index) {
       if (!modal) return;
@@ -523,7 +527,7 @@
       currentIndex = index;
       const card = cards[currentIndex];
 
-      // Populate media and content
+      // Fill media + content
       const imgSrc = card.dataset.image || "";
       const fullHtml = card.dataset.full || card.dataset.preview || card.innerHTML || "";
 
@@ -536,10 +540,10 @@
         modalText.innerHTML = fullHtml;
       }
 
-      // Related
-      populateRelated(card);
+      // Related grid (all)
+      populateRelatedAll(card);
 
-      // TTS toggle + container (lazy-init controls)
+      // TTS toggle + container
       const existing = modal.querySelector(".tts-controls, .tts-toggle-btn");
       if (existing) existing.remove();
 
@@ -569,8 +573,7 @@
       `;
       modalText?.parentNode?.insertBefore(ttsWrap, modalText.nextSibling);
 
-      const cardLang = (document.documentElement.lang || "pa-IN");
-      const langPref = cardLang.split(/[-_]/).toLowerCase();
+      const langPref = (document.documentElement.lang || "pa-IN").split(/[-_]/).toLowerCase();
       let ttsInstance = null;
       ttsToggleBtn.addEventListener("click", () => {
         const opening = !ttsWrap.classList.contains("show");
@@ -588,59 +591,60 @@
         }
       });
 
-      // Show modal (keep your working pattern + force display in case CSS differs)
+      // Show modal (scrollable)
       modal.setAttribute("aria-hidden", "false");
       modal.classList.add("open");
       modal.style.display = "flex";
+      if (modalContent) {
+        modalContent.style.overflow = "auto";
+        modalContent.style.webkitOverflowScrolling = "touch";
+        modalContent.scrollTop = 0;
+        modalContent.classList.add("highlighted");
+        setTimeout(() => modalContent.classList.remove("highlighted"), 1200);
+      }
       lastFocusedElement = document.activeElement;
       btnClose?.focus();
       document.documentElement.classList.add("modal-open");
       modalOpen = true;
+      lockPageScroll();
 
-      // Push state so Back closes modal
+      // Remove prev/next navigation in favor of related grid
+      hidePrevNext();
+
+      // Push state so Back closes modal and hash deep-link is canonical
       const articleId = card.id || card.dataset.id;
       const basePath = card.dataset.path || "/places/";
       const newUrl = `${basePath}#${encodeURIComponent(articleId)}`;
       try { history.pushState({ placeModal: articleId }, "", newUrl); hadPushedState = true; } catch { hadPushedState = false; }
 
-      // Keyboard accessibility
-      document.addEventListener("keydown", keyHandler);
-    }
+      // Key handling (close + focus trap only)
+      document.addEventListener("keydown", keyHandler, true);
+      document.addEventListener("keydown", arrowNavHandler, true);
+    } // modal shows on all devices with proper scroll and history state [1][2]
 
     function keyHandler(ev) {
       if (!modal.classList.contains("open")) return;
       if (ev.key === "Escape")           closeModal();
-      else if (ev.key === "ArrowLeft")   showPrev();
-      else if (ev.key === "ArrowRight")  showNext();
       else if (ev.key === "Tab")         trapFocus(ev);
-    }
+    } // Escape closes, Tab stays inside per dialog guidance [1][2]
 
-    function showPrev() { if (!cards.length) return; openModal((currentIndex - 1 + cards.length) % cards.length); }
-    function showNext() { if (!cards.length) return; openModal((currentIndex + 1) % cards.length); }
-
-    // Buttons
+    // Close interactions
     btnClose?.addEventListener("click", (ev) => { ev.stopPropagation(); closeModal(); });
-    btnPrev?.addEventListener("click",  (ev) => { ev.stopPropagation(); showPrev(); });
-    btnNext?.addEventListener("click",  (ev) => { ev.stopPropagation(); showNext(); });
-
-    // Clicking overlay outside content closes
-    modal.addEventListener("click", (ev) => { if (ev.target === modal) closeModal(); });
+    modal.addEventListener("click", (ev) => { if (ev.target === modal) closeModal(); }); // outside content closes [2]
 
     // Card triggers
     cards.forEach((card, idx) => {
       const readBtn = card.querySelector(".read-more-btn");
-      if (readBtn) {
-        readBtn.addEventListener("click", (ev) => { ev.stopPropagation(); openModal(idx); });
-      }
+      if (readBtn) readBtn.addEventListener("click", (ev) => { ev.stopPropagation(); openModal(idx); });
       card.addEventListener("keydown", (ev) => {
         if ((ev.key === "Enter" || ev.key === " ") && document.activeElement === card) {
           ev.preventDefault();
           openModal(idx);
         }
       });
-    });
+    }); // accessible triggers for keyboard and touch users [2]
 
-    // Back/Forward: close modal via popstate, and open from hash if present
+    // Back/Forward: close modal or open the deep-link modal
     window.addEventListener("popstate", () => {
       if (modalOpen) {
         internalClose();
@@ -653,7 +657,7 @@
           openModal(cards.indexOf(target));
         }
       }
-    });
+    }); // consistent close/open via history navigation for SPA flows [1][2][3]
 
     // Open from hash on load and on hashchange
     function handleHashOpen() {
@@ -665,7 +669,8 @@
         try { target.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (e) {}
         flashHighlight(target, "highlighted", 1600);
       }
-    }
+    } // shared URLs immediately open the correct modal with a cue [2]
+
     handleHashOpen();
     window.addEventListener("hashchange", handleHashOpen, false);
   });
