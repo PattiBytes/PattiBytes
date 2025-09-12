@@ -141,6 +141,7 @@ permalink: /places/
                 <p class="place-desc">{{ place.preview }}</p>
                 <button class="read-more-btn" type="button" aria-label="ਪੂਰਾ ਪੜ੍ਹੋ about {{ place.title | escape }}">ਪੂਰਾ ਪੜ੍ਹੋ →</button>
                 <button class="copy-link" type="button" title="Copy Link" data-url="{{ site.url }}{{ place.url | relative_url }}">🔗</button>
+                <button class="share-btn" type="button" title="Share">📤</button>
               </div>
             </article>
           {% endfor %}
@@ -150,20 +151,25 @@ permalink: /places/
     </section>
   </main>
 
-  <!-- Places Modal -->
-  <div id="places-modal" class="modal-overlay" aria-hidden="true">
-    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <button id="modal-close" class="modal-close" aria-label="Close modal" type="button">&times;</button>
-      <div class="modal-body">
-        <div id="modal-media" class="modal-media"></div>
-        <div id="modal-text" class="modal-text"></div>
-        <div class="modal-nav">
-          <button id="modal-prev" class="modal-nav-btn" aria-label="Previous place" type="button">←</button>
-          <button id="modal-next" class="modal-nav-btn" aria-label="Next place" type="button">→</button>
-        </div>
+<!-- Places Modal -->
+<div id="places-modal" class="modal-overlay" aria-hidden="true">
+  <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <button id="modal-close" class="modal-close" aria-label="Close modal" type="button">&times;</button>
+    <div class="modal-body">
+      <!-- Hidden heading for a11y; JS sets the title text -->
+      <h3 id="modal-title" class="visually-hidden"></h3>
+
+      <div id="modal-media" class="modal-media"></div>
+      <div id="modal-text" class="modal-text" translate="no"></div>
+
+      <div class="modal-nav">
+        <button id="modal-prev" class="modal-nav-btn" aria-label="Previous place" type="button">←</button>
+        <button id="modal-next" class="modal-nav-btn" aria-label="Next place" type="button">→</button>
       </div>
     </div>
   </div>
+</div>
+
 
  <!-- Shared Footer -->
   <footer class="site-footer">
@@ -329,19 +335,12 @@ permalink: /places/
 
   <button id="back-to-top" aria-label="Back to top" type="button">↑</button>
 
-  <div class="gtranslate_wrapper"></div>
-  <script>
-    window.gtranslateSettings = {
-      default_language: "pa",
-      native_language_names: true,
-      languages: ["pa","en"],
-      wrapper_selector: ".gtranslate_wrapper",
-      flag_size: 24,
-      switcher_horizontal_position: "right",
-      flag_style: "3d"
-    };
-  </script>
-  <script src="https://cdn.gtranslate.net/widgets/latest/dwf.js" defer></script>
+  <!-- GTranslate widget -->
+<div class="gtranslate_wrapper"></div>
+<script>window.gtranslateSettings = {"default_language":"pa","languages":["pa","en"],"wrapper_selector":".gtranslate_wrapper","switcher_horizontal_position":"right","flag_style":"3d","alt_flags":{"en":"usa"}}</script>
+<script src="https://cdn.gtranslate.net/widgets/latest/float.js" defer></script>
+
+  
 
   <!-- Global + Page-specific JS -->
   <script defer src="/script.js"></script>
