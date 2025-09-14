@@ -1,4 +1,4 @@
-// Enhanced places.js with horizontal buttons, Google Translate integration, heading navigation, and improved UX
+// Enhanced places.js with custom share modal, smart TTS, improved UX, and dynamic search translation
 (function () {
   "use strict";
 
@@ -9,7 +9,7 @@
   // Normalize text: remove accents, lower case
   const norm = (s) => (s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-  // Punjabi to Roman transliteration for dual keyboard search support
+  // Enhanced Punjabi to Roman transliteration
   const paToRoman = (txt) => (txt || '')
     .replace(/[ਅਆ]/g, 'a').replace(/[ਇਈ]/g, 'i').replace(/[ਉਊ]/g, 'u')
     .replace(/[ਏਐ]/g, 'e').replace(/[ਓਔ]/g, 'o').replace(/[ਂੰ]/g, 'n')
@@ -19,6 +19,16 @@
     .replace(/[ਯ]/g, 'y').replace(/[ਰ]/g, 'r').replace(/[ਲ]/g, 'l')
     .replace(/[ਵ]/g, 'v').replace(/[ਸਸ਼]/g, 's').replace(/[ਹ]/g, 'h');
 
+  // Reverse transliteration: English to Punjabi approximation
+  const romanToPa = (txt) => (txt || '')
+    .replace(/ng/g, 'ਙ').replace(/ch/g, 'ਚ').replace(/nj/g, 'ਞ')
+    .replace(/k/g, 'ਕ').replace(/t/g, 'ਟ').replace(/n/g, 'ਨ')
+    .replace(/d/g, 'ਦ').replace(/p/g, 'ਪ').replace(/m/g, 'ਮ')
+    .replace(/y/g, 'ਯ').replace(/r/g, 'ਰ').replace(/l/g, 'ਲ')
+    .replace(/v/g, 'ਵ').replace(/s/g, 'ਸ').replace(/h/g, 'ਹ')
+    .replace(/a/g, 'ਅ').replace(/i/g, 'ਇ').replace(/u/g, 'ਉ')
+    .replace(/e/g, 'ਏ').replace(/o/g, 'ਓ');
+
   // Deep-link hash normalize
   function normalizeHash(h) {
     if (!h) return '';
@@ -26,8 +36,14 @@
     try { return decodeURIComponent(s); } catch { return s; }
   }
 
-  // Store previous URL for proper back navigation
+  // Store previous URL and TTS state
   let previousUrl = window.location.href;
+  let ttsState = {
+    currentWord: 0,
+    queuePos: 0,
+    isPaused: false,
+    wasPlaying: false
+  };
 
   // Clipboard copy fallback
   async function copyToClipboard(text) {
@@ -44,18 +60,6 @@
     document.body.removeChild(ta);
   }
 
-  // Web Share API with fallback to clipboard copy
-  async function shareLink({ title, text, url }) {
-    try {
-      if (navigator.share && (!navigator.canShare || navigator.canShare({ title, text, url }))) {
-        await navigator.share({ title, text, url });
-        return true;
-      }
-    } catch (e){}
-    await copyToClipboard(`${title}\n${text}\n${url}`);
-    return false;
-  }
-
   // Visual flash highlight for deep link feedback
   function flashHighlight(el, className = 'highlighted', duration = 2000) {
     if (!el) return;
@@ -63,44 +67,149 @@
     setTimeout(() => el.classList.remove(className), duration);
   }
 
-  // Google Translate Integration
-  function setupGoogleTranslate() {
-    // Hide Google Translate when modal is open
-    function toggleTranslateVisibility(hide) {
-      const translateElements = qa('.goog-te-banner-frame, .skiptranslate, #google_translate_element, .goog-te-gadget, .goog-te-combo, .goog-te-menu-frame');
-      translateElements.forEach(el => {
-        if (hide) {
-          el.style.display = 'none';
-          el.style.visibility = 'hidden';
-          el.style.opacity = '0';
-          el.style.pointerEvents = 'none';
-        } else {
-          el.style.display = '';
-          el.style.visibility = '';
-          el.style.opacity = '';
-          el.style.pointerEvents = '';
+  // Create custom share modal
+  function createShareModal(shareData) {
+    // Remove existing share modal
+    qa('.share-modal-overlay').forEach(el => el.remove());
+
+    const shareModal = document.createElement('div');
+    shareModal.className = 'share-modal-overlay';
+    shareModal.innerHTML = `
+      <div class="share-modal">
+        <div class="share-modal-header">
+          <h3>ਸਾਂਝਾ ਕਰੋ</h3>
+          <button class="share-modal-close" type="button">&times;</button>
+        </div>
+        <div class="share-modal-content">
+          <div class="share-preview">
+            <h4>${shareData.title}</h4>
+            <p>${shareData.text}</p>
+            <div class="share-url">${shareData.url}</div>
+          </div>
+          <div class="share-options">
+            <button class="share-option" data-action="copy">
+              <span class="share-icon">🔗</span>
+              <span>ਲਿੰਕ ਕਾਪੀ ਕਰੋ</span>
+            </button>
+            <button class="share-option" data-action="whatsapp">
+              <span class="share-icon">📱</span>
+              <span>WhatsApp</span>
+            </button>
+            <button class="share-option" data-action="telegram">
+              <span class="share-icon">✈️</span>
+              <span>Telegram</span>
+            </button>
+            <button class="share-option" data-action="twitter">
+              <span class="share-icon">🐦</span>
+              <span>Twitter</span>
+            </button>
+            <button class="share-option" data-action="facebook">
+              <span class="share-icon">📘</span>
+              <span>Facebook</span>
+            </button>
+            <button class="share-option" data-action="native">
+              <span class="share-icon">📤</span>
+              <span>ਹੋਰ...</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(shareModal);
+
+    // Animate in
+    setTimeout(() => shareModal.classList.add('show'), 10);
+
+    // Handle share options
+    qa('.share-option', shareModal).forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const action = btn.dataset.action;
+        const { title, text, url } = shareData;
+
+        switch (action) {
+          case 'copy':
+            try {
+              await copyToClipboard(url);
+              btn.innerHTML = '<span class="share-icon">✅</span><span>ਕਾਪੀ ਹੋ ਗਿਆ!</span>';
+              setTimeout(() => {
+                btn.innerHTML = '<span class="share-icon">🔗</span><span>ਲਿੰਕ ਕਾਪੀ ਕਰੋ</span>';
+              }, 2000);
+            } catch {
+              alert('Copy failed');
+            }
+            break;
+            
+          case 'whatsapp':
+            window.open(`https://wa.me/?text=${encodeURIComponent(`${title}\n${text}\n${url}`)}`, '_blank');
+            break;
+            
+          case 'telegram':
+            window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(`${title}\n${text}`)}`, '_blank');
+            break;
+            
+          case 'twitter':
+            window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${title}\n${text}`)}&url=${encodeURIComponent(url)}`, '_blank');
+            break;
+            
+          case 'facebook':
+            window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank');
+            break;
+            
+          case 'native':
+            try {
+              if (navigator.share) {
+                await navigator.share({ title, text, url });
+              } else {
+                await copyToClipboard(`${title}\n${text}\n${url}`);
+                btn.innerHTML = '<span class="share-icon">✅</span><span>ਕਾਪੀ ਹੋ ਗਿਆ!</span>';
+              }
+            } catch (e) {
+              console.log('Share cancelled or failed');
+            }
+            break;
         }
       });
+    });
+
+    // Close modal handlers
+    function closeShareModal() {
+      shareModal.classList.remove('show');
+      setTimeout(() => shareModal.remove(), 300);
     }
 
-    // Observe modal state and hide/show translate accordingly
-    const observer = new MutationObserver(() => {
-      const modalOpen = document.documentElement.classList.contains('modal-open');
-      toggleTranslateVisibility(modalOpen);
+    q('.share-modal-close', shareModal).addEventListener('click', closeShareModal);
+    shareModal.addEventListener('click', (e) => {
+      if (e.target === shareModal) closeShareModal();
     });
 
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
-    // Ensure Google Translate works on all elements except .notranslate
-    document.addEventListener('DOMContentLoaded', () => {
-      if (typeof google !== 'undefined' && google.translate) {
-        // Force Google Translate to respect notranslate class
-        qa('[class*="notranslate"]').forEach(el => {
-          el.classList.add('notranslate');
-          el.setAttribute('translate', 'no');
-        });
+    // ESC key to close
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        closeShareModal();
+        document.removeEventListener('keydown', escHandler);
       }
-    });
+    };
+    document.addEventListener('keydown', escHandler);
+  }
+
+  // Detect content language and amount
+  function analyzeContent(text) {
+    const punjabiChars = (text.match(/[\u0A00-\u0A7F]/g) || []).length;
+    const englishChars = (text.match(/[a-zA-Z]/g) || []).length;
+    const totalChars = text.length;
+    const words = text.trim().split(/\s+/).filter(Boolean).length;
+
+    return {
+      totalWords: words,
+      totalChars,
+      punjabiChars,
+      englishChars,
+      primaryLang: punjabiChars > englishChars ? 'pa' : 'en',
+      hasSufficientContent: words > 20, // Minimum 20 words for TTS
+      punjabRatio: punjabiChars / totalChars,
+      englishRatio: englishChars / totalChars
+    };
   }
 
   // Create Table of Contents from headings
@@ -120,11 +229,10 @@
     tocList.className = 'toc-list';
 
     headings.forEach((heading, index) => {
-      // Generate unique ID for heading
       const headingId = `heading-${index}-${heading.textContent.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}`;
       heading.id = headingId;
+      heading.style.scrollMarginTop = '80px'; // Account for fixed header
 
-      // Create TOC entry
       const tocItem = document.createElement('li');
       tocItem.className = `toc-item toc-level-${heading.tagName.toLowerCase()}`;
       
@@ -136,7 +244,6 @@
       tocLink.addEventListener('click', (e) => {
         e.preventDefault();
         heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        // Highlight the target heading briefly
         flashHighlight(heading, 'toc-target-highlight', 2000);
       });
 
@@ -166,7 +273,6 @@
       tocButton.innerHTML = tocVisible ? '✕' : '📋';
     });
 
-    // Initially hide on mobile
     if (window.innerWidth <= 768) {
       tocContainer.style.display = 'none';
     }
@@ -174,13 +280,14 @@
     return tocButton;
   }
 
-  // Speech synthesis voice loading with timeout
+  // Enhanced TTS with language detection and fallback
   let voiceList = [];
-  function ensureVoicesLoaded(timeout = 2500) {
+  function ensureVoicesLoaded(timeout = 3000) {
     return new Promise((resolve) => {
       const synth = window.speechSynthesis;
       const voices = synth ? synth.getVoices() : [];
       if (voices.length) { voiceList = voices; resolve(voices); return; }
+
       let resolved = false;
       const onVoicesChanged = () => {
         if (resolved) return;
@@ -188,13 +295,15 @@
         resolved = true;
         resolve(voiceList);
       };
+
       if (synth && 'onvoiceschanged' in synth) synth.onvoiceschanged = onVoicesChanged;
+
       const start = performance.now();
       (function poll() {
         const vs = synth ? synth.getVoices() : [];
         if (vs.length) { voiceList = vs; resolved = true; resolve(vs); return; }
         if (performance.now() - start > timeout) { voiceList = vs || []; resolved = true; resolve(voiceList); return; }
-        setTimeout(poll, 120);
+        setTimeout(poll, 150);
       })();
     });
   }
@@ -204,11 +313,13 @@
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
     qa('.tts-play').forEach(b => { b.textContent = '▶️ Play'; b.setAttribute('aria-pressed', 'false'); });
-    qa('.tts-status').forEach(el => el.textContent = 'Stopped');
+    qa('.tts-status').forEach(el => el.textContent = 'Ready');
     qa('.tts-progress').forEach(el => el.textContent = '');
+    ttsState.isPaused = false;
+    ttsState.wasPlaying = false;
   }
 
-  // Initialize TTS controls (keeping existing implementation)
+  // Initialize enhanced TTS controls
   function initTTSControls(wrapper, modalTextContainer, langPref) {
     const playBtn = q('.tts-play', wrapper);
     const select = q('#tts-voices', wrapper);
@@ -218,20 +329,48 @@
     const pitchInput = q('#tts-pitch', wrapper);
 
     let voices = [];
-    let utterRate = parseFloat(rateInput?.value) || 1.02;
+    let utterRate = parseFloat(rateInput?.value) || 1.0;
     let utterPitch = parseFloat(pitchInput?.value) || 1.0;
     let queue = [], queuePos = 0, wordSpans = [], currentWord = 0, pauseRequested = false;
 
+    // Analyze content for TTS suitability
+    const contentAnalysis = analyzeContent(modalTextContainer.textContent || '');
+    
+    if (!contentAnalysis.hasSufficientContent) {
+      statusSpan.textContent = 'ਘੱਟ ਸਮੱਗਰੀ - TTS ਉਪਲਬਧ ਨਹੀਂ';
+      playBtn.disabled = true;
+      playBtn.style.opacity = '0.5';
+      return { stop: () => {} };
+    }
+
     const getLangCode = code => (code || '').split(/[-_]/)[0].toLowerCase();
 
+    function findBestVoice(preferredLang) {
+      // Find voice for preferred language
+      let voice = voices.find(v => getLangCode(v.lang) === preferredLang);
+      
+      // Fallback to English if preferred not available
+      if (!voice && preferredLang !== 'en') {
+        voice = voices.find(v => getLangCode(v.lang) === 'en');
+      }
+      
+      // Fallback to Hindi if English not available
+      if (!voice) {
+        voice = voices.find(v => getLangCode(v.lang) === 'hi');
+      }
+      
+      return voice;
+    }
+
     function findVoiceByValue(val) {
-      if (!val || val === '__default__') return null;
+      if (!val || val === '__default__') return findBestVoice(langPref);
       const [name, lang] = val.split('||');
-      return voices.find(v => v.name === name && v.lang === lang) || null;
+      return voices.find(v => v.name === name && v.lang === lang) || findBestVoice(langPref);
     }
 
     async function loadVoices() {
-      voices = await ensureVoicesLoaded(2500);
+      voices = await ensureVoicesLoaded(3000);
+      
       const addGroup = (label, arr) => {
         if (!arr.length) return;
         const og = document.createElement('optgroup');
@@ -245,35 +384,47 @@
         select.appendChild(og);
       };
 
-      const preferred = voices.filter(v => getLangCode(v.lang) === langPref);
-      const english = voices.filter(v => getLangCode(v.lang) === 'en' && getLangCode(v.lang) !== langPref);
-      const others = voices.filter(v => !preferred.includes(v) && !english.includes(v));
+      // Determine best language based on content
+      const bestLang = contentAnalysis.primaryLang === 'pa' ? 'pa' : 'en';
+      const preferred = voices.filter(v => getLangCode(v.lang) === bestLang);
+      const english = voices.filter(v => getLangCode(v.lang) === 'en' && bestLang !== 'en');
+      const hindi = voices.filter(v => getLangCode(v.lang) === 'hi');
+      const others = voices.filter(v => !preferred.includes(v) && !english.includes(v) && !hindi.includes(v));
 
       select.innerHTML = '';
-      addGroup('Preferred', preferred);
-      addGroup('English', english);
-      addGroup('Other voices', others);
+      if (preferred.length) addGroup(`${bestLang === 'pa' ? 'Punjabi' : 'English'} (Recommended)`, preferred);
+      if (english.length) addGroup('English', english);
+      if (hindi.length) addGroup('Hindi (हिंदी)', hindi);
+      if (others.length) addGroup('Other voices', others);
 
       if (!select.options.length) {
         const defOpt = document.createElement('option');
         defOpt.value = '__default__';
-        defOpt.textContent = 'Default';
+        defOpt.textContent = 'Default Voice';
         select.appendChild(defOpt);
+      }
+
+      // Update status based on available voices
+      if (preferred.length === 0 && bestLang === 'pa') {
+        statusSpan.textContent = 'ਪੰਜਾਬੀ ਆਵਾਜ਼ ਨਹੀਂ - English/Hindi ਵਰਤੇਗਾ';
       }
     }
 
     function prepareTextForReading() {
+      // Clean up existing spans
       qa('.tts-word-span', modalTextContainer).forEach(s => {
         if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
       });
 
-      const nodes = Array.from(modalTextContainer.querySelectorAll('p, h1, h2, h3, h4, li')).filter(el => el.textContent.trim() !== '');
+      const nodes = Array.from(modalTextContainer.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li')).filter(el => el.textContent.trim() !== '');
       const readContainer = document.createElement('div');
       readContainer.className = 'tts-read-container';
+
       nodes.forEach(el => {
         const newEl = document.createElement(el.tagName);
         const text = el.textContent.replace(/\s+/g, ' ').trim();
         const words = text.split(/\s+/);
+        
         words.forEach((w, i) => {
           const span = document.createElement('span');
           span.className = 'tts-word-span';
@@ -282,6 +433,7 @@
         });
         readContainer.appendChild(newEl);
       });
+
       modalTextContainer.innerHTML = '';
       modalTextContainer.appendChild(readContainer);
     }
@@ -290,20 +442,29 @@
       const readContainer = modalTextContainer.querySelector('.tts-read-container');
       if (!readContainer) return;
       queue = Array.from(readContainer.children).map(el => el.textContent.trim()).filter(Boolean);
-      queuePos = 0;
+      queuePos = ttsState.queuePos || 0;
     }
 
     function highlightByCharIndex(charIndex) {
       wordSpans = qa('.tts-word-span', modalTextContainer);
       if (!wordSpans.length) return;
+
       let total = 0;
       for (let i = 0; i < wordSpans.length; i++) {
         const len = (wordSpans[i].textContent || '').length;
         if (charIndex >= total && charIndex <= total + len) {
           qa('.tts-highlight', modalTextContainer).forEach(el => el.classList.remove('tts-highlight'));
           wordSpans[i].classList.add('tts-highlight');
-          try { wordSpans[i].scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+          
+          // Smooth scroll to highlighted word without disrupting user scroll
+          const rect = wordSpans[i].getBoundingClientRect();
+          const modalBody = q('.modal-body');
+          if (modalBody && (rect.top < 100 || rect.bottom > window.innerHeight - 100)) {
+            wordSpans[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          
           currentWord = i + 1;
+          ttsState.currentWord = currentWord;
           return;
         }
         total += len;
@@ -311,13 +472,20 @@
     }
 
     function speakNextChunk() {
-      if (!window.speechSynthesis) { statusSpan.textContent = 'TTS unsupported'; return; }
+      if (!window.speechSynthesis) { statusSpan.textContent = 'TTS not supported'; return; }
       if (queuePos >= queue.length) { stopLocal(); return; }
+
       const text = queue[queuePos++];
       const utterance = new SpeechSynthesisUtterance(text);
       const selectedVoice = findVoiceByValue(select.value);
-      if (selectedVoice) utterance.voice = selectedVoice;
-      else utterance.lang = langPref || document.documentElement.lang || 'pa-IN';
+      
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      } else {
+        // Auto-select best language based on content
+        utterance.lang = contentAnalysis.primaryLang === 'pa' ? 'hi-IN' : 'en-US';
+      }
+      
       utterance.rate = utterRate;
       utterance.pitch = utterPitch;
       utterance.onboundary = (ev) => { if (ev.name === 'word') highlightByCharIndex(ev.charIndex); };
@@ -325,46 +493,47 @@
         const totalWords = qa('.tts-word-span', modalTextContainer).length || 1;
         const wordCount = text.split(/\s+/).length;
         currentWord = Math.min(totalWords, currentWord + wordCount);
+        
         if (progressEl) {
           const pct = Math.round((currentWord / totalWords) * 100);
-          progressEl.textContent = ` ${pct}%`;
+          progressEl.textContent = `${pct}%`;
         }
-        setTimeout(() => { if (!pauseRequested) speakNextChunk(); }, 80);
+        
+        ttsState.queuePos = queuePos;
+        setTimeout(() => { if (!pauseRequested) speakNextChunk(); }, 100);
       };
+
       window.speechSynthesis.speak(utterance);
     }
 
-    function computeChunkIndexForWordIndex(wordIndex) {
-      const readContainer = modalTextContainer.querySelector('.tts-read-container');
-      if (!readContainer) return 0;
-      const children = Array.from(readContainer.children);
-      let cum = 0;
-      for(let i = 0; i < children.length; i++) {
-        const wordsCount = (children[i].textContent || '').trim().split(/\s+/).filter(Boolean).length;
-        if(wordIndex <= cum + wordsCount) return i;
-        cum += wordsCount;
-      }
-      return Math.max(0, children.length - 1);
-    }
-
     function stopLocal() {
-      if(window.speechSynthesis) window.speechSynthesis.cancel();
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
       qa('.tts-highlight', modalTextContainer).forEach(s => s.classList.remove('tts-highlight'));
       playBtn.textContent = '▶️ Play';
       playBtn.setAttribute('aria-pressed', 'false');
       statusSpan.textContent = 'Stopped';
-      if(progressEl) progressEl.textContent = '';
+      if (progressEl) progressEl.textContent = '';
+      ttsState.isPaused = false;
+      ttsState.wasPlaying = false;
     }
 
     function startTTS() {
-      if (!window.speechSynthesis) { statusSpan.textContent = 'TTS unsupported'; return; }
+      if (!window.speechSynthesis) { statusSpan.textContent = 'TTS not supported'; return; }
+      
       prepareTextForReading();
       if (!qa('.tts-word-span', modalTextContainer).length) { statusSpan.textContent = 'No text to read'; return; }
+      
       buildQueue();
-      currentWord = 0; queuePos = 0; pauseRequested = false;
+      if (!ttsState.isPaused) {
+        currentWord = 0;
+        queuePos = 0;
+      }
+      
+      pauseRequested = false;
       statusSpan.textContent = 'Speaking...';
       playBtn.textContent = '⏸️ Pause';
       playBtn.setAttribute('aria-pressed', 'true');
+      ttsState.wasPlaying = true;
       speakNextChunk();
     }
 
@@ -372,8 +541,9 @@
       if (window.speechSynthesis?.speaking && !window.speechSynthesis.paused) {
         window.speechSynthesis.pause();
         pauseRequested = true;
-        statusSpan.textContent = 'Paused';
-        playBtn.textContent = '▶️ Play';
+        ttsState.isPaused = true;
+        statusSpan.textContent = 'Paused - Click to resume';
+        playBtn.textContent = '▶️ Resume';
         playBtn.setAttribute('aria-pressed', 'false');
       }
     }
@@ -382,38 +552,33 @@
       if (window.speechSynthesis?.paused) {
         window.speechSynthesis.resume();
         pauseRequested = false;
-        statusSpan.textContent = 'Resumed';
+        ttsState.isPaused = false;
+        statusSpan.textContent = 'Resumed...';
         playBtn.textContent = '⏸️ Pause';
         playBtn.setAttribute('aria-pressed', 'true');
       }
     }
 
-    function restartFromCurrentWord() {
-      const idx = computeChunkIndexForWordIndex(currentWord || 1);
-      if (idx >= 0) {
-        if (window.speechSynthesis) window.speechSynthesis.cancel();
-        queuePos = idx;
-        qa('.tts-highlight', modalTextContainer).forEach(s => s.classList.remove('tts-highlight'));
-        setTimeout(() => speakNextChunk(), 120);
-      }
-    }
-
+    // Event listeners
     playBtn.addEventListener('click', () => {
       if (window.speechSynthesis?.speaking && !window.speechSynthesis.paused) pauseTTS();
       else if (window.speechSynthesis?.paused) resumeTTS();
       else startTTS();
     });
 
-    select.addEventListener('change', () => { if (window.speechSynthesis?.speaking) restartFromCurrentWord(); });
-    rateInput.addEventListener('input', (e) => {
-      const v = parseFloat(e.target.value) || 1.02;
-      if (v !== utterRate) utterRate = v;
-      if (window.speechSynthesis?.speaking) restartFromCurrentWord();
+    select.addEventListener('change', () => {
+      if (window.speechSynthesis?.speaking) {
+        window.speechSynthesis.cancel();
+        setTimeout(() => speakNextChunk(), 150);
+      }
     });
+
+    rateInput.addEventListener('input', (e) => {
+      utterRate = parseFloat(e.target.value) || 1.0;
+    });
+
     pitchInput.addEventListener('input', (e) => {
-      const v = parseFloat(e.target.value) || 1.0;
-      if (v !== utterPitch) utterPitch = v;
-      if (window.speechSynthesis?.speaking) restartFromCurrentWord();
+      utterPitch = parseFloat(e.target.value) || 1.0;
     });
 
     loadVoices().catch(() => {});
@@ -442,14 +607,14 @@
   function lockPageScroll() { document.body.style.overflow = 'hidden'; }
   function unlockPageScroll() { document.body.style.overflow = ''; }
 
-  // Trap keyboard focus inside modal
+  // Enhanced focus trap
   function trapFocus(e) {
     if (!modalOpen || e.key !== 'Tab') return;
-    const focusables = qa('#places-modal button, #places-modal a, #places-modal input, #places-modal select, #places-modal textarea, #places-modal [tabindex]:not([tabindex="-1"])')
-      .filter(el => !el.hasAttribute('disabled') && el.offsetParent !== null);
+    const focusables = qa('#places-modal button:not([disabled]), #places-modal a, #places-modal input, #places-modal select, #places-modal textarea, #places-modal [tabindex]:not([tabindex="-1"])')
+      .filter(el => el.offsetParent !== null);
     if (!focusables.length) return;
+    
     const first = focusables[0], last = focusables[focusables.length - 1];
-
     if (e.shiftKey && document.activeElement === first) {
       e.preventDefault();
       last.focus();
@@ -465,25 +630,19 @@
       const content = card.querySelector('.place-content');
       if (!content) return;
 
-      // Find existing buttons
       const readBtn = content.querySelector('.read-more-btn');
       const copyBtn = content.querySelector('.copy-link');
       const shareBtn = content.querySelector('.share-btn');
 
       if (!readBtn && !copyBtn && !shareBtn) return;
-
-      // Check if already arranged
       if (content.querySelector('.place-actions')) return;
 
-      // Create actions container
       const actionsContainer = document.createElement('div');
       actionsContainer.className = 'place-actions';
 
-      // Create button group for copy and share
       const buttonGroup = document.createElement('div');
       buttonGroup.className = 'action-buttons';
 
-      // Move buttons to their containers
       if (readBtn) {
         readBtn.remove();
         actionsContainer.appendChild(readBtn);
@@ -503,12 +662,11 @@
         actionsContainer.appendChild(buttonGroup);
       }
 
-      // Add to content
       content.appendChild(actionsContainer);
     });
   }
 
-  // Populate Related Articles (You May Also Like)
+  // Populate Related Articles
   function populateRelatedAll(activeCard) {
     if (!modalText) return;
     const existing = modalText.parentNode.querySelector('.modal-related');
@@ -545,26 +703,25 @@
       btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         if (!id) return;
-        const encoded = encodeURIComponent(id);
-        try {
-          history.pushState({ placeModal: id }, '', `/places/#${encoded}`);
-          hadPushedState = true;
-        } catch (e) { hadPushedState = false; }
-
-        const target = document.getElementById(id);
-        if (target) {
-          internalClose();
-          setTimeout(() => {
-            try { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
-            flashHighlight(target, 'highlighted', 1600);
+        
+        // Smooth transition to new modal
+        internalClose();
+        setTimeout(() => {
+          const target = document.getElementById(id);
+          if (target) {
             openModal(cards.indexOf(target));
-          }, 280);
-        }
+            setTimeout(() => {
+              // Scroll to top of new modal
+              const modalBody = q('.modal-body');
+              if (modalBody) modalBody.scrollTop = 0;
+            }, 100);
+          }
+        }, 200);
       });
     });
   }
 
-  // Internal modal close without history mutation
+  // Internal modal close
   function internalClose() {
     modal.setAttribute('aria-hidden', 'true');
     modal.classList.remove('open');
@@ -580,42 +737,38 @@
       if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
     });
 
-    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') lastFocusedElement.focus();
+    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+      lastFocusedElement.focus();
+    }
 
     document.documentElement.classList.remove('modal-open');
     modalOpen = false;
+    
+    // Reset TTS state for next modal
+    ttsState = { currentWord: 0, queuePos: 0, isPaused: false, wasPlaying: false };
   }
 
-  // Close modal properly with history back support
+  // Close modal with better back button handling
   function closeModal() {
     if (hadPushedState) {
       try { 
-        // Navigate to previous URL if available, otherwise go back
-        if (previousUrl && previousUrl !== window.location.href) {
-          window.location.href = previousUrl;
-        } else {
-          history.back();
-        }
+        history.back();
       } catch { 
         internalClose(); 
         hadPushedState = false; 
-        modalOpen = false; 
       }
       return;
     }
     internalClose();
-    hadPushedState = false;
     try { history.replaceState(history.state, '', '/places/'); } catch {}
   }
 
-  // Open modal at index
+  // Open modal with scroll to top and enhanced UX
   function openModal(index) {
     if (!modal) return;
     if (index < 0 || index >= cards.length) return;
     
-    // Store current URL as previous URL
     previousUrl = window.location.href;
-    
     currentIndex = index;
     const card = cards[currentIndex];
 
@@ -628,54 +781,84 @@
     }
     if (modalText) modalText.innerHTML = fullHtml;
 
-    // Create table of contents
+    // Create enhanced navigation
     const tocContainer = createTableOfContents(modalText);
     const mobileTocButton = createMobileTocButton(tocContainer);
 
     populateRelatedAll(card);
 
     // Clean up existing controls
-    const existing = modal.querySelector('.tts-controls, .tts-toggle-btn, .mobile-toc-toggle, .table-of-contents');
-    if (existing) existing.remove();
+    qa('.tts-controls, .tts-toggle-btn, .mobile-toc-toggle, .table-of-contents', modal).forEach(el => el.remove());
 
-    // TTS toggle + controls
+    // Create modal header if it doesn't exist
+    let modalHeader = q('.modal-header', modal);
+    if (!modalHeader) {
+      modalHeader = document.createElement('div');
+      modalHeader.className = 'modal-header';
+      modal.insertBefore(modalHeader, modal.firstChild);
+    }
+
+    // Add controls to header
+    const controlsGroup = document.createElement('div');
+    controlsGroup.className = 'modal-controls';
+
+    // TTS toggle button
     const ttsToggleBtn = document.createElement('button');
     ttsToggleBtn.className = 'tts-toggle-btn';
     ttsToggleBtn.innerHTML = '🔊';
-    ttsToggleBtn.title = 'Toggle Text-to-Speech';
+    ttsToggleBtn.title = 'Text-to-Speech';
     ttsToggleBtn.type = 'button';
 
-    btnClose?.after(ttsToggleBtn);
-
-    // Add TOC button for mobile
+    // Add mobile TOC button
     if (mobileTocButton) {
-      ttsToggleBtn.after(mobileTocButton);
+      controlsGroup.appendChild(mobileTocButton);
     }
+
+    controlsGroup.appendChild(ttsToggleBtn);
+    
+    // Ensure close button exists in header
+    if (!q('.modal-close', modalHeader)) {
+      const closeBtn = document.createElement('button');
+      closeBtn.id = 'modal-close';
+      closeBtn.className = 'modal-close';
+      closeBtn.innerHTML = '&times;';
+      closeBtn.setAttribute('aria-label', 'Close modal');
+      closeBtn.type = 'button';
+      controlsGroup.appendChild(closeBtn);
+      btnClose = closeBtn;
+    }
+
+    modalHeader.appendChild(controlsGroup);
 
     // Add TOC container
     if (tocContainer) {
       modalText?.parentNode?.insertBefore(tocContainer, modalText);
     }
 
+    // Create TTS controls
     const ttsWrap = document.createElement('div');
     ttsWrap.className = 'tts-controls';
     ttsWrap.innerHTML = `
-      <div class="tts-controls-row" style="display:flex;gap:.5rem;align-items:center;">
-        <button class="tts-play" aria-pressed="false" title="Play/Pause">▶️ Play</button>
-        <div class="tts-progress" aria-hidden="true" style="margin-left:0.5rem;"></div>
+      <div class="tts-controls-row">
+        <button class="tts-play" aria-pressed="false" title="Play/Pause TTS">▶️ Play</button>
+        <div class="tts-progress" aria-hidden="true"></div>
       </div>
-      <div class="tts-controls-row" style="margin-top:.5rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+      <div class="tts-controls-row">
         <label for="tts-voices" class="sr-only">Voice</label>
         <select id="tts-voices" aria-label="Choose voice"></select>
-        <label for="tts-rate" class="sr-only">Rate</label>
-        <input id="tts-rate" type="range" min="0.5" max="2.0" step="0.05" value="1.02" aria-label="Speech rate" style="width:120px;">
+        <label for="tts-rate" class="sr-only">Speed</label>
+        <input id="tts-rate" type="range" min="0.5" max="2.0" step="0.1" value="1.0" aria-label="Speech rate">
         <label for="tts-pitch" class="sr-only">Pitch</label>
-        <input id="tts-pitch" type="range" min="0.5" max="2.0" step="0.05" value="1.0" aria-label="Speech pitch" style="width:120px;">
-        <span class="tts-status" aria-live="polite" style="margin-left:.5rem;"></span>
+        <input id="tts-pitch" type="range" min="0.5" max="2.0" step="0.1" value="1.0" aria-label="Speech pitch">
+        <span class="tts-status" aria-live="polite">Ready</span>
       </div>
     `;
 
-    modalText?.parentNode?.insertBefore(ttsWrap, modalText.nextSibling);
+    if (tocContainer) {
+      tocContainer.after(ttsWrap);
+    } else {
+      modalText?.parentNode?.insertBefore(ttsWrap, modalText);
+    }
 
     const langPref = (document.documentElement.lang || 'pa-IN').split(/[-_]/)[0].toLowerCase();
     let ttsInstance = null;
@@ -687,7 +870,6 @@
         ttsToggleBtn.classList.add('active');
         if (!ttsInstance) ttsInstance = initTTSControls(ttsWrap, modalText, langPref);
         q('.tts-play', ttsWrap)?.focus();
-        try { ttsWrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
       } else {
         ttsWrap.classList.remove('show');
         ttsToggleBtn.classList.remove('active');
@@ -696,17 +878,17 @@
       }
     });
 
-    // Show modal
+    // Show modal with smooth animation
     modal.setAttribute('aria-hidden', 'false');
     modal.classList.add('open');
     modal.style.display = 'flex';
 
+    // Scroll to top
     if (modalContent) {
-      modalContent.style.overflow = 'auto';
-      modalContent.style.webkitOverflowScrolling = 'touch';
       modalContent.scrollTop = 0;
-      modalContent.classList.add('highlighted');
-      setTimeout(() => modalContent.classList.remove('highlighted'), 1200);
+      setTimeout(() => {
+        if (q('.modal-body')) q('.modal-body').scrollTop = 0;
+      }, 100);
     }
 
     lastFocusedElement = document.activeElement;
@@ -725,7 +907,7 @@
       hadPushedState = false;
     }
 
-    // Add key handlers
+    // Add enhanced key handlers
     document.addEventListener('keydown', keyHandler, true);
   }
 
@@ -735,7 +917,7 @@
     else if (ev.key === 'Tab') trapFocus(ev);
   }
 
-  // Setup copy-link buttons functionality
+  // Setup copy-link functionality
   function setupCopyLinks() {
     qa('.copy-link').forEach(btn => {
       btn.addEventListener('click', async e => {
@@ -754,80 +936,113 @@
           setTimeout(() => {
             btn.classList.remove('copied');
             btn.textContent = prevText || '🔗';
-          }, 1500);
+          }, 2000);
         } catch {
-          alert('Copy failed — please copy manually: ' + url);
+          const notification = document.createElement('div');
+          notification.className = 'copy-notification';
+          notification.textContent = 'Copy manually: ' + url;
+          document.body.appendChild(notification);
+          setTimeout(() => notification.remove(), 3000);
         }
       });
     });
   }
 
-  // Setup share buttons functionality
+  // Setup enhanced share buttons
   function setupShareButtons() {
     qa('.share-btn').forEach(btn => {
       btn.addEventListener('click', async e => {
         e.stopPropagation();
-        const a = btn.closest('article.place-card');
-        if (!a) return;
-        const title = a.dataset.title || a.querySelector('h3')?.textContent || document.title;
-        const url = `https://www.pattibytes.com/places/#${encodeURIComponent(a.id)}`;
-        const text = (a.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 140);
+        const article = btn.closest('article.place-card');
+        if (!article) return;
+        
+        const title = article.dataset.title || article.querySelector('h3')?.textContent || document.title;
+        const url = `https://www.pattibytes.com/places/#${encodeURIComponent(article.id)}`;
+        const text = (article.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 140);
 
-        const ok = await shareLink({ title, text, url });
-        if (!ok) {
-          btn.classList.add('copied');
-          const prevText = btn.textContent;
-          btn.textContent = '✔️';
-          setTimeout(() => {
-            btn.classList.remove('copied');
-            btn.textContent = prevText || '📤';
-          }, 1500);
-        }
+        // Create custom share modal
+        createShareModal({ title, text, url });
       });
     });
   }
 
-  // Enhanced bilingual search working with Jekyll data attributes
+  // Enhanced bilingual search with dynamic translation
   function applySearch(qstr) {
     const siteLang = (document.documentElement.lang || 'pa').toLowerCase();
     const inputLang = /[\u0A00-\u0A7F]/.test(qstr.trim()) ? 'pa' : 'en';
-
-    const normalizedQuery = norm(qstr);
+    
+    // Create search variants
+    const originalQuery = norm(qstr);
     const romanQuery = norm(paToRoman(qstr));
+    const punjabiQuery = norm(romanToPa(qstr));
 
     let shown = 0;
+    let searchVariants = [originalQuery];
+
+    // Add transliterated variants for cross-language search
+    if (siteLang === 'pa' && inputLang === 'en') {
+      searchVariants.push(punjabiQuery);
+      // Show search suggestion
+      if (qstr.trim().length > 2) {
+        const suggestion = romanToPa(qstr);
+        if (suggestion !== qstr) {
+          showSearchSuggestion(`Searching for: "${qstr}" → "${suggestion}"`);
+        }
+      }
+    } else if (siteLang === 'en' && inputLang === 'pa') {
+      searchVariants.push(romanQuery);
+    }
+
     index.forEach(({ el, nText, rText }) => {
-      // Enhanced search logic for both title and preview from Jekyll data
-      const matches = (!normalizedQuery && !romanQuery) ||
-        (siteLang === inputLang ? nText.includes(normalizedQuery) :
-        siteLang === 'pa' ? rText.includes(romanQuery) : nText.includes(normalizedQuery)) ||
-        // Also search in full content if available
-        (el.dataset.full && (
-          norm(el.dataset.full).includes(normalizedQuery) ||
-          norm(paToRoman(el.dataset.full)).includes(romanQuery)
-        ));
+      const matches = !originalQuery || 
+        searchVariants.some(variant => 
+          nText.includes(variant) || rText.includes(variant)
+        );
 
       el.style.display = matches ? '' : 'none';
       if (matches) shown++;
     });
 
+    // Update no-match message
     if (noMatchEl) {
       if (shown === 0) {
         noMatchEl.style.display = 'block';
-        noMatchEl.textContent = siteLang === 'pa' ? 'ਕੋਈ ਮਿਲਦਾ ਸਥਾਨ ਨਹੀਂ ਮਿਲਿਆ।' : 'No matching places found.';
+        noMatchEl.textContent = siteLang === 'pa' ? 
+          'ਕੋਈ ਮਿਲਦਾ ਸਥਾਨ ਨਹੀਂ ਮਿਲਿਆ। ਕਿਰਪਾ ਕਰਕੇ ਵੱਖਰੇ ਸ਼ਬਦ ਵਰਤੋ।' : 
+          'No matching places found. Try different keywords.';
       } else {
         noMatchEl.style.display = 'none';
+        hideSearchSuggestion();
       }
     }
   }
 
-  // Set up search input event handlers
+  // Show search suggestion
+  function showSearchSuggestion(text) {
+    hideSearchSuggestion();
+    const suggestion = document.createElement('div');
+    suggestion.className = 'search-suggestion';
+    suggestion.textContent = text;
+    searchInput.parentNode.after(suggestion);
+  }
+
+  // Hide search suggestion
+  function hideSearchSuggestion() {
+    qa('.search-suggestion').forEach(el => el.remove());
+  }
+
+  // Setup search functionality
   function setupSearch() {
     if (!searchInput) return;
+    
+    let searchTimeout;
     searchInput.addEventListener('input', e => {
-      applySearch(e.target.value || '');
-      const hasValue = !!(e.target.value || '').trim();
-      clearSearch?.classList.toggle('visible', hasValue);
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        applySearch(e.target.value || '');
+        const hasValue = !!(e.target.value || '').trim();
+        clearSearch?.classList.toggle('visible', hasValue);
+      }, 150); // Debounce search
     });
 
     searchInput.addEventListener('keydown', e => {
@@ -841,6 +1056,7 @@
       if (searchInput) searchInput.value = '';
       applySearch('');
       clearSearch.classList.remove('visible');
+      hideSearchSuggestion();
       searchInput?.focus();
     });
   }
@@ -849,8 +1065,6 @@
   function handleResponsiveToc() {
     window.addEventListener('resize', () => {
       const tocContainers = qa('.table-of-contents');
-      const tocButtons = qa('.mobile-toc-toggle');
-      
       tocContainers.forEach(toc => {
         if (window.innerWidth > 768) {
           toc.style.display = 'block';
@@ -864,10 +1078,10 @@
     });
   }
 
-  // Initialization on DOMContentLoaded
+  // Initialization
   document.addEventListener('DOMContentLoaded', () => {
     modal = q('#places-modal');
-    if (!modal) return; // Stop script if no modal found
+    if (!modal) return;
 
     modalMedia = q('#modal-media', modal);
     modalText = q('#modal-text', modal);
@@ -879,10 +1093,9 @@
     clearSearch = q('#clear-search');
     noMatchEl = q('#no-match');
 
-    // Arrange buttons horizontally
     arrangeActionButtonsHorizontally();
 
-    // Build enhanced search index from Jekyll data attributes
+    // Build enhanced search index
     index = cards.map(c => {
       const title = c.dataset.title || c.querySelector('h3')?.textContent || '';
       const preview = c.dataset.preview || '';
@@ -898,25 +1111,26 @@
     setupSearch();
     setupCopyLinks();
     setupShareButtons();
-    setupGoogleTranslate();
     handleResponsiveToc();
 
-    // On page load, open modal if deep link hash present
+    // Handle deep links
     function handleHashOpen() {
       const id = normalizeHash(window.location.hash || '');
       if (!id) return;
       const target = document.getElementById(id);
       if (target && target.classList.contains('place-card')) {
         openModal(cards.indexOf(target));
-        try { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
-        flashHighlight(target, 'highlighted', 1600);
+        setTimeout(() => {
+          try { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+          flashHighlight(target, 'highlighted', 1600);
+        }, 300);
       }
     }
 
     handleHashOpen();
     window.addEventListener('hashchange', handleHashOpen, false);
 
-    // History back/forward management
+    // History management
     window.addEventListener('popstate', () => {
       if (modalOpen) {
         internalClose();
@@ -931,14 +1145,26 @@
       }
     });
 
-    // Keyboard and mouse event bindings
-    btnClose?.addEventListener('click', ev => { ev.stopPropagation(); closeModal(); });
-    modal.addEventListener('click', ev => { if (ev.target === modal) closeModal(); });
-    
+    // Event bindings
+    modal.addEventListener('click', ev => { 
+      if (ev.target === modal) closeModal(); 
+    });
+
+    // Delegate modal close button clicks
+    modal.addEventListener('click', ev => {
+      if (ev.target.matches('.modal-close, #modal-close')) {
+        ev.stopPropagation();
+        closeModal();
+      }
+    });
+
     cards.forEach((card, idx) => {
       const readBtn = card.querySelector('.read-more-btn');
       if (readBtn) {
-        readBtn.addEventListener('click', ev => { ev.stopPropagation(); openModal(idx); });
+        readBtn.addEventListener('click', ev => { 
+          ev.stopPropagation(); 
+          openModal(idx); 
+        });
       }
       
       card.addEventListener('keydown', ev => {
