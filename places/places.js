@@ -1,4 +1,4 @@
-// Enhanced places.js with fullscreen mobile modal, comprehensive sharing, and improved translation support
+// Enhanced places.js with fullscreen modal, improved sharing, and better mobile experience
 (function () {
   "use strict";
 
@@ -49,12 +49,12 @@
     try { return decodeURIComponent(s); } catch { return s; }
   }
 
-  // Store previous URL and scroll position
+  // Store state
   let previousUrl = window.location.href;
   let scrollPosition = 0;
   let ttsState = { paused: false, currentWord: 0, queuePos: 0, language: 'auto' };
 
-  // Detect if device is mobile/small screen
+  // Always use modal - no mobile redirect
   const isMobile = () => window.innerWidth <= 768;
 
   // Clipboard copy fallback
@@ -72,107 +72,86 @@
     document.body.removeChild(ta);
   }
 
-  // Enhanced Web Share API with comprehensive custom share modal
-  async function shareLink({ title, text, url, image }) {
-    try {
-      if (navigator.share && (!navigator.canShare || navigator.canShare({ title, text, url }))) {
-        await navigator.share({ title, text, url });
-        return true;
-      }
-    } catch (e) {}
-
-    showComprehensiveShareModal({ title, text, url, image });
-    return false;
-  }
-
-  // Comprehensive custom share modal with all social platforms
-  function showComprehensiveShareModal({ title, text, url, image }) {
-    const existing = q('.comprehensive-share-modal');
+  // Enhanced share modal with comprehensive social media options
+  function showCustomShareModal({ title, text, url, image }) {
+    const existing = q('.custom-share-modal');
     if (existing) existing.remove();
 
+    // Disable native sharing completely
+    navigator.share = null;
+
+    const shareText = `${text}\n\nClick link to read full article: ${url}`;
+
     const modal = document.createElement('div');
-    modal.className = 'comprehensive-share-modal';
+    modal.className = 'custom-share-modal';
     modal.innerHTML = `
       <div class="share-modal-content">
         <div class="share-modal-header">
-          <h3>ਸਾਂਝਾ ਕਰੋ / Share Content</h3>
+          <h3>🔗 Share Article / ਸਾਂਝਾ ਕਰੋ</h3>
           <button class="share-modal-close" aria-label="Close">&times;</button>
         </div>
         <div class="share-modal-body">
           <div class="share-preview">
-            ${image ? `<img src="${image}" alt="${title}" class="share-preview-image">` : '<div class="share-preview-placeholder">📍</div>'}
-            <div class="share-preview-content">
+            ${image ? `<img src="${image}" alt="${title}" class="share-image">` : '<div class="share-placeholder">📍</div>'}
+            <div class="share-info">
               <h4>${title}</h4>
               <p>${text}</p>
             </div>
           </div>
-          
-          <div class="share-link-section">
-            <label for="share-url-input">Link / ਲਿੰਕ:</label>
-            <div class="share-link-container">
-              <input type="text" id="share-url-input" class="share-link-input" value="${url}" readonly>
-              <button class="copy-share-link">📋 ਕਾਪੀ</button>
-            </div>
+          <div class="share-link-container">
+            <input type="text" class="share-link-input" value="${url}" readonly>
+            <button class="copy-share-link">📋 Copy Link</button>
           </div>
-
-          <div class="share-platforms">
-            <h5>Share on Social Media / ਸੋਸ਼ਲ ਮੀਡੀਆ 'ਤੇ ਸਾਂਝਾ ਕਰੋ:</h5>
-            <div class="share-options-grid">
-              <button class="share-option" data-service="whatsapp" style="background: #25D366;">
-                <span class="share-icon">📱</span>
-                WhatsApp
-              </button>
-              <button class="share-option" data-service="facebook" style="background: #1877F2;">
-                <span class="share-icon">📘</span>
-                Facebook
-              </button>
-              <button class="share-option" data-service="twitter" style="background: #1DA1F2;">
-                <span class="share-icon">🐦</span>
-                Twitter
-              </button>
-              <button class="share-option" data-service="instagram" style="background: linear-gradient(45deg, #F58529, #DD2A7B, #8134AF, #515BD4);">
-                <span class="share-icon">📷</span>
-                Instagram
-              </button>
-              <button class="share-option" data-service="telegram" style="background: #0088CC;">
-                <span class="share-icon">✈️</span>
-                Telegram
-              </button>
-              <button class="share-option" data-service="linkedin" style="background: #0A66C2;">
-                <span class="share-icon">💼</span>
-                LinkedIn
-              </button>
-              <button class="share-option" data-service="reddit" style="background: #FF4500;">
-                <span class="share-icon">🔗</span>
-                Reddit
-              </button>
-              <button class="share-option" data-service="pinterest" style="background: #BD081C;">
-                <span class="share-icon">📌</span>
-                Pinterest
-              </button>
-              <button class="share-option" data-service="snapchat" style="background: #FFFC00; color: #000;">
-                <span class="share-icon">👻</span>
-                Snapchat
-              </button>
-              <button class="share-option" data-service="tiktok" style="background: #000000;">
-                <span class="share-icon">🎵</span>
-                TikTok
-              </button>
-              <button class="share-option" data-service="quora" style="background: #B92B27;">
-                <span class="share-icon">❓</span>
-                Quora
-              </button>
-              <button class="share-option" data-service="discord" style="background: #5865F2;">
-                <span class="share-icon">🎮</span>
-                Discord
-              </button>
-              <button class="share-option" data-service="email" style="background: #34495e;">
-                <span class="share-icon">📧</span>
-                Email
-              </button>
-              <button class="share-option" data-service="sms" style="background: #52c41a;">
+          <div class="share-options-container">
+            <h5>Share on Social Media:</h5>
+            <div class="share-options-scroll">
+              <button class="share-option" data-service="whatsapp">
                 <span class="share-icon">💬</span>
-                SMS
+                <span>WhatsApp</span>
+              </button>
+              <button class="share-option" data-service="facebook">
+                <span class="share-icon">📘</span>
+                <span>Facebook</span>
+              </button>
+              <button class="share-option" data-service="twitter">
+                <span class="share-icon">🐦</span>
+                <span>Twitter</span>
+              </button>
+              <button class="share-option" data-service="telegram">
+                <span class="share-icon">✈️</span>
+                <span>Telegram</span>
+              </button>
+              <button class="share-option" data-service="instagram">
+                <span class="share-icon">📸</span>
+                <span>Instagram</span>
+              </button>
+              <button class="share-option" data-service="linkedin">
+                <span class="share-icon">💼</span>
+                <span>LinkedIn</span>
+              </button>
+              <button class="share-option" data-service="reddit">
+                <span class="share-icon">🤖</span>
+                <span>Reddit</span>
+              </button>
+              <button class="share-option" data-service="pinterest">
+                <span class="share-icon">📌</span>
+                <span>Pinterest</span>
+              </button>
+              <button class="share-option" data-service="quora">
+                <span class="share-icon">🔍</span>
+                <span>Quora</span>
+              </button>
+              <button class="share-option" data-service="email">
+                <span class="share-icon">📧</span>
+                <span>Email</span>
+              </button>
+              <button class="share-option" data-service="sms">
+                <span class="share-icon">💬</span>
+                <span>SMS</span>
+              </button>
+              <button class="share-option" data-service="copy">
+                <span class="share-icon">📝</span>
+                <span>Copy Text</span>
               </button>
             </div>
           </div>
@@ -188,66 +167,92 @@
       setTimeout(() => modal.remove(), 300);
     };
 
+    // Event listeners
     q('.share-modal-close', modal).addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => {
       if (e.target === modal) closeModal();
     });
 
-    // Enhanced copy functionality
+    // Copy link functionality
     q('.copy-share-link', modal).addEventListener('click', async () => {
       try {
         await copyToClipboard(url);
         const btn = q('.copy-share-link', modal);
-        const original = btn.textContent;
-        btn.textContent = '✅ ਕਾਪੀ ਹੋਇਆ';
+        const original = btn.innerHTML;
+        btn.innerHTML = '✅ Copied!';
         btn.style.background = 'var(--success-color)';
-        showNotification('Link copied! / ਲਿੰਕ ਕਾਪੀ ਹੋਇਆ!', 'success');
         setTimeout(() => {
-          btn.textContent = original;
+          btn.innerHTML = original;
           btn.style.background = '';
         }, 2000);
+        showNotification('Link copied! / ਲਿੰਕ ਕਾਪੀ ਹੋਇਆ!', 'success');
       } catch {
         showNotification('Copy failed / ਕਾਪੀ ਅਸਫਲ', 'error');
       }
     });
 
-    // Comprehensive share options
+    // Social media sharing
     qa('.share-option', modal).forEach(btn => {
       btn.addEventListener('click', () => {
         const service = btn.dataset.service;
-        const encodedUrl = encodeURIComponent(url);
+        let shareUrl = '';
+        
         const encodedTitle = encodeURIComponent(title);
-        const encodedText = encodeURIComponent(text);
-        const shareText = encodeURIComponent(`${title}\n${text}\n${url}`);
+        const encodedText = encodeURIComponent(shareText);
+        const encodedUrl = encodeURIComponent(url);
         
-        const shareUrls = {
-          whatsapp: `https://wa.me/?text=${shareText}`,
-          facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
-          twitter: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`,
-          instagram: `https://www.instagram.com/`, // Instagram doesn't support direct URL sharing
-          telegram: `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}`,
-          linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
-          reddit: `https://reddit.com/submit?url=${encodedUrl}&title=${encodedTitle}`,
-          pinterest: `https://pinterest.com/pin/create/button/?url=${encodedUrl}&description=${encodedTitle}`,
-          snapchat: `https://www.snapchat.com/scan?attachmentUrl=${encodedUrl}`,
-          tiktok: `https://www.tiktok.com/`, // TikTok doesn't support direct URL sharing
-          quora: `https://www.quora.com/`, // Quora doesn't support direct URL sharing
-          discord: `https://discord.com/`, // Discord doesn't support direct URL sharing
-          email: `mailto:?subject=${encodedTitle}&body=${encodeURIComponent(`${text}\n\n${url}`)}`,
-          sms: `sms:?body=${shareText}`
-        };
+        switch(service) {
+          case 'whatsapp':
+            shareUrl = `https://wa.me/?text=${encodedText}`;
+            break;
+          case 'facebook':
+            shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
+            break;
+          case 'twitter':
+            shareUrl = `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`;
+            break;
+          case 'telegram':
+            shareUrl = `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}`;
+            break;
+          case 'instagram':
+            // Instagram doesn't support direct URL sharing, copy to clipboard
+            copyToClipboard(shareText);
+            showNotification('Content copied! Open Instagram and paste.', 'info');
+            break;
+          case 'linkedin':
+            shareUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
+            break;
+          case 'reddit':
+            shareUrl = `https://reddit.com/submit?url=${encodedUrl}&title=${encodedTitle}`;
+            break;
+          case 'pinterest':
+            shareUrl = `https://pinterest.com/pin/create/button/?url=${encodedUrl}&description=${encodedTitle}`;
+            break;
+          case 'quora':
+            copyToClipboard(`${title}\n\n${shareText}`);
+            showNotification('Content copied! Open Quora and paste.', 'info');
+            break;
+          case 'email':
+            shareUrl = `mailto:?subject=${encodedTitle}&body=${encodedText}`;
+            break;
+          case 'sms':
+            shareUrl = `sms:?body=${encodedText}`;
+            break;
+          case 'copy':
+            copyToClipboard(shareText);
+            showNotification('Full content copied! / ਪੂਰੀ ਸਮੱਗਰੀ ਕਾਪੀ ਹੋਈ!', 'success');
+            break;
+        }
         
-        if (shareUrls[service]) {
+        if (shareUrl && service !== 'instagram' && service !== 'quora' && service !== 'copy') {
           if (service === 'email' || service === 'sms') {
-            window.location.href = shareUrls[service];
-          } else if (['instagram', 'tiktok', 'quora', 'discord'].includes(service)) {
-            // For platforms without direct sharing, copy URL and open platform
-            copyToClipboard(url);
-            window.open(shareUrls[service], '_blank');
-            showNotification(`Link copied! Open ${service} to share manually`, 'info');
+            window.location.href = shareUrl;
           } else {
-            window.open(shareUrls[service], '_blank', 'width=600,height=400,scrollbars=yes,resizable=yes');
+            window.open(shareUrl, '_blank', 'width=600,height=400,scrollbars=yes,resizable=yes');
           }
+        }
+        
+        if (service !== 'copy') {
           closeModal();
         }
       });
@@ -265,18 +270,16 @@
     
     const colors = {
       error: '#ef4444',
-      success: '#10b981',
-      info: '#3b82f6',
-      warning: '#f59e0b'
+      success: '#10b981', 
+      info: '#3b82f6'
     };
-
+    
     notification.style.cssText = `
       position: fixed; top: 20px; right: 20px; z-index: 10002;
-      background: ${colors[type] || colors.info}; color: white; 
-      padding: 1rem 1.5rem; border-radius: 8px; max-width: 400px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-      animation: slideInRight 0.3s ease-out;
-      font-weight: 500; border-left: 4px solid rgba(255,255,255,0.3);
+      background: ${colors[type] || colors.info};
+      color: white; padding: 1rem 1.5rem; border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15); max-width: 400px;
+      animation: slideInRight 0.3s ease-out; backdrop-filter: blur(10px);
     `;
 
     document.body.appendChild(notification);
@@ -290,14 +293,14 @@
     setTimeout(close, duration);
   }
 
-  // Visual flash highlight for deep link feedback
+  // Visual flash highlight
   function flashHighlight(el, className = 'highlighted', duration = 2000) {
     if (!el) return;
     el.classList.add(className);
     setTimeout(() => el.classList.remove(className), duration);
   }
 
-  // Enhanced language detection with character threshold
+  // Enhanced language detection
   function detectContentLanguage(text, minChars = 200) {
     const totalLength = text.length;
     if (totalLength < 50) return 'insufficient';
@@ -319,7 +322,7 @@
     return 'mixed';
   }
 
-  // Enhanced auto-translate text with better mappings
+  // Auto-translate text
   function autoTranslateText(text, targetLang = 'en') {
     let translated = text;
     
@@ -340,12 +343,11 @@
     return translated;
   }
 
-  // Enhanced Google Translate integration with full content support
+  // Enhanced Google Translate integration for full modal content
   function setupGoogleTranslateIntegration() {
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.type === 'childList' || mutation.type === 'characterData') {
-          // Check if modal is open and update TTS if content changed
           if (modalOpen && q('.modal-text')) {
             const modalText = q('.modal-text');
             const newLang = detectContentLanguage(modalText.textContent || '');
@@ -361,19 +363,21 @@
       });
     });
 
-    // Observe the entire document for translation changes
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ['class', 'lang']
-    });
+    // Observe the entire modal for Google Translate changes
+    if (modal) {
+      observer.observe(modal, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['class', 'lang']
+      });
+    }
 
     return observer;
   }
 
-  // Update TTS language based on detected content
+  // Update TTS language
   function updateTTSLanguage(ttsWrapper, modalTextContainer, detectedLang) {
     const statusSpan = q('.tts-status', ttsWrapper);
     const voiceSelect = q('#tts-voices', ttsWrapper);
@@ -382,7 +386,7 @@
       if (detectedLang.includes('insufficient') || detectedLang === 'mixed') {
         statusSpan.textContent = 'Content auto-translated for better speech quality';
       } else {
-        statusSpan.textContent = `Using ${detectedLang.toUpperCase()} voices`;
+        statusSpan.textContent = `Ready for ${detectedLang.toUpperCase()} voices`;
       }
     }
     
@@ -391,7 +395,7 @@
     }
   }
 
-  // Create enhanced Table of Contents from headings
+  // Create Table of Contents
   function createTableOfContents(content) {
     const headings = qa('h1, h2, h3, h4, h5, h6', content);
     if (!headings.length) return null;
@@ -402,7 +406,7 @@
     const tocHeader = document.createElement('div');
     tocHeader.className = 'toc-header';
     tocHeader.innerHTML = `
-      <h4 class="toc-title">ਸਮੱਗਰੀ / Contents</h4>
+      <h4 class="toc-title">📑 Contents / ਸਮੱਗਰੀ</h4>
       <button class="toc-collapse" aria-label="Collapse TOC">−</button>
     `;
     tocContainer.appendChild(tocHeader);
@@ -413,7 +417,7 @@
     headings.forEach((heading, index) => {
       const headingId = `heading-${index}-${heading.textContent.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}`;
       heading.id = headingId;
-      heading.style.scrollMarginTop = '120px'; // Account for fixed controls
+      heading.style.scrollMarginTop = '120px';
 
       const tocItem = document.createElement('li');
       tocItem.className = `toc-item toc-level-${heading.tagName.toLowerCase()}`;
@@ -425,7 +429,6 @@
       
       tocLink.addEventListener('click', (e) => {
         e.preventDefault();
-        scrollPosition = document.querySelector('.modal-body')?.scrollTop || 0;
         heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
         flashHighlight(heading, 'toc-target-highlight', 2000);
         
@@ -450,7 +453,7 @@
     return tocContainer;
   }
 
-  // Enhanced speech synthesis with better voice management
+  // Enhanced speech synthesis
   let voiceList = [];
   function ensureVoicesLoaded(timeout = 3000) {
     return new Promise((resolve) => {
@@ -541,7 +544,7 @@
     }
   }
 
-  // Stop TTS and reset UI
+  // Stop TTS
   function stopTTS() {
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
@@ -554,7 +557,7 @@
     ttsState = { paused: false, currentWord: 0, queuePos: 0, language: 'auto' };
   }
 
-  // Enhanced TTS controls with smart language detection
+  // Enhanced TTS controls
   function initTTSControls(wrapper, modalTextContainer, langPref) {
     const playBtn = q('.tts-play', wrapper);
     const select = q('#tts-voices', wrapper);
@@ -658,7 +661,7 @@
           if (modalBody) {
             const rect = wordSpans[i].getBoundingClientRect();
             const modalRect = modalBody.getBoundingClientRect();
-            const headerHeight = q('.modal-top-controls')?.offsetHeight || 80;
+            const headerHeight = q('.modal-header')?.offsetHeight || 80;
             
             if (rect.top < modalRect.top + headerHeight || rect.bottom > modalRect.bottom - 20) {
               const scrollTop = modalBody.scrollTop + rect.top - modalRect.top - headerHeight - 50;
@@ -820,13 +823,11 @@
   // Modal elements
   let modal, modalMedia, modalText, btnClose, modalContent, cards;
 
-  // Search and Clear elements
+  // Search elements
   let searchInput, clearSearch, noMatchEl;
-
-  // Index for search
   let index = [];
 
-  // Enhanced page scroll management
+  // Page scroll management
   function lockPageScroll() { 
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = 'hidden';
@@ -838,7 +839,7 @@
     document.body.style.paddingRight = '';
   }
 
-  // Enhanced focus trap
+  // Focus trap
   function trapFocus(e) {
     if (!modalOpen || e.key !== 'Tab') return;
     
@@ -859,7 +860,7 @@
     }
   }
 
-  // Enhanced button arrangement
+  // Arrange action buttons
   function arrangeActionButtonsHorizontally() {
     cards.forEach((card, index) => {
       const content = card.querySelector('.place-content');
@@ -902,7 +903,7 @@
     });
   }
 
-  // Enhanced related articles
+  // Populate related articles
   function populateRelatedAll(activeCard) {
     if (!modalText) return;
     
@@ -911,7 +912,7 @@
 
     const wrap = document.createElement('div');
     wrap.className = 'modal-related';
-    wrap.innerHTML = `<h4>ਤੁਹਾਨੂੰ ਇਹ ਵੀ ਪਸੰਦ ਆ ਸਕਦਾ ਹੈ / You May Also Like</h4>`;
+    wrap.innerHTML = `<h4>📚 You May Also Like / ਤੁਹਾਨੂੰ ਇਹ ਵੀ ਪਸੰਦ ਆ ਸਕਦਾ ਹੈ</h4>`;
 
     const list = document.createElement('div');
     list.className = 'related-list';
@@ -931,7 +932,7 @@
           <div class="related-title">${cardTitle}</div>
           <div class="related-meta">${preview.slice(0, 100)}${preview.length > 100 ? '...' : ''}</div>
           <div class="related-actions">
-            <button class="related-open" data-id="${c.id}">ਖੋਲੋ / Open</button>
+            <button class="related-open" data-id="${c.id}">🔗 Open / ਖੋਲੋ</button>
           </div>
         </div>`;
       list.appendChild(rel);
@@ -947,8 +948,6 @@
 
         const target = document.getElementById(id);
         if (target) {
-          scrollPosition = q('.modal-body')?.scrollTop || 0;
-          
           internalClose();
           setTimeout(() => {
             if (q('.modal-body')) q('.modal-body').scrollTop = 0;
@@ -965,7 +964,7 @@
     });
   }
 
-  // Enhanced modal close
+  // Internal modal close
   function internalClose() {
     if (!modal) return;
     
@@ -979,9 +978,11 @@
     }
 
     qa('.tts-controls', modal).forEach(n => n.remove());
-    qa('.modal-top-controls', modal).forEach(n => n.remove());
+    qa('.tts-toggle-btn', modal).forEach(n => n.remove());
+    qa('.mobile-toc-toggle', modal).forEach(n => n.remove());
     qa('.table-of-contents', modal).forEach(n => n.remove());
-    qa('.comprehensive-share-modal').forEach(n => n.remove());
+    qa('.modal-header', modal).forEach(n => n.remove());
+    qa('.custom-share-modal').forEach(n => n.remove());
     
     qa('.tts-word-span', modalText).forEach(s => {
       if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
@@ -990,15 +991,18 @@
     if (lastFocusedElement?.focus) {
       try {
         lastFocusedElement.focus();
-      } catch (e) {}
+      } catch (e) {
+        // Focus might fail
+      }
     }
 
     document.documentElement.classList.remove('modal-open');
     modalOpen = false;
   }
 
+  // Close modal
   function closeModal() {
-    qa('.comprehensive-share-modal').forEach(modal => modal.remove());
+    qa('.custom-share-modal').forEach(modal => modal.remove());
     
     if (hadPushedState) {
       try { 
@@ -1016,12 +1020,12 @@
     } catch {}
   }
 
-  // Enhanced modal opening with fullscreen mobile support and proper control layout
+  // Enhanced modal opening with fullscreen on all devices
   function openModal(index) {
     if (!modal) return;
     if (index < 0 || index >= cards.length) return;
 
-    // Use fullscreen modal for all devices instead of redirect
+    // Always use fullscreen modal on all devices
     previousUrl = window.location.href;
     currentIndex = index;
     const card = cards[currentIndex];
@@ -1031,58 +1035,53 @@
     const cardTitle = card.dataset.title || card.querySelector('h3')?.textContent || '';
 
     // Clean up existing modal content
-    qa('.modal-top-controls, .tts-controls, .table-of-contents, .modal-related', modal).forEach(n => n.remove());
+    qa('.modal-header, .tts-controls, .table-of-contents, .modal-related', modal).forEach(n => n.remove());
 
-    // Create TOP control bar - always visible at the top
-    const topControls = document.createElement('div');
-    topControls.className = 'modal-top-controls';
-    
-    const controlsLeft = document.createElement('div');
-    controlsLeft.className = 'controls-left';
+    // Create fixed modal header with top controls
+    const modalHeader = document.createElement('div');
+    modalHeader.className = 'modal-header';
     
     const modalTitle = document.createElement('h2');
     modalTitle.className = 'modal-title';
     modalTitle.textContent = cardTitle;
-    controlsLeft.appendChild(modalTitle);
-    
-    const controlsRight = document.createElement('div');
-    controlsRight.className = 'controls-right';
+    modalHeader.appendChild(modalTitle);
 
-    // Create control buttons - clearly visible
+    const modalControls = document.createElement('div');
+    modalControls.className = 'modal-controls';
+
+    // Create control buttons
     const ttsToggleBtn = document.createElement('button');
-    ttsToggleBtn.className = 'control-btn tts-toggle-btn';
-    ttsToggleBtn.innerHTML = '🔊';
-    ttsToggleBtn.title = 'Text-to-Speech';
+    ttsToggleBtn.className = 'tts-toggle-btn';
+    ttsToggleBtn.innerHTML = '🔊<span>TTS</span>';
+    ttsToggleBtn.title = 'Text-to-Speech / ਟੈਕਸਟ ਟੂ ਸਪੀਚ';
     ttsToggleBtn.setAttribute('aria-label', 'Toggle Text-to-Speech');
 
-    const tocToggleBtn = document.createElement('button');
-    tocToggleBtn.className = 'control-btn toc-toggle-btn';
-    tocToggleBtn.innerHTML = '📋';
-    tocToggleBtn.title = 'Table of Contents';
-    tocToggleBtn.setAttribute('aria-label', 'Toggle table of contents');
+    const mobileTocButton = document.createElement('button');
+    mobileTocButton.className = 'mobile-toc-toggle';
+    mobileTocButton.innerHTML = '📋<span>TOC</span>';
+    mobileTocButton.title = 'Table of Contents / ਸਮੱਗਰੀ';
+    mobileTocButton.setAttribute('aria-label', 'Toggle table of contents');
 
-    const shareBtn = document.createElement('button');
-    shareBtn.className = 'control-btn share-toggle-btn';
-    shareBtn.innerHTML = '📤';
-    shareBtn.title = 'Share';
-    shareBtn.setAttribute('aria-label', 'Share this content');
+    const modalShareBtn = document.createElement('button');
+    modalShareBtn.className = 'modal-share-btn';
+    modalShareBtn.innerHTML = '📤<span>Share</span>';
+    modalShareBtn.title = 'Share Article / ਸਾਂਝਾ ਕਰੋ';
+    modalShareBtn.setAttribute('aria-label', 'Share this article');
 
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'control-btn close-btn';
-    closeBtn.innerHTML = '✕';
-    closeBtn.title = 'Close';
-    closeBtn.setAttribute('aria-label', 'Close modal');
+    const modalCloseBtn = document.createElement('button');
+    modalCloseBtn.className = 'modal-close';
+    modalCloseBtn.innerHTML = '✕<span>Close</span>';
+    modalCloseBtn.title = 'Close Modal / ਬੰਦ ਕਰੋ';
+    modalCloseBtn.setAttribute('aria-label', 'Close modal');
 
-    controlsRight.appendChild(ttsToggleBtn);
-    controlsRight.appendChild(tocToggleBtn);
-    controlsRight.appendChild(shareBtn);
-    controlsRight.appendChild(closeBtn);
+    // Add buttons to controls
+    modalControls.appendChild(ttsToggleBtn);
+    modalControls.appendChild(mobileTocButton);
+    modalControls.appendChild(modalShareBtn);
+    modalControls.appendChild(modalCloseBtn);
     
-    topControls.appendChild(controlsLeft);
-    topControls.appendChild(controlsRight);
-    
-    // Insert top controls at the very beginning of modal
-    modal.insertBefore(topControls, modal.firstChild);
+    modalHeader.appendChild(modalControls);
+    modal.prepend(modalHeader);
 
     // Update modal content
     if (modalMedia) {
@@ -1092,17 +1091,15 @@
     
     if (modalText) {
       modalText.innerHTML = fullHtml;
+      // Ensure content is translatable
+      modalText.removeAttribute('translate');
+      modalText.classList.remove('notranslate');
     }
 
-    // Create table of contents AFTER image and title
+    // Create table of contents (loads under image and title)
     const tocContainer = createTableOfContents(modalText);
     if (tocContainer) {
-      // Insert TOC after modal media, before modal text
-      if (modalMedia && modalMedia.nextSibling) {
-        modalMedia.parentNode.insertBefore(tocContainer, modalMedia.nextSibling);
-      } else {
-        modalText?.parentNode.insertBefore(tocContainer, modalText);
-      }
+      modalText.parentNode.insertBefore(tocContainer, modalText);
     }
 
     // Populate related articles
@@ -1136,7 +1133,6 @@
       </div>
     `;
 
-    // Insert TTS controls after TOC or before modal text
     if (tocContainer) {
       tocContainer.after(ttsWrap);
     } else {
@@ -1145,12 +1141,6 @@
 
     const langPref = (document.documentElement.lang || 'pa-IN').split(/[-_]/)[0].toLowerCase();
     let ttsInstance = null;
-    let tocVisible = !isMobile();
-
-    // Set initial TOC visibility
-    if (tocContainer) {
-      tocContainer.style.display = tocVisible ? 'block' : 'none';
-    }
 
     // Enhanced button event listeners
     ttsToggleBtn.addEventListener('click', () => {
@@ -1158,6 +1148,7 @@
       if (opening) {
         ttsWrap.classList.add('show');
         ttsToggleBtn.classList.add('active');
+        ttsToggleBtn.innerHTML = '🔊<span>Hide</span>';
         if (!ttsInstance) {
           ttsInstance = initTTSControls(ttsWrap, modalText, langPref);
         }
@@ -1165,39 +1156,34 @@
       } else {
         ttsWrap.classList.remove('show');
         ttsToggleBtn.classList.remove('active');
+        ttsToggleBtn.innerHTML = '🔊<span>TTS</span>';
         if (ttsInstance?.stop) ttsInstance.stop();
       }
     });
 
-    tocToggleBtn.addEventListener('click', () => {
+    mobileTocButton.addEventListener('click', () => {
       if (tocContainer) {
-        tocVisible = !tocVisible;
-        tocContainer.style.display = tocVisible ? 'block' : 'none';
-        tocToggleBtn.classList.toggle('active', tocVisible);
-        
-        if (tocVisible && isMobile()) {
-          tocContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
+        const isVisible = tocContainer.style.display !== 'none';
+        tocContainer.style.display = isVisible ? 'none' : 'block';
+        mobileTocButton.classList.toggle('active', !isVisible);
+        mobileTocButton.innerHTML = isVisible ? '📋<span>Show</span>' : '📋<span>Hide</span>';
       }
     });
 
-    shareBtn.addEventListener('click', async () => {
+    modalShareBtn.addEventListener('click', async () => {
       const url = `https://www.pattibytes.com/places/#${encodeURIComponent(card.id)}`;
       const text = (card.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 140);
-      await shareLink({ title: cardTitle, text, url, image: imgSrc });
+      const image = card.dataset.image || '';
+      
+      showCustomShareModal({ title: cardTitle, text, url, image });
     });
 
-    closeBtn.addEventListener('click', closeModal);
+    modalCloseBtn.addEventListener('click', closeModal);
 
-    // Show modal with enhanced animation
+    // Show fullscreen modal
     modal.setAttribute('aria-hidden', 'false');
     modal.classList.add('open');
     modal.style.display = 'flex';
-
-    // Set fullscreen for mobile
-    if (isMobile()) {
-      modal.classList.add('mobile-fullscreen');
-    }
 
     const modalBody = q('.modal-body', modal);
     if (modalBody) {
@@ -1207,12 +1193,12 @@
     }
 
     lastFocusedElement = document.activeElement;
-    closeBtn.focus();
+    modalCloseBtn.focus();
     document.documentElement.classList.add('modal-open');
     modalOpen = true;
     lockPageScroll();
 
-    // Setup Google Translate observer for full content translation
+    // Setup Google Translate observer for full modal
     if (gtranslateObserver) gtranslateObserver.disconnect();
     gtranslateObserver = setupGoogleTranslateIntegration();
 
@@ -1231,7 +1217,7 @@
     document.addEventListener('keydown', keyHandler, true);
   }
 
-  // Enhanced keyboard handler
+  // Keyboard handler
   function keyHandler(ev) {
     if (!modal?.classList.contains('open')) return;
     
@@ -1248,7 +1234,7 @@
     }
   }
 
-  // Enhanced copy-link functionality
+  // Setup copy-link functionality
   function setupCopyLinks() {
     qa('.copy-link').forEach(btn => {
       btn.addEventListener('click', async e => {
@@ -1280,7 +1266,7 @@
     });
   }
 
-  // Enhanced share buttons functionality
+  // Setup share buttons functionality
   function setupShareButtons() {
     qa('.share-btn').forEach(btn => {
       btn.addEventListener('click', async e => {
@@ -1293,16 +1279,16 @@
         const text = (article.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 140);
         const image = article.dataset.image || '';
 
-        const shared = await shareLink({ title, text, url, image });
-        if (!shared) {
-          btn.classList.add('shared');
-          setTimeout(() => btn.classList.remove('shared'), 2000);
-        }
+        // Always use custom share modal - disable native sharing
+        showCustomShareModal({ title, text, url, image });
+        
+        btn.classList.add('shared');
+        setTimeout(() => btn.classList.remove('shared'), 2000);
       });
     });
   }
 
-  // Enhanced search with better auto-translation
+  // Enhanced search with auto-translation
   function applySearch(qstr) {
     const siteLang = (document.documentElement.lang || 'pa').toLowerCase();
     const inputLang = /[\u0A00-\u0A7F]/.test(qstr.trim()) ? 'pa' : 'en';
@@ -1345,7 +1331,7 @@
     }
   }
 
-  // Enhanced search setup
+  // Setup search functionality
   function setupSearch() {
     if (!searchInput) return;
 
@@ -1377,28 +1363,19 @@
     });
   }
 
-  // Enhanced responsive behavior handling
+  // Enhanced responsive behavior
   function handleResponsiveChanges() {
     let resizeTimeout;
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
-        // Update mobile fullscreen class
-        if (modalOpen) {
-          if (isMobile()) {
-            modal.classList.add('mobile-fullscreen');
-          } else {
-            modal.classList.remove('mobile-fullscreen');
-          }
-        }
-        
         // Handle TOC visibility
         const tocContainers = qa('.table-of-contents');
         tocContainers.forEach(toc => {
           if (!isMobile()) {
             toc.style.display = 'block';
           } else {
-            const button = q('.toc-toggle-btn');
+            const button = q('.mobile-toc-toggle');
             if (button && !button.classList.contains('active')) {
               toc.style.display = 'none';
             }
@@ -1431,9 +1408,10 @@
       return;
     }
 
+    // Enhanced button arrangement
     arrangeActionButtonsHorizontally();
 
-    // Build enhanced search index
+    // Build search index
     index = cards.map(c => {
       const title = c.dataset.title || c.querySelector('h3')?.textContent || '';
       const preview = c.dataset.preview || '';
@@ -1446,6 +1424,7 @@
       };
     });
 
+    // Setup all functionality
     setupSearch();
     setupCopyLinks();
     setupShareButtons();
@@ -1472,7 +1451,7 @@
     handleHashOpen();
     window.addEventListener('hashchange', handleHashOpen);
 
-    // Enhanced history management
+    // History management
     window.addEventListener('popstate', (e) => {
       if (modalOpen) {
         internalClose();
@@ -1519,9 +1498,7 @@
       card.setAttribute('role', 'article');
       
       card.addEventListener('mouseenter', () => {
-        if (!isMobile()) {
-          card.style.transform = 'translateY(-4px) scale(1.01)';
-        }
+        card.style.transform = 'translateY(-4px) scale(1.01)';
       });
       
       card.addEventListener('mouseleave', () => {
@@ -1529,301 +1506,37 @@
       });
     });
 
-    // Add required CSS animations
+    // Add required styles for share modal
     const style = document.createElement('style');
     style.textContent = `
-      @keyframes slideInRight {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-      }
-      @keyframes slideOutRight {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(100%); opacity: 0; }
-      }
-      
-      .modal-top-controls {
-        position: sticky;
-        top: 0;
-        z-index: 1000;
-        background: rgba(255, 255, 255, 0.98);
-        backdrop-filter: blur(20px);
-        border-bottom: 2px solid var(--accent-color);
-        padding: 1rem 2rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-      }
-      
-      .controls-left .modal-title {
-        margin: 0;
-        font-size: 1.2rem;
-        font-weight: 700;
-        color: var(--secondary-color);
-        max-width: 300px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      
-      .controls-right {
-        display: flex;
-        gap: 0.75rem;
-        align-items: center;
-      }
-      
-      .control-btn {
-        width: 48px;
-        height: 48px;
-        border: none;
-        border-radius: 12px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem;
-        transition: all 0.3s ease;
-        background: rgba(255, 255, 255, 0.9);
-        color: var(--secondary-color);
-        border: 2px solid transparent;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      }
-      
-      .control-btn:hover,
-      .control-btn.active {
-        background: var(--accent-color);
-        color: white;
-        transform: scale(1.05);
-        border-color: var(--highlight-color);
-      }
-      
-      .close-btn:hover {
-        background: #ef4444 !important;
-        color: white !important;
-      }
-      
-      .mobile-fullscreen {
-        width: 100vw !important;
-        height: 100vh !important;
-        max-width: none !important;
-        max-height: none !important;
-        margin: 0 !important;
-        border-radius: 0 !important;
-      }
-      
-      .comprehensive-share-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(0, 0, 0, 0.9);
-        backdrop-filter: blur(15px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10003;
-        opacity: 0;
-        visibility: hidden;
-        transition: all 0.4s ease;
-      }
-      
-      .comprehensive-share-modal.show {
-        opacity: 1;
-        visibility: visible;
-      }
-      
-      .share-modal-content {
-        background: white;
-        border-radius: 20px;
-        padding: 2rem;
-        max-width: 600px;
-        width: 90vw;
-        max-height: 90vh;
-        overflow-y: auto;
-        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
-        transform: scale(0.8) translateY(50px);
-        transition: transform 0.4s ease;
-      }
-      
-      .comprehensive-share-modal.show .share-modal-content {
-        transform: scale(1) translateY(0);
-      }
-      
       .share-preview {
-        display: flex;
-        gap: 1rem;
-        margin-bottom: 2rem;
-        padding: 1rem;
-        background: #f8f9fa;
-        border-radius: 12px;
-        border: 2px solid var(--accent-color);
+        display: flex; gap: 1rem; margin-bottom: 1.5rem; padding: 1rem;
+        background: rgba(255,255,255,0.5); border-radius: 8px; border: 1px solid #eee;
       }
-      
-      .share-preview-image,
-      .share-preview-placeholder {
-        width: 80px;
-        height: 80px;
-        border-radius: 8px;
-        object-fit: cover;
-        flex-shrink: 0;
+      .share-image { width: 80px; height: 60px; object-fit: cover; border-radius: 6px; }
+      .share-placeholder { width: 80px; height: 60px; display: flex; align-items: center; justify-content: center; background: var(--gradient-primary); border-radius: 6px; font-size: 1.5rem; color: white; }
+      .share-info h4 { margin: 0 0 0.5rem 0; font-size: 1rem; color: var(--secondary-color); }
+      .share-info p { margin: 0; font-size: 0.9rem; color: #666; line-height: 1.4; }
+      .share-options-container h5 { margin: 0 0 1rem 0; color: var(--secondary-color); }
+      .share-options-scroll {
+        display: flex; gap: 1rem; overflow-x: auto; padding: 0.5rem 0;
+        scrollbar-width: thin; -webkit-overflow-scrolling: touch;
       }
-      
-      .share-preview-placeholder {
-        background: var(--gradient-primary);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 2rem;
-        color: white;
-      }
-      
-      .share-preview-content h4 {
-        margin: 0 0 0.5rem 0;
-        color: var(--secondary-color);
-        font-size: 1.1rem;
-      }
-      
-      .share-preview-content p {
-        margin: 0;
-        color: #666;
-        font-size: 0.9rem;
-        line-height: 1.4;
-      }
-      
-      .share-link-section {
-        margin-bottom: 2rem;
-      }
-      
-      .share-link-section label {
-        display: block;
-        margin-bottom: 0.5rem;
-        font-weight: 600;
-        color: var(--secondary-color);
-      }
-      
-      .share-link-container {
-        display: flex;
-        gap: 0.75rem;
-      }
-      
-      .share-link-input {
-        flex: 1;
-        padding: 1rem;
-        border: 2px solid #ddd;
-        border-radius: 8px;
-        font-size: 0.9rem;
-        background: #f8f9fa;
-        transition: border-color 0.3s ease;
-      }
-      
-      .share-link-input:focus {
-        border-color: var(--accent-color);
-        outline: none;
-      }
-      
-      .copy-share-link {
-        padding: 1rem 1.5rem;
-        background: var(--gradient-primary);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        white-space: nowrap;
-      }
-      
-      .copy-share-link:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(255, 45, 149, 0.3);
-      }
-      
-      .share-platforms h5 {
-        margin: 0 0 1rem 0;
-        color: var(--secondary-color);
-        font-size: 1.1rem;
-        font-weight: 600;
-      }
-      
-      .share-options-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-        gap: 1rem;
-      }
-      
+      .share-options-scroll::-webkit-scrollbar { height: 6px; }
+      .share-options-scroll::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+      .share-options-scroll::-webkit-scrollbar-thumb { background: var(--accent-color); border-radius: 3px; }
       .share-option {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 1rem;
-        border: 2px solid transparent;
-        border-radius: 12px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-weight: 600;
-        color: white;
-        text-align: center;
-        min-height: 80px;
-        justify-content: center;
+        min-width: 80px; flex-shrink: 0; padding: 1rem 0.75rem; background: white;
+        border: 2px solid #eee; border-radius: 8px; cursor: pointer; text-align: center;
+        transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
       }
-      
-      .share-option:hover {
-        transform: translateY(-3px) scale(1.02);
-        border-color: rgba(255, 255, 255, 0.3);
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-      }
-      
-      .share-icon {
-        font-size: 1.5rem;
-        margin-bottom: 0.5rem;
-        display: block;
-      }
-      
-      @media (max-width: 768px) {
-        .modal-top-controls {
-          padding: 0.75rem 1rem;
-        }
-        
-        .controls-left .modal-title {
-          font-size: 1rem;
-          max-width: 200px;
-        }
-        
-        .control-btn {
-          width: 44px;
-          height: 44px;
-          font-size: 1rem;
-        }
-        
-        .controls-right {
-          gap: 0.5rem;
-        }
-        
-        .share-options-grid {
-          grid-template-columns: repeat(2, 1fr);
-        }
-        
-        .share-modal-content {
-          padding: 1.5rem;
-        }
-        
-        .share-preview {
-          flex-direction: column;
-          text-align: center;
-        }
-        
-        .share-preview-image,
-        .share-preview-placeholder {
-          width: 100px;
-          height: 100px;
-          align-self: center;
-        }
-      }
+      .share-option:hover { border-color: var(--accent-color); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+      .share-option span:first-child { font-size: 1.5rem; }
+      .share-option span:last-child { font-size: 0.8rem; font-weight: 600; color: var(--text-color); }
     `;
     document.head.appendChild(style);
 
-    console.log('Enhanced Places.js with fullscreen mobile modal initialized successfully');
+    console.log('Enhanced Fullscreen Places.js initialized successfully');
   });
 
   // Global error handler
