@@ -1,7 +1,7 @@
 {
   "name": "ਪੱਟੀ ਬਾਈਟਸ",
   "short_name": "PattiBytes",
-  "description": "ਪੱਟੀ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ, ਰਿਕਾਰਡ, ਸਥਾਨ, ਦਿੱਕੜੀ ਪੰਜਾਬੀ ਵੈਬ ਐਪ",
+  "description": "Punjabi news, places, shop, and culture",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -9,14 +9,14 @@
   "theme_color": "#111111",
   "icons": [
     {
-      "src": "/icons/pwab-192.png",
+      "src": "/icons/pwab-192.jpg",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/jpg"
     },
     {
-      "src": "/icons/pwab-512.png",
+      "src": "/icons/pwab-512.jpg",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/jpg",
       "purpose": "any maskable"
     }
   ]
