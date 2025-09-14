@@ -1,11 +1,12 @@
+// sw.js
 const CACHE_NAME = 'pattibytes-v1';
 const ASSETS = [
   '/',
   '/index.html',
   '/style.css',
   '/index.css',
-  '/icons/pwab-192.png',
-  '/icons/pwab-512.png',
+  '/icons/pwab-192.jpg',
+  '/icons/pwab-512.jpg',
   '/news/index.html',
   '/news/news.css',
   '/news/news.js',
@@ -17,36 +18,30 @@ const ASSETS = [
   '/shop/shop.js'
 ];
 
-// Install: precache
+// Install: precache essential files
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
   self.skipWaiting();
 });
 
-// Activate: cleanup old cache
+// Activate: remove old caches
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.map(k => k !== CACHE_NAME ? caches.delete(k) : null))
-    )
+    caches.keys().then(keys => Promise.all(keys.map(k => (k !== CACHE_NAME ? caches.delete(k) : null))))
   );
   self.clients.claim();
 });
 
-// Fetch: network-first for HTML, cache-first for static
+// Fetch: network-first for navigation, cache-first for others
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req)
-        .then(res => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then(c => c.put(req, copy));
-          return res;
-        })
-        .catch(() => caches.match(req))
+      fetch(req).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then(c => c.put(req, copy));
+        return res;
+      }).catch(() => caches.match(req))
     );
   } else {
     event.respondWith(
