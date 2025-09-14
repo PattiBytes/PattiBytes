@@ -1,4 +1,4 @@
-// Enhanced places.js with TTS, related places, copy/share link, bilingual search, dynamic UI, error handling
+// Enhanced places.js with horizontal buttons, Google Translate integration, heading navigation, and improved UX
 (function () {
   "use strict";
 
@@ -25,6 +25,9 @@
     let s = h.replace(/^#/, '').replace(/\/+$|\/+/g, '');
     try { return decodeURIComponent(s); } catch { return s; }
   }
+
+  // Store previous URL for proper back navigation
+  let previousUrl = window.location.href;
 
   // Clipboard copy fallback
   async function copyToClipboard(text) {
@@ -58,6 +61,117 @@
     if (!el) return;
     el.classList.add(className);
     setTimeout(() => el.classList.remove(className), duration);
+  }
+
+  // Google Translate Integration
+  function setupGoogleTranslate() {
+    // Hide Google Translate when modal is open
+    function toggleTranslateVisibility(hide) {
+      const translateElements = qa('.goog-te-banner-frame, .skiptranslate, #google_translate_element, .goog-te-gadget, .goog-te-combo, .goog-te-menu-frame');
+      translateElements.forEach(el => {
+        if (hide) {
+          el.style.display = 'none';
+          el.style.visibility = 'hidden';
+          el.style.opacity = '0';
+          el.style.pointerEvents = 'none';
+        } else {
+          el.style.display = '';
+          el.style.visibility = '';
+          el.style.opacity = '';
+          el.style.pointerEvents = '';
+        }
+      });
+    }
+
+    // Observe modal state and hide/show translate accordingly
+    const observer = new MutationObserver(() => {
+      const modalOpen = document.documentElement.classList.contains('modal-open');
+      toggleTranslateVisibility(modalOpen);
+    });
+
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    // Ensure Google Translate works on all elements except .notranslate
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof google !== 'undefined' && google.translate) {
+        // Force Google Translate to respect notranslate class
+        qa('[class*="notranslate"]').forEach(el => {
+          el.classList.add('notranslate');
+          el.setAttribute('translate', 'no');
+        });
+      }
+    });
+  }
+
+  // Create Table of Contents from headings
+  function createTableOfContents(content) {
+    const headings = qa('h1, h2, h3, h4, h5, h6', content);
+    if (!headings.length) return null;
+
+    const tocContainer = document.createElement('div');
+    tocContainer.className = 'table-of-contents';
+    
+    const tocTitle = document.createElement('h4');
+    tocTitle.textContent = 'ਸਮੱਗਰੀ';
+    tocTitle.className = 'toc-title';
+    tocContainer.appendChild(tocTitle);
+
+    const tocList = document.createElement('ul');
+    tocList.className = 'toc-list';
+
+    headings.forEach((heading, index) => {
+      // Generate unique ID for heading
+      const headingId = `heading-${index}-${heading.textContent.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}`;
+      heading.id = headingId;
+
+      // Create TOC entry
+      const tocItem = document.createElement('li');
+      tocItem.className = `toc-item toc-level-${heading.tagName.toLowerCase()}`;
+      
+      const tocLink = document.createElement('a');
+      tocLink.href = `#${headingId}`;
+      tocLink.textContent = heading.textContent;
+      tocLink.className = 'toc-link';
+      
+      tocLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Highlight the target heading briefly
+        flashHighlight(heading, 'toc-target-highlight', 2000);
+      });
+
+      tocItem.appendChild(tocLink);
+      tocList.appendChild(tocItem);
+    });
+
+    tocContainer.appendChild(tocList);
+    return tocContainer;
+  }
+
+  // Create mobile TOC button
+  function createMobileTocButton(tocContainer) {
+    if (!tocContainer) return null;
+
+    const tocButton = document.createElement('button');
+    tocButton.className = 'mobile-toc-toggle';
+    tocButton.innerHTML = '📋';
+    tocButton.title = 'ਸਮੱਗਰੀ';
+    tocButton.setAttribute('aria-label', 'Toggle table of contents');
+
+    let tocVisible = false;
+    tocButton.addEventListener('click', () => {
+      tocVisible = !tocVisible;
+      tocContainer.style.display = tocVisible ? 'block' : 'none';
+      tocButton.classList.toggle('active', tocVisible);
+      tocButton.innerHTML = tocVisible ? '✕' : '📋';
+    });
+
+    // Initially hide on mobile
+    if (window.innerWidth <= 768) {
+      tocContainer.style.display = 'none';
+    }
+
+    return tocButton;
   }
 
   // Speech synthesis voice loading with timeout
@@ -94,13 +208,13 @@
     qa('.tts-progress').forEach(el => el.textContent = '');
   }
 
-  // Initialize TTS controls
+  // Initialize TTS controls (keeping existing implementation)
   function initTTSControls(wrapper, modalTextContainer, langPref) {
-    const playBtn    = q('.tts-play', wrapper);
-    const select     = q('#tts-voices', wrapper);
+    const playBtn = q('.tts-play', wrapper);
+    const select = q('#tts-voices', wrapper);
     const statusSpan = q('.tts-status', wrapper);
     const progressEl = q('.tts-progress', wrapper);
-    const rateInput  = q('#tts-rate', wrapper);
+    const rateInput = q('#tts-rate', wrapper);
     const pitchInput = q('#tts-pitch', wrapper);
 
     let voices = [];
@@ -120,7 +234,8 @@
       voices = await ensureVoicesLoaded(2500);
       const addGroup = (label, arr) => {
         if (!arr.length) return;
-        const og = document.createElement('optgroup'); og.label = label;
+        const og = document.createElement('optgroup');
+        og.label = label;
         arr.forEach(v => {
           const opt = document.createElement('option');
           opt.value = `${v.name}||${v.lang}`;
@@ -148,7 +263,6 @@
     }
 
     function prepareTextForReading() {
-      // Remove existing spans
       qa('.tts-word-span', modalTextContainer).forEach(s => {
         if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
       });
@@ -316,7 +430,7 @@
   let hadPushedState = false;
 
   // Modal elements
-  let modal, modalMedia, modalText, btnClose, modalContent, btnPrev, btnNext, cards;
+  let modal, modalMedia, modalText, btnClose, modalContent, cards;
 
   // Search and Clear elements
   let searchInput, clearSearch, noMatchEl;
@@ -345,14 +459,65 @@
     }
   }
 
+  // Arrange action buttons horizontally
+  function arrangeActionButtonsHorizontally() {
+    cards.forEach(card => {
+      const content = card.querySelector('.place-content');
+      if (!content) return;
+
+      // Find existing buttons
+      const readBtn = content.querySelector('.read-more-btn');
+      const copyBtn = content.querySelector('.copy-link');
+      const shareBtn = content.querySelector('.share-btn');
+
+      if (!readBtn && !copyBtn && !shareBtn) return;
+
+      // Check if already arranged
+      if (content.querySelector('.place-actions')) return;
+
+      // Create actions container
+      const actionsContainer = document.createElement('div');
+      actionsContainer.className = 'place-actions';
+
+      // Create button group for copy and share
+      const buttonGroup = document.createElement('div');
+      buttonGroup.className = 'action-buttons';
+
+      // Move buttons to their containers
+      if (readBtn) {
+        readBtn.remove();
+        actionsContainer.appendChild(readBtn);
+      }
+
+      if (copyBtn) {
+        copyBtn.remove();
+        buttonGroup.appendChild(copyBtn);
+      }
+
+      if (shareBtn) {
+        shareBtn.remove();
+        buttonGroup.appendChild(shareBtn);
+      }
+
+      if (buttonGroup.children.length > 0) {
+        actionsContainer.appendChild(buttonGroup);
+      }
+
+      // Add to content
+      content.appendChild(actionsContainer);
+    });
+  }
+
   // Populate Related Articles (You May Also Like)
   function populateRelatedAll(activeCard) {
     if (!modalText) return;
     const existing = modalText.parentNode.querySelector('.modal-related');
     if (existing) existing.remove();
+
     const wrap = document.createElement('div');
     wrap.className = 'modal-related';
     wrap.innerHTML = `<h4>ਤੁਹਾਨੂੰ ਇਹ ਵੀ ਪਸੰਦ ਆ ਸਕਦਾ ਹੈ</h4>`;
+
     const list = document.createElement('div');
     list.className = 'related-list';
 
@@ -409,6 +574,8 @@
     stopTTS();
     qa('.tts-controls', modal).forEach(n => n.remove());
     qa('.tts-toggle-btn', modal).forEach(n => n.remove());
+    qa('.mobile-toc-toggle', modal).forEach(n => n.remove());
+    qa('.table-of-contents', modal).forEach(n => n.remove());
     qa('.tts-word-span', modalText).forEach(s => {
       if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
     });
@@ -422,7 +589,18 @@
   // Close modal properly with history back support
   function closeModal() {
     if (hadPushedState) {
-      try { history.back(); } catch { internalClose(); hadPushedState = false; modalOpen = false; }
+      try { 
+        // Navigate to previous URL if available, otherwise go back
+        if (previousUrl && previousUrl !== window.location.href) {
+          window.location.href = previousUrl;
+        } else {
+          history.back();
+        }
+      } catch { 
+        internalClose(); 
+        hadPushedState = false; 
+        modalOpen = false; 
+      }
       return;
     }
     internalClose();
@@ -430,23 +608,14 @@
     try { history.replaceState(history.state, '', '/places/'); } catch {}
   }
 
-  // Remove prev/next navigation buttons to simplify UX
-  function hidePrevNext() {
-    if (btnPrev) { btnPrev.style.display = 'none'; btnPrev.replaceWith(btnPrev.cloneNode(true)); }
-    if (btnNext) { btnNext.style.display = 'none'; btnNext.replaceWith(btnNext.cloneNode(true)); }
-    document.removeEventListener('keydown', arrowNavHandler, true);
-  }
-
-  // Prevent arrow key navigation when removed
-  function arrowNavHandler(ev) {
-    if (!modalOpen) return;
-    if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') ev.preventDefault();
-  }
-
   // Open modal at index
   function openModal(index) {
     if (!modal) return;
     if (index < 0 || index >= cards.length) return;
+    
+    // Store current URL as previous URL
+    previousUrl = window.location.href;
+    
     currentIndex = index;
     const card = cards[currentIndex];
 
@@ -459,12 +628,17 @@
     }
     if (modalText) modalText.innerHTML = fullHtml;
 
+    // Create table of contents
+    const tocContainer = createTableOfContents(modalText);
+    const mobileTocButton = createMobileTocButton(tocContainer);
+
     populateRelatedAll(card);
 
-    // TTS toggle + controls
-    const existing = modal.querySelector('.tts-controls, .tts-toggle-btn');
+    // Clean up existing controls
+    const existing = modal.querySelector('.tts-controls, .tts-toggle-btn, .mobile-toc-toggle, .table-of-contents');
     if (existing) existing.remove();
 
+    // TTS toggle + controls
     const ttsToggleBtn = document.createElement('button');
     ttsToggleBtn.className = 'tts-toggle-btn';
     ttsToggleBtn.innerHTML = '🔊';
@@ -472,6 +646,16 @@
     ttsToggleBtn.type = 'button';
 
     btnClose?.after(ttsToggleBtn);
+
+    // Add TOC button for mobile
+    if (mobileTocButton) {
+      ttsToggleBtn.after(mobileTocButton);
+    }
+
+    // Add TOC container
+    if (tocContainer) {
+      modalText?.parentNode?.insertBefore(tocContainer, modalText);
+    }
 
     const ttsWrap = document.createElement('div');
     ttsWrap.className = 'tts-controls';
@@ -531,8 +715,6 @@
     modalOpen = true;
     lockPageScroll();
 
-    hidePrevNext();
-
     const articleId = card.id || card.dataset.id;
     const newUrl = `https://www.pattibytes.com/places/#${encodeURIComponent(articleId)}`;
 
@@ -545,7 +727,6 @@
 
     // Add key handlers
     document.addEventListener('keydown', keyHandler, true);
-    document.addEventListener('keydown', arrowNavHandler, true);
   }
 
   function keyHandler(ev) {
@@ -606,20 +787,25 @@
     });
   }
 
-  // Bilingual search applying logic based on site lang vs input
+  // Enhanced bilingual search working with Jekyll data attributes
   function applySearch(qstr) {
     const siteLang = (document.documentElement.lang || 'pa').toLowerCase();
     const inputLang = /[\u0A00-\u0A7F]/.test(qstr.trim()) ? 'pa' : 'en';
 
     const normalizedQuery = norm(qstr);
-    const romanQuery = paToRoman(qstr);
+    const romanQuery = norm(paToRoman(qstr));
 
     let shown = 0;
     index.forEach(({ el, nText, rText }) => {
-      // Logic for bilingual keyboard + site language
+      // Enhanced search logic for both title and preview from Jekyll data
       const matches = (!normalizedQuery && !romanQuery) ||
         (siteLang === inputLang ? nText.includes(normalizedQuery) :
-        siteLang === 'pa' ? rText.includes(romanQuery) : nText.includes(normalizedQuery));
+        siteLang === 'pa' ? rText.includes(romanQuery) : nText.includes(normalizedQuery)) ||
+        // Also search in full content if available
+        (el.dataset.full && (
+          norm(el.dataset.full).includes(normalizedQuery) ||
+          norm(paToRoman(el.dataset.full)).includes(romanQuery)
+        ));
 
       el.style.display = matches ? '' : 'none';
       if (matches) shown++;
@@ -659,37 +845,61 @@
     });
   }
 
+  // Handle responsive TOC behavior
+  function handleResponsiveToc() {
+    window.addEventListener('resize', () => {
+      const tocContainers = qa('.table-of-contents');
+      const tocButtons = qa('.mobile-toc-toggle');
+      
+      tocContainers.forEach(toc => {
+        if (window.innerWidth > 768) {
+          toc.style.display = 'block';
+        } else {
+          const button = q('.mobile-toc-toggle');
+          if (button && !button.classList.contains('active')) {
+            toc.style.display = 'none';
+          }
+        }
+      });
+    });
+  }
+
   // Initialization on DOMContentLoaded
   document.addEventListener('DOMContentLoaded', () => {
     modal = q('#places-modal');
     if (!modal) return; // Stop script if no modal found
+
     modalMedia = q('#modal-media', modal);
     modalText = q('#modal-text', modal);
     btnClose = q('#modal-close', modal);
     modalContent = q('.modal-content', modal);
-    btnPrev = q('#modal-prev', modal);
-    btnNext = q('#modal-next', modal);
 
     cards = Array.from(document.querySelectorAll('.place-card'));
     searchInput = q('#places-search');
     clearSearch = q('#clear-search');
     noMatchEl = q('#no-match');
 
-    // Build search index
+    // Arrange buttons horizontally
+    arrangeActionButtonsHorizontally();
+
+    // Build enhanced search index from Jekyll data attributes
     index = cards.map(c => {
       const title = c.dataset.title || c.querySelector('h3')?.textContent || '';
       const preview = c.dataset.preview || '';
-      const fullText = `${title} ${preview}`.trim();
+      const fullContent = c.dataset.full || '';
+      const searchText = `${title} ${preview} ${fullContent}`.trim();
       return {
         el: c,
-        nText: norm(fullText),
-        rText: norm(paToRoman(fullText))
+        nText: norm(searchText),
+        rText: norm(paToRoman(searchText))
       };
     });
 
     setupSearch();
     setupCopyLinks();
     setupShareButtons();
+    setupGoogleTranslate();
+    handleResponsiveToc();
 
     // On page load, open modal if deep link hash present
     function handleHashOpen() {
@@ -724,11 +934,13 @@
     // Keyboard and mouse event bindings
     btnClose?.addEventListener('click', ev => { ev.stopPropagation(); closeModal(); });
     modal.addEventListener('click', ev => { if (ev.target === modal) closeModal(); });
+    
     cards.forEach((card, idx) => {
       const readBtn = card.querySelector('.read-more-btn');
       if (readBtn) {
         readBtn.addEventListener('click', ev => { ev.stopPropagation(); openModal(idx); });
       }
+      
       card.addEventListener('keydown', ev => {
         if ((ev.key === 'Enter' || ev.key === ' ') && document.activeElement === card) {
           ev.preventDefault();
