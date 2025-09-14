@@ -1,10 +1,12 @@
-// sw.js
 const CACHE_NAME = 'pattibytes-v1';
 const ASSETS = [
   '/',
   '/index.html',
-  '/style.css',
   '/index.css',
+  '/index.js',
+  '/style.css',
+  '/script.js',
+  '/manifest.webmanifest',
   '/icons/pwab-192.jpg',
   '/icons/pwab-512.jpg',
   '/news/index.html',
@@ -15,41 +17,55 @@ const ASSETS = [
   '/places/places.js',
   '/shop/index.html',
   '/shop/shop.css',
-  '/shop/shop.js'
+  '/shop/shop.js',
+  '/privacy-policy/index.html'
 ];
 
-// Install: precache essential files
+// Pre-cache on install (static app shell)
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+  );
   self.skipWaiting();
 });
 
-// Activate: remove old caches
+// Cleanup outdated caches on activate
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.map(k => (k !== CACHE_NAME ? caches.delete(k) : null))))
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    )
   );
   self.clients.claim();
 });
 
-// Fetch: network-first for navigation, cache-first for others
+// Response logic: network-first for HTML, cache-first for others
 self.addEventListener('fetch', event => {
-  const req = event.request;
-  if (req.mode === 'navigate') {
+  const url = new URL(event.request.url);
+
+  // Network-first for HTML navigation
+  if (event.request.mode === 'navigate' || /\.(html)$/.test(url.pathname)) {
     event.respondWith(
-      fetch(req).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE_NAME).then(c => c.put(req, copy));
-        return res;
-      }).catch(() => caches.match(req))
+      fetch(event.request)
+        .then(response => {
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, response.clone()));
+          return response;
+        })
+        .catch(() => caches.match(event.request))
     );
-  } else {
-    event.respondWith(
-      caches.match(req).then(cached => cached || fetch(req).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE_NAME).then(c => c.put(req, copy));
-        return res;
-      }))
-    );
+    return;
   }
+
+  // Cache-first for assets (CSS, JS, icons)
+  event.respondWith(
+    caches.match(event.request).then(cached =>
+      cached ||
+      fetch(event.request).then(response => {
+        if (response.ok) {
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, response.clone()));
+        }
+        return response;
+      }).catch(() => undefined)
+    )
+  );
 });
