@@ -11,6 +11,7 @@
   --background-color: #f9f9f9;
   --success-color: #10b981;
   --warning-color: #f59e0b;
+  --error-color: #ef4444;
   --shadow-light: 0 2px 12px rgba(0, 0, 0, 0.08);
   --shadow-medium: 0 6px 20px rgba(0, 0, 0, 0.12);
   --shadow-heavy: 0 12px 40px rgba(0, 0, 0, 0.15);
@@ -23,10 +24,83 @@
   --header-height: 60px;
   --gradient-primary: linear-gradient(135deg, var(--accent-color) 0%, var(--highlight-color) 100%);
   --gradient-secondary: linear-gradient(135deg, var(--secondary-color) 0%, var(--accent-color) 100%);
+  --gradient-success: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
   --blur-glass: blur(20px);
 }
 
-/* Enhanced Google Translate Integration */
+/* ===========================================
+   Enhanced Notification System
+=========================================== */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 10002;
+  max-width: 400px;
+  padding: 1rem 1.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-floating);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  backdrop-filter: var(--blur-glass);
+  animation: slideInRight 0.3s ease-out;
+  font-weight: 500;
+  border-left: 4px solid currentColor;
+}
+
+.notification-info {
+  background: rgba(59, 130, 246, 0.95);
+  color: white;
+}
+
+.notification-success {
+  background: rgba(16, 185, 129, 0.95);
+  color: white;
+}
+
+.notification-error {
+  background: rgba(239, 68, 68, 0.95);
+  color: white;
+}
+
+.notification-message {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.notification-close {
+  background: none;
+  border: none;
+  color: currentColor;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: all var(--transition-speed);
+  opacity: 0.8;
+}
+
+.notification-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOutRight {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+
+/* ===========================================
+   Enhanced Google Translate Integration
+=========================================== */
 .goog-te-gadget {
   font-family: inherit !important;
   font-size: 0 !important;
@@ -42,10 +116,12 @@
   font-family: inherit !important;
   font-size: 0.9rem !important;
   transition: all var(--transition-speed) var(--transition-smooth) !important;
+  box-shadow: var(--shadow-light) !important;
 }
 
 .goog-te-gadget .goog-te-combo:focus {
   box-shadow: 0 0 0 3px rgba(255, 45, 149, 0.2) !important;
+  outline: none !important;
 }
 
 /* Hide Google Translate elements when modal is open */
@@ -63,7 +139,7 @@
 }
 
 /* ===========================================
-   Enhanced Search Wrapper with Micro-animations
+   Enhanced Search Wrapper
 =========================================== */
 .search-container {
   text-align: center;
@@ -135,7 +211,7 @@
 
 .search-input::placeholder {
   color: #888;
-  transition: opacity var(--transition-speed);
+  transition: all var(--transition-speed);
 }
 
 .search-input:focus::placeholder {
@@ -203,7 +279,7 @@
 }
 
 /* ===========================================
-   Enhanced Places Grid with Stagger Animation
+   Enhanced Places Grid
 =========================================== */
 .places-grid {
   display: grid;
@@ -296,7 +372,7 @@
   100% { background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%); }
 }
 
-/* Enhanced Media Container with 3D Effects */
+/* Enhanced Media Container */
 .place-card .media-container {
   height: 220px;
   overflow: hidden;
@@ -477,7 +553,7 @@
 .copy-link.copied,
 .share-btn.copied,
 .share-btn.shared {
-  background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+  background: var(--gradient-success);
   animation: successPulse 0.8s ease-out;
 }
 
@@ -488,7 +564,7 @@
 }
 
 /* ===========================================
-   Enhanced Modal System with Horizontal Header Controls
+   Enhanced Modal System with Horizontal Controls
 =========================================== */
 .modal-overlay {
   position: fixed;
@@ -533,7 +609,7 @@
   transform: scale(1) translateY(0);
 }
 
-/* Enhanced Fixed Modal Header with Horizontal Controls */
+/* Enhanced Modal Header with Horizontal Controls */
 .modal-header {
   position: sticky;
   top: 0;
@@ -550,47 +626,57 @@
 }
 
 .modal-title {
-  font-size: 1.2rem;
-  font-weight: 600;
+  font-size: 1.3rem;
+  font-weight: 700;
   color: var(--secondary-color);
   margin: 0;
   flex: 1;
+  line-height: 1.3;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Horizontal Modal Controls */
 .modal-controls {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .modal-close,
 .tts-toggle-btn,
-.mobile-toc-toggle {
-  width: 44px;
+.mobile-toc-toggle,
+.modal-share-btn {
+  min-width: 44px;
   height: 44px;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--border-radius);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.3s var(--transition-smooth);
   backdrop-filter: var(--blur-glass);
-  font-size: 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
   position: relative;
   overflow: hidden;
+  padding: 0 0.5rem;
+  gap: 0.5rem;
 }
 
 .modal-close {
-  background: rgba(0, 0, 0, 0.08);
-  color: var(--text-color);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error-color);
 }
 
 .modal-close:hover {
-  background: var(--accent-color);
+  background: var(--error-color);
   color: #fff;
-  transform: rotate(90deg) scale(1.1);
+  transform: scale(1.05);
 }
 
 .tts-toggle-btn {
@@ -631,6 +717,23 @@
   background: var(--secondary-color);
   color: #fff;
   transform: scale(1.05);
+}
+
+.modal-share-btn {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: #fff;
+  box-shadow: var(--shadow-light);
+}
+
+.modal-share-btn:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: var(--shadow-medium);
+}
+
+/* Control button text spans */
+.modal-controls button span {
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 /* Enhanced Modal Body */
@@ -687,7 +790,7 @@
 }
 
 /* ===========================================
-   Enhanced Table of Contents
+   Enhanced Table of Contents with Collapse
 =========================================== */
 .table-of-contents {
   background: var(--glass-bg);
@@ -706,12 +809,19 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-.toc-title {
-  font-size: 1.3rem;
-  color: var(--secondary-color);
+.toc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 1.5rem;
   border-bottom: 3px solid var(--accent-color);
   padding-bottom: 0.75rem;
+}
+
+.toc-title {
+  font-size: 1.3rem;
+  color: var(--secondary-color);
+  margin: 0;
   font-weight: 700;
   position: relative;
 }
@@ -719,7 +829,7 @@
 .toc-title::after {
   content: '';
   position: absolute;
-  bottom: -3px;
+  bottom: -0.75rem;
   left: 0;
   width: 50px;
   height: 3px;
@@ -727,10 +837,32 @@
   border-radius: 2px;
 }
 
+.toc-collapse {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--accent-color);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: all var(--transition-speed);
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toc-collapse:hover {
+  background: rgba(255, 45, 149, 0.1);
+  transform: scale(1.1);
+}
+
 .toc-list {
   list-style: none;
   padding: 0;
   margin: 0;
+  transition: all 0.3s ease;
 }
 
 .toc-item {
@@ -774,7 +906,8 @@
 }
 
 .toc-link:hover,
-.toc-link:focus {
+.toc-link:focus,
+.toc-link.active {
   background: rgba(255, 45, 149, 0.08);
   border-left-color: var(--accent-color);
   color: var(--accent-color);
@@ -848,10 +981,6 @@
   transition: opacity 0.3s ease;
 }
 
-.modal-text p:hover {
-  opacity: 1;
-}
-
 .modal-text ul,
 .modal-text ol {
   margin-bottom: 2rem;
@@ -895,7 +1024,7 @@
 }
 
 /* ===========================================
-   Enhanced TTS Controls with Better Layout
+   Enhanced TTS Controls with Professional Layout
 =========================================== */
 .tts-controls {
   margin: 2rem;
@@ -921,6 +1050,19 @@
   display: flex;
 }
 
+.tts-controls-header {
+  border-bottom: 2px solid var(--accent-color);
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tts-controls-header h5 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--secondary-color);
+}
+
 .tts-controls-row {
   display: flex;
   align-items: center;
@@ -940,7 +1082,10 @@
   transition: all 0.4s var(--transition-smooth);
   box-shadow: var(--shadow-light);
   min-height: 52px;
-  min-width: 120px;
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .tts-play:hover,
@@ -949,15 +1094,37 @@
   box-shadow: var(--shadow-medium);
 }
 
+.tts-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 150px;
+}
+
+.tts-control-group label {
+  font-weight: 600;
+  color: var(--secondary-color);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rate-value,
+.pitch-value {
+  color: var(--accent-color);
+  font-weight: 700;
+}
+
 #tts-voices {
   padding: 1rem;
   border-radius: var(--border-radius);
   border: 2px solid rgba(255, 45, 149, 0.2);
-  min-width: 220px;
   background: rgba(255, 255, 255, 0.9);
   cursor: pointer;
   transition: all var(--transition-speed);
   font-size: 1rem;
+  width: 100%;
 }
 
 #tts-voices:focus {
@@ -970,12 +1137,12 @@
 #tts-rate,
 #tts-pitch {
   -webkit-appearance: none;
-  background: linear-gradient(to right, var(--accent-color) 0%, #e2e8f0 0%);
+  background: #e2e8f0;
   height: 8px;
   border-radius: 4px;
   cursor: pointer;
   transition: all var(--transition-speed);
-  width: 150px;
+  width: 100%;
 }
 
 #tts-rate::-webkit-slider-thumb,
@@ -1001,13 +1168,18 @@
   color: var(--text-color);
   opacity: 0.9;
   font-size: 0.95rem;
+  flex: 1;
 }
 
 .tts-progress {
   font-weight: 700;
   color: var(--accent-color);
-  min-width: 60px;
   font-size: 1rem;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 45, 149, 0.1);
+  border-radius: 20px;
+  min-width: 80px;
+  text-align: center;
 }
 
 .tts-highlight {
@@ -1025,7 +1197,7 @@
 }
 
 /* ===========================================
-   Custom Share Modal
+   Enhanced Custom Share Modal
 =========================================== */
 .custom-share-modal {
   position: fixed;
@@ -1054,7 +1226,7 @@
   backdrop-filter: var(--blur-glass);
   border-radius: var(--border-radius-large);
   padding: 2.5rem;
-  max-width: 500px;
+  max-width: 550px;
   width: 90vw;
   max-height: 80vh;
   overflow-y: auto;
@@ -1072,7 +1244,7 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
-  border-bottom: 2px solid var(--accent-color);
+  border-bottom: 3px solid var(--accent-color);
   padding-bottom: 1rem;
 }
 
@@ -1092,6 +1264,11 @@
   transition: all var(--transition-speed);
   padding: 0.5rem;
   border-radius: 50%;
+  width: 3rem;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .share-modal-close:hover {
@@ -1102,11 +1279,12 @@
 .share-link-container {
   display: flex;
   gap: 1rem;
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
   padding: 1.25rem;
   background: rgba(255, 255, 255, 0.8);
   border-radius: var(--border-radius);
   backdrop-filter: var(--blur-glass);
+  border: 1px solid rgba(255, 45, 149, 0.1);
 }
 
 .share-link-input {
@@ -1122,6 +1300,7 @@
 .share-link-input:focus {
   border-color: var(--accent-color);
   outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 45, 149, 0.1);
 }
 
 .copy-share-link {
@@ -1134,6 +1313,7 @@
   cursor: pointer;
   transition: all 0.3s var(--transition-smooth);
   box-shadow: var(--shadow-light);
+  white-space: nowrap;
 }
 
 .copy-share-link:hover {
@@ -1159,12 +1339,14 @@
   transition: all 0.3s var(--transition-smooth);
   font-weight: 600;
   backdrop-filter: var(--blur-glass);
+  text-align: center;
 }
 
 .share-option:hover {
   border-color: var(--accent-color);
   transform: translateY(-5px) scale(1.02);
   box-shadow: var(--shadow-medium);
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .share-icon {
@@ -1261,10 +1443,23 @@
   transform: scale(1.08);
 }
 
+.related-placeholder {
+  width: 100%;
+  height: 120px;
+  background: var(--gradient-primary);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: white;
+}
+
 .related-info {
   text-align: center;
   position: relative;
   z-index: 2;
+  width: 100%;
 }
 
 .related-title {
@@ -1287,7 +1482,12 @@
   overflow: hidden;
 }
 
+.related-actions {
+  width: 100%;
+}
+
 .related-open {
+  width: 100%;
   padding: 0.75rem 1.5rem;
   font-size: 0.9rem;
   border: none;
@@ -1303,8 +1503,68 @@
 
 .related-open:hover,
 .related-open:focus {
-  transform: translateY(-3px) scale(1.08);
+  transform: translateY(-3px) scale(1.05);
   box-shadow: var(--shadow-medium);
+}
+
+/* ===========================================
+   Mobile Page Styles (for redirected pages)
+=========================================== */
+@media (max-width: 768px) {
+  .mobile-place-page {
+    padding: 1rem;
+    max-width: 100%;
+  }
+  
+  .mobile-place-header {
+    background: var(--gradient-primary);
+    color: white;
+    padding: 2rem 1rem;
+    border-radius: var(--border-radius);
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+  
+  .mobile-place-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0 0 1rem 0;
+  }
+  
+  .mobile-place-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+  }
+  
+  .mobile-back-btn,
+  .mobile-share-btn {
+    padding: 0.75rem 1.5rem;
+    border: 2px solid white;
+    background: transparent;
+    color: white;
+    border-radius: 25px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-speed);
+  }
+  
+  .mobile-back-btn:hover,
+  .mobile-share-btn:hover {
+    background: white;
+    color: var(--accent-color);
+  }
+  
+  .mobile-place-content {
+    background: white;
+    padding: 2rem;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-light);
+    line-height: 1.7;
+    font-size: 1.1rem;
+  }
 }
 
 /* ===========================================
@@ -1313,6 +1573,7 @@
 @media (max-width: 768px) {
   :root {
     --reading-width: 100%;
+    --header-height: 50px;
   }
 
   .places-grid {
@@ -1336,6 +1597,25 @@
 
   .modal-header {
     padding: 1rem 1.5rem;
+  }
+
+  .modal-title {
+    font-size: 1.1rem;
+    max-width: 50%;
+  }
+
+  .modal-controls {
+    gap: 0.5rem;
+  }
+
+  .modal-controls button {
+    min-width: 40px;
+    height: 40px;
+    font-size: 0.9rem;
+  }
+
+  .modal-controls button span {
+    display: none;
   }
 
   .mobile-toc-toggle {
@@ -1373,6 +1653,10 @@
     gap: 1rem;
   }
 
+  .tts-control-group {
+    min-width: auto;
+  }
+
   .related-list {
     grid-template-columns: 1fr;
     gap: 1rem;
@@ -1394,6 +1678,10 @@
   .share-options {
     grid-template-columns: 1fr;
   }
+
+  .custom-share-modal .share-modal-content {
+    padding: 2rem;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1405,22 +1693,23 @@
     font-size: 1rem;
   }
 
-  .related-card img {
+  .related-card img,
+  .related-placeholder {
     height: 100px;
-  }
-
-  #tts-voices {
-    min-width: auto;
-    width: 100%;
-  }
-
-  #tts-rate,
-  #tts-pitch {
-    width: 100%;
   }
 
   .share-modal-content {
     padding: 1.5rem;
+  }
+
+  .share-link-container {
+    flex-direction: column;
+  }
+
+  .notification {
+    right: 10px;
+    left: 10px;
+    max-width: none;
   }
 }
 
@@ -1474,7 +1763,8 @@
   .place-card,
   .modal-content,
   .tts-controls,
-  .table-of-contents {
+  .table-of-contents,
+  .custom-share-modal .share-modal-content {
     border: 3px solid #000;
   }
 }
@@ -1486,7 +1776,8 @@
   .action-buttons,
   .mobile-toc-toggle,
   .modal-header,
-  .custom-share-modal {
+  .custom-share-modal,
+  .notification {
     display: none !important;
   }
 
@@ -1537,6 +1828,10 @@
   .custom-share-modal .share-modal-content {
     background: rgba(45, 55, 72, 0.95);
   }
+
+  .notification {
+    backdrop-filter: blur(10px);
+  }
 }
 
 /* Loading and skeleton styles */
@@ -1549,4 +1844,23 @@
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
+}
+
+/* Utility classes for enhanced UX */
+.highlighted {
+  animation: highlightFlash 1.5s ease-out;
+}
+
+@keyframes highlightFlash {
+  0% { background-color: rgba(255, 45, 149, 0.2); }
+  100% { background-color: transparent; }
+}
+
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
