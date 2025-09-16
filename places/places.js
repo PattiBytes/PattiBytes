@@ -1,4 +1,4 @@
-// Enhanced places.js with full-screen modals, improved controls, and comprehensive sharing
+// Enhanced places.js with GTranslate modal integration and emoji-free TTS
 (function () {
   "use strict";
 
@@ -57,6 +57,11 @@
   // Always use full-screen modal instead of page redirect
   const isMobile = () => window.innerWidth <= 768;
 
+  // Remove emojis from text for TTS
+  function removeEmojis(text) {
+    return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, ' ');
+  }
+
   // Clipboard copy fallback
   async function copyToClipboard(text) {
     if (!text) throw new Error('No text to copy');
@@ -72,52 +77,49 @@
     document.body.removeChild(ta);
   }
 
-  // ENHANCED: Google Translate integration for whole modal
-  function triggerGoogleTranslateRefresh() {
-    // Method 1: Try to trigger retranslation using Google Translate widget
-    const gtSelect = document.querySelector('select.goog-te-combo');
-    if (gtSelect && gtSelect.value && gtSelect.value !== '') {
-      const currentLang = gtSelect.value;
-      // Reset to original language momentarily then back to trigger refresh
-      gtSelect.value = '';
-      setTimeout(() => {
-        gtSelect.value = currentLang;
-        gtSelect.dispatchEvent(new Event('change', { bubbles: true }));
-      }, 50);
+  // GTranslate integration for modal content
+  function applyGTranslateToModal(targetLang) {
+    if (typeof doGTranslate !== 'function') {
+      console.warn('GTranslate not loaded');
       return;
     }
 
-    // Method 2: Check for Google Translate frame and reload
-    const gtFrame = document.querySelector('iframe.goog-te-menu-frame');
-    if (gtFrame) {
-      try {
-        gtFrame.src = gtFrame.src;
-      } catch (e) {
-        console.log('Could not refresh Google Translate frame');
-      }
-    }
+    const modalContent = q('.modal-content');
+    if (!modalContent) return;
 
-    // Method 3: Dispatch custom event that other translation tools might listen for
-    document.dispatchEvent(new CustomEvent('translateContent', { 
-      detail: { container: q('#places-modal') } 
-    }));
+    // Add notranslate class to body to exclude page content
+    document.body.classList.add('notranslate');
+    
+    // Remove notranslate from modal to allow translation
+    modalContent.classList.remove('notranslate');
+    modalContent.classList.add('translate');
+
+    // Get source and target languages
+    const defaultLang = window.gtranslateSettings?.default_language || 'pa';
+    const sourceLang = defaultLang;
+    const targetLang = targetLang || 'en';
+
+    if (sourceLang === targetLang) return;
+
+    try {
+      doGTranslate(`${sourceLang}|${targetLang}`);
+    } catch (e) {
+      console.warn('GTranslate failed:', e);
+    }
   }
 
-  // ENHANCED: Enhanced custom share modal with translate support
+  // Enhanced custom share modal - NEVER use native sharing
   function showCustomShareModal({ title, text, url, image }) {
-    // Remove any existing share modal
     const existing = q('.custom-share-modal');
     if (existing) existing.remove();
 
     const modal = document.createElement('div');
     modal.className = 'custom-share-modal';
-    // Add translate class to ensure Google Translate processes this modal
-    modal.setAttribute('class', 'custom-share-modal notranslate');
     modal.innerHTML = `
       <div class="share-modal-overlay">
         <div class="share-modal-content">
           <div class="share-modal-header">
-            <h3>[translate:ਸਾਂਝਾ ਕਰੋ] / Share</h3>
+            <h3>ਸਾਂਝਾ ਕਰੋ / Share</h3>
             <button class="share-modal-close" aria-label="Close">&times;</button>
           </div>
           <div class="share-modal-body">
@@ -126,15 +128,15 @@
               <div class="share-preview-content">
                 <h4 class="share-preview-title">${title}</h4>
                 <p class="share-preview-text">${text}</p>
-                <p class="share-preview-link notranslate">${url}</p>
+                <p class="share-preview-link">${url}</p>
                 <div class="share-preview-actions">
-                  <button class="share-copy-link">📋 [translate:ਲਿੰਕ ਕਾਪੀ ਕਰੋ]</button>
-                  <a href="${url}" target="_blank" class="share-read-full">📖 [translate:ਪੂਰਾ ਪੜ੍ਹੋ]</a>
+                  <button class="share-copy-link">📋 ਲਿੰਕ ਕਾਪੀ ਕਰੋ</button>
+                  <a href="${url}" target="_blank" class="share-read-full">📖 ਪੂਰਾ ਪੜ੍ਹੋ</a>
                 </div>
               </div>
             </div>
             <div class="share-platforms">
-              <h5>[translate:ਸੋਸ਼ਲ ਮੀਡੀਆ] / Social Media</h5>
+              <h5>ਸੋਸ਼ਲ ਮੀਡੀਆ / Social Media</h5>
               <div class="share-platforms-scroll">
                 <button class="share-platform" data-platform="whatsapp">
                   <span class="share-platform-icon">📱</span>
@@ -148,10 +150,6 @@
                   <span class="share-platform-icon">🐦</span>
                   <span class="share-platform-name">Twitter</span>
                 </button>
-                <button class="share-platform" data-platform="instagram">
-                  <span class="share-platform-icon">📸</span>
-                  <span class="share-platform-name">Instagram</span>
-                </button>
                 <button class="share-platform" data-platform="telegram">
                   <span class="share-platform-icon">✈️</span>
                   <span class="share-platform-name">Telegram</span>
@@ -160,25 +158,9 @@
                   <span class="share-platform-icon">💼</span>
                   <span class="share-platform-name">LinkedIn</span>
                 </button>
-                <button class="share-platform" data-platform="reddit">
-                  <span class="share-platform-icon">🤖</span>
-                  <span class="share-platform-name">Reddit</span>
-                </button>
-                <button class="share-platform" data-platform="quora">
-                  <span class="share-platform-icon">❓</span>
-                  <span class="share-platform-name">Quora</span>
-                </button>
-                <button class="share-platform" data-platform="pinterest">
-                  <span class="share-platform-icon">📌</span>
-                  <span class="share-platform-name">Pinterest</span>
-                </button>
                 <button class="share-platform" data-platform="email">
                   <span class="share-platform-icon">📧</span>
                   <span class="share-platform-name">Email</span>
-                </button>
-                <button class="share-platform" data-platform="sms">
-                  <span class="share-platform-icon">💬</span>
-                  <span class="share-platform-name">SMS</span>
                 </button>
               </div>
             </div>
@@ -188,13 +170,8 @@
     `;
 
     document.body.appendChild(modal);
-    setTimeout(() => {
-      modal.classList.add('show');
-      // Trigger translation for the new modal content
-      setTimeout(triggerGoogleTranslateRefresh, 100);
-    }, 10);
+    setTimeout(() => modal.classList.add('show'), 10);
 
-    // ... rest of the existing share modal code ...
     const closeModal = () => {
       modal.classList.remove('show');
       setTimeout(() => modal.remove(), 300);
@@ -210,14 +187,14 @@
         await copyToClipboard(url);
         const btn = q('.share-copy-link', modal);
         const original = btn.textContent;
-        btn.textContent = '✅ [translate:ਕਾਪੀ ਹੋਇਆ]!';
+        btn.textContent = '✅ ਕਾਪੀ ਹੋਇਆ!';
         btn.style.background = 'var(--success-color)';
         setTimeout(() => {
           btn.textContent = original;
           btn.style.background = '';
         }, 2000);
       } catch {
-        showNotification('Copy failed / [translate:ਕਾਪੀ ਅਸਫਲ]', 'error');
+        showNotification('Copy failed / ਕਾਪੀ ਅਸਫਲ', 'error');
       }
     });
 
@@ -230,24 +207,16 @@
           whatsapp: `https://wa.me/?text=${encodeURIComponent(shareText)}`,
           facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
           twitter: `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}`,
-          instagram: `https://www.instagram.com/`,
           telegram: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}`,
           linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
-          reddit: `https://reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`,
-          quora: `https://www.quora.com/`,
-          pinterest: `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&description=${encodeURIComponent(title)}`,
-          email: `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareText)}`,
-          sms: `sms:?body=${encodeURIComponent(shareText)}`
+          email: `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareText)}`
         };
         
         if (shareUrls[platform]) {
-          if (platform === 'email' || platform === 'sms') {
+          if (platform === 'email') {
             window.location.href = shareUrls[platform];
-          } else if (platform === 'instagram' || platform === 'quora') {
-            copyToClipboard(shareText);
-            showNotification(`Link copied! Open ${platform === 'instagram' ? 'Instagram' : 'Quora'} app to share.`, 'info');
           } else {
-            window.open(shareUrls[platform], '_blank', 'width=600,height=400,scrollbars=yes,resizable=yes');
+            window.open(shareUrls[platform], '_blank', 'width=600,height=400');
           }
           closeModal();
         }
@@ -285,36 +254,26 @@
     setTimeout(close, duration);
   }
 
-  // Visual flash highlight for deep link feedback
   function flashHighlight(el, className = 'highlighted', duration = 2000) {
     if (!el) return;
     el.classList.add(className);
     setTimeout(() => el.classList.remove(className), duration);
   }
 
-  // Enhanced language detection with character threshold
   function detectContentLanguage(text, minChars = 200) {
     const totalLength = text.length;
     if (totalLength < 50) return 'insufficient';
 
     const punjabiFactor = (text.match(/[\u0A00-\u0A7F]/g) || []).length;
     const englishFactor = (text.match(/[a-zA-Z]/g) || []).length;
-    const hindiFactor = (text.match(/[\u0900-\u097F]/g) || []).length;
 
-    const hasSufficientPunjabi = punjabiFactor >= minChars;
-    const hasSufficientEnglish = englishFactor >= minChars;
-    const hasSufficientHindi = hindiFactor >= minChars;
-
-    if (hasSufficientPunjabi && punjabiFactor / totalLength > 0.3) return 'pa';
-    if (hasSufficientEnglish && englishFactor / totalLength > 0.5) return 'en';
-    if (hasSufficientHindi && hindiFactor / totalLength > 0.3) return 'hi';
+    if (punjabiFactor >= minChars && punjabiFactor / totalLength > 0.3) return 'pa';
+    if (englishFactor >= minChars && englishFactor / totalLength > 0.5) return 'en';
     
-    if (punjabiFactor > englishFactor && punjabiFactor > hindiFactor) return 'pa-insufficient';
-    if (englishFactor > hindiFactor) return 'en-insufficient';
-    return 'mixed';
+    if (punjabiFactor > englishFactor) return 'pa-insufficient';
+    return 'en-insufficient';
   }
 
-  // Enhanced auto-translate text with better mappings
   function autoTranslateText(text, targetLang = 'en') {
     let translated = text;
     
@@ -322,94 +281,11 @@
       Object.entries(paToEnglish).forEach(([pa, en]) => {
         translated = translated.replace(new RegExp(pa, 'g'), en);
       });
-      
-      translated = translated
-        .replace(/ਦਾ|ਦੇ|ਦੀ/g, 'of')
-        .replace(/ਵਿੱਚ/g, 'in')
-        .replace(/ਨਾਲ/g, 'with')
-        .replace(/ਤੇ|ਅਤੇ/g, 'and')
-        .replace(/ਇਹ/g, 'this')
-        .replace(/ਉਹ/g, 'that');
     }
     
     return translated;
   }
 
-  // ENHANCED: Google Translate integration for whole modal
-  function setupGoogleTranslateIntegration() {
-    const observer = new MutationObserver((mutations) => {
-      let shouldRetranslate = false;
-      
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'childList' || mutation.type === 'characterData') {
-          // Check if modal content changed
-          if (modalOpen && q('.modal-text')) {
-            const modalText = q('.modal-text');
-            const newLang = detectContentLanguage(modalText.textContent || '');
-            if (newLang !== ttsState.language) {
-              ttsState.language = newLang;
-              const ttsControls = q('.tts-controls.show');
-              if (ttsControls) {
-                updateTTSLanguage(ttsControls, modalText, newLang);
-              }
-              shouldRetranslate = true;
-            }
-          }
-          
-          // Check if any new content was added to modal
-          if (mutation.target.closest && mutation.target.closest('#places-modal')) {
-            shouldRetranslate = true;
-          }
-        }
-      });
-      
-      // Trigger retranslation if needed
-      if (shouldRetranslate) {
-        setTimeout(triggerGoogleTranslateRefresh, 200);
-      }
-    });
-
-    // ENHANCED: Watch the entire modal container for changes
-    const modal = q('#places-modal');
-    if (modal) {
-      observer.observe(modal, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-        attributes: true,
-        attributeFilter: ['data-title', 'data-preview', 'data-full']
-      });
-    }
-
-    // Also observe document body for general changes
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true
-    });
-
-    return observer;
-  }
-
-  // Update TTS language based on detected content
-  function updateTTSLanguage(ttsWrapper, modalTextContainer, detectedLang) {
-    const statusSpan = q('.tts-status', ttsWrapper);
-    const voiceSelect = q('#tts-voices', ttsWrapper);
-    
-    if (statusSpan) {
-      if (detectedLang.includes('insufficient') || detectedLang === 'mixed') {
-        statusSpan.textContent = 'Content auto-translated for better speech quality';
-      } else {
-        statusSpan.textContent = `Using ${detectedLang.toUpperCase()} voices`;
-      }
-    }
-    
-    if (voiceSelect) {
-      loadVoicesForLanguage(voiceSelect, detectedLang);
-    }
-  }
-
-  // Create enhanced Table of Contents
   function createTableOfContents(content) {
     const headings = qa('h1, h2, h3, h4, h5, h6', content);
     if (!headings.length) return null;
@@ -420,7 +296,7 @@
     const tocHeader = document.createElement('div');
     tocHeader.className = 'toc-header';
     tocHeader.innerHTML = `
-      <h4 class="toc-title">[translate:ਸਮੱਗਰੀ] / Contents</h4>
+      <h4 class="toc-title">ਸਮੱਗਰੀ / Contents</h4>
       <button class="toc-collapse" aria-label="Collapse TOC">−</button>
     `;
     tocContainer.appendChild(tocHeader);
@@ -443,12 +319,8 @@
       
       tocLink.addEventListener('click', (e) => {
         e.preventDefault();
-        scrollPosition = document.querySelector('.modal-body')?.scrollTop || 0;
         heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
         flashHighlight(heading, 'toc-target-highlight', 2000);
-        
-        qa('.toc-link.active').forEach(link => link.classList.remove('active'));
-        tocLink.classList.add('active');
       });
 
       tocItem.appendChild(tocLink);
@@ -457,12 +329,10 @@
 
     tocContainer.appendChild(tocList);
 
-    // TOC collapse functionality
     q('.toc-collapse', tocContainer).addEventListener('click', function() {
       const isCollapsed = tocList.style.display === 'none';
       tocList.style.display = isCollapsed ? 'block' : 'none';
       this.textContent = isCollapsed ? '−' : '+';
-      this.setAttribute('aria-label', isCollapsed ? 'Collapse TOC' : 'Expand TOC');
     });
 
     return tocContainer;
@@ -518,7 +388,6 @@
     });
   }
 
-  // Load voices for specific language - FIXED toLowerCase issue
   function loadVoicesForLanguage(selectElement, langPref) {
     const getLangCode = code => ((code || '').split(/[-_]/)[0] || '').toLowerCase();
     
@@ -548,7 +417,7 @@
     
     if (preferred.length) addGroup(`${cleanLangPref.toUpperCase()} Voices`, preferred);
     if (english.length) addGroup('English Voices', english);
-    if (hindi.length) addGroup('[translate:हिंदी] Voices', hindi);
+    if (hindi.length) addGroup('हिंदी Voices', hindi);
     if (others.length) addGroup('Other Voices', others);
 
     if (!selectElement.options.length) {
@@ -559,7 +428,6 @@
     }
   }
 
-  // Stop TTS and reset UI
   function stopTTS() {
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
@@ -572,7 +440,7 @@
     ttsState = { paused: false, currentWord: 0, queuePos: 0, language: 'auto' };
   }
 
-  // Enhanced TTS controls
+  // Enhanced TTS controls with emoji filtering
   function initTTSControls(wrapper, modalTextContainer, langPref) {
     const playBtn = q('.tts-play', wrapper);
     const select = q('#tts-voices', wrapper);
@@ -600,7 +468,7 @@
       
       let finalLangPref = langPref;
 
-      if (detectedLang === 'insufficient' || detectedLang.includes('insufficient') || detectedLang === 'mixed') {
+      if (detectedLang === 'insufficient' || detectedLang.includes('insufficient')) {
         finalLangPref = 'en';
         statusSpan.textContent = 'Content will be auto-translated for better speech';
       } else {
@@ -627,12 +495,15 @@
         const newEl = document.createElement(el.tagName);
         let text = el.textContent.replace(/\s+/g, ' ').trim();
         
+        // Remove emojis from text before TTS
+        text = removeEmojis(text);
+        
         const contentLang = detectContentLanguage(text, 200);
-        if (contentLang.includes('insufficient') || contentLang === 'mixed') {
+        if (contentLang.includes('insufficient')) {
           text = autoTranslateText(text, 'en');
         }
         
-        const words = text.split(/\s+/);
+        const words = text.split(/\s+/).filter(w => w.trim());
         words.forEach((w, i) => {
           const span = document.createElement('span');
           span.className = 'tts-word-span';
@@ -657,7 +528,7 @@
       const readContainer = modalTextContainer.querySelector('.tts-read-container');
       if (!readContainer) return;
       queue = Array.from(readContainer.children)
-        .map(el => el.textContent.trim())
+        .map(el => removeEmojis(el.textContent.trim()))
         .filter(Boolean);
     }
 
@@ -791,7 +662,6 @@
       }
     }
 
-    // Event listeners
     playBtn.addEventListener('click', () => {
       if (window.speechSynthesis?.speaking) {
         pauseTTS();
@@ -833,7 +703,7 @@
   let lastFocusedElement = null;
   let modalOpen = false;
   let hadPushedState = false;
-  let gtranslateObserver = null;
+  let ttsInstance = null;
 
   // Modal elements
   let modal, modalMedia, modalText, btnClose, modalContent, cards;
@@ -844,7 +714,6 @@
   // Index for search
   let index = [];
 
-  // Enhanced page scroll management
   function lockPageScroll() { 
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = 'hidden';
@@ -856,7 +725,6 @@
     document.body.style.paddingRight = '';
   }
 
-  // Enhanced focus trap - FIXED focusables array access
   function trapFocus(e) {
     if (!modalOpen || e.key !== 'Tab') return;
     
@@ -877,7 +745,6 @@
     }
   }
 
-  // Enhanced button arrangement
   function arrangeActionButtonsHorizontally() {
     cards.forEach((card, index) => {
       const content = card.querySelector('.place-content');
@@ -920,7 +787,6 @@
     });
   }
 
-  // Enhanced related articles
   function populateRelatedAll(activeCard) {
     if (!modalText) return;
     
@@ -929,7 +795,7 @@
 
     const wrap = document.createElement('div');
     wrap.className = 'modal-related';
-    wrap.innerHTML = `<h4>[translate:ਤੁਹਾਨੂੰ ਇਹ ਵੀ ਪਸੰਦ ਆ ਸਕਦਾ ਹੈ] / You May Also Like</h4>`;
+    wrap.innerHTML = `<h4>ਤੁਹਾਨੂੰ ਇਹ ਵੀ ਪਸੰਦ ਆ ਸਕਦਾ ਹੈ / You May Also Like</h4>`;
 
     const list = document.createElement('div');
     list.className = 'related-list';
@@ -949,7 +815,7 @@
           <div class="related-title">${cardTitle}</div>
           <div class="related-meta">${preview.slice(0, 100)}${preview.length > 100 ? '...' : ''}</div>
           <div class="related-actions">
-            <button class="related-open" data-id="${c.id}">[translate:ਖੋਲੋ] / Open</button>
+            <button class="related-open" data-id="${c.id}">ਖੋਲੋ / Open</button>
           </div>
         </div>`;
       list.appendChild(rel);
@@ -970,11 +836,6 @@
           internalClose();
           setTimeout(() => {
             if (q('.modal-body')) q('.modal-body').scrollTop = 0;
-            
-            try { 
-              target.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
-            } catch {}
-            
             flashHighlight(target, 'highlighted', 2000);
             openModal(cards.indexOf(target));
           }, 300);
@@ -983,7 +844,7 @@
     });
   }
 
-  // Enhanced modal close
+  // Enhanced modal close with GTranslate cleanup
   function internalClose() {
     if (!modal) return;
     
@@ -996,16 +857,24 @@
       window.speechSynthesis.cancel();
     }
 
-    // Clean up all modal elements
+    if (ttsInstance?.stop) {
+      ttsInstance.stop();
+    }
+    ttsInstance = null;
+
+    // Remove GTranslate effects
+    document.body.classList.remove('notranslate');
+    if (modalContent) {
+      modalContent.classList.remove('translate');
+    }
+
     qa('.modal-controls-fixed, .tts-controls, .table-of-contents, .modal-related', modal).forEach(n => n.remove());
     qa('.custom-share-modal').forEach(n => n.remove());
     
-    // Restore original content
     qa('.tts-word-span', modalText).forEach(s => {
       if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
     });
 
-    // Restore static close button
     if (btnClose) btnClose.classList.remove('sr-only');
 
     if (lastFocusedElement?.focus) {
@@ -1018,7 +887,6 @@
     modalOpen = false;
   }
 
-  // Enhanced modal close with better back button handling
   function closeModal() {
     qa('.custom-share-modal').forEach(modal => modal.remove());
     
@@ -1038,7 +906,7 @@
     } catch {}
   }
 
-  // ENHANCED: Full-screen modal opening with Google Translate support
+  // Enhanced modal opening with GTranslate support
   function openModal(index) {
     if (!modal) return;
     if (index < 0 || index >= cards.length) return;
@@ -1051,17 +919,10 @@
     const fullHtml = card.dataset.full || card.dataset.preview || '';
     const cardTitle = card.dataset.title || card.querySelector('h3')?.textContent || '';
 
-    // Clean up existing modal content
     qa('.modal-controls-fixed, .tts-controls, .table-of-contents, .modal-related', modal).forEach(n => n.remove());
 
-    // Hide static close button to avoid duplicates
     if (btnClose) btnClose.classList.add('sr-only');
 
-    // ENHANCED: Mark modal as translatable and add language attributes
-    modal.setAttribute('lang', document.documentElement.lang || 'pa');
-    modal.classList.remove('notranslate');
-
-    // FIXED: Create fixed modal controls INSIDE modal content, not overlay
     const modalControlsFixed = document.createElement('div');
     modalControlsFixed.className = 'modal-controls-fixed';
     
@@ -1072,7 +933,6 @@
     const controlsButtons = document.createElement('div');
     controlsButtons.className = 'modal-controls-buttons';
 
-    // Create control buttons with FIXED emojis
     const ttsToggleBtn = document.createElement('button');
     ttsToggleBtn.className = 'modal-control-btn tts-toggle-btn';
     ttsToggleBtn.innerHTML = '🔊';
@@ -1091,7 +951,6 @@
     modalShareBtn.title = 'Share Article';
     modalShareBtn.setAttribute('aria-label', 'Share this article');
 
-    // ADDED: Article Link button
     const modalLinkBtn = document.createElement('button');
     modalLinkBtn.className = 'modal-control-btn modal-link-btn';
     modalLinkBtn.innerHTML = '🔗';
@@ -1113,10 +972,8 @@
     modalControlsFixed.appendChild(controlsTitle);
     modalControlsFixed.appendChild(controlsButtons);
     
-    // FIXED: Insert controls inside modal-content, not overlay
     (modalContent || modal).prepend(modalControlsFixed);
 
-    // ENHANCED: Update modal content with translation support
     if (modalMedia) {
       modalMedia.innerHTML = imgSrc ?
         `<img src="${imgSrc}" alt="${cardTitle}" loading="lazy">` : '';
@@ -1124,31 +981,24 @@
     
     if (modalText) {
       modalText.innerHTML = fullHtml;
-      // Add language detection attributes to help Google Translate
-      modalText.setAttribute('lang', detectContentLanguage(fullHtml, 100));
     }
 
-    // Create table of contents AFTER image and title
     const tocContainer = createTableOfContents(modalText);
     if (tocContainer) {
       if (modalMedia && modalMedia.innerHTML) {
-        // Insert after media
         modalMedia.after(tocContainer);
       } else {
-        // Insert at beginning of modal text
         modalText.parentNode.insertBefore(tocContainer, modalText);
       }
     }
 
-    // Populate related articles
     populateRelatedAll(card);
 
-    // Enhanced TTS controls
     const ttsWrap = document.createElement('div');
     ttsWrap.className = 'tts-controls';
     ttsWrap.innerHTML = `
       <div class="tts-controls-header">
-        <h5>🔊 Text-to-Speech Controls / [translate:ਟੈਕਸਟ ਟੂ ਸਪੀਚ ਕੰਟਰੋਲ]</h5>
+        <h5>🔊 Text-to-Speech Controls / ਟੈਕਸਟ ਟੂ ਸਪੀਚ ਕੰਟਰੋਲ</h5>
       </div>
       <div class="tts-controls-row">
         <button class="tts-play" aria-pressed="false" title="Play/Pause">▶️ <span>Play</span></button>
@@ -1171,18 +1021,14 @@
       </div>
     `;
 
-    // Insert TTS controls after TOC or before modal text
     if (tocContainer) {
       tocContainer.after(ttsWrap);
     } else {
       modalText?.before(ttsWrap);
     }
 
-    // FIXED: langPref split result indexed before toLowerCase
     const langPref = ((document.documentElement.lang || 'pa-IN').split(/[-_]/)[0] || 'pa').toLowerCase();
-    let ttsInstance = null;
 
-    // Enhanced button event listeners
     ttsToggleBtn.addEventListener('click', () => {
       const opening = !ttsWrap.classList.contains('show');
       if (opening) {
@@ -1209,12 +1055,10 @@
 
     modalShareBtn.addEventListener('click', async () => {
       const url = `https://www.pattibytes.com/places/#${encodeURIComponent(card.id)}`;
-      const text = (card.dataset.preview || '[translate:ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ]').slice(0, 140);
-      // Always use custom share modal, never native
+      const text = (card.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 140);
       showCustomShareModal({ title: cardTitle, text, url, image: imgSrc });
     });
 
-    // ADDED: Article Link button event listener
     modalLinkBtn.addEventListener('click', async () => {
       const url = `https://www.pattibytes.com/places/#${encodeURIComponent(card.id)}`;
       try {
@@ -1227,7 +1071,6 @@
 
     modalCloseBtn.addEventListener('click', closeModal);
 
-    // Show full-screen modal
     modal.setAttribute('aria-hidden', 'false');
     modal.classList.add('open');
     modal.style.display = 'flex';
@@ -1245,16 +1088,6 @@
     modalOpen = true;
     lockPageScroll();
 
-    // ENHANCED: Setup Google Translate observer and trigger initial translation
-    if (gtranslateObserver) gtranslateObserver.disconnect();
-    gtranslateObserver = setupGoogleTranslateIntegration();
-
-    // ENHANCED: Trigger Google Translate for the new modal content
-    setTimeout(() => {
-      triggerGoogleTranslateRefresh();
-    }, 500);
-
-    // Update URL
     const articleId = card.id || card.dataset.id;
     const newUrl = `https://www.pattibytes.com/places/#${encodeURIComponent(articleId)}`;
 
@@ -1265,11 +1098,9 @@
       hadPushedState = false;
     }
 
-    // Add keyboard handlers
     document.addEventListener('keydown', keyHandler, true);
   }
 
-  // Enhanced keyboard handler
   function keyHandler(ev) {
     if (!modal?.classList.contains('open')) return;
     
@@ -1286,7 +1117,6 @@
     }
   }
 
-  // Enhanced copy-link functionality
   function setupCopyLinks() {
     qa('.copy-link').forEach(btn => {
       btn.addEventListener('click', async e => {
@@ -1305,7 +1135,7 @@
           const prevIcon = btn.textContent;
           btn.textContent = '✔️';
           
-          showNotification('Link copied! / [translate:ਲਿੰਕ ਕਾਪੀ ਹੋਇਆ]!', 'success');
+          showNotification('Link copied! / ਲਿੰਕ ਕਾਪੀ ਹੋਇਆ!', 'success');
           
           setTimeout(() => {
             btn.classList.remove('copied');
@@ -1318,7 +1148,6 @@
     });
   }
 
-  // Enhanced share buttons - always use custom modal
   function setupShareButtons() {
     qa('.share-btn').forEach(btn => {
       btn.addEventListener('click', async e => {
@@ -1328,10 +1157,9 @@
 
         const title = article.dataset.title || article.querySelector('h3')?.textContent || document.title;
         const url = `https://www.pattibytes.com/places/#${encodeURIComponent(article.id)}`;
-        const text = (article.dataset.preview || '[translate:ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ]').slice(0, 140);
+        const text = (article.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 140);
         const image = article.dataset.image || '';
 
-        // Always use custom share modal
         showCustomShareModal({ title, text, url, image });
         
         btn.classList.add('shared');
@@ -1340,7 +1168,6 @@
     });
   }
 
-  // ENHANCED: Search with ID support - now searches place IDs too
   function applySearch(qstr) {
     const siteLang = (document.documentElement.lang || 'pa').toLowerCase();
     const inputLang = /[\u0A00-\u0A7F]/.test(qstr.trim()) ? 'pa' : 'en';
@@ -1362,7 +1189,7 @@
       const matches = !normalizedQuery ||
         nText.includes(normalizedQuery) ||
         rText.includes(romanQuery) ||
-        idText.includes(normalizedQuery) || // ADDED: Search by ID
+        idText.includes(normalizedQuery) ||
         (el.dataset.full && (
           norm(el.dataset.full).includes(normalizedQuery) ||
           norm(paToRoman(el.dataset.full)).includes(romanQuery)
@@ -1376,7 +1203,7 @@
       if (shown === 0) {
         noMatchEl.style.display = 'block';
         noMatchEl.innerHTML = siteLang === 'pa' ? 
-          '[translate:ਕੋਈ ਮਿਲਦਾ ਸਥਾਨ ਨਹੀਂ ਮਿਲਿਆ]।<br><small>Try terms like: gurdwara, temple, school, market</small>' : 
+          'ਕੋਈ ਮਿਲਦਾ ਸਥਾਨ ਨਹੀਂ ਮਿਲਿਆ।<br><small>Try terms like: gurdwara, temple, school, market</small>' : 
           'No matching places found.<br><small>Try Punjabi terms or different keywords</small>';
       } else {
         noMatchEl.style.display = 'none';
@@ -1384,7 +1211,6 @@
     }
   }
 
-  // Enhanced search setup
   function setupSearch() {
     if (!searchInput) return;
 
@@ -1416,13 +1242,11 @@
     });
   }
 
-  // Enhanced responsive behavior handling
   function handleResponsiveChanges() {
     let resizeTimeout;
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
-        // Update modal controls on resize
         const controlsFixed = q('.modal-controls-fixed');
         if (controlsFixed && modalOpen) {
           const title = q('.modal-controls-title', controlsFixed);
@@ -1435,6 +1259,38 @@
       }, 250);
     });
   }
+
+  // GTranslate widget click handler
+  document.addEventListener('click', function(event) {
+    const gtWidget = event.target.closest('.gtranslate_wrapper');
+    if (!gtWidget) return;
+
+    // Check if clicking the language selector itself
+    const langSelector = event.target.closest('select.goog-te-combo');
+    if (langSelector) {
+      // Language changed, apply to modal if open
+      setTimeout(() => {
+        if (modalOpen) {
+          const selectedLang = langSelector.value || 'en';
+          applyGTranslateToModal(selectedLang);
+        }
+      }, 100);
+      return;
+    }
+
+    // If clicking widget but not selector, open modal
+    event.preventDefault();
+    if (cards && cards.length > 0) {
+      openModal(0);
+      
+      // Apply translation after modal opens
+      setTimeout(() => {
+        const selector = document.querySelector('select.goog-te-combo');
+        const selectedLang = selector?.value || 'en';
+        applyGTranslateToModal(selectedLang);
+      }, 500);
+    }
+  });
 
   // Enhanced initialization
   document.addEventListener('DOMContentLoaded', () => {
@@ -1461,28 +1317,26 @@
 
     arrangeActionButtonsHorizontally();
 
-    // ENHANCED: Build search index with ID support
+    // Build search index with ID support
     index = cards.map(c => {
       const title = c.dataset.title || c.querySelector('h3')?.textContent || '';
       const preview = c.dataset.preview || '';
       const fullContent = c.dataset.full || '';
-      const placeId = c.id || c.dataset.id || ''; // ADDED: Include place ID
+      const placeId = c.id || c.dataset.id || '';
       const searchText = `${title} ${preview} ${fullContent}`.trim();
       return {
         el: c,
         nText: norm(searchText),
         rText: norm(paToRoman(searchText)),
-        idText: norm(placeId) // ADDED: Normalized place ID for searching
+        idText: norm(placeId)
       };
     });
 
-    // Setup all functionality
     setupSearch();
     setupCopyLinks();
     setupShareButtons();
     handleResponsiveChanges();
 
-    // Enhanced deep link handling
     function handleHashOpen() {
       const id = normalizeHash(window.location.hash || '');
       if (!id) return;
@@ -1503,7 +1357,6 @@
     handleHashOpen();
     window.addEventListener('hashchange', handleHashOpen);
 
-    // Enhanced history management
     window.addEventListener('popstate', (e) => {
       if (modalOpen) {
         internalClose();
@@ -1519,7 +1372,6 @@
       }
     });
 
-    // Enhanced event bindings
     btnClose?.addEventListener('click', ev => { 
       ev.stopPropagation(); 
       closeModal(); 
@@ -1529,7 +1381,6 @@
       if (ev.target === modal) closeModal(); 
     });
 
-    // Enhanced card interactions
     cards.forEach((card, idx) => {
       const readBtn = card.querySelector('.read-more-btn');
       if (readBtn) {
@@ -1558,10 +1409,9 @@
       });
     });
 
-    console.log('Enhanced Places.js with Google Translate support initialized successfully');
+    console.log('Enhanced Places.js with GTranslate integration initialized successfully');
   });
 
-  // Global error handler
   window.addEventListener('error', (e) => {
     if (e.filename?.includes('places.js')) {
       console.error('Places.js error:', e.error);
