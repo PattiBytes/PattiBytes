@@ -1,4 +1,4 @@
-// Enhanced places.js with GTranslate modal integration and emoji-free TTS
+// Enhanced places.js with improved search, modal functionality, and UI enhancements
 (function () {
   "use strict";
 
@@ -57,58 +57,46 @@
   // Always use full-screen modal instead of page redirect
   const isMobile = () => window.innerWidth <= 768;
 
-  // Remove emojis from text for TTS
+  // Enhanced emoji removal for TTS - removes all emojis and special characters
   function removeEmojis(text) {
-    return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, ' ');
+    return text
+      .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/gu, ' ')
+      .replace(/[📱📘🐦✈️💼📧📍📋🔊▶️⏸️✕📤🔗✔️]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
-  // Clipboard copy fallback
+  // Enhanced clipboard copy with better error handling
   async function copyToClipboard(text) {
     if (!text) throw new Error('No text to copy');
-    if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+    
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+    } catch (e) {
+      console.warn('Modern clipboard API failed, trying fallback');
+    }
+    
+    // Fallback method
     const ta = document.createElement('textarea');
     ta.value = text;
     ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed';
-    ta.style.left = '-9999px';
+    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
     document.body.appendChild(ta);
     ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-  }
-
-  // GTranslate integration for modal content
-  function applyGTranslateToModal(targetLang) {
-    if (typeof doGTranslate !== 'function') {
-      console.warn('GTranslate not loaded');
-      return;
-    }
-
-    const modalContent = q('.modal-content');
-    if (!modalContent) return;
-
-    // Add notranslate class to body to exclude page content
-    document.body.classList.add('notranslate');
+    ta.setSelectionRange(0, 99999);
     
-    // Remove notranslate from modal to allow translation
-    modalContent.classList.remove('notranslate');
-    modalContent.classList.add('translate');
-
-    // Get source and target languages
-    const defaultLang = window.gtranslateSettings?.default_language || 'pa';
-    const sourceLang = defaultLang;
-    const targetLang = targetLang || 'en';
-
-    if (sourceLang === targetLang) return;
-
     try {
-      doGTranslate(`${sourceLang}|${targetLang}`);
-    } catch (e) {
-      console.warn('GTranslate failed:', e);
+      const successful = document.execCommand('copy');
+      if (!successful) throw new Error('Copy command failed');
+    } finally {
+      document.body.removeChild(ta);
     }
   }
 
-  // Enhanced custom share modal - NEVER use native sharing
+  // Enhanced custom share modal with better UI
   function showCustomShareModal({ title, text, url, image }) {
     const existing = q('.custom-share-modal');
     if (existing) existing.remove();
@@ -188,7 +176,7 @@
         const btn = q('.share-copy-link', modal);
         const original = btn.textContent;
         btn.textContent = '✅ ਕਾਪੀ ਹੋਇਆ!';
-        btn.style.background = 'var(--success-color)';
+        btn.style.background = 'var(--success-color, #10b981)';
         setTimeout(() => {
           btn.textContent = original;
           btn.style.background = '';
@@ -216,7 +204,7 @@
           if (platform === 'email') {
             window.location.href = shareUrls[platform];
           } else {
-            window.open(shareUrls[platform], '_blank', 'width=600,height=400');
+            window.open(shareUrls[platform], '_blank', 'width=600,height=400,scrollbars=yes,resizable=yes');
           }
           closeModal();
         }
@@ -226,7 +214,7 @@
     return false;
   }
 
-  // Enhanced notification system
+  // Enhanced notification system with better positioning
   function showNotification(message, type = 'info', duration = 3000) {
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
@@ -235,12 +223,20 @@
       <button class="notification-close" aria-label="Close">&times;</button>
     `;
     
+    const colors = {
+      error: '#ef4444',
+      success: '#10b981', 
+      warning: '#f59e0b',
+      info: '#3b82f6'
+    };
+    
     notification.style.cssText = `
       position: fixed; top: 20px; right: 20px; z-index: 10003;
-      background: ${type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#3b82f6'};
+      background: ${colors[type] || colors.info};
       color: white; padding: 1rem 1.5rem; border-radius: 8px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.15); max-width: 400px;
-      animation: slideInRight 0.3s ease-out;
+      animation: slideInRight 0.3s ease-out; font-size: 0.9rem;
+      display: flex; align-items: center; gap: 1rem;
     `;
 
     document.body.appendChild(notification);
@@ -286,12 +282,14 @@
     return translated;
   }
 
+  // Enhanced table of contents with better UI
   function createTableOfContents(content) {
     const headings = qa('h1, h2, h3, h4, h5, h6', content);
     if (!headings.length) return null;
 
     const tocContainer = document.createElement('div');
     tocContainer.className = 'table-of-contents';
+    tocContainer.style.display = 'none'; // Initially hidden
     
     const tocHeader = document.createElement('div');
     tocHeader.className = 'toc-header';
@@ -338,7 +336,7 @@
     return tocContainer;
   }
 
-  // Enhanced speech synthesis
+  // Enhanced speech synthesis with better error handling
   let voiceList = [];
   function ensureVoicesLoaded(timeout = 3000) {
     return new Promise((resolve) => {
@@ -428,8 +426,12 @@
     }
   }
 
+  // Enhanced TTS stop function
   function stopTTS() {
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.pause();
+    }
     qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
     qa('.tts-play').forEach(b => {
       b.innerHTML = '▶️ <span>Play</span>';
@@ -440,7 +442,7 @@
     ttsState = { paused: false, currentWord: 0, queuePos: 0, language: 'auto' };
   }
 
-  // Enhanced TTS controls with emoji filtering
+  // Enhanced TTS controls with better emoji handling
   function initTTSControls(wrapper, modalTextContainer, langPref) {
     const playBtn = q('.tts-play', wrapper);
     const select = q('#tts-voices', wrapper);
@@ -495,7 +497,7 @@
         const newEl = document.createElement(el.tagName);
         let text = el.textContent.replace(/\s+/g, ' ').trim();
         
-        // Remove emojis from text before TTS
+        // Enhanced emoji removal for TTS
         text = removeEmojis(text);
         
         const contentLang = detectContentLanguage(text, 200);
@@ -573,7 +575,7 @@
         return; 
       }
       
-      const text = queue[ttsState.queuePos++];
+      const text = removeEmojis(queue[ttsState.queuePos++]); // Extra emoji removal
       const utterance = new SpeechSynthesisUtterance(text);
       const selectedVoice = findVoiceByValue(select.value);
       
@@ -609,13 +611,17 @@
       
       utterance.onerror = (error) => {
         statusSpan.textContent = `Speech error: ${error.error}`;
+        console.warn('TTS error:', error);
       };
       
       window.speechSynthesis.speak(utterance);
     }
 
     function stopLocal() {
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.pause();
+      }
       qa('.tts-highlight', modalTextContainer).forEach(s => s.classList.remove('tts-highlight'));
       playBtn.innerHTML = '▶️ <span>Play</span>';
       playBtn.setAttribute('aria-pressed', 'false');
@@ -662,6 +668,7 @@
       }
     }
 
+    // Event listeners
     playBtn.addEventListener('click', () => {
       if (window.speechSynthesis?.speaking) {
         pauseTTS();
@@ -844,17 +851,14 @@
     });
   }
 
-  // Enhanced modal close with GTranslate cleanup
+  // Enhanced modal close function with better cleanup
   function internalClose() {
     if (!modal) return;
     
-    modal.setAttribute('aria-hidden', 'true');
-    modal.classList.remove('open');
-    modal.style.display = 'none';
-    unlockPageScroll();
-
-    if (window.speechSynthesis?.speaking) {
+    // Stop TTS immediately
+    if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
+      window.speechSynthesis.pause();
     }
 
     if (ttsInstance?.stop) {
@@ -862,32 +866,44 @@
     }
     ttsInstance = null;
 
-    // Remove GTranslate effects
-    document.body.classList.remove('notranslate');
-    if (modalContent) {
-      modalContent.classList.remove('translate');
-    }
-
-    qa('.modal-controls-fixed, .tts-controls, .table-of-contents, .modal-related', modal).forEach(n => n.remove());
+    // Close any share modals
     qa('.custom-share-modal').forEach(n => n.remove());
     
+    // Clean up modal state
+    modal.setAttribute('aria-hidden', 'true');
+    modal.classList.remove('open');
+    modal.style.display = 'none';
+    unlockPageScroll();
+
+    // Remove modal-specific elements
+    qa('.modal-controls-fixed, .tts-controls, .table-of-contents, .modal-related', modal).forEach(n => n.remove());
+    
+    // Clean up TTS word spans
     qa('.tts-word-span', modalText).forEach(s => {
       if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
     });
 
+    // Show original close button
     if (btnClose) btnClose.classList.remove('sr-only');
 
+    // Restore focus
     if (lastFocusedElement?.focus) {
       try {
         lastFocusedElement.focus();
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Focus restoration failed:', e);
+      }
     }
 
     document.documentElement.classList.remove('modal-open');
     modalOpen = false;
+    
+    // Reset TTS state
+    ttsState = { paused: false, currentWord: 0, queuePos: 0, language: 'auto' };
   }
 
   function closeModal() {
+    // Close any open share modals first
     qa('.custom-share-modal').forEach(modal => modal.remove());
     
     if (hadPushedState) {
@@ -906,10 +922,13 @@
     } catch {}
   }
 
-  // Enhanced modal opening with GTranslate support
+  // Enhanced modal opening function
   function openModal(index) {
     if (!modal) return;
     if (index < 0 || index >= cards.length) return;
+
+    // Clean up any existing state
+    internalClose();
 
     previousUrl = window.location.href;
     currentIndex = index;
@@ -919,10 +938,12 @@
     const fullHtml = card.dataset.full || card.dataset.preview || '';
     const cardTitle = card.dataset.title || card.querySelector('h3')?.textContent || '';
 
+    // Remove existing modal elements
     qa('.modal-controls-fixed, .tts-controls, .table-of-contents, .modal-related', modal).forEach(n => n.remove());
 
     if (btnClose) btnClose.classList.add('sr-only');
 
+    // Create enhanced modal controls
     const modalControlsFixed = document.createElement('div');
     modalControlsFixed.className = 'modal-controls-fixed';
     
@@ -974,6 +995,7 @@
     
     (modalContent || modal).prepend(modalControlsFixed);
 
+    // Set modal content
     if (modalMedia) {
       modalMedia.innerHTML = imgSrc ?
         `<img src="${imgSrc}" alt="${cardTitle}" loading="lazy">` : '';
@@ -983,6 +1005,7 @@
       modalText.innerHTML = fullHtml;
     }
 
+    // Create table of contents
     const tocContainer = createTableOfContents(modalText);
     if (tocContainer) {
       if (modalMedia && modalMedia.innerHTML) {
@@ -992,8 +1015,10 @@
       }
     }
 
+    // Add related content
     populateRelatedAll(card);
 
+    // Create TTS controls
     const ttsWrap = document.createElement('div');
     ttsWrap.className = 'tts-controls';
     ttsWrap.innerHTML = `
@@ -1029,11 +1054,13 @@
 
     const langPref = ((document.documentElement.lang || 'pa-IN').split(/[-_]/)[0] || 'pa').toLowerCase();
 
+    // Enhanced TTS toggle with better UI feedback
     ttsToggleBtn.addEventListener('click', () => {
       const opening = !ttsWrap.classList.contains('show');
       if (opening) {
         ttsWrap.classList.add('show');
         ttsToggleBtn.classList.add('active');
+        ttsToggleBtn.innerHTML = '🔊';
         if (!ttsInstance) {
           ttsInstance = initTTSControls(ttsWrap, modalText, langPref);
         }
@@ -1041,36 +1068,47 @@
       } else {
         ttsWrap.classList.remove('show');
         ttsToggleBtn.classList.remove('active');
+        ttsToggleBtn.innerHTML = '🔊';
         if (ttsInstance?.stop) ttsInstance.stop();
       }
     });
 
+    // Enhanced TOC toggle with cross icon when active
     tocToggleBtn.addEventListener('click', () => {
       if (tocContainer) {
         const isVisible = tocContainer.style.display !== 'none';
         tocContainer.style.display = isVisible ? 'none' : 'block';
         tocToggleBtn.classList.toggle('active', !isVisible);
+        // Show cross when active, show original icon when inactive
+        tocToggleBtn.innerHTML = isVisible ? '📋' : '✕';
+        tocToggleBtn.title = isVisible ? 'Table of Contents' : 'Close Table of Contents';
       }
     });
 
+    // Share button
     modalShareBtn.addEventListener('click', async () => {
       const url = `https://www.pattibytes.com/places/#${encodeURIComponent(card.id)}`;
       const text = (card.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 140);
       showCustomShareModal({ title: cardTitle, text, url, image: imgSrc });
     });
 
+    // Link copy button
     modalLinkBtn.addEventListener('click', async () => {
       const url = `https://www.pattibytes.com/places/#${encodeURIComponent(card.id)}`;
       try {
         await copyToClipboard(url);
         showNotification('Article link copied to clipboard!', 'success');
+        modalLinkBtn.classList.add('copied');
+        setTimeout(() => modalLinkBtn.classList.remove('copied'), 2000);
       } catch {
         showNotification(`Copy failed. Please copy manually: ${url}`, 'error');
       }
     });
 
+    // Close button
     modalCloseBtn.addEventListener('click', closeModal);
 
+    // Open modal
     modal.setAttribute('aria-hidden', 'false');
     modal.classList.add('open');
     modal.style.display = 'flex';
@@ -1088,6 +1126,7 @@
     modalOpen = true;
     lockPageScroll();
 
+    // Update URL
     const articleId = card.id || card.dataset.id;
     const newUrl = `https://www.pattibytes.com/places/#${encodeURIComponent(articleId)}`;
 
@@ -1168,12 +1207,14 @@
     });
   }
 
+  // Enhanced search function with better matching for place.id, place.title, and place.preview
   function applySearch(qstr) {
     const siteLang = (document.documentElement.lang || 'pa').toLowerCase();
     const inputLang = /[\u0A00-\u0A7F]/.test(qstr.trim()) ? 'pa' : 'en';
 
     let searchQuery = qstr.trim();
     
+    // Enhanced search query expansion
     if (siteLang === 'pa' && inputLang === 'en') {
       Object.entries(enToPunjabi).forEach(([en, pa]) => {
         const regex = new RegExp(`\\b${en}\\b`, 'gi');
@@ -1185,20 +1226,25 @@
     const romanQuery = norm(paToRoman(searchQuery));
 
     let shown = 0;
-    index.forEach(({ el, nText, rText, idText }) => {
-      const matches = !normalizedQuery ||
-        nText.includes(normalizedQuery) ||
-        rText.includes(romanQuery) ||
-        idText.includes(normalizedQuery) ||
-        (el.dataset.full && (
-          norm(el.dataset.full).includes(normalizedQuery) ||
-          norm(paToRoman(el.dataset.full)).includes(romanQuery)
-        ));
+    index.forEach(({ el, searches }) => {
+      let matches = false;
+      
+      // If no query, show all
+      if (!normalizedQuery) {
+        matches = true;
+      } else {
+        // Search in all indexed fields
+        matches = searches.some(searchText => {
+          return searchText.includes(normalizedQuery) || 
+                 searchText.includes(romanQuery);
+        });
+      }
 
       el.style.display = matches ? '' : 'none';
       if (matches) shown++;
     });
 
+    // Update no match message
     if (noMatchEl) {
       if (shown === 0) {
         noMatchEl.style.display = 'block';
@@ -1260,38 +1306,6 @@
     });
   }
 
-  // GTranslate widget click handler
-  document.addEventListener('click', function(event) {
-    const gtWidget = event.target.closest('.gtranslate_wrapper');
-    if (!gtWidget) return;
-
-    // Check if clicking the language selector itself
-    const langSelector = event.target.closest('select.goog-te-combo');
-    if (langSelector) {
-      // Language changed, apply to modal if open
-      setTimeout(() => {
-        if (modalOpen) {
-          const selectedLang = langSelector.value || 'en';
-          applyGTranslateToModal(selectedLang);
-        }
-      }, 100);
-      return;
-    }
-
-    // If clicking widget but not selector, open modal
-    event.preventDefault();
-    if (cards && cards.length > 0) {
-      openModal(0);
-      
-      // Apply translation after modal opens
-      setTimeout(() => {
-        const selector = document.querySelector('select.goog-te-combo');
-        const selectedLang = selector?.value || 'en';
-        applyGTranslateToModal(selectedLang);
-      }, 500);
-    }
-  });
-
   // Enhanced initialization
   document.addEventListener('DOMContentLoaded', () => {
     modal = q('#places-modal');
@@ -1317,18 +1331,28 @@
 
     arrangeActionButtonsHorizontally();
 
-    // Build search index with ID support
+    // Enhanced search index building with place.id, place.title, and place.preview
     index = cards.map(c => {
-      const title = c.dataset.title || c.querySelector('h3')?.textContent || '';
-      const preview = c.dataset.preview || '';
-      const fullContent = c.dataset.full || '';
       const placeId = c.id || c.dataset.id || '';
-      const searchText = `${title} ${preview} ${fullContent}`.trim();
+      const placeTitle = c.dataset.title || c.querySelector('h3')?.textContent || '';
+      const placePreview = c.dataset.preview || '';
+      const fullContent = c.dataset.full || '';
+      
+      // Create multiple search strings for different fields
+      const searches = [
+        norm(placeId),
+        norm(placeTitle),
+        norm(placePreview),
+        norm(fullContent),
+        norm(paToRoman(placeId)),
+        norm(paToRoman(placeTitle)),
+        norm(paToRoman(placePreview)),
+        norm(paToRoman(fullContent))
+      ].filter(Boolean);
+
       return {
         el: c,
-        nText: norm(searchText),
-        rText: norm(paToRoman(searchText)),
-        idText: norm(placeId)
+        searches
       };
     });
 
@@ -1381,6 +1405,7 @@
       if (ev.target === modal) closeModal(); 
     });
 
+    // Enhanced card event listeners
     cards.forEach((card, idx) => {
       const readBtn = card.querySelector('.read-more-btn');
       if (readBtn) {
@@ -1402,20 +1427,36 @@
       
       card.addEventListener('mouseenter', () => {
         card.style.transform = 'translateY(-4px) scale(1.01)';
+        card.style.transition = 'transform 0.3s ease';
       });
       
       card.addEventListener('mouseleave', () => {
         card.style.transform = '';
       });
+
+      // Add click to open functionality
+      card.addEventListener('click', (e) => {
+        // Don't open modal if clicking on buttons
+        if (e.target.closest('button, a')) return;
+        openModal(idx);
+      });
     });
 
-    console.log('Enhanced Places.js with GTranslate integration initialized successfully');
+    console.log('Enhanced Places.js initialized successfully with improved search and modal functionality');
   });
 
+  // Enhanced error handling
   window.addEventListener('error', (e) => {
     if (e.filename?.includes('places.js')) {
       console.error('Places.js error:', e.error);
       showNotification('An error occurred. Please refresh the page.', 'error');
+    }
+  });
+
+  // Clean up on page unload
+  window.addEventListener('beforeunload', () => {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
   });
 
