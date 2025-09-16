@@ -70,7 +70,7 @@
     document.body.removeChild(ta);
   }
 
-  // Custom share modal (kept as-is)
+  // Custom share modal
   function showCustomShareModal({ title, text, url, image }) {
     const existing = q('.custom-share-modal');
     if (existing) existing.remove();
@@ -164,7 +164,6 @@
           email: `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareText)}`,
           sms: `sms:?body=${encodeURIComponent(shareText)}`
         };
-
         if (shareUrls[platform]) {
           if (platform === 'email' || platform === 'sms') {
             window.location.href = shareUrls[platform];
@@ -247,20 +246,18 @@
     return translated;
   }
 
-  // Google Translate observer (unchanged)
+  // Google Translate observer
   function setupGoogleTranslateIntegration() {
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach(() => {
-        if (modalOpen && q('.modal-text')) {
-          const modalText = q('.modal-text');
-          const newLang = detectContentLanguage(modalText.textContent || '');
-          if (newLang !== ttsState.language) {
-            ttsState.language = newLang;
-            const ttsControls = q('.tts-controls.show');
-            if (ttsControls) updateTTSLanguage(ttsControls, modalText, newLang);
-          }
+    const observer = new MutationObserver(() => {
+      if (modalOpen && q('.modal-text')) {
+        const modalText = q('.modal-text');
+        const newLang = detectContentLanguage(modalText.textContent || '');
+        if (newLang !== ttsState.language) {
+          ttsState.language = newLang;
+          const ttsControls = q('.tts-controls.show');
+          if (ttsControls) updateTTSLanguage(ttsControls, modalText, newLang);
         }
-      });
+      }
     });
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     return observer;
@@ -357,8 +354,10 @@
     });
   }
 
+  // FIX: make sure getLangCode returns a string, not an array
   function loadVoicesForLanguage(selectElement, langPref) {
-    const getLangCode = code => (code || '').split(/[-_]/).toLowerCase();
+    const getLangCode = code => ((code || '').split(/[-_]/) || '').toLowerCase();
+
     const addGroup = (label, arr) => {
       if (!arr.length) return;
       const og = document.createElement('optgroup');
@@ -371,7 +370,9 @@
       });
       selectElement.appendChild(og);
     };
+
     const cleanLangPref = (langPref || '').replace('-insufficient', '');
+
     const preferred = voiceList.filter(v => getLangCode(v.lang) === cleanLangPref);
     const english = voiceList.filter(v => getLangCode(v.lang) === 'en');
     const hindi = voiceList.filter(v => getLangCode(v.lang) === 'hi');
@@ -615,7 +616,7 @@
     document.body.style.paddingRight = '';
   }
 
-  // Focus trap
+  // Focus trap (FIX: index into focusables)
   function trapFocus(e) {
     if (!modalOpen || e.key !== 'Tab') return;
     const focusables = qa('#places-modal button:not([disabled]), #places-modal a[href], #places-modal input:not([disabled]), #places-modal select:not([disabled]), #places-modal textarea:not([disabled]), #places-modal [tabindex]:not([tabindex="-1"]):not([disabled])')
@@ -694,7 +695,8 @@
         if (!id) return;
         const target = document.getElementById(id);
         if (target) {
-          scrollPosition = q('.modal-body')?.scrollTop || 0;
+          const bodyEl = q('.modal-body');
+          scrollPosition = bodyEl?.scrollTop || 0;
           internalClose();
           setTimeout(() => {
             if (q('.modal-body')) q('.modal-body').scrollTop = 0;
@@ -717,7 +719,6 @@
     qa('.modal-controls-fixed, .tts-controls, .table-of-contents, .modal-related', modal).forEach(n => n.remove());
     qa('.custom-share-modal').forEach(n => n.remove());
     qa('.tts-word-span', modalText).forEach(s => { if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s); });
-    // Restore static close button (if it exists)
     if (btnClose) btnClose.classList.remove('sr-only');
     if (lastFocusedElement?.focus) { try { lastFocusedElement.focus(); } catch (e) {} }
     document.documentElement.classList.remove('modal-open');
@@ -734,7 +735,7 @@
     try { history.replaceState(history.state, '', '/places/'); } catch {}
   }
 
-  // Enhanced full-screen modal opening (FIXED INSERTION + ARTICLE LINK + EMOJI)
+  // Open modal (fixed insertion + article link + emoji, no inline styles)
   function openModal(index) {
     if (!modal) return;
     if (index < 0 || index >= cards.length) return;
@@ -747,13 +748,13 @@
     const fullHtml = card.dataset.full || card.dataset.preview || '';
     const cardTitle = card.dataset.title || card.querySelector('h3')?.textContent || '';
 
-    // Clean up existing modal content
+    // Clean existing
     qa('.modal-controls-fixed, .tts-controls, .table-of-contents, .modal-related', modal).forEach(n => n.remove());
 
     // Hide static close (avoid duplicate)
     if (btnClose) btnClose.classList.add('sr-only');
 
-    // Create fixed controls at top INSIDE .modal-content
+    // Controls bar inside .modal-content
     const modalControlsFixed = document.createElement('div');
     modalControlsFixed.className = 'modal-controls-fixed';
 
@@ -782,7 +783,6 @@
     modalShareBtn.title = 'Share Article';
     modalShareBtn.setAttribute('aria-label', 'Share this article');
 
-    // NEW: Article Link button
     const modalLinkBtn = document.createElement('button');
     modalLinkBtn.className = 'modal-control-btn modal-link-btn';
     modalLinkBtn.innerHTML = '🔗';
@@ -804,10 +804,9 @@
     modalControlsFixed.appendChild(controlsTitle);
     modalControlsFixed.appendChild(controlsButtons);
 
-    // FIX: Put bar inside .modal-content, not overlay
     (modalContent || modal).prepend(modalControlsFixed);
 
-    // Update modal content
+    // Update content
     if (modalMedia) modalMedia.innerHTML = imgSrc ? `<img src="${imgSrc}" alt="${cardTitle}" loading="lazy">` : '';
     if (modalText) modalText.innerHTML = fullHtml;
 
@@ -850,7 +849,9 @@
     `;
     if (tocContainer) tocContainer.after(ttsWrap); else modalText?.before(ttsWrap);
 
-    const langPref = (document.documentElement.lang || 'pa-IN').split(/[-_]/).toLowerCase();
+    // FIX: langPref split result indexed before toLowerCase
+    const langPref = ((document.documentElement.lang || 'pa-IN').split(/[-_]/) || 'pa').toLowerCase();
+
     let ttsInstance = null;
 
     // Button events
@@ -1066,6 +1067,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     modal = q('#places-modal');
     if (!modal) { console.warn('Places modal not found'); return; }
+
     modalMedia = q('#modal-media', modal);
     modalText = q('#modal-text', modal);
     btnClose = q('#modal-close', modal);
@@ -1080,7 +1082,6 @@
 
     arrangeActionButtonsHorizontally();
 
-    // Search index
     index = cards.map(c => {
       const title = c.dataset.title || c.querySelector('h3')?.textContent || '';
       const preview = c.dataset.preview || '';
@@ -1124,7 +1125,7 @@
 
     btnClose?.addEventListener('click', ev => { ev.stopPropagation(); closeModal(); });
     modal?.addEventListener('click', ev => { if (ev.target === modal) closeModal(); });
-    
+
     cards.forEach((card, idx) => {
       const readBtn = card.querySelector('.read-more-btn');
       if (readBtn) readBtn.addEventListener('click', ev => { ev.stopPropagation(); openModal(idx); });
@@ -1140,7 +1141,7 @@
       card.addEventListener('mouseleave', () => { card.style.transform = ''; });
     });
 
-    // IMPORTANT: Removed all inline <style> injection from JS. Styles live in CSS file.
+    // NOTE: No inline <style> injection here; all styles live in CSS.
   });
 
   // Global error handler
