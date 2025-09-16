@@ -72,7 +72,38 @@
     document.body.removeChild(ta);
   }
 
-  // Enhanced custom share modal - NEVER use native sharing
+  // ENHANCED: Google Translate integration for whole modal
+  function triggerGoogleTranslateRefresh() {
+    // Method 1: Try to trigger retranslation using Google Translate widget
+    const gtSelect = document.querySelector('select.goog-te-combo');
+    if (gtSelect && gtSelect.value && gtSelect.value !== '') {
+      const currentLang = gtSelect.value;
+      // Reset to original language momentarily then back to trigger refresh
+      gtSelect.value = '';
+      setTimeout(() => {
+        gtSelect.value = currentLang;
+        gtSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      }, 50);
+      return;
+    }
+
+    // Method 2: Check for Google Translate frame and reload
+    const gtFrame = document.querySelector('iframe.goog-te-menu-frame');
+    if (gtFrame) {
+      try {
+        gtFrame.src = gtFrame.src;
+      } catch (e) {
+        console.log('Could not refresh Google Translate frame');
+      }
+    }
+
+    // Method 3: Dispatch custom event that other translation tools might listen for
+    document.dispatchEvent(new CustomEvent('translateContent', { 
+      detail: { container: q('#places-modal') } 
+    }));
+  }
+
+  // ENHANCED: Enhanced custom share modal with translate support
   function showCustomShareModal({ title, text, url, image }) {
     // Remove any existing share modal
     const existing = q('.custom-share-modal');
@@ -80,11 +111,13 @@
 
     const modal = document.createElement('div');
     modal.className = 'custom-share-modal';
+    // Add translate class to ensure Google Translate processes this modal
+    modal.setAttribute('class', 'custom-share-modal notranslate');
     modal.innerHTML = `
       <div class="share-modal-overlay">
         <div class="share-modal-content">
           <div class="share-modal-header">
-            <h3>ਸਾਂਝਾ ਕਰੋ / Share</h3>
+            <h3>[translate:ਸਾਂਝਾ ਕਰੋ] / Share</h3>
             <button class="share-modal-close" aria-label="Close">&times;</button>
           </div>
           <div class="share-modal-body">
@@ -93,15 +126,15 @@
               <div class="share-preview-content">
                 <h4 class="share-preview-title">${title}</h4>
                 <p class="share-preview-text">${text}</p>
-                <p class="share-preview-link">${url}</p>
+                <p class="share-preview-link notranslate">${url}</p>
                 <div class="share-preview-actions">
-                  <button class="share-copy-link">📋 ਲਿੰਕ ਕਾਪੀ ਕਰੋ</button>
-                  <a href="${url}" target="_blank" class="share-read-full">📖 ਪੂਰਾ ਪੜ੍ਹੋ</a>
+                  <button class="share-copy-link">📋 [translate:ਲਿੰਕ ਕਾਪੀ ਕਰੋ]</button>
+                  <a href="${url}" target="_blank" class="share-read-full">📖 [translate:ਪੂਰਾ ਪੜ੍ਹੋ]</a>
                 </div>
               </div>
             </div>
             <div class="share-platforms">
-              <h5>ਸੋਸ਼ਲ ਮੀਡੀਆ / Social Media</h5>
+              <h5>[translate:ਸੋਸ਼ਲ ਮੀਡੀਆ] / Social Media</h5>
               <div class="share-platforms-scroll">
                 <button class="share-platform" data-platform="whatsapp">
                   <span class="share-platform-icon">📱</span>
@@ -155,37 +188,39 @@
     `;
 
     document.body.appendChild(modal);
-    setTimeout(() => modal.classList.add('show'), 10);
+    setTimeout(() => {
+      modal.classList.add('show');
+      // Trigger translation for the new modal content
+      setTimeout(triggerGoogleTranslateRefresh, 100);
+    }, 10);
 
+    // ... rest of the existing share modal code ...
     const closeModal = () => {
       modal.classList.remove('show');
       setTimeout(() => modal.remove(), 300);
     };
 
-    // Event listeners
     q('.share-modal-close', modal).addEventListener('click', closeModal);
     q('.share-modal-overlay', modal).addEventListener('click', (e) => {
       if (e.target === e.currentTarget) closeModal();
     });
 
-    // Copy link functionality
     q('.share-copy-link', modal).addEventListener('click', async () => {
       try {
         await copyToClipboard(url);
         const btn = q('.share-copy-link', modal);
         const original = btn.textContent;
-        btn.textContent = '✅ ਕਾਪੀ ਹੋਇਆ!';
+        btn.textContent = '✅ [translate:ਕਾਪੀ ਹੋਇਆ]!';
         btn.style.background = 'var(--success-color)';
         setTimeout(() => {
           btn.textContent = original;
           btn.style.background = '';
         }, 2000);
       } catch {
-        showNotification('Copy failed / ਕਾਪੀ ਅਸਫਲ', 'error');
+        showNotification('Copy failed / [translate:ਕਾਪੀ ਅਸਫਲ]', 'error');
       }
     });
 
-    // Social media sharing
     qa('.share-platform', modal).forEach(btn => {
       btn.addEventListener('click', () => {
         const platform = btn.dataset.platform;
@@ -195,11 +230,11 @@
           whatsapp: `https://wa.me/?text=${encodeURIComponent(shareText)}`,
           facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
           twitter: `https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}`,
-          instagram: `https://www.instagram.com/`, // Instagram doesn't support direct URL sharing
+          instagram: `https://www.instagram.com/`,
           telegram: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(title)}`,
           linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
           reddit: `https://reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`,
-          quora: `https://www.quora.com/`, // Quora doesn't support direct sharing
+          quora: `https://www.quora.com/`,
           pinterest: `https://pinterest.com/pin/create/button/?url=${encodeURIComponent(url)}&description=${encodeURIComponent(title)}`,
           email: `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(shareText)}`,
           sms: `sms:?body=${encodeURIComponent(shareText)}`
@@ -209,7 +244,6 @@
           if (platform === 'email' || platform === 'sms') {
             window.location.href = shareUrls[platform];
           } else if (platform === 'instagram' || platform === 'quora') {
-            // For Instagram and Quora, copy to clipboard and notify user
             copyToClipboard(shareText);
             showNotification(`Link copied! Open ${platform === 'instagram' ? 'Instagram' : 'Quora'} app to share.`, 'info');
           } else {
@@ -220,7 +254,6 @@
       });
     });
 
-    // Prevent default browser sharing
     return false;
   }
 
@@ -302,11 +335,14 @@
     return translated;
   }
 
-  // Enhanced Google Translate integration
+  // ENHANCED: Google Translate integration for whole modal
   function setupGoogleTranslateIntegration() {
     const observer = new MutationObserver((mutations) => {
+      let shouldRetranslate = false;
+      
       mutations.forEach((mutation) => {
         if (mutation.type === 'childList' || mutation.type === 'characterData') {
+          // Check if modal content changed
           if (modalOpen && q('.modal-text')) {
             const modalText = q('.modal-text');
             const newLang = detectContentLanguage(modalText.textContent || '');
@@ -316,12 +352,36 @@
               if (ttsControls) {
                 updateTTSLanguage(ttsControls, modalText, newLang);
               }
+              shouldRetranslate = true;
             }
+          }
+          
+          // Check if any new content was added to modal
+          if (mutation.target.closest && mutation.target.closest('#places-modal')) {
+            shouldRetranslate = true;
           }
         }
       });
+      
+      // Trigger retranslation if needed
+      if (shouldRetranslate) {
+        setTimeout(triggerGoogleTranslateRefresh, 200);
+      }
     });
 
+    // ENHANCED: Watch the entire modal container for changes
+    const modal = q('#places-modal');
+    if (modal) {
+      observer.observe(modal, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['data-title', 'data-preview', 'data-full']
+      });
+    }
+
+    // Also observe document body for general changes
     observer.observe(document.body, {
       childList: true,
       subtree: true,
@@ -360,7 +420,7 @@
     const tocHeader = document.createElement('div');
     tocHeader.className = 'toc-header';
     tocHeader.innerHTML = `
-      <h4 class="toc-title">ਸਮੱਗਰੀ / Contents</h4>
+      <h4 class="toc-title">[translate:ਸਮੱਗਰੀ] / Contents</h4>
       <button class="toc-collapse" aria-label="Collapse TOC">−</button>
     `;
     tocContainer.appendChild(tocHeader);
@@ -488,7 +548,7 @@
     
     if (preferred.length) addGroup(`${cleanLangPref.toUpperCase()} Voices`, preferred);
     if (english.length) addGroup('English Voices', english);
-    if (hindi.length) addGroup('हिंदी Voices', hindi);
+    if (hindi.length) addGroup('[translate:हिंदी] Voices', hindi);
     if (others.length) addGroup('Other Voices', others);
 
     if (!selectElement.options.length) {
@@ -869,7 +929,7 @@
 
     const wrap = document.createElement('div');
     wrap.className = 'modal-related';
-    wrap.innerHTML = `<h4>ਤੁਹਾਨੂੰ ਇਹ ਵੀ ਪਸੰਦ ਆ ਸਕਦਾ ਹੈ / You May Also Like</h4>`;
+    wrap.innerHTML = `<h4>[translate:ਤੁਹਾਨੂੰ ਇਹ ਵੀ ਪਸੰਦ ਆ ਸਕਦਾ ਹੈ] / You May Also Like</h4>`;
 
     const list = document.createElement('div');
     list.className = 'related-list';
@@ -889,7 +949,7 @@
           <div class="related-title">${cardTitle}</div>
           <div class="related-meta">${preview.slice(0, 100)}${preview.length > 100 ? '...' : ''}</div>
           <div class="related-actions">
-            <button class="related-open" data-id="${c.id}">ਖੋਲੋ / Open</button>
+            <button class="related-open" data-id="${c.id}">[translate:ਖੋਲੋ] / Open</button>
           </div>
         </div>`;
       list.appendChild(rel);
@@ -978,7 +1038,7 @@
     } catch {}
   }
 
-  // FIXED: Enhanced full-screen modal opening - controls inside modal content + article link button
+  // ENHANCED: Full-screen modal opening with Google Translate support
   function openModal(index) {
     if (!modal) return;
     if (index < 0 || index >= cards.length) return;
@@ -996,6 +1056,10 @@
 
     // Hide static close button to avoid duplicates
     if (btnClose) btnClose.classList.add('sr-only');
+
+    // ENHANCED: Mark modal as translatable and add language attributes
+    modal.setAttribute('lang', document.documentElement.lang || 'pa');
+    modal.classList.remove('notranslate');
 
     // FIXED: Create fixed modal controls INSIDE modal content, not overlay
     const modalControlsFixed = document.createElement('div');
@@ -1052,7 +1116,7 @@
     // FIXED: Insert controls inside modal-content, not overlay
     (modalContent || modal).prepend(modalControlsFixed);
 
-    // Update modal content
+    // ENHANCED: Update modal content with translation support
     if (modalMedia) {
       modalMedia.innerHTML = imgSrc ?
         `<img src="${imgSrc}" alt="${cardTitle}" loading="lazy">` : '';
@@ -1060,6 +1124,8 @@
     
     if (modalText) {
       modalText.innerHTML = fullHtml;
+      // Add language detection attributes to help Google Translate
+      modalText.setAttribute('lang', detectContentLanguage(fullHtml, 100));
     }
 
     // Create table of contents AFTER image and title
@@ -1082,7 +1148,7 @@
     ttsWrap.className = 'tts-controls';
     ttsWrap.innerHTML = `
       <div class="tts-controls-header">
-        <h5>🔊 Text-to-Speech Controls / ਟੈਕਸਟ ਟੂ ਸਪੀਚ ਕੰਟਰੋਲ</h5>
+        <h5>🔊 Text-to-Speech Controls / [translate:ਟੈਕਸਟ ਟੂ ਸਪੀਚ ਕੰਟਰੋਲ]</h5>
       </div>
       <div class="tts-controls-row">
         <button class="tts-play" aria-pressed="false" title="Play/Pause">▶️ <span>Play</span></button>
@@ -1143,7 +1209,7 @@
 
     modalShareBtn.addEventListener('click', async () => {
       const url = `https://www.pattibytes.com/places/#${encodeURIComponent(card.id)}`;
-      const text = (card.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 140);
+      const text = (card.dataset.preview || '[translate:ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ]').slice(0, 140);
       // Always use custom share modal, never native
       showCustomShareModal({ title: cardTitle, text, url, image: imgSrc });
     });
@@ -1179,9 +1245,14 @@
     modalOpen = true;
     lockPageScroll();
 
-    // Setup Google Translate observer
+    // ENHANCED: Setup Google Translate observer and trigger initial translation
     if (gtranslateObserver) gtranslateObserver.disconnect();
     gtranslateObserver = setupGoogleTranslateIntegration();
+
+    // ENHANCED: Trigger Google Translate for the new modal content
+    setTimeout(() => {
+      triggerGoogleTranslateRefresh();
+    }, 500);
 
     // Update URL
     const articleId = card.id || card.dataset.id;
@@ -1234,7 +1305,7 @@
           const prevIcon = btn.textContent;
           btn.textContent = '✔️';
           
-          showNotification('Link copied! / ਲਿੰਕ ਕਾਪੀ ਹੋਇਆ!', 'success');
+          showNotification('Link copied! / [translate:ਲਿੰਕ ਕਾਪੀ ਹੋਇਆ]!', 'success');
           
           setTimeout(() => {
             btn.classList.remove('copied');
@@ -1257,7 +1328,7 @@
 
         const title = article.dataset.title || article.querySelector('h3')?.textContent || document.title;
         const url = `https://www.pattibytes.com/places/#${encodeURIComponent(article.id)}`;
-        const text = (article.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 140);
+        const text = (article.dataset.preview || '[translate:ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ]').slice(0, 140);
         const image = article.dataset.image || '';
 
         // Always use custom share modal
@@ -1305,7 +1376,7 @@
       if (shown === 0) {
         noMatchEl.style.display = 'block';
         noMatchEl.innerHTML = siteLang === 'pa' ? 
-          'ਕੋਈ ਮਿਲਦਾ ਸਥਾਨ ਨਹੀਂ ਮਿਲਿਆ।<br><small>Try terms like: gurdwara, temple, school, market</small>' : 
+          '[translate:ਕੋਈ ਮਿਲਦਾ ਸਥਾਨ ਨਹੀਂ ਮਿਲਿਆ]।<br><small>Try terms like: gurdwara, temple, school, market</small>' : 
           'No matching places found.<br><small>Try Punjabi terms or different keywords</small>';
       } else {
         noMatchEl.style.display = 'none';
@@ -1487,9 +1558,7 @@
       });
     });
 
-    // NOTE: CSS injection removed - styles should be in your CSS file
-
-    console.log('Enhanced Places.js with full-screen modals initialized successfully');
+    console.log('Enhanced Places.js with Google Translate support initialized successfully');
   });
 
   // Global error handler
