@@ -1,155 +1,693 @@
-// Enhanced places.js with improved search, modal functionality, and UI enhancements
+// Enhanced places.js with advanced search, TTS, modal management, and improved UI
 (function () {
   "use strict";
 
   // Utilities
-  const q  = (s, c = document) => (c || document).querySelector(s);
+  const q = (s, c = document) => (c || document).querySelector(s);
   const qa = (s, c = document) => Array.from((c || document).querySelectorAll(s));
 
-  // Normalize text: remove accents, lower case
-  const norm = (s) => (s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  // Normalize text: remove accents, lower case, handle special characters
+  const norm = (s) => (s || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-  // Enhanced Punjabi to Roman transliteration
+  // Enhanced Punjabi to Roman transliteration with comprehensive mappings
   const paToRoman = (txt) => (txt || '')
     .replace(/[ਅਆ]/g, 'a').replace(/[ਇਈ]/g, 'i').replace(/[ਉਊ]/g, 'u')
     .replace(/[ਏਐ]/g, 'e').replace(/[ਓਔ]/g, 'o').replace(/[ਂੰ]/g, 'n')
     .replace(/[ਕਖਗਘ]/g, 'k').replace(/[ਙ]/g, 'ng').replace(/[ਚਛਜਝ]/g, 'ch')
     .replace(/[ਞ]/g, 'nj').replace(/[ਟਠਡਢ]/g, 't').replace(/[ਣਨ]/g, 'n')
     .replace(/[ਤਥਦਧ]/g, 'd').replace(/[ਪਫਬਭ]/g, 'p').replace(/[ਮ]/g, 'm')
-    .replace(/[ਯ]/g, 'y').replace(/[ਰ]/g, 'r').replace(/[ਲ]/g, 'l')
-    .replace(/[ਵ]/g, 'v').replace(/[ਸਸ਼]/g, 's').replace(/[ਹ]/g, 'h');
+    .replace(/[ਯ]/g, 'y').replace(/[ਰ]/g, 'r').replace(/[ਲਵ]/g, 'l')
+    .replace(/[ਸਸ਼]/g, 's').replace(/[ਹ]/g, 'h').replace(/[ੜ]/g, 'r')
+    .replace(/[ਜ਼]/g, 'z').replace(/[ਫ਼]/g, 'f').replace(/[ਖ਼]/g, 'kh')
+    .replace(/[ਗ਼]/g, 'gh').replace(/[ੱ]/g, '').replace(/[੍]/g, '');
 
-  // Enhanced English to Punjabi word mapping for search
+  // Comprehensive English to Punjabi word mapping for enhanced search
   const enToPunjabi = {
-    'gurdwara': 'ਗੁਰਦੁਆਰਾ', 'gurudwara': 'ਗੁਰਦੁਆਰਾ', 'temple': 'ਮੰਦਿਰ', 
+    // Religious places
+    'gurdwara': 'ਗੁਰਦੁਆਰਾ', 'gurudwara': 'ਗੁਰਦੁਆਰਾ', 'gurudrawa': 'ਗੁਰਦੁਆਰਾ',
+    'temple': 'ਮੰਦਿਰ', 'mandir': 'ਮੰਦਿਰ', 'mosque': 'ਮਸਜਿਦ', 'masjid': 'ਮਸਜਿਦ',
+    'church': 'ਗਿਰਜਾ', 'girja': 'ਗਿਰਜਾ',
+    
+    // Educational institutions
     'school': 'ਸਕੂਲ', 'college': 'ਕਾਲਜ', 'university': 'ਯੂਨੀਵਰਸਿਟੀ',
-    'hospital': 'ਹਸਪਤਾਲ', 'market': 'ਮਾਰਕੀਟ', 'bazaar': 'ਬਜ਼ਾਰ',
-    'park': 'ਪਾਰਕ', 'garden': 'ਬਗੀਚਾ', 'river': 'ਨਦੀ', 'canal': 'ਨਹਿਰ',
+    'academy': 'ਅਕਾਦਮੀ', 'institute': 'ਇੰਸਟੀਟਿਊਟ',
+    
+    // Healthcare
+    'hospital': 'ਹਸਪਤਾਲ', 'clinic': 'ਕਲੀਨਿਕ', 'dispensary': 'ਡਿਸਪੈਂਸਰੀ',
+    'doctor': 'ਡਾਕਟਰ', 'medical': 'ਮੈਡੀਕਲ',
+    
+    // Commercial places
+    'market': 'ਮਾਰਕੀਟ', 'bazaar': 'ਬਜ਼ਾਰ', 'shop': 'ਦੁਕਾਨ',
+    'mall': 'ਮਾਲ', 'store': 'ਸਟੋਰ', 'bank': 'ਬੈਂਕ',
+    
+    // Public places
+    'park': 'ਪਾਰਕ', 'garden': 'ਬਗੀਚਾ', 'playground': 'ਖੇਡ ਮੈਦਾਨ',
+    'stadium': 'ਸਟੇਡੀਅਮ', 'ground': 'ਮੈਦਾਨ',
+    
+    // Transportation
+    'station': 'ਸਟੇਸ਼ਨ', 'bus': 'ਬੱਸ', 'railway': 'ਰੇਲਵੇ',
+    'airport': 'ਏਅਰਪੋਰਟ', 'bridge': 'ਪੁਲ',
+    
+    // Geographic features
+    'river': 'ਨਦੀ', 'canal': 'ਨਹਿਰ', 'pond': 'ਤਲਾਬ',
+    'lake': 'ਝੀਲ', 'well': 'ਖੂਹ', 'tube': 'ਟਿਊਬ',
+    
+    // Settlements
     'village': 'ਪਿੰਡ', 'city': 'ਸ਼ਹਿਰ', 'town': 'ਕਸਬਾ',
-    'place': 'ਸਥਾਨ', 'location': 'ਜਗ੍ਹਾ', 'famous': 'ਮਸ਼ਹੂਰ', 'popular': 'ਪ੍ਰਸਿੱਧ',
-    'history': 'ਇਤਿਹਾਸ', 'heritage': 'ਵਿਰਾਸਤ', 'culture': 'ਸੱਭਿਆਚਾਰ'
+    'district': 'ਜਿਲ੍ਹਾ', 'tehsil': 'ਤਹਿਸੀਲ', 'block': 'ਬਲਾਕ',
+    
+    // Descriptive terms
+    'place': 'ਸਥਾਨ', 'location': 'ਜਗ੍ਹਾ', 'area': 'ਇਲਾਕਾ',
+    'famous': 'ਮਸ਼ਹੂਰ', 'popular': 'ਪ੍ਰਸਿੱਧ', 'old': 'ਪੁਰਾਣਾ',
+    'new': 'ਨਵਾਂ', 'big': 'ਵੱਡਾ', 'small': 'ਛੋਟਾ',
+    'main': 'ਮੁੱਖ', 'central': 'ਕੇਂਦਰੀ', 'local': 'ਸਥਾਨਕ',
+    
+    // Cultural terms
+    'history': 'ਇਤਿਹਾਸ', 'heritage': 'ਵਿਰਾਸਤ', 'culture': 'ਸੱਭਿਆਚਾਰ',
+    'tradition': 'ਪਰੰਪਰਾ', 'festival': 'ਤਿਉਹਾਰ', 'fair': 'ਮੇਲਾ',
+    
+    // Administrative
+    'office': 'ਦਫ਼ਤਰ', 'government': 'ਸਰਕਾਰੀ', 'public': 'ਜਨਤਕ',
+    'private': 'ਪ੍ਰਾਈਵੇਟ', 'committee': 'ਕਮੇਟੀ', 'society': 'ਸੋਸਾਇਟੀ',
+    
+    // Common Punjabi place names
+    'singh': 'ਸਿੰਘ', 'kaur': 'ਕੌਰ', 'guru': 'ਗੁਰੂ',
+    'sahib': 'ਸਾਹਿਬ', 'ji': 'ਜੀ', 'wala': 'ਵਾਲਾ',
+    'pura': 'ਪੁਰਾ', 'nagar': 'ਨਗਰ', 'pur': 'ਪੁਰ'
   };
 
-  // Enhanced translation mappings for TTS
-  const paToEnglish = {
-    'ਗੁਰਦੁਆਰਾ': 'Gurdwara', 'ਮੰਦਿਰ': 'Temple', 'ਮਸਜਿਦ': 'Mosque',
-    'ਸਕੂਲ': 'School', 'ਕਾਲਜ': 'College', 'ਯੂਨੀਵਰਸਿਟੀ': 'University',
-    'ਹਸਪਤਾਲ': 'Hospital', 'ਕਲੀਨਿਕ': 'Clinic', 'ਡਾਕਟਰ': 'Doctor',
-    'ਪਾਰਕ': 'Park', 'ਬਗੀਚਾ': 'Garden', 'ਮਾਰਕੀਟ': 'Market', 'ਬਜ਼ਾਰ': 'Bazaar',
-    'ਪਿੰਡ': 'Village', 'ਸ਼ਹਿਰ': 'City', 'ਕਸਬਾ': 'Town',
-    'ਸਥਾਨ': 'Place', 'ਜਗ੍ਹਾ': 'Location', 'ਮਸ਼ਹੂਰ': 'Famous', 'ਪ੍ਰਸਿੱਧ': 'Popular',
-    'ਇਤਿਹਾਸ': 'History', 'ਵਿਰਾਸਤ': 'Heritage', 'ਸੱਭਿਆਚਾਰ': 'Culture',
-    'ਨਦੀ': 'River', 'ਨਹਿਰ': 'Canal', 'ਤਲਾਬ': 'Pond', 'ਖੇਤ': 'Farm'
+  // Store navigation state and modal stack
+  let modalStack = [];
+  let navigationHistory = [];
+  let currentModalId = null;
+  let scrollPositions = new Map();
+  let isInitialLoad = true;
+
+  // TTS State Management
+  let ttsState = {
+    isActive: false,
+    isPaused: false,
+    currentUtterance: null,
+    currentIndex: 0,
+    wordSpans: [],
+    queuePosition: 0,
+    detectedLanguage: 'auto',
+    preferredVoice: null
   };
 
-  // Deep-link hash normalize
-  function normalizeHash(h) {
-    if (!h) return '';
-    let s = h.replace(/^#/, '').replace(/\/+$|\/+/g, '');
-    try { return decodeURIComponent(s); } catch { return s; }
-  }
+  // Modal and UI state
+  let modal, modalMedia, modalText, btnClose, modalContent, cards;
+  let searchInput, clearSearch, noMatchEl, placesGrid;
+  let searchIndex = [];
+  let currentIndex = -1;
+  let lastFocusedElement = null;
+  let modalOpen = false;
 
-  // Store previous URL and scroll position
-  let previousUrl = window.location.href;
-  let scrollPosition = 0;
-  let ttsState = { paused: false, currentWord: 0, queuePos: 0, language: 'auto' };
-
-  // Always use full-screen modal instead of page redirect
-  const isMobile = () => window.innerWidth <= 768;
-
-  // Enhanced emoji removal for TTS - removes all emojis and special characters
-  function removeEmojis(text) {
-    return text
-      .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/gu, ' ')
-      .replace(/[📱📘🐦✈️💼📧📍📋🔊▶️⏸️✕📤🔗✔️]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  // Enhanced clipboard copy with better error handling
+  // Enhanced clipboard functionality with better error handling
   async function copyToClipboard(text) {
-    if (!text) throw new Error('No text to copy');
+    if (!text) throw new Error('No text provided');
     
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
-        return;
+        return true;
       }
-    } catch (e) {
-      console.warn('Modern clipboard API failed, trying fallback');
+    } catch (error) {
+      console.warn('Modern clipboard API failed:', error);
     }
     
-    // Fallback method
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
-    document.body.appendChild(ta);
-    ta.select();
-    ta.setSelectionRange(0, 99999);
+    // Fallback for older browsers
+    return new Promise((resolve, reject) => {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none;';
+      document.body.appendChild(textarea);
+      
+      try {
+        textarea.select();
+        textarea.setSelectionRange(0, text.length);
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        
+        if (successful) {
+          resolve(true);
+        } else {
+          reject(new Error('Copy command failed'));
+        }
+      } catch (error) {
+        document.body.removeChild(textarea);
+        reject(error);
+      }
+    });
+  }
+
+  // Enhanced notification system with better positioning and accessibility
+  function showNotification(message, type = 'info', duration = 4000) {
+    // Remove existing notifications of the same type
+    qa(`.notification-${type}`).forEach(n => n.remove());
     
-    try {
-      const successful = document.execCommand('copy');
-      if (!successful) throw new Error('Copy command failed');
-    } finally {
-      document.body.removeChild(ta);
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.setAttribute('role', 'alert');
+    notification.setAttribute('aria-live', 'polite');
+    
+    notification.innerHTML = `
+      <div class="notification-content">
+        <span class="notification-message">${message}</span>
+        <button class="notification-close" aria-label="Close notification">&times;</button>
+      </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Add show class for animation
+    requestAnimationFrame(() => {
+      notification.classList.add('show');
+    });
+
+    const closeNotification = () => {
+      notification.classList.remove('show');
+      setTimeout(() => notification.remove(), 300);
+    };
+
+    q('.notification-close', notification)?.addEventListener('click', closeNotification);
+    
+    if (duration > 0) {
+      setTimeout(closeNotification, duration);
+    }
+    
+    return closeNotification;
+  }
+
+  // Enhanced language detection with better accuracy
+  function detectLanguage(text, minLength = 100) {
+    if (!text || text.length < 10) return { language: 'unknown', confidence: 0 };
+    
+    const cleanText = text.replace(/[^\w\s\u0A00-\u0A7F]/g, ' ').trim();
+    const totalChars = cleanText.length;
+    
+    if (totalChars < minLength) {
+      return { language: 'insufficient', confidence: 0, suggestion: 'en' };
+    }
+
+    const punjabiFactor = (cleanText.match(/[\u0A00-\u0A7F]/g) || []).length;
+    const englishFactor = (cleanText.match(/[a-zA-Z]/g) || []).length;
+    const hindiDevanagari = (cleanText.match(/[\u0900-\u097F]/g) || []).length;
+    
+    const punjabi = punjabiFactor / totalChars;
+    const english = englishFactor / totalChars;
+    const hindi = hindiDevanagari / totalChars;
+    
+    if (punjabi > 0.4) {
+      return { language: 'pa', confidence: punjabi, script: 'Gurmukhi' };
+    } else if (hindi > 0.3) {
+      return { language: 'hi', confidence: hindi, script: 'Devanagari' };
+    } else if (english > 0.6) {
+      return { language: 'en', confidence: english, script: 'Latin' };
+    } else if (punjabi > english && punjabi > hindi) {
+      return { language: 'pa', confidence: punjabi, script: 'Gurmukhi' };
+    }
+    
+    return { language: 'en', confidence: english, script: 'Latin', fallback: true };
+  }
+
+  // Enhanced TTS with multi-language support and better error handling
+  class AdvancedTTS {
+    constructor() {
+      this.synth = window.speechSynthesis;
+      this.voices = [];
+      this.isSupported = !!this.synth;
+      this.currentUtterance = null;
+      this.isPlaying = false;
+      this.isPaused = false;
+      this.queue = [];
+      this.currentIndex = 0;
+      this.callbacks = {};
+      
+      this.init();
+    }
+
+    async init() {
+      if (!this.isSupported) {
+        console.warn('Speech Synthesis not supported');
+        return;
+      }
+
+      // Load voices with retry mechanism
+      await this.loadVoices();
+      
+      // Handle voice changes
+      if (this.synth.onvoiceschanged !== undefined) {
+        this.synth.onvoiceschanged = () => this.loadVoices();
+      }
+    }
+
+    async loadVoices(maxRetries = 5, retryDelay = 500) {
+      for (let i = 0; i < maxRetries; i++) {
+        this.voices = this.synth?.getVoices() || [];
+        if (this.voices.length > 0) break;
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
+      
+      if (this.voices.length === 0) {
+        console.warn('No voices available for TTS');
+      }
+      
+      return this.voices;
+    }
+
+    getVoicesForLanguage(language) {
+      if (!this.voices.length) return [];
+      
+      const langCode = language.split('-')[0].toLowerCase();
+      const voices = this.voices.filter(voice => {
+        const voiceLang = voice.lang.split('-')[0].toLowerCase();
+        return voiceLang === langCode;
+      });
+      
+      // Sort by quality (prefer non-remote voices)
+      return voices.sort((a, b) => {
+        if (!a.localService && b.localService) return 1;
+        if (a.localService && !b.localService) return -1;
+        return 0;
+      });
+    }
+
+    getBestVoice(language, preferredName = null) {
+      const voices = this.getVoicesForLanguage(language);
+      
+      if (preferredName) {
+        const preferred = voices.find(v => v.name === preferredName);
+        if (preferred) return preferred;
+      }
+      
+      // Fallback to best available voice
+      const localVoices = voices.filter(v => v.localService);
+      if (localVoices.length > 0) return localVoices[0];
+      
+      if (voices.length > 0) return voices[0];
+      
+      // Ultimate fallback - any voice
+      return this.voices.length > 0 ? this.voices[0] : null;
+    }
+
+    cleanTextForTTS(text) {
+      return text
+        // Remove emojis and special characters
+        .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/gu, ' ')
+        // Remove URLs
+        .replace(/https?:\/\/[^\s]+/g, ' ')
+        // Remove email addresses
+        .replace(/\S+@\S+\.\S+/g, ' ')
+        // Clean up whitespace
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    createUtterance(text, options = {}) {
+      const cleanText = this.cleanTextForTTS(text);
+      if (!cleanText) return null;
+      
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      
+      // Detect language if not provided
+      const detectedLang = options.language || this.detectTextLanguage(cleanText);
+      const voice = this.getBestVoice(detectedLang, options.voiceName);
+      
+      if (voice) {
+        utterance.voice = voice;
+      } else {
+        utterance.lang = this.mapLanguageCode(detectedLang);
+      }
+      
+      utterance.rate = options.rate || 1.0;
+      utterance.pitch = options.pitch || 1.0;
+      utterance.volume = options.volume || 1.0;
+      
+      return utterance;
+    }
+
+    detectTextLanguage(text) {
+      const detection = detectLanguage(text);
+      
+      switch(detection.language) {
+        case 'pa': return 'pa-IN';
+        case 'hi': return 'hi-IN';
+        case 'en': return 'en-US';
+        default: return 'en-US';
+      }
+    }
+
+    mapLanguageCode(lang) {
+      const mapping = {
+        'pa': 'pa-IN',
+        'hi': 'hi-IN', 
+        'en': 'en-US',
+        'es': 'es-ES',
+        'fr': 'fr-FR',
+        'de': 'de-DE',
+        'it': 'it-IT',
+        'pt': 'pt-BR',
+        'ru': 'ru-RU',
+        'ja': 'ja-JP',
+        'ko': 'ko-KR',
+        'zh': 'zh-CN'
+      };
+      return mapping[lang.split('-')[0]] || 'en-US';
+    }
+
+    speak(text, options = {}) {
+      return new Promise((resolve, reject) => {
+        if (!this.isSupported) {
+          reject(new Error('Speech synthesis not supported'));
+          return;
+        }
+
+        const utterance = this.createUtterance(text, options);
+        if (!utterance) {
+          reject(new Error('Failed to create utterance'));
+          return;
+        }
+
+        // Stop current speech
+        this.stop();
+
+        utterance.onstart = () => {
+          this.isPlaying = true;
+          this.isPaused = false;
+          this.currentUtterance = utterance;
+          this.callbacks.onStart?.(utterance);
+        };
+
+        utterance.onend = () => {
+          this.isPlaying = false;
+          this.currentUtterance = null;
+          this.callbacks.onEnd?.(utterance);
+          resolve();
+        };
+
+        utterance.onerror = (error) => {
+          this.isPlaying = false;
+          this.currentUtterance = null;
+          this.callbacks.onError?.(error);
+          reject(error);
+        };
+
+        utterance.onboundary = (event) => {
+          this.callbacks.onBoundary?.(event);
+        };
+
+        this.synth.speak(utterance);
+      });
+    }
+
+    pause() {
+      if (this.isSupported && this.isPlaying) {
+        this.synth.pause();
+        this.isPaused = true;
+        this.callbacks.onPause?.();
+      }
+    }
+
+    resume() {
+      if (this.isSupported && this.isPaused) {
+        this.synth.resume();
+        this.isPaused = false;
+        this.callbacks.onResume?.();
+      }
+    }
+
+    stop() {
+      if (this.isSupported) {
+        this.synth.cancel();
+        this.isPlaying = false;
+        this.isPaused = false;
+        this.currentUtterance = null;
+        this.callbacks.onStop?.();
+      }
+    }
+
+    on(event, callback) {
+      this.callbacks[event] = callback;
+    }
+
+    getStatus() {
+      return {
+        isSupported: this.isSupported,
+        isPlaying: this.isPlaying,
+        isPaused: this.isPaused,
+        hasVoices: this.voices.length > 0,
+        voiceCount: this.voices.length
+      };
     }
   }
 
-  // Enhanced custom share modal with better UI
+  // Initialize advanced TTS
+  const advancedTTS = new AdvancedTTS();
+
+  // Enhanced modal stack management
+  function pushModal(modalId, data = {}) {
+    modalStack.push({ id: modalId, data, timestamp: Date.now() });
+    currentModalId = modalId;
+    console.log('Modal stack:', modalStack.map(m => m.id));
+  }
+
+  function popModal() {
+    if (modalStack.length > 0) {
+      modalStack.pop();
+      currentModalId = modalStack.length > 0 ? modalStack[modalStack.length - 1].id : null;
+      console.log('Modal stack after pop:', modalStack.map(m => m.id));
+      return currentModalId;
+    }
+    return null;
+  }
+
+  function clearModalStack() {
+    modalStack = [];
+    currentModalId = null;
+    console.log('Modal stack cleared');
+  }
+
+  function getCurrentModalLevel() {
+    return modalStack.length;
+  }
+
+  // Enhanced navigation management
+  function updateNavigation(articleId, action = 'push') {
+    const baseUrl = 'https://www.pattibytes.com/places/';
+    const newUrl = articleId ? `${baseUrl}#${encodeURIComponent(articleId)}` : baseUrl;
+    
+    try {
+      if (action === 'push' && window.location.href !== newUrl) {
+        history.pushState({ 
+          articleId, 
+          modalLevel: getCurrentModalLevel(),
+          timestamp: Date.now() 
+        }, '', newUrl);
+        console.log('Navigation pushed:', { articleId, modalLevel: getCurrentModalLevel() });
+      } else if (action === 'replace') {
+        history.replaceState({ 
+          articleId, 
+          modalLevel: getCurrentModalLevel(),
+          timestamp: Date.now() 
+        }, '', newUrl);
+        console.log('Navigation replaced:', { articleId, modalLevel: getCurrentModalLevel() });
+      }
+    } catch (error) {
+      console.warn('Navigation update failed:', error);
+    }
+  }
+
+  // Enhanced scroll management
+  function saveScrollPosition(key = 'main') {
+    const modalBody = q('.modal-body');
+    if (modalBody && modalOpen) {
+      scrollPositions.set(key, modalBody.scrollTop);
+    } else {
+      scrollPositions.set(key, window.pageYOffset || document.documentElement.scrollTop);
+    }
+  }
+
+  function restoreScrollPosition(key = 'main', behavior = 'auto') {
+    const position = scrollPositions.get(key) || 0;
+    const modalBody = q('.modal-body');
+    
+    if (modalBody && modalOpen) {
+      modalBody.scrollTo({ top: position, behavior });
+    } else {
+      window.scrollTo({ top: position, behavior });
+    }
+  }
+
+  function smoothScrollToElement(element, offset = 80) {
+    if (!element) return;
+    
+    const modalBody = q('.modal-body');
+    if (modalBody && modalOpen) {
+      const elementRect = element.getBoundingClientRect();
+      const modalRect = modalBody.getBoundingClientRect();
+      const scrollTop = modalBody.scrollTop + elementRect.top - modalRect.top - offset;
+      modalBody.scrollTo({ top: scrollTop, behavior: 'smooth' });
+    } else {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    }
+  }
+
+  // Enhanced search functionality with comprehensive English to Punjabi mapping
+  function buildSearchIndex() {
+    searchIndex = cards.map(card => {
+      const id = card.id || card.dataset.id || '';
+      const title = card.dataset.title || card.querySelector('h3')?.textContent || '';
+      const preview = card.dataset.preview || '';
+      const fullContent = card.dataset.full || '';
+      
+      // Create comprehensive search terms
+      const searchTerms = [
+        id, title, preview, fullContent
+      ].filter(Boolean).join(' ');
+      
+      // Enhanced search with transliteration and translation
+      const normalizedTerms = norm(searchTerms);
+      const romanizedTerms = norm(paToRoman(searchTerms));
+      
+      // Add English translations for Punjabi terms
+      let expandedTerms = searchTerms;
+      Object.entries(enToPunjabi).forEach(([eng, pun]) => {
+        if (searchTerms.includes(pun)) {
+          expandedTerms += ` ${eng}`;
+        }
+      });
+      
+      const expandedNormalized = norm(expandedTerms);
+      const expandedRomanized = norm(paToRoman(expandedTerms));
+      
+      return {
+        element: card,
+        id,
+        title,
+        preview,
+        searchText: [
+          normalizedTerms,
+          romanizedTerms, 
+          expandedNormalized,
+          expandedRomanized
+        ].filter(Boolean).join(' ')
+      };
+    });
+    
+    console.log('Search index built with', searchIndex.length, 'items');
+  }
+
+  function performSearch(query) {
+    if (!query.trim()) {
+      // Show all cards
+      cards.forEach(card => card.style.display = '');
+      updateSearchResults(cards.length);
+      return cards.length;
+    }
+
+    let searchQuery = query.trim();
+    
+    // Expand English terms to include Punjabi equivalents
+    Object.entries(enToPunjabi).forEach(([eng, pun]) => {
+      const regex = new RegExp(`\\b${eng}\\b`, 'gi');
+      if (regex.test(searchQuery)) {
+        searchQuery += ` ${pun}`;
+      }
+    });
+    
+    const normalizedQuery = norm(searchQuery);
+    const romanizedQuery = norm(paToRoman(searchQuery));
+    
+    let visibleCount = 0;
+    
+    searchIndex.forEach(({ element, searchText }) => {
+      const matches = searchText.includes(normalizedQuery) || 
+                     searchText.includes(romanizedQuery) ||
+                     normalizedQuery.split(' ').some(term => 
+                       term.length > 2 && searchText.includes(term)
+                     );
+      
+      element.style.display = matches ? '' : 'none';
+      if (matches) visibleCount++;
+    });
+    
+    updateSearchResults(visibleCount);
+    return visibleCount;
+  }
+
+  function updateSearchResults(count) {
+    if (noMatchEl) {
+      if (count === 0) {
+        noMatchEl.style.display = 'block';
+        noMatchEl.innerHTML = `
+          <div>ਕੋਈ ਮਿਲਦਾ ਸਥਾਨ ਨਹੀਂ ਮਿਲਿਆ / No matching places found</div>
+          <small>Try: gurdwara, school, hospital, market, park</small>
+        `;
+      } else {
+        noMatchEl.style.display = 'none';
+      }
+    }
+    
+    // Update clear button visibility
+    if (clearSearch) {
+      clearSearch.classList.toggle('visible', !!searchInput?.value.trim());
+    }
+  }
+
+  // Enhanced custom share modal
   function showCustomShareModal({ title, text, url, image }) {
-    const existing = q('.custom-share-modal');
-    if (existing) existing.remove();
+    const existingModal = q('.custom-share-modal');
+    if (existingModal) existingModal.remove();
 
     const modal = document.createElement('div');
     modal.className = 'custom-share-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-labelledby', 'share-modal-title');
+    modal.setAttribute('aria-modal', 'true');
+    
     modal.innerHTML = `
       <div class="share-modal-overlay">
         <div class="share-modal-content">
           <div class="share-modal-header">
-            <h3>ਸਾਂਝਾ ਕਰੋ / Share</h3>
-            <button class="share-modal-close" aria-label="Close">&times;</button>
+            <h3 id="share-modal-title">ਸਾਂਝਾ ਕਰੋ / Share</h3>
+            <button class="share-modal-close" aria-label="Close share dialog">&times;</button>
           </div>
           <div class="share-modal-body">
             <div class="share-preview">
-              ${image ? `<img src="${image}" alt="${title}" class="share-preview-image">` : '<div class="share-preview-placeholder">📍</div>'}
+              ${image ? `<img src="${image}" alt="${title}" class="share-preview-image" loading="lazy">` : '<div class="share-preview-placeholder">📍</div>'}
               <div class="share-preview-content">
                 <h4 class="share-preview-title">${title}</h4>
                 <p class="share-preview-text">${text}</p>
                 <p class="share-preview-link">${url}</p>
                 <div class="share-preview-actions">
                   <button class="share-copy-link">📋 ਲਿੰਕ ਕਾਪੀ ਕਰੋ</button>
-                  <a href="${url}" target="_blank" class="share-read-full">📖 ਪੂਰਾ ਪੜ੍ਹੋ</a>
+                  <a href="${url}" target="_blank" rel="noopener" class="share-read-full">📖 ਪੂਰਾ ਪੜ੍ਹੋ</a>
                 </div>
               </div>
             </div>
             <div class="share-platforms">
               <h5>ਸੋਸ਼ਲ ਮੀਡੀਆ / Social Media</h5>
               <div class="share-platforms-scroll">
-                <button class="share-platform" data-platform="whatsapp">
-                  <span class="share-platform-icon">📱</span>
-                  <span class="share-platform-name">WhatsApp</span>
-                </button>
-                <button class="share-platform" data-platform="facebook">
-                  <span class="share-platform-icon">📘</span>
-                  <span class="share-platform-name">Facebook</span>
-                </button>
-                <button class="share-platform" data-platform="twitter">
-                  <span class="share-platform-icon">🐦</span>
-                  <span class="share-platform-name">Twitter</span>
-                </button>
-                <button class="share-platform" data-platform="telegram">
-                  <span class="share-platform-icon">✈️</span>
-                  <span class="share-platform-name">Telegram</span>
-                </button>
-                <button class="share-platform" data-platform="linkedin">
-                  <span class="share-platform-icon">💼</span>
-                  <span class="share-platform-name">LinkedIn</span>
-                </button>
-                <button class="share-platform" data-platform="email">
-                  <span class="share-platform-icon">📧</span>
-                  <span class="share-platform-name">Email</span>
-                </button>
+                ${[
+                  { platform: 'whatsapp', icon: '📱', name: 'WhatsApp' },
+                  { platform: 'facebook', icon: '📘', name: 'Facebook' },
+                  { platform: 'twitter', icon: '🐦', name: 'Twitter' },
+                  { platform: 'telegram', icon: '✈️', name: 'Telegram' },
+                  { platform: 'linkedin', icon: '💼', name: 'LinkedIn' },
+                  { platform: 'email', icon: '📧', name: 'Email' }
+                ].map(({ platform, icon, name }) => `
+                  <button class="share-platform" data-platform="${platform}" aria-label="Share on ${name}">
+                    <span class="share-platform-icon">${icon}</span>
+                    <span class="share-platform-name">${name}</span>
+                  </button>
+                `).join('')}
               </div>
             </div>
           </div>
@@ -158,34 +696,48 @@
     `;
 
     document.body.appendChild(modal);
-    setTimeout(() => modal.classList.add('show'), 10);
+    pushModal('share-modal', { title, text, url, image });
+    
+    // Animate in
+    requestAnimationFrame(() => {
+      modal.classList.add('show');
+    });
 
     const closeModal = () => {
       modal.classList.remove('show');
-      setTimeout(() => modal.remove(), 300);
+      setTimeout(() => {
+        modal.remove();
+        popModal();
+      }, 300);
     };
 
+    // Event listeners
     q('.share-modal-close', modal).addEventListener('click', closeModal);
     q('.share-modal-overlay', modal).addEventListener('click', (e) => {
       if (e.target === e.currentTarget) closeModal();
     });
 
+    // Copy link functionality
     q('.share-copy-link', modal).addEventListener('click', async () => {
       try {
         await copyToClipboard(url);
         const btn = q('.share-copy-link', modal);
         const original = btn.textContent;
         btn.textContent = '✅ ਕਾਪੀ ਹੋਇਆ!';
-        btn.style.background = 'var(--success-color, #10b981)';
+        btn.classList.add('copied');
+        
         setTimeout(() => {
           btn.textContent = original;
-          btn.style.background = '';
+          btn.classList.remove('copied');
         }, 2000);
-      } catch {
-        showNotification('Copy failed / ਕਾਪੀ ਅਸਫਲ', 'error');
+        
+        showNotification('Link copied successfully! / ਲਿੰਕ ਕਾਪੀ ਹੋ ਗਿਆ!', 'success');
+      } catch (error) {
+        showNotification('Failed to copy link / ਲਿੰਕ ਕਾਪੀ ਨਹੀਂ ਹੋਇਆ', 'error');
       }
     });
 
+    // Platform sharing
     qa('.share-platform', modal).forEach(btn => {
       btn.addEventListener('click', () => {
         const platform = btn.dataset.platform;
@@ -204,1260 +756,1176 @@
           if (platform === 'email') {
             window.location.href = shareUrls[platform];
           } else {
-            window.open(shareUrls[platform], '_blank', 'width=600,height=400,scrollbars=yes,resizable=yes');
+            window.open(shareUrls[platform], '_blank', 'width=600,height=500,scrollbars=yes,resizable=yes');
           }
-          closeModal();
+          
+          btn.classList.add('shared');
+          setTimeout(() => btn.classList.remove('shared'), 1000);
+          
+          // Close modal after sharing
+          setTimeout(closeModal, 500);
         }
       });
     });
 
-    return false;
+    // Focus management
+    const closeButton = q('.share-modal-close', modal);
+    closeButton?.focus();
+    
+    // Trap focus in modal
+    modal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      } else if (e.key === 'Tab') {
+        const focusableElements = qa('button, a, [tabindex]:not([tabindex="-1"])', modal);
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+        
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    });
   }
 
-  // Enhanced notification system with better positioning
-  function showNotification(message, type = 'info', duration = 3000) {
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.innerHTML = `
-      <span class="notification-message">${message}</span>
-      <button class="notification-close" aria-label="Close">&times;</button>
-    `;
-    
-    const colors = {
-      error: '#ef4444',
-      success: '#10b981', 
-      warning: '#f59e0b',
-      info: '#3b82f6'
-    };
-    
-    notification.style.cssText = `
-      position: fixed; top: 20px; right: 20px; z-index: 10003;
-      background: ${colors[type] || colors.info};
-      color: white; padding: 1rem 1.5rem; border-radius: 8px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.15); max-width: 400px;
-      animation: slideInRight 0.3s ease-out; font-size: 0.9rem;
-      display: flex; align-items: center; gap: 1rem;
-    `;
-
-    document.body.appendChild(notification);
-
-    const close = () => {
-      notification.style.animation = 'slideOutRight 0.3s ease-in forwards';
-      setTimeout(() => notification.remove(), 300);
-    };
-
-    q('.notification-close', notification).addEventListener('click', close);
-    setTimeout(close, duration);
-  }
-
-  function flashHighlight(el, className = 'highlighted', duration = 2000) {
-    if (!el) return;
-    el.classList.add(className);
-    setTimeout(() => el.classList.remove(className), duration);
-  }
-
-  function detectContentLanguage(text, minChars = 200) {
-    const totalLength = text.length;
-    if (totalLength < 50) return 'insufficient';
-
-    const punjabiFactor = (text.match(/[\u0A00-\u0A7F]/g) || []).length;
-    const englishFactor = (text.match(/[a-zA-Z]/g) || []).length;
-
-    if (punjabiFactor >= minChars && punjabiFactor / totalLength > 0.3) return 'pa';
-    if (englishFactor >= minChars && englishFactor / totalLength > 0.5) return 'en';
-    
-    if (punjabiFactor > englishFactor) return 'pa-insufficient';
-    return 'en-insufficient';
-  }
-
-  function autoTranslateText(text, targetLang = 'en') {
-    let translated = text;
-    
-    if (targetLang === 'en') {
-      Object.entries(paToEnglish).forEach(([pa, en]) => {
-        translated = translated.replace(new RegExp(pa, 'g'), en);
-      });
-    }
-    
-    return translated;
-  }
-
-  // Enhanced table of contents with better UI
+  // Enhanced table of contents with better navigation
   function createTableOfContents(content) {
     const headings = qa('h1, h2, h3, h4, h5, h6', content);
     if (!headings.length) return null;
 
     const tocContainer = document.createElement('div');
     tocContainer.className = 'table-of-contents';
-    tocContainer.style.display = 'none'; // Initially hidden
+    tocContainer.style.display = 'none';
+    tocContainer.setAttribute('role', 'navigation');
+    tocContainer.setAttribute('aria-label', 'Table of contents');
     
     const tocHeader = document.createElement('div');
     tocHeader.className = 'toc-header';
     tocHeader.innerHTML = `
       <h4 class="toc-title">ਸਮੱਗਰੀ / Contents</h4>
-      <button class="toc-collapse" aria-label="Collapse TOC">−</button>
+      <button class="toc-collapse" aria-label="Collapse table of contents" aria-expanded="true">−</button>
     `;
-    tocContainer.appendChild(tocHeader);
-
+    
     const tocList = document.createElement('ul');
     tocList.className = 'toc-list';
+    tocList.setAttribute('role', 'list');
 
     headings.forEach((heading, index) => {
-      const headingId = `heading-${index}-${heading.textContent.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')}`;
+      const headingId = `heading-${index}-${heading.textContent.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, '-')}`;
       heading.id = headingId;
       heading.style.scrollMarginTop = '120px';
-
+      
       const tocItem = document.createElement('li');
       tocItem.className = `toc-item toc-level-${heading.tagName.toLowerCase()}`;
+      tocItem.setAttribute('role', 'listitem');
       
-      const tocLink = document.createElement('a');
-      tocLink.href = `#${headingId}`;
+      const tocLink = document.createElement('button');
       tocLink.textContent = heading.textContent;
       tocLink.className = 'toc-link';
+      tocLink.setAttribute('aria-label', `Navigate to: ${heading.textContent}`);
       
       tocLink.addEventListener('click', (e) => {
         e.preventDefault();
-        heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        flashHighlight(heading, 'toc-target-highlight', 2000);
+        
+        // Remove active class from all links
+        qa('.toc-link').forEach(link => {
+          link.classList.remove('active');
+          link.setAttribute('aria-current', 'false');
+        });
+        
+        // Add active class to clicked link
+        tocLink.classList.add('active');
+        tocLink.setAttribute('aria-current', 'page');
+        
+        // Smooth scroll to heading
+        smoothScrollToElement(heading, 100);
+        
+        // Highlight the heading temporarily
+        heading.classList.add('toc-target-highlight');
+        setTimeout(() => heading.classList.remove('toc-target-highlight'), 2000);
       });
 
       tocItem.appendChild(tocLink);
       tocList.appendChild(tocItem);
     });
 
+    tocContainer.appendChild(tocHeader);
     tocContainer.appendChild(tocList);
 
-    q('.toc-collapse', tocContainer).addEventListener('click', function() {
-      const isCollapsed = tocList.style.display === 'none';
-      tocList.style.display = isCollapsed ? 'block' : 'none';
-      this.textContent = isCollapsed ? '−' : '+';
+    // Collapse/expand functionality
+    const collapseBtn = q('.toc-collapse', tocContainer);
+    collapseBtn.addEventListener('click', function() {
+      const isExpanded = this.getAttribute('aria-expanded') === 'true';
+      const newState = !isExpanded;
+      
+      tocList.style.display = newState ? 'block' : 'none';
+      this.textContent = newState ? '−' : '+';
+      this.setAttribute('aria-expanded', newState.toString());
     });
 
     return tocContainer;
   }
 
-  // Enhanced speech synthesis with better error handling
-  let voiceList = [];
-  function ensureVoicesLoaded(timeout = 3000) {
-    return new Promise((resolve) => {
-      const synth = window.speechSynthesis;
-      if (!synth) {
-        resolve([]);
-        return;
-      }
-
-      const voices = synth.getVoices();
-      if (voices.length) {
-        voiceList = voices;
-        resolve(voices);
-        return;
-      }
-      
-      let resolved = false;
-      const onVoicesChanged = () => {
-        if (resolved) return;
-        voiceList = synth.getVoices() || [];
-        resolved = true;
-        resolve(voiceList);
-      };
-      
-      if ('onvoiceschanged' in synth) {
-        synth.onvoiceschanged = onVoicesChanged;
-      }
-      
-      const start = performance.now();
-      const poll = () => {
-        const vs = synth.getVoices();
-        if (vs.length) {
-          voiceList = vs;
-          resolved = true;
-          resolve(vs);
-          return;
-        }
-        if (performance.now() - start > timeout) {
-          voiceList = vs || [];
-          resolved = true;
-          resolve(voiceList);
-          return;
-        }
-        setTimeout(poll, 100);
-      };
-      poll();
-    });
+  // Enhanced TTS controls with multi-language support
+  function createTTSControls(container, options = {}) {
+    const { language = 'auto', container: parentContainer } = options;
+    
+    const ttsWrap = document.createElement('div');
+    ttsWrap.className = 'tts-controls';
+    ttsWrap.style.display = 'none';
+    ttsWrap.setAttribute('role', 'region');
+    ttsWrap.setAttribute('aria-label', 'Text-to-speech controls');
+    
+    ttsWrap.innerHTML = `
+      <div class="tts-controls-header">
+        <h5>🔊 Text-to-Speech Controls / ਟੈਕਸਟ ਟੂ ਸਪੀਚ ਕੰਟਰੋਲ</h5>
+      </div>
+      <div class="tts-controls-row">
+        <button class="tts-play" aria-pressed="false" aria-label="Play or pause text-to-speech">
+          <span class="tts-play-icon">▶️</span>
+          <span class="tts-play-text">Play</span>
+        </button>
+        <div class="tts-status-group">
+          <div class="tts-progress" role="progressbar" aria-label="Reading progress"></div>
+          <div class="tts-status" aria-live="polite">Ready</div>
+        </div>
+      </div>
+      <div class="tts-controls-row">
+        <div class="tts-control-group">
+          <label for="tts-voices">Voice:</label>
+          <select id="tts-voices" aria-label="Choose voice for text-to-speech"></select>
+        </div>
+        <div class="tts-control-group">
+          <label for="tts-rate">Speed: <span class="rate-value">1.0</span></label>
+          <input id="tts-rate" type="range" min="0.5" max="2.0" step="0.1" value="1.0" 
+                 aria-label="Speech rate" aria-valuemin="0.5" aria-valuemax="2.0">
+        </div>
+        <div class="tts-control-group">
+          <label for="tts-pitch">Pitch: <span class="pitch-value">1.0</span></label>
+          <input id="tts-pitch" type="range" min="0.5" max="2.0" step="0.1" value="1.0"
+                 aria-label="Speech pitch" aria-valuemin="0.5" aria-valuemax="2.0">
+        </div>
+      </div>
+    `;
+    
+    if (parentContainer) {
+      parentContainer.appendChild(ttsWrap);
+    }
+    
+    // Initialize TTS functionality
+    initializeTTS(ttsWrap, container, options);
+    
+    return ttsWrap;
   }
 
-  function loadVoicesForLanguage(selectElement, langPref) {
-    const getLangCode = code => ((code || '').split(/[-_]/)[0] || '').toLowerCase();
+  function initializeTTS(controlsWrap, textContainer, options = {}) {
+    const playBtn = q('.tts-play', controlsWrap);
+    const statusEl = q('.tts-status', controlsWrap);
+    const progressEl = q('.tts-progress', controlsWrap);
+    const voiceSelect = q('#tts-voices', controlsWrap);
+    const rateSlider = q('#tts-rate', controlsWrap);
+    const pitchSlider = q('#tts-pitch', controlsWrap);
+    const rateValue = q('.rate-value', controlsWrap);
+    const pitchValue = q('.pitch-value', controlsWrap);
     
-    const addGroup = (label, arr) => {
-      if (!arr.length) return;
-      const og = document.createElement('optgroup');
-      og.label = label;
-      arr.forEach(v => {
-        const opt = document.createElement('option');
-        opt.value = `${v.name}||${v.lang}`;
-        opt.textContent = `${v.name} (${v.lang})`;
-        og.appendChild(opt);
-      });
-      selectElement.appendChild(og);
+    let isReading = false;
+    let textSegments = [];
+    let currentSegment = 0;
+    let totalWords = 0;
+    let currentWords = 0;
+    
+    // Load voices when available
+    const loadVoices = async () => {
+      await advancedTTS.loadVoices();
+      populateVoiceSelect();
+      statusEl.textContent = 'Ready - Choose a voice and click play';
     };
-
-    const cleanLangPref = (langPref || '').replace('-insufficient', '');
     
-    const preferred = voiceList.filter(v => getLangCode(v.lang) === cleanLangPref);
-    const english = voiceList.filter(v => getLangCode(v.lang) === 'en');
-    const hindi = voiceList.filter(v => getLangCode(v.lang) === 'hi');
-    const others = voiceList.filter(v => 
-      !preferred.includes(v) && !english.includes(v) && !hindi.includes(v)
-    );
-
-    selectElement.innerHTML = '';
-    
-    if (preferred.length) addGroup(`${cleanLangPref.toUpperCase()} Voices`, preferred);
-    if (english.length) addGroup('English Voices', english);
-    if (hindi.length) addGroup('हिंदी Voices', hindi);
-    if (others.length) addGroup('Other Voices', others);
-
-    if (!selectElement.options.length) {
-      const defOpt = document.createElement('option');
-      defOpt.value = '__default__';
-      defOpt.textContent = 'System Default';
-      selectElement.appendChild(defOpt);
-    }
-  }
-
-  // Enhanced TTS stop function
-  function stopTTS() {
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.pause();
-    }
-    qa('.tts-highlight').forEach(s => s.classList.remove('tts-highlight'));
-    qa('.tts-play').forEach(b => {
-      b.innerHTML = '▶️ <span>Play</span>';
-      b.setAttribute('aria-pressed', 'false');
-    });
-    qa('.tts-status').forEach(el => el.textContent = 'Stopped');
-    qa('.tts-progress').forEach(el => el.textContent = '');
-    ttsState = { paused: false, currentWord: 0, queuePos: 0, language: 'auto' };
-  }
-
-  // Enhanced TTS controls with better emoji handling
-  function initTTSControls(wrapper, modalTextContainer, langPref) {
-    const playBtn = q('.tts-play', wrapper);
-    const select = q('#tts-voices', wrapper);
-    const statusSpan = q('.tts-status', wrapper);
-    const progressEl = q('.tts-progress', wrapper);
-    const rateInput = q('#tts-rate', wrapper);
-    const pitchInput = q('#tts-pitch', wrapper);
-
-    let voices = [];
-    let utterRate = parseFloat(rateInput?.value) || 1.0;
-    let utterPitch = parseFloat(pitchInput?.value) || 1.0;
-    let queue = [], wordSpans = [];
-
-    function findVoiceByValue(val) {
-      if (!val || val === '__default__') return null;
-      const [name, lang] = val.split('||');
-      return voices.find(v => v.name === name && v.lang === lang) || null;
-    }
-
-    async function loadVoices() {
-      voices = await ensureVoicesLoaded(3000);
-      
-      const contentText = modalTextContainer.textContent || '';
-      const detectedLang = detectContentLanguage(contentText, 200);
-      
-      let finalLangPref = langPref;
-
-      if (detectedLang === 'insufficient' || detectedLang.includes('insufficient')) {
-        finalLangPref = 'en';
-        statusSpan.textContent = 'Content will be auto-translated for better speech';
-      } else {
-        finalLangPref = detectedLang;
-        statusSpan.textContent = `Ready for ${detectedLang.toUpperCase()} speech`;
+    const populateVoiceSelect = () => {
+      const voices = advancedTTS.voices;
+      if (!voices.length) {
+        voiceSelect.innerHTML = '<option value="">No voices available</option>';
+        return;
       }
-
-      ttsState.language = finalLangPref;
-      loadVoicesForLanguage(select, finalLangPref);
-    }
-
-    function prepareTextForReading() {
-      qa('.tts-word-span', modalTextContainer).forEach(s => {
-        if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
-      });
-
-      const nodes = Array.from(modalTextContainer.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li'))
-        .filter(el => el.textContent.trim() !== '');
       
-      const readContainer = document.createElement('div');
-      readContainer.className = 'tts-read-container';
+      // Detect content language
+      const content = textContainer.textContent || '';
+      const detection = detectLanguage(content);
       
-      nodes.forEach(el => {
-        const newEl = document.createElement(el.tagName);
-        let text = el.textContent.replace(/\s+/g, ' ').trim();
-        
-        // Enhanced emoji removal for TTS
-        text = removeEmojis(text);
-        
-        const contentLang = detectContentLanguage(text, 200);
-        if (contentLang.includes('insufficient')) {
-          text = autoTranslateText(text, 'en');
+      // Group voices by language
+      const voiceGroups = {
+        preferred: [],
+        english: [],
+        punjabi: [],
+        hindi: [],
+        others: []
+      };
+      
+      voices.forEach(voice => {
+        const lang = voice.lang.toLowerCase();
+        if (lang.startsWith(detection.language)) {
+          voiceGroups.preferred.push(voice);
+        } else if (lang.startsWith('en')) {
+          voiceGroups.english.push(voice);
+        } else if (lang.startsWith('pa')) {
+          voiceGroups.punjabi.push(voice);
+        } else if (lang.startsWith('hi')) {
+          voiceGroups.hindi.push(voice);
+        } else {
+          voiceGroups.others.push(voice);
         }
-        
-        const words = text.split(/\s+/).filter(w => w.trim());
-        words.forEach((w, i) => {
-          const span = document.createElement('span');
-          span.className = 'tts-word-span';
-          span.textContent = w + (i < words.length - 1 ? ' ' : '');
-          newEl.appendChild(span);
-        });
-        
-        Array.from(el.attributes).forEach(attr => {
-          if (attr.name !== 'class') {
-            newEl.setAttribute(attr.name, attr.value);
-          }
-        });
-        
-        readContainer.appendChild(newEl);
       });
       
-      modalTextContainer.innerHTML = '';
-      modalTextContainer.appendChild(readContainer);
-    }
-
-    function buildQueue() {
-      const readContainer = modalTextContainer.querySelector('.tts-read-container');
-      if (!readContainer) return;
-      queue = Array.from(readContainer.children)
-        .map(el => removeEmojis(el.textContent.trim()))
-        .filter(Boolean);
-    }
-
-    function highlightByCharIndex(charIndex) {
-      wordSpans = qa('.tts-word-span', modalTextContainer);
-      if (!wordSpans.length) return;
+      voiceSelect.innerHTML = '';
       
-      let total = 0;
-      for (let i = 0; i < wordSpans.length; i++) {
-        const len = (wordSpans[i].textContent || '').length;
-        if (charIndex >= total && charIndex <= total + len) {
-          qa('.tts-highlight', modalTextContainer).forEach(el => el.classList.remove('tts-highlight'));
-          wordSpans[i].classList.add('tts-highlight');
-          
-          const modalBody = q('.modal-body');
-          if (modalBody) {
-            const rect = wordSpans[i].getBoundingClientRect();
-            const modalRect = modalBody.getBoundingClientRect();
-            const headerHeight = q('.modal-controls-fixed')?.offsetHeight || 80;
-            
-            if (rect.top < modalRect.top + headerHeight || rect.bottom > modalRect.bottom - 20) {
-              const scrollTop = modalBody.scrollTop + rect.top - modalRect.top - headerHeight - 50;
-              modalBody.scrollTo({ top: scrollTop, behavior: 'smooth' });
-            }
+      // Add voices by groups
+      const addVoiceGroup = (label, voices) => {
+        if (!voices.length) return;
+        
+        const group = document.createElement('optgroup');
+        group.label = label;
+        
+        voices.forEach(voice => {
+          const option = document.createElement('option');
+          option.value = voice.name;
+          option.textContent = `${voice.name} (${voice.lang})`;
+          if (!voice.localService) option.textContent += ' [Remote]';
+          group.appendChild(option);
+        });
+        
+        voiceSelect.appendChild(group);
+      };
+      
+      addVoiceGroup(`Recommended (${detection.language.toUpperCase()})`, voiceGroups.preferred);
+      addVoiceGroup('English', voiceGroups.english);
+      addVoiceGroup('ਪੰਜਾਬੀ (Punjabi)', voiceGroups.punjabi);
+      addVoiceGroup('हिंदी (Hindi)', voiceGroups.hindi);
+      addVoiceGroup('Other Languages', voiceGroups.others);
+      
+      // Select best default voice
+      if (voiceGroups.preferred.length > 0) {
+        voiceSelect.value = voiceGroups.preferred[0].name;
+      } else if (voiceGroups.english.length > 0) {
+        voiceSelect.value = voiceGroups.english[0].name;
+      }
+    };
+    
+    const prepareTextForReading = () => {
+      // Get readable text elements
+      const elements = qa('p, h1, h2, h3, h4, h5, h6, li', textContainer);
+      textSegments = [];
+      totalWords = 0;
+      
+      elements.forEach(el => {
+        const text = advancedTTS.cleanTextForTTS(el.textContent);
+        if (text) {
+          const words = text.split(/\s+/).filter(w => w.length > 0);
+          if (words.length > 0) {
+            textSegments.push({
+              element: el,
+              text,
+              words: words.length
+            });
+            totalWords += words.length;
           }
-          
-          ttsState.currentWord = i + 1;
-          return;
         }
-        total += len;
+      });
+      
+      return textSegments.length > 0;
+    };
+    
+    const updateProgress = () => {
+      if (totalWords > 0) {
+        const percentage = Math.round((currentWords / totalWords) * 100);
+        progressEl.textContent = `${percentage}%`;
+        progressEl.setAttribute('aria-valuenow', percentage.toString());
+        progressEl.setAttribute('aria-valuemin', '0');
+        progressEl.setAttribute('aria-valuemax', '100');
       }
-    }
-
-    function speakNextChunk() {
-      if (!window.speechSynthesis) { 
-        statusSpan.textContent = 'Speech synthesis not supported';
-        return; 
+    };
+    
+    const highlightCurrentSegment = (segmentIndex) => {
+      // Remove previous highlights
+      qa('.tts-highlight', textContainer).forEach(el => {
+        el.classList.remove('tts-highlight');
+      });
+      
+      // Highlight current segment
+      if (segmentIndex < textSegments.length) {
+        const segment = textSegments[segmentIndex];
+        segment.element.classList.add('tts-highlight');
+        smoothScrollToElement(segment.element, 150);
+      }
+    };
+    
+    const speakNext = async () => {
+      if (currentSegment >= textSegments.length) {
+        // Finished reading
+        isReading = false;
+        playBtn.innerHTML = '<span class="tts-play-icon">▶️</span><span class="tts-play-text">Play</span>';
+        playBtn.setAttribute('aria-pressed', 'false');
+        statusEl.textContent = 'Finished reading';
+        qa('.tts-highlight', textContainer).forEach(el => el.classList.remove('tts-highlight'));
+        currentSegment = 0;
+        currentWords = 0;
+        updateProgress();
+        return;
       }
       
-      if (ttsState.queuePos >= queue.length) { 
-        stopLocal(); 
-        return; 
-      }
+      const segment = textSegments[currentSegment];
+      highlightCurrentSegment(currentSegment);
+      statusEl.textContent = `Reading... (${currentSegment + 1}/${textSegments.length})`;
       
-      const text = removeEmojis(queue[ttsState.queuePos++]); // Extra emoji removal
-      const utterance = new SpeechSynthesisUtterance(text);
-      const selectedVoice = findVoiceByValue(select.value);
-      
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-      } else {
-        utterance.lang = ttsState.language === 'pa' ? 'pa-IN' : 
-                        ttsState.language === 'hi' ? 'hi-IN' : 'en-US';
-      }
-      
-      utterance.rate = utterRate;
-      utterance.pitch = utterPitch;
-      utterance.volume = 1;
-      
-      utterance.onboundary = (ev) => { 
-        if (ev.name === 'word') highlightByCharIndex(ev.charIndex); 
-      };
-      
-      utterance.onend = () => {
-        const totalWords = qa('.tts-word-span', modalTextContainer).length || 1;
-        const wordCount = text.split(/\s+/).length;
-        ttsState.currentWord = Math.min(totalWords, ttsState.currentWord + wordCount);
+      try {
+        const selectedVoice = voiceSelect.value;
+        const options = {
+          voiceName: selectedVoice,
+          rate: parseFloat(rateSlider.value) || 1.0,
+          pitch: parseFloat(pitchSlider.value) || 1.0
+        };
         
-        if (progressEl) {
-          const pct = Math.round((ttsState.currentWord / totalWords) * 100);
-          progressEl.innerHTML = `<span>${pct}%</span>`;
+        await advancedTTS.speak(segment.text, options);
+        
+        currentWords += segment.words;
+        currentSegment++;
+        updateProgress();
+        
+        if (isReading) {
+          setTimeout(() => speakNext(), 100);
         }
         
-        setTimeout(() => { 
-          if (!ttsState.paused) speakNextChunk(); 
-        }, 100);
-      };
-      
-      utterance.onerror = (error) => {
-        statusSpan.textContent = `Speech error: ${error.error}`;
-        console.warn('TTS error:', error);
-      };
-      
-      window.speechSynthesis.speak(utterance);
-    }
-
-    function stopLocal() {
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.pause();
-      }
-      qa('.tts-highlight', modalTextContainer).forEach(s => s.classList.remove('tts-highlight'));
-      playBtn.innerHTML = '▶️ <span>Play</span>';
-      playBtn.setAttribute('aria-pressed', 'false');
-      statusSpan.textContent = 'Stopped';
-      if (progressEl) progressEl.innerHTML = '';
-      ttsState.paused = false;
-      ttsState.currentWord = 0;
-      ttsState.queuePos = 0;
-    }
-
-    function startTTS() {
-      if (!window.speechSynthesis) { 
-        statusSpan.textContent = 'Speech synthesis not supported'; 
-        return; 
-      }
-      
-      prepareTextForReading();
-      buildQueue();
-      
-      if (!qa('.tts-word-span', modalTextContainer).length) { 
-        statusSpan.textContent = 'No readable content found'; 
-        return; 
-      }
-      
-      if (!ttsState.paused) {
-        ttsState.currentWord = 0;
-        ttsState.queuePos = 0;
-      }
-      ttsState.paused = false;
-      
-      statusSpan.textContent = 'Speaking...';
-      playBtn.innerHTML = '⏸️ <span>Pause</span>';
-      playBtn.setAttribute('aria-pressed', 'true');
-      speakNextChunk();
-    }
-
-    function pauseTTS() {
-      if (window.speechSynthesis?.speaking) {
-        window.speechSynthesis.cancel();
-        ttsState.paused = true;
-        statusSpan.textContent = 'Paused - Click play to continue';
-        playBtn.innerHTML = '▶️ <span>Continue</span>';
+      } catch (error) {
+        console.error('TTS Error:', error);
+        statusEl.textContent = `Error: ${error.message}`;
+        isReading = false;
+        playBtn.innerHTML = '<span class="tts-play-icon">▶️</span><span class="tts-play-text">Play</span>';
         playBtn.setAttribute('aria-pressed', 'false');
       }
-    }
-
+    };
+    
+    const startReading = () => {
+      if (!prepareTextForReading()) {
+        statusEl.textContent = 'No readable content found';
+        return;
+      }
+      
+      isReading = true;
+      currentSegment = 0;
+      currentWords = 0;
+      playBtn.innerHTML = '<span class="tts-play-icon">⏸️</span><span class="tts-play-text">Pause</span>';
+      playBtn.setAttribute('aria-pressed', 'true');
+      statusEl.textContent = 'Starting...';
+      updateProgress();
+      speakNext();
+    };
+    
+    const stopReading = () => {
+      isReading = false;
+      advancedTTS.stop();
+      playBtn.innerHTML = '<span class="tts-play-icon">▶️</span><span class="tts-play-text">Play</span>';
+      playBtn.setAttribute('aria-pressed', 'false');
+      statusEl.textContent = 'Stopped';
+      qa('.tts-highlight', textContainer).forEach(el => el.classList.remove('tts-highlight'));
+    };
+    
     // Event listeners
     playBtn.addEventListener('click', () => {
-      if (window.speechSynthesis?.speaking) {
-        pauseTTS();
+      if (isReading) {
+        stopReading();
       } else {
-        startTTS();
+        startReading();
       }
     });
-
-    select.addEventListener('change', () => { 
-      if (window.speechSynthesis?.speaking) {
-        pauseTTS();
-        setTimeout(startTTS, 150);
-      }
+    
+    rateSlider.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      rateValue.textContent = value.toFixed(1);
     });
-
-    rateInput.addEventListener('input', (e) => {
-      utterRate = parseFloat(e.target.value) || 1.0;
-      q('.rate-value', wrapper).textContent = utterRate.toFixed(1);
+    
+    pitchSlider.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      pitchValue.textContent = value.toFixed(1);
     });
-
-    pitchInput.addEventListener('input', (e) => {
-      utterPitch = parseFloat(e.target.value) || 1.0;
-      q('.pitch-value', wrapper).textContent = utterPitch.toFixed(1);
-    });
-
-    loadVoices().catch(() => {
-      statusSpan.textContent = 'Failed to load voices';
-    });
-
-    return { 
-      stop: () => { 
-        try { stopLocal(); } catch (e) { console.warn('TTS stop error:', e); } 
-      }
+    
+    // Initialize voices
+    loadVoices();
+    
+    return {
+      start: startReading,
+      stop: stopReading,
+      isReading: () => isReading
     };
   }
 
-  // Variables for modal state
-  let currentIndex = -1;
-  let lastFocusedElement = null;
-  let modalOpen = false;
-  let hadPushedState = false;
-  let ttsInstance = null;
-
-  // Modal elements
-  let modal, modalMedia, modalText, btnClose, modalContent, cards;
-
-  // Search and Clear elements
-  let searchInput, clearSearch, noMatchEl;
-
-  // Index for search
-  let index = [];
-
-  function lockPageScroll() { 
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = 'hidden';
-    document.body.style.paddingRight = `${scrollbarWidth}px`;
-  }
-  
-  function unlockPageScroll() { 
-    document.body.style.overflow = '';
-    document.body.style.paddingRight = '';
-  }
-
-  function trapFocus(e) {
-    if (!modalOpen || e.key !== 'Tab') return;
+  // Enhanced modal management with better cleanup
+  function closeModal(force = false) {
+    console.log('Closing modal, stack level:', getCurrentModalLevel());
     
-    const focusables = qa('#places-modal button:not([disabled]), #places-modal a[href], #places-modal input:not([disabled]), #places-modal select:not([disabled]), #places-modal textarea:not([disabled]), #places-modal [tabindex]:not([tabindex="-1"]):not([disabled])')
-      .filter(el => el.offsetParent !== null);
-    
-    if (!focusables.length) return;
-    
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }
-
-  function arrangeActionButtonsHorizontally() {
-    cards.forEach((card, index) => {
-      const content = card.querySelector('.place-content');
-      if (!content) return;
-
-      const readBtn = content.querySelector('.read-more-btn');
-      const copyBtn = content.querySelector('.copy-link');
-      const shareBtn = content.querySelector('.share-btn');
-
-      if (!readBtn && !copyBtn && !shareBtn) return;
-      if (content.querySelector('.place-actions')) return;
-
-      const actionsContainer = document.createElement('div');
-      actionsContainer.className = 'place-actions';
-
-      const buttonGroup = document.createElement('div');
-      buttonGroup.className = 'action-buttons';
-
-      if (readBtn) {
-        readBtn.remove();
-        readBtn.setAttribute('data-index', index);
-        actionsContainer.appendChild(readBtn);
-      }
-
-      if (copyBtn) {
-        copyBtn.remove();
-        buttonGroup.appendChild(copyBtn);
-      }
-
-      if (shareBtn) {
-        shareBtn.remove();
-        buttonGroup.appendChild(shareBtn);
-      }
-
-      if (buttonGroup.children.length > 0) {
-        actionsContainer.appendChild(buttonGroup);
-      }
-
-      content.appendChild(actionsContainer);
-    });
-  }
-
-  function populateRelatedAll(activeCard) {
-    if (!modalText) return;
-    
-    const existing = modalText.parentNode.querySelector('.modal-related');
-    if (existing) existing.remove();
-
-    const wrap = document.createElement('div');
-    wrap.className = 'modal-related';
-    wrap.innerHTML = `<h4>ਤੁਹਾਨੂੰ ਇਹ ਵੀ ਪਸੰਦ ਆ ਸਕਦਾ ਹੈ / You May Also Like</h4>`;
-
-    const list = document.createElement('div');
-    list.className = 'related-list';
-
-    const relatedCards = cards.filter(c => c !== activeCard).slice(0, 6);
-    
-    relatedCards.forEach(c => {
-      const thumb = c.dataset.image || '';
-      const cardTitle = c.dataset.title || c.querySelector('h3')?.textContent || '';
-      const preview = c.dataset.preview || '';
-      
-      const rel = document.createElement('div');
-      rel.className = 'related-card';
-      rel.innerHTML = `
-        ${thumb ? `<img src="${thumb}" alt="${cardTitle}" loading="lazy"/>` : '<div class="related-placeholder">📍</div>'}
-        <div class="related-info">
-          <div class="related-title">${cardTitle}</div>
-          <div class="related-meta">${preview.slice(0, 100)}${preview.length > 100 ? '...' : ''}</div>
-          <div class="related-actions">
-            <button class="related-open" data-id="${c.id}">ਖੋਲੋ / Open</button>
-          </div>
-        </div>`;
-      list.appendChild(rel);
-    });
-
-    wrap.appendChild(list);
-    modalText.parentNode.appendChild(wrap);
-
-    qa('.related-open', wrap).forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.id;
-        if (!id) return;
-
-        const target = document.getElementById(id);
-        if (target) {
-          scrollPosition = q('.modal-body')?.scrollTop || 0;
-          
-          internalClose();
-          setTimeout(() => {
-            if (q('.modal-body')) q('.modal-body').scrollTop = 0;
-            flashHighlight(target, 'highlighted', 2000);
-            openModal(cards.indexOf(target));
-          }, 300);
-        }
+    // Handle nested modals (like share modal)
+    if (q('.custom-share-modal')) {
+      qa('.custom-share-modal').forEach(modal => {
+        modal.classList.remove('show');
+        setTimeout(() => modal.remove(), 300);
       });
-    });
-  }
-
-  // Enhanced modal close function with better cleanup
-  function internalClose() {
-    if (!modal) return;
+      popModal();
+      
+      if (!force) {
+        return; // Don't close main modal if we're just closing a nested modal
+      }
+    }
     
-    // Stop TTS immediately
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.pause();
+    // Stop TTS
+    advancedTTS.stop();
+    
+    // Save scroll position before closing
+    saveScrollPosition('main-modal');
+    
+    if (!modal || !modalOpen) {
+      return;
     }
-
-    if (ttsInstance?.stop) {
-      ttsInstance.stop();
-    }
-    ttsInstance = null;
-
-    // Close any share modals
-    qa('.custom-share-modal').forEach(n => n.remove());
     
     // Clean up modal state
     modal.setAttribute('aria-hidden', 'true');
     modal.classList.remove('open');
     modal.style.display = 'none';
-    unlockPageScroll();
-
-    // Remove modal-specific elements
-    qa('.modal-controls-fixed, .tts-controls, .table-of-contents, .modal-related', modal).forEach(n => n.remove());
     
-    // Clean up TTS word spans
-    qa('.tts-word-span', modalText).forEach(s => {
-      if (s.parentNode) s.parentNode.replaceChild(document.createTextNode(s.textContent), s);
+    // Remove modal-specific elements
+    qa('.modal-controls-fixed, .tts-controls, .table-of-contents, .modal-related', modal)
+      .forEach(el => el.remove());
+    
+    // Clean up highlights and TTS elements
+    qa('.tts-highlight, .tts-word-span', modalText).forEach(el => {
+      if (el.classList.contains('tts-word-span')) {
+        el.parentNode?.replaceChild(document.createTextNode(el.textContent), el);
+      } else {
+        el.classList.remove('tts-highlight');
+      }
     });
-
+    
     // Show original close button
-    if (btnClose) btnClose.classList.remove('sr-only');
-
+    if (btnClose) {
+      btnClose.classList.remove('sr-only');
+    }
+    
+    // Unlock page scroll
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+    document.documentElement.classList.remove('modal-open');
+    
     // Restore focus
     if (lastFocusedElement?.focus) {
       try {
         lastFocusedElement.focus();
-      } catch (e) {
-        console.warn('Focus restoration failed:', e);
+      } catch (error) {
+        console.warn('Focus restoration failed:', error);
       }
     }
-
-    document.documentElement.classList.remove('modal-open');
-    modalOpen = false;
     
-    // Reset TTS state
-    ttsState = { paused: false, currentWord: 0, queuePos: 0, language: 'auto' };
+    modalOpen = false;
+    clearModalStack();
+    
+    // Handle navigation
+    const shouldNavigateBack = getCurrentModalLevel() > 0 || !isInitialLoad;
+    
+    if (shouldNavigateBack) {
+      try {
+        // Check if we can go back in history
+        if (window.history.length > 1 && window.history.state) {
+          history.back();
+        } else {
+          // Fallback to places page
+          window.location.href = 'https://www.pattibytes.com/places/';
+        }
+      } catch (error) {
+        console.warn('Navigation failed:', error);
+        window.location.href = 'https://www.pattibytes.com/places/';
+      }
+    } else {
+      // Update URL without navigation
+      try {
+        history.replaceState(null, '', 'https://www.pattibytes.com/places/');
+      } catch (error) {
+        console.warn('URL update failed:', error);
+      }
+    }
+    
+    console.log('Modal closed successfully');
   }
 
-  function closeModal() {
-    // Close any open share modals first
-    qa('.custom-share-modal').forEach(modal => modal.remove());
-    
-    if (hadPushedState) {
-      try { 
-        history.back();
-      } catch { 
-        internalClose(); 
-        hadPushedState = false; 
-      }
+  function openModal(index) {
+    if (!modal || index < 0 || index >= cards.length) {
+      console.error('Invalid modal open request:', { modal: !!modal, index, cardsLength: cards.length });
       return;
     }
     
-    internalClose();
-    try { 
-      history.replaceState(history.state, '', '/places/'); 
-    } catch {}
-  }
-
-  // Enhanced modal opening function
-  function openModal(index) {
-    if (!modal) return;
-    if (index < 0 || index >= cards.length) return;
-
-    // Clean up any existing state
-    internalClose();
-
-    previousUrl = window.location.href;
+    // Save current scroll position
+    if (modalOpen) {
+      saveScrollPosition(`modal-${currentIndex}`);
+    } else {
+      saveScrollPosition('main-page');
+    }
+    
     currentIndex = index;
     const card = cards[currentIndex];
-
+    const articleId = card.id || card.dataset.id || '';
+    
+    console.log('Opening modal for:', articleId);
+    
+    // Clean up previous modal state
+    qa('.modal-controls-fixed, .tts-controls, .table-of-contents, .modal-related', modal)
+      .forEach(el => el.remove());
+    
+    // Hide original close button
+    if (btnClose) {
+      btnClose.classList.add('sr-only');
+    }
+    
+    // Get content data
     const imgSrc = card.dataset.image || '';
     const fullHtml = card.dataset.full || card.dataset.preview || '';
     const cardTitle = card.dataset.title || card.querySelector('h3')?.textContent || '';
-
-    // Remove existing modal elements
-    qa('.modal-controls-fixed, .tts-controls, .table-of-contents, .modal-related', modal).forEach(n => n.remove());
-
-    if (btnClose) btnClose.classList.add('sr-only');
-
+    
     // Create enhanced modal controls
-    const modalControlsFixed = document.createElement('div');
-    modalControlsFixed.className = 'modal-controls-fixed';
+    const modalControls = createModalControls(cardTitle, articleId, imgSrc);
+    modalContent.prepend(modalControls);
     
-    const controlsTitle = document.createElement('h2');
-    controlsTitle.className = 'modal-controls-title';
-    controlsTitle.textContent = cardTitle;
-    
-    const controlsButtons = document.createElement('div');
-    controlsButtons.className = 'modal-controls-buttons';
-
-    const ttsToggleBtn = document.createElement('button');
-    ttsToggleBtn.className = 'modal-control-btn tts-toggle-btn';
-    ttsToggleBtn.innerHTML = '🔊';
-    ttsToggleBtn.title = 'Text-to-Speech';
-    ttsToggleBtn.setAttribute('aria-label', 'Toggle Text-to-Speech');
-
-    const tocToggleBtn = document.createElement('button');
-    tocToggleBtn.className = 'modal-control-btn toc-toggle-btn';
-    tocToggleBtn.innerHTML = '📋';
-    tocToggleBtn.title = 'Table of Contents';
-    tocToggleBtn.setAttribute('aria-label', 'Toggle table of contents');
-
-    const modalShareBtn = document.createElement('button');
-    modalShareBtn.className = 'modal-control-btn modal-share-btn';
-    modalShareBtn.innerHTML = '📤';
-    modalShareBtn.title = 'Share Article';
-    modalShareBtn.setAttribute('aria-label', 'Share this article');
-
-    const modalLinkBtn = document.createElement('button');
-    modalLinkBtn.className = 'modal-control-btn modal-link-btn';
-    modalLinkBtn.innerHTML = '🔗';
-    modalLinkBtn.title = 'Copy Article Link';
-    modalLinkBtn.setAttribute('aria-label', 'Copy Article Link');
-
-    const modalCloseBtn = document.createElement('button');
-    modalCloseBtn.className = 'modal-control-btn modal-close-btn';
-    modalCloseBtn.innerHTML = '✕';
-    modalCloseBtn.title = 'Close';
-    modalCloseBtn.setAttribute('aria-label', 'Close modal');
-
-    controlsButtons.appendChild(ttsToggleBtn);
-    controlsButtons.appendChild(tocToggleBtn);
-    controlsButtons.appendChild(modalShareBtn);
-    controlsButtons.appendChild(modalLinkBtn);
-    controlsButtons.appendChild(modalCloseBtn);
-    
-    modalControlsFixed.appendChild(controlsTitle);
-    modalControlsFixed.appendChild(controlsButtons);
-    
-    (modalContent || modal).prepend(modalControlsFixed);
-
     // Set modal content
     if (modalMedia) {
-      modalMedia.innerHTML = imgSrc ?
+      modalMedia.innerHTML = imgSrc ? 
         `<img src="${imgSrc}" alt="${cardTitle}" loading="lazy">` : '';
     }
     
     if (modalText) {
       modalText.innerHTML = fullHtml;
     }
-
+    
     // Create table of contents
     const tocContainer = createTableOfContents(modalText);
     if (tocContainer) {
-      if (modalMedia && modalMedia.innerHTML) {
+      if (modalMedia?.innerHTML) {
         modalMedia.after(tocContainer);
       } else {
         modalText.parentNode.insertBefore(tocContainer, modalText);
       }
     }
-
-    // Add related content
-    populateRelatedAll(card);
-
+    
     // Create TTS controls
-    const ttsWrap = document.createElement('div');
-    ttsWrap.className = 'tts-controls';
-    ttsWrap.innerHTML = `
-      <div class="tts-controls-header">
-        <h5>🔊 Text-to-Speech Controls / ਟੈਕਸਟ ਟੂ ਸਪੀਚ ਕੰਟਰੋਲ</h5>
-      </div>
-      <div class="tts-controls-row">
-        <button class="tts-play" aria-pressed="false" title="Play/Pause">▶️ <span>Play</span></button>
-        <div class="tts-progress" aria-hidden="true"></div>
-        <span class="tts-status" aria-live="polite">Ready</span>
-      </div>
-      <div class="tts-controls-row">
-        <div class="tts-control-group">
-          <label for="tts-voices">Voice:</label>
-          <select id="tts-voices" aria-label="Choose voice"></select>
-        </div>
-        <div class="tts-control-group">
-          <label for="tts-rate">Speed: <span class="rate-value">1.0</span></label>
-          <input id="tts-rate" type="range" min="0.5" max="2.0" step="0.1" value="1.0" aria-label="Speech rate">
-        </div>
-        <div class="tts-control-group">
-          <label for="tts-pitch">Pitch: <span class="pitch-value">1.0</span></label>
-          <input id="tts-pitch" type="range" min="0.5" max="2.0" step="0.1" value="1.0" aria-label="Speech pitch">
-        </div>
-      </div>
-    `;
-
+    const ttsControls = createTTSControls(modalText, {
+      language: detectLanguage(modalText.textContent).language
+    });
+    
     if (tocContainer) {
-      tocContainer.after(ttsWrap);
+      tocContainer.after(ttsControls);
     } else {
-      modalText?.before(ttsWrap);
+      modalText.before(ttsControls);
     }
-
-    const langPref = ((document.documentElement.lang || 'pa-IN').split(/[-_]/)[0] || 'pa').toLowerCase();
-
-    // Enhanced TTS toggle with better UI feedback
-    ttsToggleBtn.addEventListener('click', () => {
-      const opening = !ttsWrap.classList.contains('show');
-      if (opening) {
-        ttsWrap.classList.add('show');
-        ttsToggleBtn.classList.add('active');
-        ttsToggleBtn.innerHTML = '🔊';
-        if (!ttsInstance) {
-          ttsInstance = initTTSControls(ttsWrap, modalText, langPref);
-        }
-        q('.tts-play', ttsWrap)?.focus();
-      } else {
-        ttsWrap.classList.remove('show');
-        ttsToggleBtn.classList.remove('active');
-        ttsToggleBtn.innerHTML = '🔊';
-        if (ttsInstance?.stop) ttsInstance.stop();
-      }
-    });
-
-    // Enhanced TOC toggle with cross icon when active
-    tocToggleBtn.addEventListener('click', () => {
-      if (tocContainer) {
-        const isVisible = tocContainer.style.display !== 'none';
-        tocContainer.style.display = isVisible ? 'none' : 'block';
-        tocToggleBtn.classList.toggle('active', !isVisible);
-        // Show cross when active, show original icon when inactive
-        tocToggleBtn.innerHTML = isVisible ? '📋' : '✕';
-        tocToggleBtn.title = isVisible ? 'Table of Contents' : 'Close Table of Contents';
-      }
-    });
-
-    // Share button
-    modalShareBtn.addEventListener('click', async () => {
-      const url = `https://www.pattibytes.com/places/#${encodeURIComponent(card.id)}`;
-      const text = (card.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 140);
-      showCustomShareModal({ title: cardTitle, text, url, image: imgSrc });
-    });
-
-    // Link copy button
-    modalLinkBtn.addEventListener('click', async () => {
-      const url = `https://www.pattibytes.com/places/#${encodeURIComponent(card.id)}`;
-      try {
-        await copyToClipboard(url);
-        showNotification('Article link copied to clipboard!', 'success');
-        modalLinkBtn.classList.add('copied');
-        setTimeout(() => modalLinkBtn.classList.remove('copied'), 2000);
-      } catch {
-        showNotification(`Copy failed. Please copy manually: ${url}`, 'error');
-      }
-    });
-
-    // Close button
-    modalCloseBtn.addEventListener('click', closeModal);
-
+    
+    // Add related content
+    createRelatedContent(card);
+    
     // Open modal
     modal.setAttribute('aria-hidden', 'false');
     modal.classList.add('open');
     modal.style.display = 'flex';
-
+    
+    // Lock page scroll
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = 'hidden';
+    document.body.style.paddingRight = `${scrollbarWidth}px`;
+    
+    document.documentElement.classList.add('modal-open');
+    modalOpen = true;
+    
+    // Focus management
+    lastFocusedElement = document.activeElement;
+    const closeBtn = q('.modal-close-btn', modalControls);
+    closeBtn?.focus();
+    
+    // Reset scroll position
     const modalBody = q('.modal-body', modal);
     if (modalBody) {
       modalBody.scrollTop = 0;
-      modalBody.classList.add('highlighted');
-      setTimeout(() => modalBody.classList.remove('highlighted'), 1000);
     }
-
-    lastFocusedElement = document.activeElement;
-    modalCloseBtn.focus();
-    document.documentElement.classList.add('modal-open');
-    modalOpen = true;
-    lockPageScroll();
-
-    // Update URL
-    const articleId = card.id || card.dataset.id;
-    const newUrl = `https://www.pattibytes.com/places/#${encodeURIComponent(articleId)}`;
-
-    try {
-      history.pushState({ placeModal: articleId }, '', newUrl);
-      hadPushedState = true;
-    } catch {
-      hadPushedState = false;
-    }
-
-    document.addEventListener('keydown', keyHandler, true);
+    
+    // Update navigation
+    pushModal('main-modal', { articleId, index });
+    updateNavigation(articleId, 'push');
+    
+    console.log('Modal opened successfully');
   }
 
-  function keyHandler(ev) {
-    if (!modal?.classList.contains('open')) return;
+  function createModalControls(title, articleId, image) {
+    const controls = document.createElement('div');
+    controls.className = 'modal-controls-fixed';
     
-    if (ev.key === 'Escape') {
-      closeModal();
-    } else if (ev.key === 'Tab') {
-      trapFocus(ev);
-    } else if (ev.key === ' ' && ev.target.tagName !== 'INPUT' && ev.target.tagName !== 'TEXTAREA') {
-      const ttsToggle = q('.tts-toggle-btn');
-      if (ttsToggle && !ev.ctrlKey && !ev.altKey) {
-        ev.preventDefault();
-        ttsToggle.click();
+    const titleEl = document.createElement('h2');
+    titleEl.className = 'modal-controls-title';
+    titleEl.textContent = title;
+    
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.className = 'modal-controls-buttons';
+    
+    const buttons = [
+      { class: 'tts-toggle-btn', icon: '🔊', label: 'Toggle text-to-speech', action: 'tts' },
+      { class: 'toc-toggle-btn', icon: '📋', label: 'Toggle table of contents', action: 'toc' },
+      { class: 'modal-share-btn', icon: '📤', label: 'Share article', action: 'share' },
+      { class: 'modal-link-btn', icon: '🔗', label: 'Copy article link', action: 'copy' },
+      { class: 'modal-close-btn', icon: '✕', label: 'Close modal', action: 'close' }
+    ];
+    
+    buttons.forEach(({ class: className, icon, label, action }) => {
+      const btn = document.createElement('button');
+      btn.className = `modal-control-btn ${className}`;
+      btn.innerHTML = icon;
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('data-action', action);
+      
+      buttonsContainer.appendChild(btn);
+    });
+    
+    controls.appendChild(titleEl);
+    controls.appendChild(buttonsContainer);
+    
+    // Add event listeners
+    setupModalControlEvents(controls, title, articleId, image);
+    
+    return controls;
+  }
+
+  function setupModalControlEvents(controls, title, articleId, image) {
+    const buttons = qa('.modal-control-btn', controls);
+    
+    buttons.forEach(btn => {
+      const action = btn.dataset.action;
+      
+      btn.addEventListener('click', async () => {
+        switch(action) {
+          case 'tts':
+            toggleTTS(btn);
+            break;
+          case 'toc':
+            toggleTOC(btn);
+            break;
+          case 'share':
+            await shareArticle(title, articleId, image);
+            break;
+          case 'copy':
+            await copyArticleLink(articleId, btn);
+            break;
+          case 'close':
+            closeModal(true);
+            break;
+        }
+      });
+    });
+  }
+
+  function toggleTTS(btn) {
+    const ttsControls = q('.tts-controls');
+    if (!ttsControls) return;
+    
+    const isActive = btn.classList.contains('active');
+    
+    if (isActive) {
+      ttsControls.style.display = 'none';
+      btn.classList.remove('active');
+      btn.innerHTML = '🔊';
+      advancedTTS.stop();
+    } else {
+      ttsControls.style.display = 'flex';
+      btn.classList.add('active');
+      btn.innerHTML = '🔊';
+      
+      // Focus the play button
+      const playBtn = q('.tts-play', ttsControls);
+      if (playBtn) {
+        smoothScrollToElement(ttsControls, 80);
+        setTimeout(() => playBtn.focus(), 300);
       }
     }
   }
 
-  function setupCopyLinks() {
+  function toggleTOC(btn) {
+    const tocContainer = q('.table-of-contents');
+    if (!tocContainer) return;
+    
+    const isVisible = tocContainer.style.display !== 'none';
+    
+    tocContainer.style.display = isVisible ? 'none' : 'block';
+    btn.classList.toggle('active', !isVisible);
+    btn.innerHTML = isVisible ? '📋' : '✕';
+    
+    if (!isVisible) {
+      smoothScrollToElement(tocContainer, 80);
+    }
+  }
+
+  async function shareArticle(title, articleId, image) {
+    const url = `https://www.pattibytes.com/places/#${encodeURIComponent(articleId)}`;
+    const card = document.getElementById(articleId);
+    const text = (card?.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 200);
+    
+    showCustomShareModal({ title, text, url, image });
+  }
+
+  async function copyArticleLink(articleId, btn) {
+    const url = `https://www.pattibytes.com/places/#${encodeURIComponent(articleId)}`;
+    
+    try {
+      await copyToClipboard(url);
+      btn.classList.add('copied');
+      btn.innerHTML = '✓';
+      showNotification('Article link copied! / ਲਿੰਕ ਕਾਪੀ ਹੋਇਆ!', 'success');
+      
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.innerHTML = '🔗';
+      }, 2000);
+    } catch (error) {
+      showNotification('Copy failed. Please try again. / ਕਾਪੀ ਅਸਫਲ ਹੋਇਆ।', 'error');
+      console.error('Copy failed:', error);
+    }
+  }
+
+  function createRelatedContent(activeCard) {
+    const existing = q('.modal-related');
+    if (existing) existing.remove();
+    
+    const relatedContainer = document.createElement('div');
+    relatedContainer.className = 'modal-related';
+    relatedContainer.innerHTML = `
+      <h4>ਤੁਹਾਨੂੰ ਇਹ ਵੀ ਪਸੰਦ ਆ ਸਕਦਾ ਹੈ / You May Also Like</h4>
+    `;
+    
+    const relatedList = document.createElement('div');
+    relatedList.className = 'related-list';
+    
+    // Get related cards (excluding current one)
+    const relatedCards = cards.filter(card => card !== activeCard).slice(0, 6);
+    
+    relatedCards.forEach(card => {
+      const cardImage = card.dataset.image || '';
+      const cardTitle = card.dataset.title || card.querySelector('h3')?.textContent || '';
+      const cardPreview = (card.dataset.preview || '').slice(0, 120);
+      const cardId = card.id || card.dataset.id || '';
+      
+      const relatedCard = document.createElement('div');
+      relatedCard.className = 'related-card';
+      relatedCard.innerHTML = `
+        ${cardImage ? 
+          `<img src="${cardImage}" alt="${cardTitle}" loading="lazy">` : 
+          '<div class="related-placeholder">📍</div>'
+        }
+        <div class="related-info">
+          <div class="related-title">${cardTitle}</div>
+          <div class="related-meta">${cardPreview}${cardPreview.length > 100 ? '...' : ''}</div>
+          <div class="related-actions">
+            <button class="related-open" data-card-id="${cardId}" aria-label="Open ${cardTitle}">
+              ਖੋਲ੍ਹੋ / Open
+            </button>
+          </div>
+        </div>
+      `;
+      
+      relatedList.appendChild(relatedCard);
+    });
+    
+    relatedContainer.appendChild(relatedList);
+    modalText.parentNode.appendChild(relatedContainer);
+    
+    // Add event listeners for related cards
+    qa('.related-open', relatedContainer).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cardId = btn.dataset.cardId;
+        const targetCard = document.getElementById(cardId);
+        
+        if (targetCard) {
+          const targetIndex = cards.indexOf(targetCard);
+          if (targetIndex !== -1) {
+            // Save current position in stack
+            saveScrollPosition(`modal-${currentIndex}`);
+            
+            // Open new modal
+            setTimeout(() => {
+              openModal(targetIndex);
+              
+              // Highlight the card briefly
+              targetCard.classList.add('highlighted');
+              setTimeout(() => targetCard.classList.remove('highlighted'), 2000);
+            }, 100);
+          }
+        }
+      });
+    });
+  }
+
+  // Enhanced keyboard and navigation handling
+  function setupKeyboardHandling() {
+    document.addEventListener('keydown', (e) => {
+      if (!modalOpen) return;
+      
+      switch(e.key) {
+        case 'Escape':
+          if (q('.custom-share-modal.show')) {
+            // Close share modal first
+            qa('.custom-share-modal').forEach(modal => {
+              modal.classList.remove('show');
+              setTimeout(() => modal.remove(), 300);
+            });
+            popModal();
+          } else {
+            closeModal(true);
+          }
+          break;
+          
+        case ' ':
+          if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
+            e.preventDefault();
+            const ttsToggle = q('.tts-toggle-btn');
+            if (ttsToggle) {
+              ttsToggle.click();
+            }
+          }
+          break;
+          
+        case 'ArrowLeft':
+          if (e.ctrlKey && currentIndex > 0) {
+            e.preventDefault();
+            openModal(currentIndex - 1);
+          }
+          break;
+          
+        case 'ArrowRight':
+          if (e.ctrlKey && currentIndex < cards.length - 1) {
+            e.preventDefault();
+            openModal(currentIndex + 1);
+          }
+          break;
+      }
+    }, true);
+    
+    // Handle browser back/forward buttons
+    window.addEventListener('popstate', (e) => {
+      console.log('Popstate event:', e.state);
+      
+      if (modalOpen) {
+        // Modal is open, close it
+        closeModal(false);
+        return;
+      }
+      
+      // Check if we should open a modal based on hash
+      const hash = window.location.hash.slice(1);
+      if (hash) {
+        const targetCard = document.getElementById(decodeURIComponent(hash));
+        if (targetCard) {
+          const index = cards.indexOf(targetCard);
+          if (index !== -1) {
+            setTimeout(() => openModal(index), 100);
+          }
+        }
+      }
+    });
+  }
+
+  // Setup search functionality
+  function setupSearch() {
+    if (!searchInput) return;
+    
+    let searchTimeout;
+    
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      
+      searchTimeout = setTimeout(() => {
+        const query = e.target.value.trim();
+        const resultCount = performSearch(query);
+        
+        // Update clear button visibility
+        if (clearSearch) {
+          clearSearch.classList.toggle('visible', query.length > 0);
+        }
+        
+        // Log search for analytics (if needed)
+        if (query.length > 2) {
+          console.log('Search performed:', { query, results: resultCount });
+        }
+      }, 300);
+    });
+    
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        
+        // Find first visible card and highlight it
+        const firstVisible = cards.find(card => card.style.display !== 'none');
+        if (firstVisible) {
+          smoothScrollToElement(firstVisible, 100);
+          firstVisible.classList.add('search-result-highlight');
+          setTimeout(() => firstVisible.classList.remove('search-result-highlight'), 3000);
+          
+          // Focus the card for keyboard navigation
+          firstVisible.focus();
+        }
+      }
+    });
+    
+    // Clear search functionality
+    if (clearSearch) {
+      clearSearch.addEventListener('click', () => {
+        searchInput.value = '';
+        performSearch('');
+        clearSearch.classList.remove('visible');
+        searchInput.focus();
+      });
+    }
+  }
+
+  // Setup card interactions
+  function setupCardInteractions() {
+    cards.forEach((card, index) => {
+      // Make cards keyboard accessible
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('role', 'article');
+      card.setAttribute('aria-label', `Open article: ${card.dataset.title || 'Untitled'}`);
+      
+      // Click to open modal
+      card.addEventListener('click', (e) => {
+        // Don't open modal if clicking on buttons
+        if (e.target.closest('button, a, .action-buttons')) {
+          return;
+        }
+        
+        openModal(index);
+      });
+      
+      // Keyboard navigation
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openModal(index);
+        }
+      });
+      
+      // Enhanced hover effects
+      let hoverTimeout;
+      card.addEventListener('mouseenter', () => {
+        clearTimeout(hoverTimeout);
+        card.style.transform = 'translateY(-8px) scale(1.02)';
+      });
+      
+      card.addEventListener('mouseleave', () => {
+        hoverTimeout = setTimeout(() => {
+          card.style.transform = '';
+        }, 150);
+      });
+    });
+  }
+
+  // Setup copy and share functionality
+  function setupCopyShareButtons() {
+    // Setup copy buttons
     qa('.copy-link').forEach(btn => {
-      btn.addEventListener('click', async e => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const article = btn.closest('article');
-        if (!article) return;
-
-        const id = article.id;
-        if (!id) return;
-
-        const url = `https://www.pattibytes.com/places/#${encodeURIComponent(id)}`;
-
+        e.preventDefault();
+        
+        const card = btn.closest('.place-card');
+        if (!card) return;
+        
+        const articleId = card.id || card.dataset.id || '';
+        const url = `https://www.pattibytes.com/places/#${encodeURIComponent(articleId)}`;
+        
         try {
           await copyToClipboard(url);
+          
           btn.classList.add('copied');
-          const prevIcon = btn.textContent;
-          btn.textContent = '✔️';
+          const originalText = btn.textContent;
+          btn.textContent = '✓';
           
           showNotification('Link copied! / ਲਿੰਕ ਕਾਪੀ ਹੋਇਆ!', 'success');
           
           setTimeout(() => {
             btn.classList.remove('copied');
-            btn.textContent = prevIcon;
+            btn.textContent = originalText;
           }, 2000);
-        } catch {
-          showNotification(`Copy failed. Manual copy: ${url}`, 'error');
+          
+        } catch (error) {
+          showNotification('Copy failed / ਕਾਪੀ ਅਸਫਲ', 'error');
+          console.error('Copy failed:', error);
         }
       });
     });
-  }
-
-  function setupShareButtons() {
+    
+    // Setup share buttons
     qa('.share-btn').forEach(btn => {
-      btn.addEventListener('click', async e => {
+      btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const article = btn.closest('article.place-card');
-        if (!article) return;
-
-        const title = article.dataset.title || article.querySelector('h3')?.textContent || document.title;
-        const url = `https://www.pattibytes.com/places/#${encodeURIComponent(article.id)}`;
-        const text = (article.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 140);
-        const image = article.dataset.image || '';
-
+        e.preventDefault();
+        
+        const card = btn.closest('.place-card');
+        if (!card) return;
+        
+        const title = card.dataset.title || card.querySelector('h3')?.textContent || '';
+        const url = `https://www.pattibytes.com/places/#${encodeURIComponent(card.id)}`;
+        const text = (card.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 200);
+        const image = card.dataset.image || '';
+        
         showCustomShareModal({ title, text, url, image });
         
         btn.classList.add('shared');
-        setTimeout(() => btn.classList.remove('shared'), 2000);
+        setTimeout(() => btn.classList.remove('shared'), 1500);
       });
     });
   }
 
-  // Enhanced search function with better matching for place.id, place.title, and place.preview
-  function applySearch(qstr) {
-    const siteLang = (document.documentElement.lang || 'pa').toLowerCase();
-    const inputLang = /[\u0A00-\u0A7F]/.test(qstr.trim()) ? 'pa' : 'en';
-
-    let searchQuery = qstr.trim();
+  // Initialize everything when DOM is ready
+  function initializePlaces() {
+    console.log('Initializing Enhanced Places.js...');
     
-    // Enhanced search query expansion
-    if (siteLang === 'pa' && inputLang === 'en') {
-      Object.entries(enToPunjabi).forEach(([en, pa]) => {
-        const regex = new RegExp(`\\b${en}\\b`, 'gi');
-        searchQuery = searchQuery.replace(regex, `${en} ${pa}`);
-      });
-    }
-
-    const normalizedQuery = norm(searchQuery);
-    const romanQuery = norm(paToRoman(searchQuery));
-
-    let shown = 0;
-    index.forEach(({ el, searches }) => {
-      let matches = false;
-      
-      // If no query, show all
-      if (!normalizedQuery) {
-        matches = true;
-      } else {
-        // Search in all indexed fields
-        matches = searches.some(searchText => {
-          return searchText.includes(normalizedQuery) || 
-                 searchText.includes(romanQuery);
-        });
-      }
-
-      el.style.display = matches ? '' : 'none';
-      if (matches) shown++;
-    });
-
-    // Update no match message
-    if (noMatchEl) {
-      if (shown === 0) {
-        noMatchEl.style.display = 'block';
-        noMatchEl.innerHTML = siteLang === 'pa' ? 
-          'ਕੋਈ ਮਿਲਦਾ ਸਥਾਨ ਨਹੀਂ ਮਿਲਿਆ।<br><small>Try terms like: gurdwara, temple, school, market</small>' : 
-          'No matching places found.<br><small>Try Punjabi terms or different keywords</small>';
-      } else {
-        noMatchEl.style.display = 'none';
-      }
-    }
-  }
-
-  function setupSearch() {
-    if (!searchInput) return;
-
-    let searchTimeout;
-    searchInput.addEventListener('input', e => {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => {
-        applySearch(e.target.value || '');
-        const hasValue = !!(e.target.value || '').trim();
-        clearSearch?.classList.toggle('visible', hasValue);
-      }, 300);
-    });
-
-    searchInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        const first = cards.find(c => c.style.display !== 'none');
-        if (first) {
-          first.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          flashHighlight(first, 'search-result-highlight', 2000);
-        }
-      }
-    });
-
-    clearSearch?.addEventListener('click', () => {
-      if (searchInput) searchInput.value = '';
-      applySearch('');
-      clearSearch.classList.remove('visible');
-      searchInput?.focus();
-    });
-  }
-
-  function handleResponsiveChanges() {
-    let resizeTimeout;
-    window.addEventListener('resize', () => {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
-        const controlsFixed = q('.modal-controls-fixed');
-        if (controlsFixed && modalOpen) {
-          const title = q('.modal-controls-title', controlsFixed);
-          if (title && isMobile()) {
-            title.style.display = 'none';
-          } else if (title) {
-            title.style.display = 'block';
-          }
-        }
-      }, 250);
-    });
-  }
-
-  // Enhanced initialization
-  document.addEventListener('DOMContentLoaded', () => {
+    // Get DOM elements
     modal = q('#places-modal');
-    if (!modal) {
-      console.warn('Places modal not found');
-      return;
-    }
-
     modalMedia = q('#modal-media', modal);
     modalText = q('#modal-text', modal);
     btnClose = q('#modal-close', modal);
     modalContent = q('.modal-content', modal);
-
-    cards = Array.from(document.querySelectorAll('.place-card'));
+    
+    cards = qa('.place-card');
     searchInput = q('#places-search');
     clearSearch = q('#clear-search');
     noMatchEl = q('#no-match');
-
-    if (!cards.length) {
-      console.warn('No place cards found');
+    placesGrid = q('.places-grid');
+    
+    if (!modal || !cards.length) {
+      console.warn('Essential elements not found:', { modal: !!modal, cards: cards.length });
       return;
     }
-
-    arrangeActionButtonsHorizontally();
-
-    // Enhanced search index building with place.id, place.title, and place.preview
-    index = cards.map(c => {
-      const placeId = c.id || c.dataset.id || '';
-      const placeTitle = c.dataset.title || c.querySelector('h3')?.textContent || '';
-      const placePreview = c.dataset.preview || '';
-      const fullContent = c.dataset.full || '';
-      
-      // Create multiple search strings for different fields
-      const searches = [
-        norm(placeId),
-        norm(placeTitle),
-        norm(placePreview),
-        norm(fullContent),
-        norm(paToRoman(placeId)),
-        norm(paToRoman(placeTitle)),
-        norm(paToRoman(placePreview)),
-        norm(paToRoman(fullContent))
-      ].filter(Boolean);
-
-      return {
-        el: c,
-        searches
-      };
-    });
-
-    setupSearch();
-    setupCopyLinks();
-    setupShareButtons();
-    handleResponsiveChanges();
-
-    function handleHashOpen() {
-      const id = normalizeHash(window.location.hash || '');
-      if (!id) return;
-      
-      const target = document.getElementById(id);
-      if (target?.classList.contains('place-card')) {
-        const targetIndex = cards.indexOf(target);
-        if (targetIndex !== -1) {
-          openModal(targetIndex);
-          try { 
-            target.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
-          } catch {}
-          flashHighlight(target, 'highlighted', 2000);
-        }
-      }
-    }
-
-    handleHashOpen();
-    window.addEventListener('hashchange', handleHashOpen);
-
-    window.addEventListener('popstate', (e) => {
-      if (modalOpen) {
-        internalClose();
-        hadPushedState = false;
-      }
-      
-      const id = normalizeHash(window.location.hash || '');
-      if (id) {
-        const target = document.getElementById(id);
-        if (target?.classList.contains('place-card')) {
-          setTimeout(() => openModal(cards.indexOf(target)), 100);
-        }
-      }
-    });
-
-    btnClose?.addEventListener('click', ev => { 
-      ev.stopPropagation(); 
-      closeModal(); 
-    });
     
-    modal?.addEventListener('click', ev => { 
-      if (ev.target === modal) closeModal(); 
-    });
-
-    // Enhanced card event listeners
-    cards.forEach((card, idx) => {
-      const readBtn = card.querySelector('.read-more-btn');
+    // Arrange action buttons horizontally
+    cards.forEach((card, index) => {
+      const content = card.querySelector('.place-content');
+      if (!content) return;
+      
+      // Find existing buttons
+      const readBtn = content.querySelector('.read-more-btn');
+      const copyBtn = content.querySelector('.copy-link');
+      const shareBtn = content.querySelector('.share-btn');
+      
+      // Skip if already arranged
+      if (content.querySelector('.place-actions')) return;
+      
+      // Create actions container
+      const actionsContainer = document.createElement('div');
+      actionsContainer.className = 'place-actions';
+      
+      // Add read more button
       if (readBtn) {
-        readBtn.addEventListener('click', ev => { 
-          ev.stopPropagation(); 
-          openModal(idx); 
+        readBtn.remove();
+        readBtn.setAttribute('data-index', index);
+        actionsContainer.appendChild(readBtn);
+        
+        // Add event listener
+        readBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openModal(index);
         });
       }
-
-      card.addEventListener('keydown', ev => {
-        if ((ev.key === 'Enter' || ev.key === ' ') && document.activeElement === card) {
-          ev.preventDefault();
-          openModal(idx);
+      
+      // Create button group for copy/share
+      const buttonGroup = document.createElement('div');
+      buttonGroup.className = 'action-buttons';
+      
+      if (copyBtn) {
+        copyBtn.remove();
+        buttonGroup.appendChild(copyBtn);
+      }
+      
+      if (shareBtn) {
+        shareBtn.remove();
+        buttonGroup.appendChild(shareBtn);
+      }
+      
+      if (buttonGroup.children.length > 0) {
+        actionsContainer.appendChild(buttonGroup);
+      }
+      
+      content.appendChild(actionsContainer);
+    });
+    
+    // Build search index
+    buildSearchIndex();
+    
+    // Setup all functionality
+    setupSearch();
+    setupCardInteractions();
+    setupCopyShareButtons();
+    setupKeyboardHandling();
+    
+    // Handle initial hash
+    const initialHash = window.location.hash.slice(1);
+    if (initialHash) {
+      const targetCard = document.getElementById(decodeURIComponent(initialHash));
+      if (targetCard) {
+        const index = cards.indexOf(targetCard);
+        if (index !== -1) {
+          isInitialLoad = false;
+          setTimeout(() => {
+            openModal(index);
+            targetCard.classList.add('highlighted');
+            setTimeout(() => targetCard.classList.remove('highlighted'), 3000);
+          }, 500);
+        }
+      }
+    }
+    
+    // Setup original close button
+    if (btnClose) {
+      btnClose.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeModal(true);
+      });
+    }
+    
+    // Setup modal overlay click
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          closeModal(true);
         }
       });
-
-      card.setAttribute('tabindex', '0');
-      card.setAttribute('role', 'article');
-      
-      card.addEventListener('mouseenter', () => {
-        card.style.transform = 'translateY(-4px) scale(1.01)';
-        card.style.transition = 'transform 0.3s ease';
-      });
-      
-      card.addEventListener('mouseleave', () => {
-        card.style.transform = '';
-      });
-
-      // Add click to open functionality
-      card.addEventListener('click', (e) => {
-        // Don't open modal if clicking on buttons
-        if (e.target.closest('button, a')) return;
-        openModal(idx);
-      });
+    }
+    
+    console.log('Enhanced Places.js initialized successfully!', {
+      cards: cards.length,
+      searchEnabled: !!searchInput,
+      ttsSupported: advancedTTS.isSupported,
+      voicesAvailable: advancedTTS.voices.length
     });
+  }
 
-    console.log('Enhanced Places.js initialized successfully with improved search and modal functionality');
-  });
-
-  // Enhanced error handling
+  // Error handling
   window.addEventListener('error', (e) => {
-    if (e.filename?.includes('places.js')) {
-      console.error('Places.js error:', e.error);
-      showNotification('An error occurred. Please refresh the page.', 'error');
+    if (e.filename?.includes('places.js') || e.message?.includes('places')) {
+      console.error('Places.js Error:', e.error || e.message);
+      showNotification('A technical error occurred. Please refresh the page.', 'error', 8000);
     }
   });
-
-  // Clean up on page unload
+  
+  // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    advancedTTS.stop();
   });
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializePlaces);
+  } else {
+    initializePlaces();
+  }
 
 })();
