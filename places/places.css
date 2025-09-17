@@ -1,52 +1,152 @@
-/* ===========================================
-   Enhanced Variables and Global Settings
-=========================================== */
+/* Enhanced CSS Variables and Global Settings */
 :root {
+  /* Timing and Animations */
   --transition-speed: 0.3s;
   --transition-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  
+  /* Color Palette */
   --text-color: #1a202c;
+  --text-light: #4a5568;
   --accent-color: #e53e3e;
   --secondary-color: #2b6cb0;
   --highlight-color: #ed64a6;
   --background-color: #f7fafc;
+  --surface-color: #ffffff;
   --success-color: #38a169;
   --warning-color: #d69e2e;
   --error-color: #e53e3e;
   --info-color: #3182ce;
-  --shadow-light: 0 4px 20px rgba(229, 62, 62, 0.1);
-  --shadow-medium: 0 8px 30px rgba(229, 62, 62, 0.15);
-  --shadow-heavy: 0 16px 50px rgba(229, 62, 62, 0.2);
-  --shadow-floating: 0 25px 70px rgba(229, 62, 62, 0.25);
+  
+  /* Shadows */
+  --shadow-light: 0 4px 20px rgba(229, 62, 62, 0.08);
+  --shadow-medium: 0 8px 30px rgba(229, 62, 62, 0.12);
+  --shadow-heavy: 0 16px 50px rgba(229, 62, 62, 0.15);
+  --shadow-floating: 0 25px 70px rgba(229, 62, 62, 0.2);
+  
+  /* Border Radius */
   --border-radius: 16px;
   --border-radius-large: 24px;
   --border-radius-small: 12px;
+  --border-radius-pill: 50px;
+  
+  /* Glass Effects */
   --glass-bg: rgba(255, 255, 255, 0.85);
   --glass-bg-strong: rgba(255, 255, 255, 0.95);
   --glass-border: rgba(255, 255, 255, 0.5);
+  --blur-glass: blur(20px);
+  --blur-strong: blur(30px);
+  --blur-backdrop: blur(40px);
+  
+  /* Layout */
   --reading-width: 70ch;
   --header-height: 70px;
-  --mobile-header-height: 50px;
+  --mobile-header-height: 60px;
+  --container-padding: 1rem;
+  --grid-gap: 2rem;
+  
+  /* Control Sizes */
   --control-size-desktop: 52px;
   --control-size-tablet: 44px;
   --control-size-mobile: 40px;
+  
+  /* Gradients */
   --gradient-primary: linear-gradient(135deg, #e53e3e 0%, #ed64a6 50%, #d53f8c 100%);
   --gradient-secondary: linear-gradient(135deg, #2b6cb0 0%, #3182ce 50%, #4299e1 100%);
   --gradient-success: linear-gradient(135deg, #38a169 0%, #48bb78 100%);
   --gradient-warning: linear-gradient(135deg, #d69e2e 0%, #ed8936 100%);
   --gradient-info: linear-gradient(135deg, #3182ce 0%, #4299e1 100%);
-  --blur-glass: blur(20px);
-  --blur-strong: blur(30px);
-  --blur-backdrop: blur(40px);
+  
+  /* Z-index Scale */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+  --z-toast: 1080;
 }
 
-/* ===========================================
-   Enhanced Notification System
-=========================================== */
+/* Dark Mode Variables */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text-color: #e2e8f0;
+    --text-light: #a0aec0;
+    --background-color: #1a202c;
+    --surface-color: #2d3748;
+    --glass-bg: rgba(26, 32, 44, 0.85);
+    --glass-bg-strong: rgba(26, 32, 44, 0.95);
+    --glass-border: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+  :root {
+    --accent-color: #cc0000;
+    --text-color: #000000;
+    --background-color: #ffffff;
+    --secondary-color: #000080;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Base Styles */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.6;
+  color: var(--text-color);
+  background-color: var(--background-color);
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Skip Link for Accessibility */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: var(--accent-color);
+  color: white;
+  padding: 8px 16px;
+  text-decoration: none;
+  border-radius: var(--border-radius-small);
+  transition: top var(--transition-speed);
+  z-index: calc(var(--z-toast) + 1);
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  top: 6px;
+}
+
+/* Enhanced Notification System */
 .notification {
   position: fixed;
   top: 20px;
   right: 20px;
-  z-index: 10003;
+  z-index: var(--z-toast);
   max-width: 400px;
   padding: 1.25rem 1.75rem;
   border-radius: var(--border-radius);
@@ -116,22 +216,32 @@
 }
 
 @keyframes slideInRight {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 @keyframes slideOutRight {
-  from { transform: translateX(0); opacity: 1; }
-  to { transform: translateX(100%); opacity: 0; }
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
 }
 
-/* ===========================================
-   Enhanced Search Container
-=========================================== */
+/* Enhanced Search Container */
 .search-container {
   text-align: center;
   margin: 2rem 0 3rem;
-  padding: 0 1rem;
+  padding: 0 var(--container-padding);
 }
 
 .search-wrapper {
@@ -142,7 +252,7 @@
   padding: 1rem 2rem;
   background: var(--glass-bg-strong);
   border: 3px solid transparent;
-  border-radius: 50px;
+  border-radius: var(--border-radius-pill);
   box-shadow: var(--shadow-medium);
   position: relative;
   overflow: hidden;
@@ -237,13 +347,17 @@
 }
 
 @keyframes fadeInSpin {
-  from { opacity: 0; transform: rotate(-180deg) scale(0.5); }
-  to { opacity: 1; transform: rotate(0deg) scale(1); }
+  from {
+    opacity: 0;
+    transform: rotate(-180deg) scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
 }
 
-/* ===========================================
-   Enhanced No Match Message
-=========================================== */
+/* Enhanced No Match Message */
 .no-match-message {
   display: none;
   margin: 2.5rem auto;
@@ -262,20 +376,27 @@
 }
 
 @keyframes bounceIn {
-  0% { opacity: 0; transform: scale(0.5) translateY(-30px); }
-  50% { opacity: 1; transform: scale(1.05) translateY(-10px); }
-  100% { opacity: 1; transform: scale(1) translateY(0); }
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(-30px);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05) translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
-/* ===========================================
-   Enhanced Places Grid
-=========================================== */
+/* Enhanced Places Grid */
 .places-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  gap: 2rem;
+  gap: var(--grid-gap);
   margin-top: 2rem;
-  padding: 0 1rem;
+  padding: 0 var(--container-padding);
 }
 
 .place-card {
@@ -295,16 +416,20 @@
   transform: translateY(30px);
 }
 
-@keyframes cardAppear {
-  to { opacity: 1; transform: translateY(0); }
-}
-
+/* Staggered animation for cards */
 .place-card:nth-child(1) { animation-delay: 0.1s; }
 .place-card:nth-child(2) { animation-delay: 0.2s; }
 .place-card:nth-child(3) { animation-delay: 0.3s; }
 .place-card:nth-child(4) { animation-delay: 0.4s; }
 .place-card:nth-child(5) { animation-delay: 0.5s; }
 .place-card:nth-child(6) { animation-delay: 0.6s; }
+
+@keyframes cardAppear {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 .place-card::before {
   content: '';
@@ -337,14 +462,14 @@
 }
 
 @keyframes cardHighlight {
-  0% { 
-    border-color: var(--accent-color); 
-    box-shadow: 0 0 30px rgba(229, 62, 62, 0.4); 
+  0% {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 30px rgba(229, 62, 62, 0.4);
     transform: scale(1.05);
   }
-  100% { 
-    border-color: rgba(0, 0, 0, 0.06); 
-    box-shadow: var(--shadow-light); 
+  100% {
+    border-color: rgba(0, 0, 0, 0.06);
+    box-shadow: var(--shadow-light);
     transform: scale(1);
   }
 }
@@ -354,8 +479,12 @@
 }
 
 @keyframes searchHighlight {
-  0% { background: rgba(229, 62, 62, 0.15); }
-  100% { background: linear-gradient(145deg, #ffffff 0%, #f7fafc 100%); }
+  0% {
+    background: rgba(229, 62, 62, 0.15);
+  }
+  100% {
+    background: linear-gradient(145deg, #ffffff 0%, #f7fafc 100%);
+  }
 }
 
 /* Enhanced Media Container */
@@ -438,9 +567,7 @@
   opacity: 1;
 }
 
-/* ===========================================
-   Enhanced Action Buttons
-=========================================== */
+/* Enhanced Action Buttons */
 .place-actions {
   display: flex;
   align-items: center;
@@ -459,7 +586,7 @@
   color: #fff;
   background: var(--gradient-primary);
   border: none;
-  border-radius: 50px;
+  border-radius: var(--border-radius-pill);
   cursor: pointer;
   position: relative;
   overflow: hidden;
@@ -548,13 +675,14 @@
 
 @keyframes successPulse {
   0% { transform: scale(1); }
-  30% { transform: scale(1.2); box-shadow: 0 0 30px rgba(56, 161, 105, 0.7); }
+  30% { 
+    transform: scale(1.2); 
+    box-shadow: 0 0 30px rgba(56, 161, 105, 0.7);
+  }
   100% { transform: scale(1); }
 }
 
-/* ===========================================
-   Enhanced Full-Screen Modal System with Blur
-=========================================== */
+/* Enhanced Full-Screen Modal System */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -566,7 +694,7 @@
   display: flex;
   align-items: stretch;
   justify-content: center;
-  z-index: 9999;
+  z-index: var(--z-modal-backdrop);
   opacity: 0;
   visibility: hidden;
   transition: all 0.6s var(--transition-smooth);
@@ -600,11 +728,11 @@
   transform: scale(1);
 }
 
-/* Enhanced Modal Header - Compact Controls */
+/* Enhanced Modal Header */
 .modal-controls-fixed {
   position: sticky;
   top: 0;
-  z-index: 1001;
+  z-index: calc(var(--z-modal) + 1);
   background: var(--glass-bg-strong);
   backdrop-filter: var(--blur-strong);
   border-bottom: 3px solid rgba(229, 62, 62, 0.2);
@@ -770,9 +898,7 @@
   filter: brightness(1) contrast(1.1) saturate(1.15);
 }
 
-/* ===========================================
-   Enhanced Table of Contents with Scroll Functionality
-=========================================== */
+/* Enhanced Table of Contents */
 .table-of-contents {
   background: var(--glass-bg-strong);
   border: 3px solid rgba(229, 62, 62, 0.25);
@@ -786,8 +912,14 @@
 }
 
 @keyframes slideInDown {
-  from { opacity: 0; transform: translateY(-20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .toc-header {
@@ -905,18 +1037,20 @@
 }
 
 @keyframes tocHighlight {
-  from { background: linear-gradient(90deg, rgba(229, 62, 62, 0.5), transparent); }
-  to { background: transparent; }
+  from {
+    background: linear-gradient(90deg, rgba(229, 62, 62, 0.5), transparent);
+  }
+  to {
+    background: transparent;
+  }
 }
 
-/* ===========================================
-   Enhanced Modal Text
-=========================================== */
+/* Enhanced Modal Text */
 .modal-text {
   padding: 3rem;
   max-width: var(--reading-width);
   margin: 0 auto;
-  font-family: 'Georgia', 'Times New Roman', serif;
+  font-family: Georgia, 'Times New Roman', serif;
   line-height: 1.8;
   color: var(--text-color);
   font-size: 1.1rem;
@@ -965,9 +1099,7 @@
   transition: opacity 0.3s ease;
 }
 
-/* ===========================================
-   Enhanced TTS Controls
-=========================================== */
+/* Enhanced TTS Controls */
 .tts-controls {
   margin: 2rem;
   padding: 2.5rem;
@@ -984,8 +1116,14 @@
 }
 
 @keyframes slideInUp {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .tts-controls.show {
@@ -1017,7 +1155,7 @@
   border: none;
   color: #fff;
   padding: 1rem 2rem;
-  border-radius: 50px;
+  border-radius: var(--border-radius-pill);
   cursor: pointer;
   font-weight: 700;
   font-size: 1rem;
@@ -1139,20 +1277,22 @@
 }
 
 @keyframes highlightPulse {
-  from { box-shadow: var(--shadow-medium); }
-  to { box-shadow: 0 6px 25px rgba(229, 62, 62, 0.8); }
+  from {
+    box-shadow: var(--shadow-medium);
+  }
+  to {
+    box-shadow: 0 6px 25px rgba(229, 62, 62, 0.8);
+  }
 }
 
-/* ===========================================
-   Enhanced Custom Share Modal - Horizontal Buttons
-=========================================== */
+/* Enhanced Custom Share Modal */
 .custom-share-modal {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  z-index: 10002;
+  z-index: var(--z-modal);
   opacity: 0;
   visibility: hidden;
   transition: all 0.5s var(--transition-smooth);
@@ -1397,9 +1537,7 @@
   color: var(--text-color);
 }
 
-/* ===========================================
-   Enhanced Related Places
-=========================================== */
+/* Enhanced Related Places */
 .modal-related {
   margin: 4rem 2rem 3rem;
   border-top: 3px solid rgba(229, 62, 62, 0.2);
@@ -1551,9 +1689,7 @@
   box-shadow: var(--shadow-floating);
 }
 
-/* ===========================================
-   Enhanced Mobile Responsiveness - Same Colors, Smaller Sizes
-=========================================== */
+/* Enhanced Mobile Responsiveness */
 @media (max-width: 1024px) {
   :root {
     --control-size-desktop: var(--control-size-tablet);
@@ -1574,215 +1710,217 @@
     --reading-width: 100%;
     --mobile-header-height: var(--control-size-mobile);
     --control-size-desktop: var(--control-size-mobile);
+    --container-padding: 0.75rem;
+    --grid-gap: 1.5rem;
   }
-
+  
   .places-grid {
     grid-template-columns: 1fr;
-    gap: 1.5rem;
-    padding: 0 0.75rem;
+    gap: var(--grid-gap);
+    padding: 0 var(--container-padding);
   }
-
+  
   .place-card {
     min-height: 400px;
   }
-
+  
   .place-card .media-container {
     height: 200px;
   }
-
+  
   .place-card .place-content {
     padding: 1.5rem;
   }
-
+  
   .place-card h3 {
     font-size: 1.3rem;
   }
-
+  
   .place-card .place-desc {
     font-size: 1rem;
     margin-bottom: 1.5rem;
   }
-
+  
   /* Compact Mobile Header */
   .modal-controls-fixed {
     padding: 0.75rem 1rem;
     min-height: var(--mobile-header-height);
   }
-
+  
   .modal-controls-title {
     font-size: 1.1rem;
     padding-right: 0.75rem;
     font-weight: 800;
   }
-
+  
   .modal-controls-buttons {
     gap: 0.5rem;
   }
-
+  
   .modal-control-btn {
     width: var(--control-size-mobile);
     height: var(--control-size-mobile);
     font-size: 1.1rem;
     border-radius: var(--border-radius-small);
   }
-
+  
   .table-of-contents {
     margin: 1rem;
     padding: 1.5rem;
   }
-
+  
   .toc-title {
     font-size: 1.2rem;
   }
-
+  
   .toc-collapse {
     width: 2rem;
     height: 2rem;
     font-size: 1.2rem;
   }
-
+  
   .modal-text {
     padding: 2rem;
     font-size: 1.05rem;
     line-height: 1.7;
   }
-
+  
   .modal-text h3:first-child {
     font-size: 1.8rem;
     margin-bottom: 2rem;
   }
-
+  
   .modal-text h1 { font-size: 2.1rem; }
   .modal-text h2 { font-size: 1.8rem; }
   .modal-text h3 { font-size: 1.6rem; }
   .modal-text h4 { font-size: 1.4rem; }
-
+  
   .search-wrapper {
     max-width: 95%;
     padding: 0.875rem 1.5rem;
   }
-
+  
   .search-input {
     font-size: 1.05rem;
   }
-
+  
   .search-icon {
     width: 1.25rem;
     height: 1.25rem;
     margin-right: 0.875rem;
   }
-
+  
   .clear-btn {
     width: 1.75rem;
     height: 1.75rem;
     font-size: 1.1rem;
   }
-
+  
   .tts-controls {
     margin: 1rem;
     padding: 2rem;
   }
-
+  
   .tts-controls-row {
     flex-direction: column;
     align-items: stretch;
     gap: 1.5rem;
   }
-
+  
   .tts-control-group {
     min-width: auto;
   }
-
+  
   .tts-play {
     min-width: 140px;
     min-height: 50px;
     font-size: 0.95rem;
     padding: 0.875rem 1.5rem;
   }
-
+  
   .related-list {
     grid-template-columns: 1fr;
     gap: 2rem;
   }
-
+  
   .place-actions {
     flex-direction: column;
     gap: 1rem;
   }
-
+  
   .action-buttons {
     justify-content: center;
   }
-
+  
   .copy-link,
   .share-btn {
     width: var(--control-size-mobile);
     height: var(--control-size-mobile);
     font-size: 1.1rem;
   }
-
+  
   .modal-related {
     margin: 2rem 1rem 1rem;
   }
-
+  
   .share-preview {
     flex-direction: column;
     text-align: center;
     padding: 1.5rem;
   }
-
+  
   .share-preview-image,
   .share-preview-placeholder {
     width: 100%;
     height: 140px;
   }
-
-  /* Mobile Horizontal Buttons - Same Colors */
+  
+  /* Mobile Horizontal Buttons */
   .share-preview-actions {
     flex-direction: row;
     justify-content: center;
     gap: 1rem;
   }
-
+  
   .share-copy-link,
   .share-read-full {
     padding: 0.75rem 1.25rem;
     font-size: 0.9rem;
   }
-
+  
   .share-platforms-scroll {
     justify-content: flex-start;
     gap: 1rem;
   }
-
+  
   .share-platform {
     min-width: 80px;
     padding: 1rem;
   }
-
+  
   .share-platform-icon {
     font-size: 2.2rem;
   }
-
+  
   .share-platform-name {
     font-size: 0.8rem;
   }
-
+  
   .custom-share-modal .share-modal-content {
     padding: 2rem;
     margin: 0.75rem;
   }
-
+  
   .share-modal-header h3 {
     font-size: 1.5rem;
   }
-
+  
   .share-modal-close {
     width: 2.5rem;
     height: 2.5rem;
     font-size: 2rem;
   }
-
+  
   .notification {
     right: 10px;
     left: 10px;
@@ -1790,7 +1928,7 @@
     padding: 1rem 1.25rem;
     font-size: 0.95rem;
   }
-
+  
   .notification-close {
     width: 1.75rem;
     height: 1.75rem;
@@ -1803,63 +1941,63 @@
   .modal-media {
     max-height: 35vh;
   }
-
+  
   .modal-text {
     padding: 1.5rem;
     font-size: 1rem;
   }
-
+  
   .modal-text p {
     font-size: 1.05rem;
   }
-
+  
   .related-card img,
   .related-placeholder {
     height: 120px;
   }
-
+  
   .share-modal-content {
     padding: 1.5rem;
   }
-
+  
   .modal-controls-title {
     font-size: 1rem;
   }
-
+  
   .modal-control-btn {
     width: 36px;
     height: 36px;
     font-size: 1rem;
   }
-
+  
   .place-card .media-container {
     height: 180px;
   }
-
+  
   .search-wrapper {
     padding: 0.75rem 1.25rem;
   }
-
+  
   .search-input {
     font-size: 1rem;
   }
-
+  
   .tts-controls {
     padding: 1.5rem;
   }
-
+  
   .tts-play {
     min-width: 120px;
     min-height: 46px;
     font-size: 0.9rem;
   }
-
+  
   /* Extra Small Mobile Horizontal Buttons */
   .share-preview-actions {
     flex-direction: column;
     gap: 0.75rem;
   }
-
+  
   .share-copy-link,
   .share-read-full {
     padding: 0.675rem 1rem;
@@ -1867,33 +2005,12 @@
   }
 }
 
-/* ===========================================
-   SEO & Accessibility Enhancements
-=========================================== */
-/* Enhanced Focus States for Accessibility */
+/* Accessibility Enhancements */
 .focus-visible,
 *:focus-visible {
   outline: 4px solid var(--accent-color);
   outline-offset: 3px;
   border-radius: 8px;
-}
-
-/* Skip to Content Link for Screen Readers */
-.skip-link {
-  position: absolute;
-  top: -40px;
-  left: 6px;
-  background: var(--accent-color);
-  color: white;
-  padding: 8px;
-  text-decoration: none;
-  border-radius: 4px;
-  transition: top 0.3s;
-  z-index: 10000;
-}
-
-.skip-link:focus {
-  top: 6px;
 }
 
 /* Screen Reader Only Content */
@@ -1911,40 +2028,12 @@
 
 /* High Contrast Mode Support */
 @media (prefers-contrast: high) {
-  :root {
-    --accent-color: #cc0000;
-    --text-color: #000;
-    --background-color: #fff;
-    --secondary-color: #000080;
-  }
-
   .place-card,
   .modal-content,
   .tts-controls,
   .table-of-contents,
   .custom-share-modal .share-modal-content {
     border: 4px solid #000;
-  }
-}
-
-/* Reduced Motion Support */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-
-  .place-card:hover {
-    transform: none;
-  }
-
-  .tts-highlight {
-    animation: none;
-  }
-
-  .modal-overlay {
-    backdrop-filter: none;
   }
 }
 
@@ -1957,13 +2046,13 @@
   .notification {
     display: none !important;
   }
-
+  
   .modal-text {
     color: #000 !important;
     background: #fff !important;
     font-size: 12pt !important;
   }
-
+  
   .modal-text h1,
   .modal-text h2,
   .modal-text h3,
@@ -1973,7 +2062,7 @@
     color: #000 !important;
     break-after: avoid;
   }
-
+  
   .modal-text p {
     orphans: 3;
     widows: 3;
@@ -1982,27 +2071,20 @@
 
 /* Dark Mode Support */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --text-color: #e2e8f0;
-    --background-color: #1a202c;
-    --glass-bg: rgba(26, 32, 44, 0.9);
-    --glass-bg-strong: rgba(26, 32, 44, 0.95);
-  }
-
   .place-card {
     background: linear-gradient(145deg, #2d3748 0%, #1a202c 100%);
     border-color: rgba(255, 255, 255, 0.1);
   }
-
+  
   .modal-content {
     background: rgba(45, 55, 72, 0.95);
     color: var(--text-color);
   }
-
+  
   .search-wrapper {
     background: rgba(45, 55, 72, 0.95);
   }
-
+  
   .custom-share-modal .share-modal-content {
     background: rgba(45, 55, 72, 0.95);
   }
@@ -2014,8 +2096,12 @@
 }
 
 @keyframes highlightFlash {
-  0% { background-color: rgba(229, 62, 62, 0.25); }
-  100% { background-color: transparent; }
+  0% {
+    background-color: rgba(229, 62, 62, 0.25);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 
 .pulse {
@@ -2023,11 +2109,15 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
-/* Smooth Scrolling for TOC Links */
+/* Smooth Scrolling */
 html {
   scroll-behavior: smooth;
 }
@@ -2040,11 +2130,15 @@ html {
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
-/* Enhanced Button States for Better UX */
+/* Enhanced Button States */
 button:disabled,
 .btn:disabled {
   opacity: 0.6;
@@ -2065,4 +2159,28 @@ button:active,
   width: 1px;
   height: 1px;
   overflow: hidden;
+}
+
+/* Performance Optimizations */
+* {
+  will-change: auto;
+}
+
+.place-card:hover,
+.modal-control-btn:hover,
+.tts-play:hover {
+  will-change: transform;
+}
+
+/* Container Queries Support */
+@supports (container-type: inline-size) {
+  .places-grid {
+    container-type: inline-size;
+  }
+  
+  @container (max-width: 600px) {
+    .place-card .place-actions {
+      flex-direction: column;
+    }
+  }
 }
