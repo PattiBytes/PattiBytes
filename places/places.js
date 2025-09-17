@@ -1664,3 +1664,97 @@
   }
 
 })();
+// Enhanced TOC Scroll Effect
+document.addEventListener('DOMContentLoaded', function() {
+  const tocButton = document.querySelector('.toc-toggle-btn');
+  const toc = document.querySelector('.table-of-contents');
+  const modalBody = document.querySelector('.modal-body');
+  
+  if (tocButton && toc) {
+    let tocVisible = false;
+    
+    tocButton.addEventListener('click', function() {
+      tocVisible = !tocVisible;
+      
+      if (tocVisible) {
+        // Show TOC
+        toc.style.display = 'block';
+        toc.classList.add('scroll-to-view');
+        tocButton.classList.add('active');
+        
+        // Smooth scroll to TOC
+        setTimeout(() => {
+          toc.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start',
+            inline: 'nearest'
+          });
+        }, 100);
+        
+        // Remove highlight animation after it completes
+        setTimeout(() => {
+          toc.classList.remove('scroll-to-view');
+        }, 2000);
+        
+      } else {
+        // Hide TOC
+        toc.style.display = 'none';
+        tocButton.classList.remove('active');
+      }
+    });
+    
+    // Enhanced TOC link clicks with smooth scrolling
+    const tocLinks = document.querySelectorAll('.toc-link');
+    tocLinks.forEach(link => {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const targetId = this.getAttribute('href');
+        const targetElement = document.querySelector(targetId);
+        
+        if (targetElement) {
+          // Remove active class from all links
+          tocLinks.forEach(l => l.classList.remove('active'));
+          
+          // Add active class to clicked link
+          this.classList.add('active');
+          
+          // Smooth scroll to target
+          targetElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+            inline: 'nearest'
+          });
+          
+          // Add highlight effect to target
+          targetElement.classList.add('toc-target-highlight');
+          setTimeout(() => {
+            targetElement.classList.remove('toc-target-highlight');
+          }, 3000);
+          
+          // Auto-hide TOC on mobile after clicking
+          if (window.innerWidth <= 768) {
+            setTimeout(() => {
+              toc.style.display = 'none';
+              tocButton.classList.remove('active');
+              tocVisible = false;
+            }, 1000);
+          }
+        }
+      });
+    });
+    
+    // Auto-hide TOC when clicking outside (mobile)
+    if (window.innerWidth <= 768) {
+      document.addEventListener('click', function(e) {
+        if (tocVisible && 
+            !toc.contains(e.target) && 
+            !tocButton.contains(e.target)) {
+          toc.style.display = 'none';
+          tocButton.classList.remove('active');
+          tocVisible = false;
+        }
+      });
+    }
+  }
+});
