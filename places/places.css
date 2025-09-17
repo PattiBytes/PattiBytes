@@ -68,18 +68,6 @@
   --z-toast: 1080;
 }
 
-/* Dark Mode Variables */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text-color: #e2e8f0;
-    --text-light: #a0aec0;
-    --background-color: #1a202c;
-    --surface-color: #2d3748;
-    --glass-bg: rgba(26, 32, 44, 0.85);
-    --glass-bg-strong: rgba(26, 32, 44, 0.95);
-    --glass-border: rgba(255, 255, 255, 0.1);
-  }
-}
 
 /* High Contrast Mode */
 @media (prefers-contrast: high) {
@@ -829,6 +817,43 @@ body {
   box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.25);
 }
 
+/* Enhanced TOC Button with Scroll Indicator */
+.toc-toggle-btn {
+  background: var(--gradient-info);
+  color: #fff;
+  position: relative;
+}
+
+.toc-toggle-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.toc-toggle-btn.active {
+  background: var(--gradient-warning);
+  animation: tocButtonPulse 2s ease-in-out infinite;
+}
+
+.toc-toggle-btn.active::after {
+  width: 80%;
+  height: 80%;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+@keyframes tocButtonPulse {
+  0%, 100% { box-shadow: var(--shadow-medium); }
+  50% { box-shadow: 0 0 20px rgba(237, 137, 54, 0.8); }
+}
+
 /* Individual button styles */
 .tts-toggle-btn {
   background: var(--gradient-primary);
@@ -837,15 +862,6 @@ body {
 
 .tts-toggle-btn.active {
   background: var(--gradient-secondary);
-}
-
-.toc-toggle-btn {
-  background: var(--gradient-info);
-  color: #fff;
-}
-
-.toc-toggle-btn.active {
-  background: var(--gradient-warning);
 }
 
 .modal-share-btn {
@@ -876,6 +892,7 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--accent-color) transparent;
   padding-top: 0;
+  position: relative;
 }
 
 .modal-body::-webkit-scrollbar {
@@ -922,7 +939,7 @@ body {
   filter: brightness(1) contrast(1.1) saturate(1.15);
 }
 
-/* Enhanced Table of Contents */
+/* Enhanced Table of Contents with Better Mobile Visibility */
 .table-of-contents {
   background: var(--glass-bg-strong);
   border: 3px solid rgba(229, 62, 62, 0.25);
@@ -933,6 +950,53 @@ body {
   backdrop-filter: var(--blur-glass);
   box-shadow: var(--shadow-heavy);
   animation: slideInDown 0.5s var(--transition-smooth);
+  position: relative;
+  max-height: 70vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-color) rgba(0, 0, 0, 0.1);
+}
+
+/* Enhanced TOC Scrollbar */
+.table-of-contents::-webkit-scrollbar {
+  width: 12px;
+}
+
+.table-of-contents::-webkit-scrollbar-track {
+  background: rgba(229, 62, 62, 0.1);
+  border-radius: 6px;
+  margin: 4px;
+}
+
+.table-of-contents::-webkit-scrollbar-thumb {
+  background: var(--gradient-primary);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  box-shadow: inset 0 0 4px rgba(229, 62, 62, 0.3);
+}
+
+.table-of-contents::-webkit-scrollbar-thumb:hover {
+  background: var(--gradient-secondary);
+  background-clip: content-box;
+}
+
+/* Smooth Scroll Animation for TOC */
+.table-of-contents.scroll-to-view {
+  animation: tocScrollHighlight 2s ease-out;
+}
+
+@keyframes tocScrollHighlight {
+  0% {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 30px rgba(229, 62, 62, 0.6);
+    transform: scale(1.02);
+  }
+  100% {
+    border-color: rgba(229, 62, 62, 0.25);
+    box-shadow: var(--shadow-heavy);
+    transform: scale(1);
+  }
 }
 
 @keyframes slideInDown {
@@ -953,6 +1017,11 @@ body {
   margin-bottom: 1.5rem;
   border-bottom: 4px solid var(--accent-color);
   padding-bottom: 1rem;
+  position: sticky;
+  top: 0;
+  background: inherit;
+  backdrop-filter: inherit;
+  z-index: 10;
 }
 
 .toc-title {
@@ -993,7 +1062,7 @@ body {
 
 .toc-collapse:hover {
   background: rgba(229, 62, 62, 0.15);
-  transform: scale(1.1);
+  transform: scale(1.1) rotate(180deg);
 }
 
 .toc-list {
@@ -1005,6 +1074,25 @@ body {
 
 .toc-item {
   margin-bottom: 0.75rem;
+  opacity: 0;
+  animation: tocItemFadeIn 0.5s ease-out forwards;
+}
+
+.toc-item:nth-child(1) { animation-delay: 0.1s; }
+.toc-item:nth-child(2) { animation-delay: 0.2s; }
+.toc-item:nth-child(3) { animation-delay: 0.3s; }
+.toc-item:nth-child(4) { animation-delay: 0.4s; }
+.toc-item:nth-child(5) { animation-delay: 0.5s; }
+
+@keyframes tocItemFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .toc-level-h1 { margin-left: 0; }
@@ -1069,7 +1157,7 @@ body {
   }
 }
 
-/* Enhanced Modal Text with Superior Typography */
+/* Enhanced Modal Text */
 .modal-text {
   padding: 3rem;
   max-width: var(--reading-width);
@@ -1086,6 +1174,227 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Mobile Optimizations - Fix White Text on White Background */
+@media (max-width: 768px) {
+  .modal-content {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .modal-controls-fixed {
+    background: rgba(255, 255, 255, 0.95) !important;
+    color: #000000 !important;
+    border-bottom-color: rgba(229, 62, 62, 0.3) !important;
+    padding: 0.75rem 1rem !important;
+    min-height: var(--mobile-header-height) !important;
+  }
+
+  .modal-controls-title {
+    color: #000000 !important;
+    font-size: 1.1rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .modal-controls-buttons {
+    gap: 0.5rem !important;
+  }
+
+  .modal-control-btn {
+    width: var(--control-size-mobile) !important;
+    height: var(--control-size-mobile) !important;
+    font-size: 1.1rem !important;
+    border-radius: var(--border-radius-small) !important;
+  }
+
+  /* Fixed TOC for Mobile - Black Text on White Background */
+  .table-of-contents {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 2px solid rgba(229, 62, 62, 0.3) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+    backdrop-filter: none !important;
+    max-height: 60vh !important;
+    padding: 1.5rem !important;
+    margin: 1rem !important;
+    border-radius: var(--border-radius) !important;
+  }
+
+  .table-of-contents::-webkit-scrollbar {
+    width: 8px !important;
+  }
+
+  .table-of-contents::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05) !important;
+    border-radius: 4px !important;
+  }
+
+  .table-of-contents::-webkit-scrollbar-thumb {
+    background: var(--accent-color) !important;
+    border-radius: 4px !important;
+    border: 1px solid transparent !important;
+    background-clip: content-box !important;
+  }
+
+  .table-of-contents::-webkit-scrollbar-thumb:hover {
+    background: var(--highlight-color) !important;
+    background-clip: content-box !important;
+  }
+
+  .toc-header {
+    border-bottom-color: rgba(229, 62, 62, 0.4) !important;
+    margin-bottom: 1rem !important;
+    padding-bottom: 0.75rem !important;
+    background: #ffffff !important;
+  }
+
+  .toc-title {
+    color: #000000 !important;
+    font-size: 1.2rem !important;
+  }
+
+  .toc-title::after {
+    background: var(--accent-color) !important;
+  }
+
+  .toc-collapse {
+    color: var(--accent-color) !important;
+    width: 2rem !important;
+    height: 2rem !important;
+    font-size: 1.2rem !important;
+  }
+
+  .toc-collapse:hover {
+    background: rgba(229, 62, 62, 0.1) !important;
+  }
+
+  .toc-link {
+    color: #000000 !important;
+    padding: 0.6rem 0.8rem !important;
+    font-size: 0.95rem !important;
+  }
+
+  .toc-link:hover,
+  .toc-link:focus,
+  .toc-link.active {
+    background: rgba(229, 62, 62, 0.1) !important;
+    color: var(--accent-color) !important;
+    border-left-color: var(--accent-color) !important;
+  }
+
+  /* Mobile TOC Level Indentations */
+  .toc-level-h1 { margin-left: 0 !important; }
+  .toc-level-h2 { margin-left: 1rem !important; }
+  .toc-level-h3 { margin-left: 2rem !important; }
+  .toc-level-h4 { margin-left: 3rem !important; }
+  .toc-level-h5 { margin-left: 4rem !important; }
+  .toc-level-h6 { margin-left: 5rem !important; }
+
+  /* Enhanced Mobile Modal Body */
+  .modal-body {
+    background: #ffffff !important;
+  }
+
+  .modal-media {
+    max-height: 35vh !important;
+  }
+}
+
+/* Extra Small Mobile */
+@media (max-width: 480px) {
+  .modal-controls-title {
+    font-size: 1rem !important;
+  }
+
+  .modal-control-btn {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 1rem !important;
+  }
+
+  .table-of-contents {
+    padding: 1rem !important;
+    margin: 0.5rem !important;
+    max-height: 50vh !important;
+  }
+
+  .toc-title {
+    font-size: 1.1rem !important;
+  }
+
+  .toc-collapse {
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+    font-size: 1.1rem !important;
+  }
+
+  .toc-link {
+    padding: 0.5rem 0.6rem !important;
+    font-size: 0.9rem !important;
+  }
+
+  /* Extra Small Mobile TOC Level Indentations */
+  .toc-level-h2 { margin-left: 0.75rem !important; }
+  .toc-level-h3 { margin-left: 1.5rem !important; }
+  .toc-level-h4 { margin-left: 2.25rem !important; }
+  .toc-level-h5 { margin-left: 3rem !important; }
+  .toc-level-h6 { margin-left: 3.75rem !important; }
+}
+
+/* Dark Mode Override for Mobile - Keep Light Theme */
+@media (max-width: 768px) and (prefers-color-scheme: dark) {
+  .modal-content,
+  .table-of-contents,
+  .modal-controls-fixed,
+  .toc-header {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .modal-controls-title,
+  .toc-title,
+  .toc-link {
+    color: #000000 !important;
+  }
+
+  .toc-collapse {
+    color: var(--accent-color) !important;
+  }
+
+  .toc-link:hover,
+  .toc-link:focus,
+  .toc-link.active {
+    color: var(--accent-color) !important;
+  }
+}
+
+/* Enhanced Accessibility */
+.table-of-contents:focus-within {
+  outline: 3px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+.toc-link:focus {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
+}
+
+/* Print Optimization */
+@media print {
+  .table-of-contents {
+    background: white !important;
+    color: black !important;
+    border: 2px solid black !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+
+  .toc-title,
+  .toc-link {
+    color: black !important;
+  }
+}
+
 
 /* Enhanced Typography for Better Reading Experience */
 .modal-text::before {
