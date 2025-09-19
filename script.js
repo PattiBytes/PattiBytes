@@ -1095,46 +1095,278 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // Universal In-App Browser Detection - Enhanced for pattibytes.com
-// Modified version that WORKS with Instagram
-function detectInstagram() {
-    const ua = navigator.userAgent.toLowerCase();
-    if (ua.includes('instagram')) {
-        showInstagramInstructions();
-        return true;
+// Enhanced Instagram Detection - Works on ALL Devices
+(function() {
+    'use strict';
+    
+    // Enhanced device and browser detection
+    function getDeviceInfo() {
+        const ua = navigator.userAgent || '';
+        return {
+            isIOS: /iPad|iPhone|iPod/.test(ua),
+            isAndroid: /Android/.test(ua),
+            isMobile: /Mobi|Android/i.test(ua),
+            isTablet: /iPad/.test(ua) || (/Android/.test(ua) && !/Mobile/.test(ua)),
+            isInstagram: ua.toLowerCase().includes('instagram'),
+            hasTouch: 'ontouchstart' in window || navigator.maxTouchPoints > 0
+        };
     }
-    return false;
-}
-
-function showInstagramInstructions() {
-    const popup = document.createElement('div');
-    popup.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.9); z-index: 999999;
-        display: flex; align-items: center; justify-content: center;
-        font-family: Arial, sans-serif; color: white;
-    `;
     
-    popup.innerHTML = `
-        <div style="text-align: center; max-width: 300px; padding: 20px;">
-            <div style="font-size: 40px; margin-bottom: 20px;">📱</div>
-            <h3>Open in Browser</h3>
-            <p style="margin: 15px 0;">For the best experience:</p>
-            <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin: 15px 0;">
-                <strong>Tap the three dots (⋯)</strong><br>
-                at the bottom right<br><br>
-                Then select<br>
-                <strong>"Open in Browser"</strong>
+    // Comprehensive Instagram detection (all versions)
+    function detectInstagram() {
+        const ua = navigator.userAgent.toLowerCase();
+        const patterns = [
+            'instagram',           // Standard Instagram app
+            'ig_user_agent',      // Instagram internal browser
+            'instagrambot',       // Instagram bot
+            'instagram android',  // Android Instagram
+            'instagram ios'       // iOS Instagram
+        ];
+        
+        return patterns.some(pattern => ua.includes(pattern)) || 
+               (ua.includes('mobile safari') && ua.includes('instagram'));
+    }
+    
+    // Enhanced popup with device-specific instructions
+    function showInstagramInstructions() {
+        // Prevent multiple popups
+        if (document.getElementById('instagram-popup') || 
+            sessionStorage.getItem('instagram-popup-shown')) {
+            return;
+        }
+        
+        sessionStorage.setItem('instagram-popup-shown', 'true');
+        
+        const deviceInfo = getDeviceInfo();
+        
+        // Create responsive popup
+        const popup = document.createElement('div');
+        popup.id = 'instagram-popup';
+        popup.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 999999;
+            display: flex; align-items: center; justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            color: white; padding: 20px; box-sizing: border-box;
+            animation: fadeInPopup 0.4s ease-out;
+        `;
+        
+        // Device-specific instructions
+        let instructions = '';
+        let buttonText = 'Open in Browser';
+        
+        if (deviceInfo.isIOS) {
+            instructions = `
+                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; margin: 20px 0;">
+                    <div style="font-size: 32px; margin-bottom: 15px;">📱</div>
+                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 15px;">iOS Instructions:</div>
+                    <div style="line-height: 1.6;">
+                        1. Tap the <strong>Share button</strong> (square with arrow)<br>
+                        2. Select <strong>"Open in Safari"</strong><br><br>
+                        <em>Or tap the three dots (⋯) and choose "Open in Browser"</em>
+                    </div>
+                </div>
+            `;
+        } else if (deviceInfo.isAndroid) {
+            instructions = `
+                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; margin: 20px 0;">
+                    <div style="font-size: 32px; margin-bottom: 15px;">🤖</div>
+                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 15px;">Android Instructions:</div>
+                    <div style="line-height: 1.6;">
+                        1. Tap the <strong>three dots (⋯)</strong> at the top-right<br>
+                        2. Select <strong>"Open in Browser"</strong> or <strong>"Open in Chrome"</strong><br><br>
+                        <em>Look for the browser icon or "External Browser" option</em>
+                    </div>
+                </div>
+            `;
+        } else {
+            instructions = `
+                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; margin: 20px 0;">
+                    <div style="font-size: 32px; margin-bottom: 15px;">🌐</div>
+                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 15px;">Desktop Instructions:</div>
+                    <div style="line-height: 1.6;">
+                        Copy this URL and paste it in your preferred browser for the best experience.
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Responsive content container
+        const content = document.createElement('div');
+        content.style.cssText = `
+            text-align: center; max-width: ${deviceInfo.isMobile ? '350px' : '400px'}; 
+            width: 90%; background: rgba(30,30,30,0.95); padding: 30px; 
+            border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
+        `;
+        
+        content.innerHTML = `
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 48px; margin-bottom: 15px;">🔓</div>
+                <h2 style="margin: 0 0 10px 0; font-size: 24px; font-weight: 600;">
+                    Open in Browser
+                </h2>
+                <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 16px;">
+                    For the best experience and full functionality
+                </p>
             </div>
-            <button onclick="this.parentElement.parentElement.remove()" 
-                    style="background: #e53e3e; color: white; border: none; 
-                           padding: 10px 20px; border-radius: 5px; margin-top: 15px;">
-                Continue Here
-            </button>
-        </div>
-    `;
+            
+            ${instructions}
+            
+            <div style="margin-top: 25px;">
+                <button id="try-open-btn" style="
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white; border: none; padding: 14px 28px; 
+                    border-radius: 25px; font-size: 16px; font-weight: 600;
+                    cursor: pointer; margin: 8px; min-width: 140px;
+                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+                    transition: all 0.3s ease;
+                " onmouseover="this.style.transform='translateY(-2px)'" 
+                   onmouseout="this.style.transform='translateY(0)'">
+                    ${buttonText}
+                </button>
+                <br>
+                <button id="continue-btn" style="
+                    background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8);
+                    border: 1px solid rgba(255,255,255,0.2); padding: 12px 24px;
+                    border-radius: 20px; font-size: 14px; cursor: pointer;
+                    margin: 8px; transition: all 0.3s ease;
+                " onmouseover="this.style.background='rgba(255,255,255,0.15)'" 
+                   onmouseout="this.style.background='rgba(255,255,255,0.1)'">
+                    Continue Here
+                </button>
+            </div>
+            
+            <div style="margin-top: 20px; font-size: 12px; color: rgba(255,255,255,0.6);">
+                This popup appears once per session
+            </div>
+        `;
+        
+        popup.appendChild(content);
+        
+        // Add animation styles
+        if (!document.getElementById('instagram-popup-styles')) {
+            const styles = document.createElement('style');
+            styles.id = 'instagram-popup-styles';
+            styles.textContent = `
+                @keyframes fadeInPopup {
+                    from { opacity: 0; transform: scale(0.9) translateY(20px); }
+                    to { opacity: 1; transform: scale(1) translateY(0); }
+                }
+                @media (max-width: 480px) {
+                    #instagram-popup > div {
+                        padding: 20px !important;
+                        font-size: 14px !important;
+                    }
+                }
+            `;
+            document.head.appendChild(styles);
+        }
+        
+        document.body.appendChild(popup);
+        
+        // Enhanced event handlers
+        const tryOpenBtn = document.getElementById('try-open-btn');
+        const continueBtn = document.getElementById('continue-btn');
+        
+        // Try to open in external browser (with fallbacks)
+        tryOpenBtn.addEventListener('click', function() {
+            const currentUrl = window.location.href;
+            
+            try {
+                if (deviceInfo.isAndroid) {
+                    // Android Chrome intent
+                    const intentUrl = `intent://${window.location.host}${window.location.pathname}${window.location.search}#Intent;scheme=https;package=com.android.chrome;end`;
+                    window.location.href = intentUrl;
+                    
+                    // Fallback after 2 seconds
+                    setTimeout(() => {
+                        if (!document.hidden) {
+                            window.open(currentUrl, '_blank');
+                        }
+                    }, 2000);
+                    
+                } else if (deviceInfo.isIOS) {
+                    // iOS Safari intent
+                    window.location.href = `x-safari-https://${window.location.host}${window.location.pathname}${window.location.search}`;
+                    
+                    // Fallback
+                    setTimeout(() => {
+                        if (!document.hidden) {
+                            window.open(currentUrl, '_blank');
+                        }
+                    }, 2000);
+                    
+                } else {
+                    // Desktop/other fallback
+                    window.open(currentUrl, '_blank');
+                }
+            } catch (error) {
+                // Ultimate fallback
+                window.open(currentUrl, '_blank');
+            }
+            
+            popup.remove();
+        });
+        
+        // Continue in current browser
+        continueBtn.addEventListener('click', function() {
+            popup.remove();
+        });
+        
+        // Touch/click outside to close (mobile-friendly)
+        popup.addEventListener('click', function(e) {
+            if (e.target === popup) {
+                popup.remove();
+            }
+        });
+        
+        // Keyboard accessibility
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && document.getElementById('instagram-popup')) {
+                popup.remove();
+            }
+        });
+        
+        // Auto-focus for accessibility
+        if (!deviceInfo.hasTouch) {
+            setTimeout(() => tryOpenBtn.focus(), 500);
+        }
+        
+        // Auto-remove after 30 seconds to prevent blocking
+        setTimeout(() => {
+            if (document.getElementById('instagram-popup')) {
+                popup.remove();
+            }
+        }, 30000);
+    }
     
-    document.body.appendChild(popup);
-}
-
-// Initialize
-document.addEventListener('DOMContentLoaded', detectInstagram);
+    // Enhanced initialization
+    function initInstagramDetection() {
+        // Skip if already shown or not Instagram
+        if (sessionStorage.getItem('instagram-popup-shown') || 
+            window.location.search.includes('external_browser=true')) {
+            return;
+        }
+        
+        if (detectInstagram()) {
+            // Small delay to ensure page is fully loaded
+            setTimeout(showInstagramInstructions, 1000);
+        }
+    }
+    
+    // Initialize based on document state
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initInstagramDetection);
+    } else {
+        initInstagramDetection();
+    }
+    
+    // Also initialize on page show (back/forward navigation)
+    window.addEventListener('pageshow', function(event) {
+        if (event.persisted) {
+            initInstagramDetection();
+        }
+    });
+    
+})();
