@@ -555,92 +555,413 @@
     }
   }
 
-  // Enhanced table of contents with proper navigation
-  function createTableOfContents(content) {
+ function createTableOfContents(content) {
     const headings = qa('h1, h2, h3, h4, h5, h6', content);
     if (!headings.length) return null;
+
+    // Device detection for optimization
+    const isMobile = () => window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isTablet = () => window.innerWidth > 768 && window.innerWidth <= 1024;
+    const isTouch = () => 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const tocContainer = document.createElement('div');
     tocContainer.className = 'table-of-contents';
     tocContainer.style.display = 'none';
     tocContainer.setAttribute('role', 'navigation');
     tocContainer.setAttribute('aria-label', 'Table of contents');
+    tocContainer.setAttribute('id', 'table-of-contents'); // Add ID for scrolling
+    
+    // Enhanced bilingual title with device-specific sizing
+    const titleText = isMobile() ? 'ਸਮੱਗਰੀ' : 'ਸਮੱਗਰੀ / Contents';
     
     tocContainer.innerHTML = `
-      <div class="toc-header">
-        <h4 class="toc-title">ਸਮੱਗਰੀ / Contents</h4>
-        <button class="toc-collapse" aria-label="Collapse table of contents" aria-expanded="true">−</button>
-      </div>
-      <ul class="toc-list" role="list"></ul>
+        <div class="toc-header">
+            <h4 class="toc-title">${titleText}</h4>
+            <button class="toc-collapse" 
+                    aria-label="Collapse table of contents" 
+                    aria-expanded="true"
+                    type="button">−</button>
+        </div>
+        <ul class="toc-list" role="list"></ul>
     `;
     
     const tocList = tocContainer.querySelector('.toc-list');
+    let activeLink = null;
 
+    // Enhanced heading processing with better ID generation
     headings.forEach((heading, index) => {
-      const headingId = `heading-${index}-${heading.textContent.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, '-')}`;
-      heading.id = headingId;
-      heading.style.scrollMarginTop = '120px';
-      
-      const tocItem = document.createElement('li');
-      tocItem.className = `toc-item toc-level-${heading.tagName.toLowerCase()}`;
-      
-      const tocLink = document.createElement('button');
-      tocLink.textContent = heading.textContent;
-      tocLink.className = 'toc-link';
-      tocLink.setAttribute('aria-label', `Navigate to: ${heading.textContent}`);
-      tocLink.setAttribute('data-target', headingId);
-      
-      // Enhanced navigation with proper scrolling
-      tocLink.addEventListener('click', (e) => {
-        e.preventDefault();
+        // Create unique, SEO-friendly IDs
+        const baseText = heading.textContent
+            .toLowerCase()
+            .replace(/[^\w\s\u0A00-\u0A7F]/g, '') // Support Punjabi characters
+            .replace(/\s+/g, '-')
+            .substring(0, 50); // Limit length for better URLs
         
-        // Remove active states
-        qa('.toc-link').forEach(link => {
-          link.classList.remove('active');
-          link.setAttribute('aria-current', 'false');
-        });
+        const headingId = `heading-${index}-${baseText}`;
+        heading.id = headingId;
         
-        // Add active state
-        tocLink.classList.add('active');
-        tocLink.setAttribute('aria-current', 'page');
+        // Dynamic scroll margin based on device
+        const scrollMargin = isMobile() ? '100px' : isTablet() ? '110px' : '120px';
+        heading.style.scrollMarginTop = scrollMargin;
         
-        // Smooth scroll with proper offset
-        const modalBody = q('.modal-body');
-        if (modalBody && heading) {
-          const headingRect = heading.getBoundingClientRect();
-          const modalRect = modalBody.getBoundingClientRect();
-          const headerHeight = q('.modal-controls-fixed')?.offsetHeight || 80;
-          
-          const targetScrollTop = modalBody.scrollTop + headingRect.top - modalRect.top - headerHeight - 20;
-          
-          modalBody.scrollTo({
-            top: Math.max(0, targetScrollTop),
-            behavior: 'smooth'
-          });
-          
-          // Highlight heading
-          heading.classList.add('toc-target-highlight');
-          setTimeout(() => heading.classList.remove('toc-target-highlight'), 2000);
+        // Enhanced accessibility attributes
+        heading.setAttribute('tabindex', '-1');
+        heading.setAttribute('data-toc-target', 'true');
+        
+        const tocItem = document.createElement('li');
+        tocItem.className = `toc-item toc-level-${heading.tagName.toLowerCase()}`;
+        tocItem.setAttribute('role', 'none');
+        
+        const tocLink = document.createElement('button');
+        tocLink.textContent = heading.textContent;
+        tocLink.className = 'toc-link';
+        tocLink.type = 'button';
+        tocLink.setAttribute('aria-label', `Navigate to: ${heading.textContent}`);
+        tocLink.setAttribute('data-target', headingId);
+        tocLink.setAttribute('role', 'link');
+        
+        // Enhanced click/touch handler with device-specific optimizations
+        const handleNavigation = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Prevent double-clicks on touch devices
+            if (isTouch() && tocLink.dataset.clicking === 'true') return;
+            if (isTouch()) {
+                tocLink.dataset.clicking = 'true';
+                setTimeout(() => delete tocLink.dataset.clicking, 500);
+            }
+            
+            // Remove active states
+            qa('.toc-link').forEach(link => {
+                link.classList.remove('active');
+                link.setAttribute('aria-current', 'false');
+            });
+            
+            // Add active state
+            tocLink.classList.add('active');
+            tocLink.setAttribute('aria-current', 'page');
+            activeLink = tocLink;
+            
+            // Enhanced smooth scrolling with device-specific behavior
+            const modalBody = q('.modal-body') || document.documentElement;
+            const target = document.getElementById(headingId);
+            
+            if (modalBody && target) {
+                const rect = target.getBoundingClientRect();
+                const modalRect = modalBody.getBoundingClientRect();
+                const headerHeight = q('.modal-controls-fixed')?.offsetHeight || 
+                                   q('.navbar')?.offsetHeight || 
+                                   (isMobile() ? 60 : 80);
+                
+                // Device-specific offset calculations
+                const extraOffset = isMobile() ? 20 : isTablet() ? 25 : 30;
+                let targetScrollTop;
+                
+                if (modalBody === document.documentElement) {
+                    // Page-level scrolling
+                    targetScrollTop = window.pageYOffset + rect.top - headerHeight - extraOffset;
+                } else {
+                    // Modal scrolling
+                    targetScrollTop = modalBody.scrollTop + rect.top - modalRect.top - headerHeight - extraOffset;
+                }
+                
+                // Enhanced smooth scrolling with fallbacks
+                const scrollToTarget = (element, top) => {
+                    if ('scrollBehavior' in element.style && !prefersReducedMotion()) {
+                        element.scrollTo({
+                            top: Math.max(0, top),
+                            behavior: 'smooth'
+                        });
+                    } else {
+                        // Fallback for older browsers or reduced motion preference
+                        element.scrollTop = Math.max(0, top);
+                    }
+                };
+                
+                scrollToTarget(modalBody, targetScrollTop);
+                
+                // Enhanced target highlighting with device-specific timing
+                target.classList.add('toc-target-highlight');
+                const highlightDuration = isMobile() ? 1500 : 2000;
+                setTimeout(() => target.classList.remove('toc-target-highlight'), highlightDuration);
+                
+                // Announce to screen readers
+                const announcement = document.createElement('div');
+                announcement.setAttribute('aria-live', 'polite');
+                announcement.setAttribute('aria-atomic', 'true');
+                announcement.className = 'sr-only';
+                announcement.textContent = `Navigated to: ${heading.textContent}`;
+                document.body.appendChild(announcement);
+                setTimeout(() => document.body.removeChild(announcement), 1000);
+                
+                // Auto-collapse on mobile after navigation
+                if (isMobile()) {
+                    setTimeout(() => {
+                        const collapseBtn = tocContainer.querySelector('.toc-collapse');
+                        if (collapseBtn && collapseBtn.getAttribute('aria-expanded') === 'true') {
+                            collapseBtn.click();
+                        }
+                    }, 1000);
+                }
+            }
+        };
+        
+        // Multi-event support for cross-device compatibility
+        tocLink.addEventListener('click', handleNavigation);
+        
+        // Touch-specific optimizations
+        if (isTouch()) {
+            tocLink.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                handleNavigation(e);
+            });
+            
+            // Prevent touch highlighting
+            tocLink.style.webkitTouchCallout = 'none';
+            tocLink.style.webkitUserSelect = 'none';
         }
-      });
+        
+        // Keyboard navigation
+        tocLink.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleNavigation(e);
+            }
+        });
 
-      tocItem.appendChild(tocLink);
-      tocList.appendChild(tocItem);
+        tocItem.appendChild(tocLink);
+        tocList.appendChild(tocItem);
     });
 
-    // Collapse functionality
+    // Enhanced collapse functionality with improved accessibility
     const collapseBtn = tocContainer.querySelector('.toc-collapse');
-    collapseBtn.addEventListener('click', function() {
-      const isExpanded = this.getAttribute('aria-expanded') === 'true';
-      const newState = !isExpanded;
-      
-      tocList.style.display = newState ? 'block' : 'none';
-      this.textContent = newState ? '−' : '+';
-      this.setAttribute('aria-expanded', newState.toString());
+    const handleCollapse = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const isExpanded = this.getAttribute('aria-expanded') === 'true';
+        const newState = !isExpanded;
+        
+        // Enhanced animation for better UX
+        if (newState) {
+            // Show
+            tocList.style.display = 'block';
+            tocList.style.maxHeight = '0';
+            tocList.style.opacity = '0';
+            tocList.style.transform = 'translateY(-10px)';
+            
+            requestAnimationFrame(() => {
+                tocList.style.transition = prefersReducedMotion() ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                tocList.style.maxHeight = isMobile() ? '60vh' : '70vh';
+                tocList.style.opacity = '1';
+                tocList.style.transform = 'translateY(0)';
+            });
+        } else {
+            // Hide
+            tocList.style.transition = prefersReducedMotion() ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+            tocList.style.maxHeight = '0';
+            tocList.style.opacity = '0';
+            tocList.style.transform = 'translateY(-10px)';
+            
+            setTimeout(() => {
+                tocList.style.display = 'none';
+            }, prefersReducedMotion() ? 0 : 300);
+        }
+        
+        // Update button state
+        this.textContent = newState ? '−' : '+';
+        this.setAttribute('aria-expanded', newState.toString());
+        this.setAttribute('aria-label', newState ? 'Collapse table of contents' : 'Expand table of contents');
+        
+        // Store state in localStorage
+        try {
+            localStorage.setItem('toc-expanded', newState.toString());
+        } catch (e) {
+            // Ignore localStorage errors
+        }
+    };
+    
+    collapseBtn.addEventListener('click', handleCollapse);
+    
+    // Touch support for collapse button
+    if (isTouch()) {
+        collapseBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            handleCollapse.call(collapseBtn, e);
+        });
+    }
+    
+    // Keyboard support for collapse button
+    collapseBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleCollapse.call(collapseBtn, e);
+        }
     });
+
+    // Restore previous state
+    try {
+        const savedState = localStorage.getItem('toc-expanded');
+        if (savedState === 'false') {
+            collapseBtn.click();
+        }
+    } catch (e) {
+        // Ignore localStorage errors
+    }
+
+    // Enhanced scroll spy for active link highlighting
+    let scrollTimeout;
+    const updateActiveLink = () => {
+        if (scrollTimeout) {
+            cancelAnimationFrame(scrollTimeout);
+        }
+        
+        scrollTimeout = requestAnimationFrame(() => {
+            const scrollContainer = q('.modal-body') || window;
+            const scrollTop = scrollContainer.scrollY || scrollContainer.scrollTop || 0;
+            const offset = isMobile() ? 150 : isTablet() ? 160 : 180;
+            
+            let currentHeading = null;
+            let minDistance = Infinity;
+            
+            headings.forEach(heading => {
+                const rect = heading.getBoundingClientRect();
+                const distance = Math.abs(rect.top - offset);
+                
+                if (rect.top <= offset && distance < minDistance) {
+                    minDistance = distance;
+                    currentHeading = heading;
+                }
+            });
+            
+            if (currentHeading && currentHeading.id) {
+                const targetLink = tocContainer.querySelector(`[data-target="${currentHeading.id}"]`);
+                if (targetLink && targetLink !== activeLink) {
+                    qa('.toc-link').forEach(link => {
+                        link.classList.remove('active');
+                        link.setAttribute('aria-current', 'false');
+                    });
+                    
+                    targetLink.classList.add('active');
+                    targetLink.setAttribute('aria-current', 'page');
+                    activeLink = targetLink;
+                }
+            }
+        });
+    };
+
+    // Attach scroll listener with throttling
+    const scrollContainer = q('.modal-body') || window;
+    let isScrolling = false;
+    
+    const scrollHandler = () => {
+        if (!isScrolling) {
+            requestAnimationFrame(() => {
+                updateActiveLink();
+                isScrolling = false;
+            });
+            isScrolling = true;
+        }
+    };
+    
+    scrollContainer.addEventListener('scroll', scrollHandler, { passive: true });
+
+    // Enhanced resize handler
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            // Update scroll margins on resize
+            headings.forEach(heading => {
+                const scrollMargin = isMobile() ? '100px' : isTablet() ? '110px' : '120px';
+                heading.style.scrollMarginTop = scrollMargin;
+            });
+            
+            // Update title text on resize
+            const title = tocContainer.querySelector('.toc-title');
+            if (title) {
+                title.textContent = isMobile() ? 'ਸਮੱਗਰੀ' : 'ਸਮੱਗਰੀ / Contents';
+            }
+        }, 150);
+    });
+
+    // Cleanup function for memory management
+    tocContainer._cleanup = () => {
+        scrollContainer.removeEventListener('scroll', scrollHandler);
+        window.removeEventListener('resize', resizeTimeout);
+        if (scrollTimeout) cancelAnimationFrame(scrollTimeout);
+        if (resizeTimeout) clearTimeout(resizeTimeout);
+    };
 
     return tocContainer;
-  }
+}
+
+// Enhanced utility function for better heading detection
+function generateTOCForContent(contentSelector = '.modal-body, .content, .post-content, main, article') {
+    const content = q(contentSelector);
+    if (!content) return null;
+    
+    const toc = createTableOfContents(content);
+    if (toc) {
+        // Auto-insert TOC if container exists
+        const tocContainer = q('.toc-container, .table-of-contents-container');
+        if (tocContainer) {
+            tocContainer.appendChild(toc);
+            toc.style.display = 'block';
+        }
+    }
+    
+    return toc;
+}
+
+// Enhanced TOC scroll-to functionality
+function scrollToTableOfContents() {
+    const tocContainer = q('#table-of-contents, .table-of-contents');
+    const modalBody = q('.modal-body') || document.documentElement;
+    const isMobile = window.innerWidth <= 768;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    
+    if (!tocContainer || !modalBody) return;
+    
+    // Calculate scroll position
+    const tocRect = tocContainer.getBoundingClientRect();
+    const modalRect = modalBody.getBoundingClientRect();
+    const headerHeight = q('.modal-controls-fixed')?.offsetHeight || (isMobile ? 60 : 80);
+    const extraOffset = isMobile ? 20 : 30;
+    
+    let targetScrollTop;
+    
+    if (modalBody === document.documentElement) {
+        // Page-level scrolling
+        targetScrollTop = window.pageYOffset + tocRect.top - headerHeight - extraOffset;
+    } else {
+        // Modal scrolling
+        targetScrollTop = modalBody.scrollTop + tocRect.top - modalRect.top - headerHeight - extraOffset;
+    }
+    
+    // Smooth scroll with fallbacks
+    if ('scrollBehavior' in modalBody.style && !prefersReducedMotion) {
+        modalBody.scrollTo({
+            top: Math.max(0, targetScrollTop),
+            behavior: 'smooth'
+        });
+    } else {
+        // Fallback for older browsers
+        modalBody.scrollTop = Math.max(0, targetScrollTop);
+    }
+    
+    // Add highlight effect
+    tocContainer.classList.add('scroll-to-view');
+    setTimeout(() => tocContainer.classList.remove('scroll-to-view'), 2500);
+    
+    // Focus management for accessibility
+    const firstTocLink = tocContainer.querySelector('.toc-link');
+    if (firstTocLink) {
+        setTimeout(() => firstTocLink.focus(), 300);
+    }
+}
 
   // Enhanced share modal with horizontal buttons
   function showCustomShareModal({ title, text, url, image }) {
@@ -1143,7 +1464,8 @@
     }
   }
 
-  function createModalControls(title, articleId, image) {
+  // Enhanced modal controls with TOC scroll functionality
+function createModalControls(title, articleId, image) {
     const controls = document.createElement('div');
     controls.className = 'modal-controls-fixed';
     
@@ -1158,68 +1480,136 @@
       </div>
     `;
     
-    // Event listeners
+    // Enhanced event listeners with TOC scroll functionality
     qa('.modal-control-btn', controls).forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const action = btn.dataset.action;
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const action = btn.dataset.action;
+            const isMobile = window.innerWidth <= 768;
+            const isTouch = 'ontouchstart' in window;
+            
+            // Add click feedback
+            btn.classList.add('clicked');
+            setTimeout(() => btn.classList.remove('clicked'), 150);
+            
+            switch(action) {
+                case 'tts':
+                    const ttsControls = q('.tts-controls');
+                    if (ttsControls) {
+                        const isVisible = ttsControls.style.display === 'flex';
+                        ttsControls.style.display = isVisible ? 'none' : 'flex';
+                        btn.classList.toggle('active', !isVisible);
+                        
+                        if (!isVisible) {
+                            const playBtn = ttsControls.querySelector('.tts-play');
+                            setTimeout(() => playBtn?.focus(), 300);
+                        }
+                    }
+                    break;
+                    
+                case 'toc':
+                    const tocContainer = q('.table-of-contents, #table-of-contents');
+                    if (tocContainer) {
+                        const isVisible = tocContainer.style.display !== 'none';
+                        
+                        if (isVisible) {
+                            // Hide TOC
+                            tocContainer.style.display = 'none';
+                            btn.classList.remove('active');
+                            btn.innerHTML = '📋';
+                            btn.setAttribute('aria-label', 'Show table of contents');
+                        } else {
+                            // Show TOC and scroll to it
+                            tocContainer.style.display = 'block';
+                            btn.classList.add('active');
+                            btn.innerHTML = '✕';
+                            btn.setAttribute('aria-label', 'Hide table of contents');
+                            
+                            // Scroll to TOC after a brief delay to ensure it's rendered
+                            setTimeout(() => {
+                                scrollToTableOfContents();
+                            }, 100);
+                        }
+                        
+                        // Store state for consistency
+                        try {
+                            localStorage.setItem('toc-visible', (!isVisible).toString());
+                        } catch (e) {
+                            // Ignore localStorage errors
+                        }
+                    }
+                    break;
+                    
+                case 'share':
+                    const url = `https://www.pattibytes.com/places/#${encodeURIComponent(articleId)}`;
+                    const card = document.getElementById(articleId);
+                    const text = (card?.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 200);
+                    showCustomShareModal({ title, text, url, image });
+                    break;
+                    
+                case 'copy':
+                    try {
+                        const url = `https://www.pattibytes.com/places/#${encodeURIComponent(articleId)}`;
+                        await copyToClipboard(url);
+                        btn.classList.add('copied');
+                        btn.innerHTML = '✓';
+                        showNotification('Link copied! / ਲਿੰਕ ਕਾਪੀ ਹੋਇਆ!', 'success');
+                        setTimeout(() => {
+                            btn.classList.remove('copied');
+                            btn.innerHTML = '🔗';
+                        }, 2000);
+                    } catch (error) {
+                        ErrorHandler.show('Copy failed', error.message);
+                    }
+                    break;
+                    
+                case 'close':
+                    closeModal(true);
+                    break;
+            }
+        });
         
-        switch(action) {
-          case 'tts':
-            const ttsControls = q('.tts-controls');
-            if (ttsControls) {
-              const isVisible = ttsControls.style.display === 'flex';
-              ttsControls.style.display = isVisible ? 'none' : 'flex';
-              btn.classList.toggle('active', !isVisible);
-              
-              if (!isVisible) {
-                const playBtn = ttsControls.querySelector('.tts-play');
-                setTimeout(() => playBtn?.focus(), 300);
-              }
-            }
-            break;
+        // Enhanced touch support
+        if ('ontouchstart' in window) {
+            btn.addEventListener('touchstart', (e) => {
+                btn.classList.add('touch-active');
+            });
             
-          case 'toc':
-            const tocContainer = q('.table-of-contents');
-            if (tocContainer) {
-              const isVisible = tocContainer.style.display !== 'none';
-              tocContainer.style.display = isVisible ? 'none' : 'block';
-              btn.classList.toggle('active', !isVisible);
-              btn.innerHTML = isVisible ? '📋' : '✕';
-            }
-            break;
+            btn.addEventListener('touchend', (e) => {
+                btn.classList.remove('touch-active');
+            });
             
-          case 'share':
-            const url = `https://www.pattibytes.com/places/#${encodeURIComponent(articleId)}`;
-            const card = document.getElementById(articleId);
-            const text = (card?.dataset.preview || 'ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ').slice(0, 200);
-            showCustomShareModal({ title, text, url, image });
-            break;
-            
-          case 'copy':
-            try {
-              const url = `https://www.pattibytes.com/places/#${encodeURIComponent(articleId)}`;
-              await copyToClipboard(url);
-              btn.classList.add('copied');
-              btn.innerHTML = '✓';
-              showNotification('Link copied! / ਲਿੰਕ ਕਾਪੀ ਹੋਇਆ!', 'success');
-              setTimeout(() => {
-                btn.classList.remove('copied');
-                btn.innerHTML = '🔗';
-              }, 2000);
-            } catch (error) {
-              ErrorHandler.show('Copy failed', error.message);
-            }
-            break;
-            
-          case 'close':
-            closeModal(true);
-            break;
+            btn.addEventListener('touchcancel', (e) => {
+                btn.classList.remove('touch-active');
+            });
         }
-      });
+        
+        // Enhanced keyboard support
+        btn.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                btn.click();
+            }
+        });
     });
     
+    // Restore TOC state on modal open
+    try {
+        const tocVisible = localStorage.getItem('toc-visible');
+        if (tocVisible === 'true') {
+            setTimeout(() => {
+                const tocBtn = controls.querySelector('[data-action="toc"]');
+                if (tocBtn) tocBtn.click();
+            }, 500);
+        }
+    } catch (e) {
+        // Ignore localStorage errors
+    }
+    
     return controls;
-  }
+}
 
   function createRelatedContent(activeCard) {
     const existing = q('.modal-related');
