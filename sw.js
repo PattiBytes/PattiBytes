@@ -1,7 +1,7 @@
 const CACHE_NAME = 'pattibytes-v6';
 const APP_VERSION = '2.0.0';
 
-// Website assets
+// Website assets (browser pages)
 const WEBSITE_ASSETS = [
   '/',
   '/index.html',
@@ -15,7 +15,7 @@ const WEBSITE_ASSETS = [
   '/script.js'
 ];
 
-// App assets  
+// App assets (app-only pages)
 const APP_ASSETS = [
   '/app/',
   '/app/index.html',
@@ -49,7 +49,6 @@ const SHARED_ASSETS = [
 // Install - cache everything
 self.addEventListener('install', event => {
   console.log('[SW] Installing service worker...');
-  
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
@@ -64,47 +63,34 @@ self.addEventListener('install', event => {
 // Activate - clean old caches
 self.addEventListener('activate', event => {
   console.log('[SW] Activating service worker...');
-  
   event.waitUntil(
     caches.keys()
-      .then(cacheNames => {
-        return Promise.all(
-          cacheNames
-            .filter(cacheName => cacheName !== CACHE_NAME)
-            .map(cacheName => caches.delete(cacheName))
-        );
-      })
+      .then(cacheNames => Promise.all(
+        cacheNames.filter(n => n !== CACHE_NAME).map(n => caches.delete(n))
+      ))
       .then(() => self.clients.claim())
   );
 });
 
-// Fetch - smart routing
+// Fetch - smart routing (no redirects)
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
-  
-  // Skip non-GET requests
-  if (event.request.method !== 'GET') {
-    return;
-  }
-  
-  // Skip external requests
-  if (url.origin !== location.origin) {
-    return;
-  }
-  
-  // Handle app routes
+
+  // Skip non-GET and external
+  if (event.request.method !== 'GET') return;
+  if (url.origin !== location.origin) return;
+
   if (url.pathname.startsWith('/app/')) {
     event.respondWith(handleAppRoute(event.request));
     return;
   }
-  
-  // Handle website routes
+
   if (isWebsiteRoute(url.pathname)) {
     event.respondWith(handleWebsiteRoute(event.request));
     return;
   }
-  
-  // Handle shared assets
+
+  // Shared or other assets
   event.respondWith(handleAssetRoute(event.request));
 });
 
@@ -115,122 +101,75 @@ function isWebsiteRoute(pathname) {
 
 async function handleAppRoute(request) {
   const url = new URL(request.url);
-  
   try {
-    // App-first strategy: try cache first for better performance
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      // Update cache in background
-      fetch(request)
-        .then(response => {
-          if (response.ok) {
-            caches.open(CACHE_NAME)
-              .then(cache => cache.put(request, response.clone()));
-          }
-        })
-        .catch(() => {});
-      
-      return cachedResponse;
+    // Cache-first for app shell speed; update in background
+    const cached = await caches.match(request);
+    if (cached) {
+      fetch(request).then(r => {
+        if (r.ok) caches.open(CACHE_NAME).then(c => c.put(request, r.clone()));
+      }).catch(() => {});
+      return cached;
     }
-    
-    // Try network
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
-    }
-    
-    return networkResponse;
-    
-  } catch (error) {
-    console.log('[SW] App route failed:', url.pathname);
-    
-    // Return app offline page
+    const net = await fetch(request);
+    if (net.ok) (await caches.open(CACHE_NAME)).put(request, net.clone());
+    return net;
+  } catch (err) {
+    // App offline fallback
     if (url.pathname.endsWith('/') || url.pathname.endsWith('.html')) {
-      return caches.match('/app/offline.html') || 
-             new Response(`
-               <!DOCTYPE html>
-               <html><head><title>App Offline</title></head>
-               <body style="font-family:system-ui;text-align:center;padding:2rem;">
-                 <h1>📱 ऐप ऑफलाइन</h1>
-                 <p>इंटरनेट कनेक्शन चेक करें</p>
-                 <button onclick="location.reload()">रिफ्रेश करें</button>
-               </body></html>
-             `, { headers: { 'Content-Type': 'text/html' }, status: 503 });
+      return (await caches.match('/app/offline.html')) || new Response(`
+        <!DOCTYPE html><html><head><meta charset="utf-8"><title>App Offline</title></head>
+        <body style="font-family:system-ui;text-align:center;padding:2rem;">
+          <h1>📱 App Offline</h1>
+          <p>Check connection and retry</p>
+          <button onclick="location.reload()">Refresh</button>
+        </body></html>
+      `, { headers: { 'Content-Type': 'text/html' }, status: 503 });
     }
-    
     return new Response('App resource not available', { status: 503 });
   }
 }
 
 async function handleWebsiteRoute(request) {
   try {
-    // Website: network-first strategy
-    const networkResponse = await fetch(request);
-    
-    if (networkResponse.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
-    }
-    
-    return networkResponse;
-    
-  } catch (error) {
-    console.log('[SW] Website route failed, trying cache');
-    
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    
-    // Website offline page
+    // Network-first for live content
+    const net = await fetch(request);
+    if (net.ok) (await caches.open(CACHE_NAME)).put(request, net.clone());
+    return net;
+  } catch (err) {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+
+    // Simple offline page for website
     return new Response(`
-      <!DOCTYPE html>
-      <html lang="pa">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>ऑफलाइन - पट्टी बाइट्स</title>
-        <style>
-          body { font-family: system-ui; text-align: center; padding: 2rem; background: #f8fafc; }
-          .offline { max-width: 400px; margin: 2rem auto; }
-          h1 { color: #1f2937; margin-bottom: 1rem; }
-          p { color: #6b7280; margin-bottom: 2rem; }
-          button { background: #2563eb; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; }
-        </style>
-      </head>
-      <body>
-        <div class="offline">
-          <h1>🌐 ऑफलाइन</h1>
-          <p>इंटरनेट कनेक्शन चेक करें और फिर से कोशिश करें</p>
-          <button onclick="location.reload()">रिफ्रेश करें</button>
-          <br><br>
-          <a href="/app/" style="color: #2563eb;">ऐप मोड देखें</a>
-        </div>
-      </body>
-      </html>
-    `, {
-      headers: { 'Content-Type': 'text/html' },
-      status: 503
-    });
+      <!DOCTYPE html><html lang="pa"><head><meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Offline - Patti Bytes</title>
+      <style>
+        body{font-family:system-ui;text-align:center;padding:2rem;background:#f8fafc}
+        .box{max-width:420px;margin:2rem auto}
+        h1{color:#1f2937;margin-bottom:1rem}
+        p{color:#6b7280;margin-bottom:1.5rem}
+        button{background:#2563eb;color:#fff;border:none;padding:.75rem 1.5rem;border-radius:8px;cursor:pointer}
+        a{color:#2563eb;display:inline-block;margin-top:1rem}
+      </style></head>
+      <body><div class="box">
+        <h1>🌐 Offline</h1>
+        <p>ਇੰਟਰਨੈਟ ਕਨੈਕਸ਼ਨ ਚੈਕ ਕਰੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ</p>
+        <button onclick="location.reload()">Refresh</button>
+        <a href="/app/">Try App</a>
+      </div></body></html>
+    `, { headers: { 'Content-Type': 'text/html' }, status: 503 });
   }
 }
 
 async function handleAssetRoute(request) {
-  // Assets: cache-first
-  const cachedResponse = await caches.match(request);
-  if (cachedResponse) {
-    return cachedResponse;
-  }
-  
+  const cached = await caches.match(request);
+  if (cached) return cached;
   try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
+    const net = await fetch(request);
+    if (net.ok) (await caches.open(CACHE_NAME)).put(request, net.clone());
+    return net;
+  } catch {
     return new Response('Asset not available', { status: 404 });
   }
 }
