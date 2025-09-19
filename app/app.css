@@ -288,3 +288,154 @@ body {
         --border-color: #374151;
     }
 }
+/* Mode Toggle Styles */
+.mode-toggle {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 16px;
+    margin: -1rem -1rem 2rem -1rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.mode-toggle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    pointer-events: none;
+}
+
+.mode-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+}
+
+.mode-icon {
+    font-size: 20px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+.mode-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
+.mode-subtitle {
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+.website-link {
+    color: white;
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.website-link:hover {
+    text-decoration: none;
+    opacity: 0.8;
+}
+
+/* Hide mode toggle when installed as PWA */
+@media (display-mode: standalone) {
+    .mode-toggle {
+        display: none;
+    }
+}
+
+/* Additional styles for activity feed */
+.activity-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.activity-item:last-child {
+    border-bottom: none;
+}
+
+.activity-icon {
+    font-size: 18px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-variant);
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.activity-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.activity-text {
+    font-weight: 500;
+    margin-bottom: 2px;
+    color: var(--text-primary);
+}
+
+.activity-time {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.preview-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+}
+
+.preview-item:last-child {
+    border-bottom: none;
+}
+
+.preview-title {
+    flex: 1;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.preview-time, .preview-rating, .preview-price {
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-left: 8px;
+}
+
+.preview-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.preview-stat {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+}
+
+.preview-label {
+    color: var(--text-secondary);
+}
+
+.preview-value {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
