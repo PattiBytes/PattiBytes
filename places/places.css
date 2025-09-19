@@ -952,19 +952,295 @@ body {
   }
 }
 
-/* Loading States */
+/* Enhanced Loading States - Modern & Performance Optimized */
+
+/* Base Loading State */
 .place-card.loading {
   pointer-events: none;
-  opacity: 0.7;
+  opacity: 0.8;
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  cursor: not-allowed;
+  transform: translateZ(0); /* Enable hardware acceleration */
+  will-change: opacity; /* Optimize for animation */
 }
 
+/* Enhanced Pulse Animation with GPU Acceleration */
 .place-card.loading * {
-  animation: pulse 1.5s ease-in-out infinite alternate;
+  animation: modernPulse 2s ease-in-out infinite;
+  transform: translateZ(0); /* Hardware acceleration */
 }
 
-@keyframes pulse {
-  from { opacity: 0.6; }
-  to { opacity: 1; }
+@keyframes modernPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+/* Skeleton Loading Effect */
+.place-card.loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.2) 20%,
+    rgba(255, 255, 255, 0.5) 60%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: shimmer 2.5s infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Advanced Skeleton Placeholder */
+.place-card.loading .place-image,
+.place-card.loading .place-title,
+.place-card.loading .place-description,
+.place-card.loading .place-rating {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e0e0 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonWave 2s infinite;
+  color: transparent !important;
+  border-radius: 4px;
+}
+
+@keyframes skeletonWave {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Specific Element Loading States */
+.place-card.loading .place-image {
+  background: linear-gradient(
+    45deg,
+    #f0f0f0 0%,
+    #e8e8e8 25%,
+    #f0f0f0 50%,
+    #e8e8e8 75%,
+    #f0f0f0 100%
+  );
+  background-size: 400% 400%;
+  animation: imageShimmer 3s ease-in-out infinite;
+  min-height: 200px;
+}
+
+@keyframes imageShimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Text Loading Placeholders */
+.place-card.loading .place-title {
+  height: 24px;
+  width: 80%;
+  margin-bottom: 12px;
+}
+
+.place-card.loading .place-description {
+  height: 16px;
+  width: 95%;
+  margin-bottom: 8px;
+}
+
+.place-card.loading .place-description:nth-of-type(2) {
+  width: 70%;
+}
+
+/* Rating Stars Loading */
+.place-card.loading .place-rating {
+  height: 20px;
+  width: 120px;
+  border-radius: 10px;
+}
+
+/* Modern Bounce Loading Effect */
+.place-card.loading-bounce {
+  animation: cardBounce 1.5s ease-in-out infinite;
+}
+
+@keyframes cardBounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-10px) scale(1.02);
+  }
+  60% {
+    transform: translateY(-5px) scale(1.01);
+  }
+}
+
+/* Gradient Loading Background */
+.place-card.loading-gradient {
+  background: linear-gradient(
+    135deg,
+    #f5f7fa 0%,
+    #c3cfe2 50%,
+    #f5f7fa 100%
+  );
+  background-size: 400% 400%;
+  animation: gradientShift 3s ease infinite;
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Staggered Loading Animation */
+.place-card.loading-stagger .place-image {
+  animation-delay: 0ms;
+}
+
+.place-card.loading-stagger .place-title {
+  animation-delay: 200ms;
+}
+
+.place-card.loading-stagger .place-description {
+  animation-delay: 400ms;
+}
+
+.place-card.loading-stagger .place-rating {
+  animation-delay: 600ms;
+}
+
+/* Loading Spinner Overlay */
+.place-card.loading-spinner::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-top: 3px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  z-index: 2;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Performance Optimizations */
+.place-card.loading,
+.place-card.loading *,
+.place-card.loading::before,
+.place-card.loading::after {
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Responsive Loading States */
+@media (max-width: 768px) {
+  .place-card.loading {
+    animation-duration: 1.5s; /* Faster on mobile */
+  }
+  
+  .place-card.loading::before {
+    animation-duration: 2s; /* Quicker shimmer */
+  }
+}
+
+/* Dark Theme Loading */
+@media (prefers-color-scheme: dark) {
+  .place-card.loading .place-image,
+  .place-card.loading .place-title,
+  .place-card.loading .place-description,
+  .place-card.loading .place-rating {
+    background: linear-gradient(
+      90deg,
+      #2a2a2a 25%,
+      #3a3a3a 50%,
+      #2a2a2a 75%
+    );
+  }
+  
+  .place-card.loading::before {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.05) 20%,
+      rgba(255, 255, 255, 0.1) 60%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .place-card.loading *,
+  .place-card.loading::before,
+  .place-card.loading::after {
+    animation: none;
+  }
+  
+  .place-card.loading {
+    opacity: 0.6;
+  }
+  
+  .place-card.loading .place-image,
+  .place-card.loading .place-title,
+  .place-card.loading .place-description,
+  .place-card.loading .place-rating {
+    background: #f0f0f0;
+    animation: none;
+  }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+  .place-card.loading {
+    border: 2px dashed #000;
+  }
+  
+  .place-card.loading .place-image,
+  .place-card.loading .place-title,
+  .place-card.loading .place-description,
+  .place-card.loading .place-rating {
+    background: repeating-linear-gradient(
+      45deg,
+      #ccc,
+      #ccc 10px,
+      #eee 10px,
+      #eee 20px
+    );
+  }
+}
+
+/* Loading State Combinations */
+.place-card.loading.premium {
+  border: 2px solid gold;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+.place-card.loading.error {
+  border: 2px solid #ff4757;
+  background: rgba(255, 71, 87, 0.05);
+}
+
+.place-card.loading.success {
+  border: 2px solid #2ed573;
+  background: rgba(46, 213, 115, 0.05);
 }
 
 /* Enhanced Full-Screen Modal System */
@@ -1090,70 +1366,416 @@ body {
   box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.25);
 }
 
-/* Enhanced TOC Button with Scroll Indicator */
+/* Enhanced TOC Button with Modern Cross-Device Support */
 .toc-toggle-btn {
-  background: var(--gradient-info);
+  /* Base styles with modern gradient and glassmorphism */
+  background: linear-gradient(135deg, 
+    rgba(59, 130, 246, 0.8) 0%, 
+    rgba(99, 102, 241, 0.9) 50%, 
+    rgba(139, 92, 246, 0.8) 100%
+  );
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: #fff;
   position: relative;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  overflow: hidden;
+  
+  /* Performance optimizations */
+  will-change: transform, box-shadow;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  
+  /* Smooth transitions using GPU acceleration */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Modern box shadow with depth */
+  box-shadow: 
+    0 4px 15px rgba(59, 130, 246, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.toc-toggle-btn::after {
+/* Enhanced pseudo-element with ripple effect */
+.toc-toggle-btn::before {
   content: '';
   position: absolute;
   top: 50%;
   left: 50%;
   width: 0;
   height: 0;
-  border: 2px solid transparent;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
   border-radius: 50%;
-  transform: translate(-50%, -50%);
-  transition: all 0.3s ease;
-  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%) scale(0);
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  pointer-events: none;
 }
 
+/* Modern scroll indicator */
+.toc-toggle-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.6;
+}
+
+/* Hover states with modern micro-interactions */
+.toc-toggle-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 
+    0 8px 25px rgba(59, 130, 246, 0.4),
+    0 4px 10px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  
+  background: linear-gradient(135deg, 
+    rgba(59, 130, 246, 0.9) 0%, 
+    rgba(99, 102, 241, 1) 50%, 
+    rgba(139, 92, 246, 0.9) 100%
+  );
+}
+
+.toc-toggle-btn:hover::before {
+  width: 120%;
+  height: 120%;
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0.8;
+}
+
+.toc-toggle-btn:hover::after {
+  width: 12px;
+  height: 12px;
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* Active state with enhanced feedback */
 .toc-toggle-btn.active {
-  background: var(--gradient-warning);
-  animation: tocButtonPulse 2s ease-in-out infinite;
+  background: linear-gradient(135deg, 
+    rgba(245, 158, 11, 0.8) 0%, 
+    rgba(251, 146, 60, 0.9) 50%, 
+    rgba(249, 115, 22, 0.8) 100%
+  );
+  animation: modernTocPulse 2s ease-in-out infinite;
+  transform: translateY(-1px);
 }
 
 .toc-toggle-btn.active::after {
-  width: 80%;
-  height: 80%;
-  border-color: rgba(255, 255, 255, 0.5);
+  width: 16px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  animation: rotateIndicator 3s linear infinite;
 }
 
-@keyframes tocButtonPulse {
-  0%, 100% { box-shadow: var(--shadow-medium); }
-  50% { box-shadow: 0 0 20px rgba(237, 137, 54, 0.8); }
+/* Modern pulsing animation with better performance */
+@keyframes modernTocPulse {
+  0%, 100% { 
+    box-shadow: 
+      0 4px 15px rgba(245, 158, 11, 0.3),
+      0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  50% { 
+    box-shadow: 
+      0 8px 30px rgba(245, 158, 11, 0.6),
+      0 4px 15px rgba(245, 158, 11, 0.4),
+      0 0 20px rgba(245, 158, 11, 0.3);
+  }
 }
 
-/* Individual button styles */
+@keyframes rotateIndicator {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Enhanced TTS Button with Modern Glassmorphism */
 .tts-toggle-btn {
-  background: var(--gradient-primary);
+  background: linear-gradient(135deg, 
+    rgba(16, 185, 129, 0.8) 0%, 
+    rgba(5, 150, 105, 0.9) 50%, 
+    rgba(4, 120, 87, 0.8) 100%
+  );
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: #fff;
+  position: relative;
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.tts-toggle-btn::before {
+  content: '🔊';
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  transform: translateY(-50%);
+  font-size: 16px;
+  transition: all 0.3s ease;
+}
+
+.tts-toggle-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 
+    0 8px 25px rgba(16, 185, 129, 0.4),
+    0 4px 10px rgba(0, 0, 0, 0.15);
 }
 
 .tts-toggle-btn.active {
-  background: var(--gradient-secondary);
+  background: linear-gradient(135deg, 
+    rgba(239, 68, 68, 0.8) 0%, 
+    rgba(220, 38, 38, 0.9) 50%, 
+    rgba(185, 28, 28, 0.8) 100%
+  );
+  animation: ttsActive 1.5s ease-in-out infinite alternate;
 }
 
+.tts-toggle-btn.active::before {
+  content: '⏸️';
+  animation: bounce 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes ttsActive {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.02); }
+}
+
+@keyframes bounce {
+  0% { transform: translateY(-50%) scale(1); }
+  100% { transform: translateY(-50%) scale(1.1); }
+}
+
+/* Modern Modal Buttons with Enhanced States */
 .modal-share-btn {
-  background: linear-gradient(135deg, #ed64a6 0%, #d53f8c 100%);
+  background: linear-gradient(135deg, 
+    rgba(236, 72, 153, 0.8) 0%, 
+    rgba(219, 39, 119, 0.9) 50%, 
+    rgba(190, 24, 93, 0.8) 100%
+  );
   color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-weight: 600;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-share-btn::before {
+  content: '📤';
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+.modal-share-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(236, 72, 153, 0.4);
+  background: linear-gradient(135deg, 
+    rgba(236, 72, 153, 0.9) 0%, 
+    rgba(219, 39, 119, 1) 50%, 
+    rgba(190, 24, 93, 0.9) 100%
+  );
 }
 
 .modal-link-btn {
-  background: var(--gradient-success);
+  background: linear-gradient(135deg, 
+    rgba(34, 197, 94, 0.8) 0%, 
+    rgba(22, 163, 74, 0.9) 50%, 
+    rgba(21, 128, 61, 0.8) 100%
+  );
   color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-weight: 600;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-link-btn::before {
+  content: '🔗';
+  margin-right: 8px;
+}
+
+.modal-link-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(34, 197, 94, 0.4);
 }
 
 .modal-close-btn {
-  background: var(--error-color);
+  background: linear-gradient(135deg, 
+    rgba(239, 68, 68, 0.8) 0%, 
+    rgba(220, 38, 38, 0.9) 50%, 
+    rgba(185, 28, 28, 0.8) 100%
+  );
   color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-weight: 600;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-close-btn::before {
+  content: '✕';
+  font-size: 16px;
+  font-weight: bold;
 }
 
 .modal-close-btn:hover {
-  background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, 
+    rgba(239, 68, 68, 0.9) 0%, 
+    rgba(220, 38, 38, 1) 50%, 
+    rgba(185, 28, 28, 0.9) 100%
+  );
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+}
+
+/* Click/Touch Effects for All Buttons */
+.toc-toggle-btn:active,
+.tts-toggle-btn:active,
+.modal-share-btn:active,
+.modal-link-btn:active,
+.modal-close-btn:active {
+  transform: translateY(0) scale(0.98);
+  transition: all 0.1s ease;
+}
+
+/* Mobile-Optimized Touch States */
+@media (max-width: 768px) {
+  .toc-toggle-btn,
+  .tts-toggle-btn,
+  .modal-share-btn,
+  .modal-link-btn,
+  .modal-close-btn {
+    min-height: 44px; /* iOS touch target */
+    min-width: 44px;
+    font-size: 16px; /* Prevent zoom on iOS */
+    border-radius: 16px; /* Larger radius for mobile */
+    padding: 14px 20px;
+  }
+  
+  /* Enhanced touch feedback */
+  .toc-toggle-btn:active,
+  .tts-toggle-btn:active {
+    transform: scale(0.95);
+    filter: brightness(0.9);
+  }
+}
+
+/* Tablet Optimizations */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .toc-toggle-btn,
+  .tts-toggle-btn {
+    padding: 12px 18px;
+    font-size: 15px;
+  }
+}
+
+/* High DPI Display Optimizations */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .toc-toggle-btn,
+  .tts-toggle-btn,
+  .modal-share-btn,
+  .modal-link-btn,
+  .modal-close-btn {
+    border: 0.5px solid rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .toc-toggle-btn,
+  .tts-toggle-btn,
+  .modal-share-btn,
+  .modal-link-btn,
+  .modal-close-btn {
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .toc-toggle-btn,
+  .tts-toggle-btn,
+  .modal-share-btn,
+  .modal-link-btn,
+  .modal-close-btn,
+  .toc-toggle-btn::before,
+  .toc-toggle-btn::after {
+    animation: none;
+    transition: none;
+  }
+  
+  .toc-toggle-btn:hover,
+  .tts-toggle-btn:hover {
+    transform: none;
+  }
+}
+
+/* Focus States for Accessibility */
+.toc-toggle-btn:focus-visible,
+.tts-toggle-btn:focus-visible,
+.modal-share-btn:focus-visible,
+.modal-link-btn:focus-visible,
+.modal-close-btn:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.5);
+  outline-offset: 2px;
+}
+
+/* Loading States */
+.toc-toggle-btn.loading,
+.tts-toggle-btn.loading {
+  pointer-events: none;
+  opacity: 0.7;
+  position: relative;
+}
+
+.toc-toggle-btn.loading::after,
+.tts-toggle-btn.loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  animation: buttonSpin 1s linear infinite;
+}
+
+@keyframes buttonSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .toc-toggle-btn,
+  .tts-toggle-btn,
+  .modal-share-btn,
+  .modal-link-btn,
+  .modal-close-btn {
+    border: 2px solid;
+    backdrop-filter: none;
+    background: solid colors instead of gradients;
+  }
 }
 
 /* Enhanced Modal Body */
@@ -1231,39 +1853,43 @@ body {
 }
 
 /* Enhanced TOC Scrollbar */
+/* Scrollbar Enhancement for Major Browsers */
+.table-of-contents {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gradient-primary) rgba(229, 62, 62, 0.1);
+}
 .table-of-contents::-webkit-scrollbar {
   width: 12px;
 }
-
 .table-of-contents::-webkit-scrollbar-track {
   background: rgba(229, 62, 62, 0.1);
   border-radius: 6px;
   margin: 4px;
 }
-
 .table-of-contents::-webkit-scrollbar-thumb {
   background: var(--gradient-primary);
   border-radius: 6px;
   border: 2px solid transparent;
   background-clip: content-box;
   box-shadow: inset 0 0 4px rgba(229, 62, 62, 0.3);
+  transition: background-color 0.3s ease;
 }
-
 .table-of-contents::-webkit-scrollbar-thumb:hover {
   background: var(--gradient-secondary);
-  background-clip: content-box;
 }
 
-/* Smooth Scroll Animation for TOC */
+/* Container Animation: Highlight & Subtle Zoom */
 .table-of-contents.scroll-to-view {
-  animation: tocScrollHighlight 2s ease-out;
+  animation: tocScrollHighlight 2s ease-out forwards;
+  will-change: transform, box-shadow;
 }
 
+/* Highlight Animation */
 @keyframes tocScrollHighlight {
   0% {
     border-color: var(--accent-color);
     box-shadow: 0 0 30px rgba(229, 62, 62, 0.6);
-    transform: scale(1.02);
+    transform: scale(1.03);
   }
   100% {
     border-color: rgba(229, 62, 62, 0.25);
@@ -1272,6 +1898,7 @@ body {
   }
 }
 
+/* Slide Down Animation for Header */
 @keyframes slideInDown {
   from {
     opacity: 0;
@@ -1294,7 +1921,9 @@ body {
   top: 0;
   background: inherit;
   backdrop-filter: inherit;
-  z-index: 10;
+  z-index: 11;
+  animation: slideInDown 0.3s ease forwards;
+  will-change: transform, opacity;
 }
 
 .toc-title {
@@ -1303,85 +1932,112 @@ body {
   margin: 0;
   font-weight: 800;
   position: relative;
+  user-select: none;
+  transition: color 0.3s ease;
 }
-
 .toc-title::after {
   content: '';
   position: absolute;
-  bottom: -1rem;
+  bottom: -1.1rem;
   left: 0;
   width: 60px;
   height: 4px;
   background: var(--highlight-color);
   border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.toc-header:hover .toc-title::after {
+  width: 100px;
 }
 
+/* Collapse Button Styles */
 .toc-collapse {
   background: none;
   border: none;
-  font-size: 1.4rem;
+  font-size: 1.6rem;
   color: var(--accent-color);
   cursor: pointer;
   padding: 0.5rem;
   border-radius: 50%;
-  transition: all var(--transition-speed);
-  width: 2.5rem;
-  height: 2.5rem;
+  transition: 
+    all 0.3s var(--transition-speed),
+    transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 2.8rem;
+  height: 2.8rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
+  font-weight: 900;
+  will-change: transform, background-color;
 }
-
 .toc-collapse:hover {
   background: rgba(229, 62, 62, 0.15);
-  transform: scale(1.1) rotate(180deg);
+  transform: scale(1.25) rotate(180deg);
 }
 
+/* TOC List and Item */
 .toc-list {
   list-style: none;
   padding: 0;
   margin: 0;
-  transition: all 0.3s ease;
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  will-change: max-height;
 }
-
 .toc-item {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.8rem;
   opacity: 0;
-  animation: tocItemFadeIn 0.5s ease-out forwards;
+  transform: translateX(-20px);
+  animation: tocItemFadeIn 0.4s ease-out forwards;
+  will-change: transform, opacity;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+}
+.toc-item:hover, 
+.toc-item:focus-within {
+  transform: translateX(3px);
+  outline-offset: 3px;
+  outline-color: var(--accent-color);
 }
 
+/* Staggered Animation */
 .toc-item:nth-child(1) { animation-delay: 0.1s; }
-.toc-item:nth-child(2) { animation-delay: 0.2s; }
-.toc-item:nth-child(3) { animation-delay: 0.3s; }
-.toc-item:nth-child(4) { animation-delay: 0.4s; }
-.toc-item:nth-child(5) { animation-delay: 0.5s; }
+.toc-item:nth-child(2) { animation-delay: 0.18s; }
+.toc-item:nth-child(3) { animation-delay: 0.26s; }
+.toc-item:nth-child(4) { animation-delay: 0.34s; }
+.toc-item:nth-child(5) { animation-delay: 0.42s; }
+.toc-item:nth-child(6) { animation-delay: 0.5s; }
+.toc-item:nth-child(7) { animation-delay: 0.58s; }
 
 @keyframes tocItemFadeIn {
-  from {
+  0% {
     opacity: 0;
     transform: translateX(-20px);
   }
-  to {
+  100% {
     opacity: 1;
     transform: translateX(0);
   }
 }
 
+/* Heading Levels Indentation */
 .toc-level-h1 { margin-left: 0; }
-.toc-level-h2 { margin-left: 1.5rem; }
-.toc-level-h3 { margin-left: 3rem; }
-.toc-level-h4 { margin-left: 4.5rem; }
-.toc-level-h5 { margin-left: 6rem; }
-.toc-level-h6 { margin-left: 7.5rem; }
+.toc-level-h2 { margin-left: 1.6rem; }
+.toc-level-h3 { margin-left: 3.2rem; }
+.toc-level-h4 { margin-left: 4.8rem; }
+.toc-level-h5 { margin-left: 6.4rem; }
+.toc-level-h6 { margin-left: 8rem; }
 
+/* TOC Links */
 .toc-link {
   color: var(--text-color);
   text-decoration: none;
-  padding: 0.75rem 1rem;
+  padding: 0.8rem 1.2rem;
   border-radius: var(--border-radius-small);
   display: block;
-  transition: all 0.3s var(--transition-smooth);
+  transition: 
+    all 0.35s var(--transition-smooth),
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   border-left: 4px solid transparent;
   font-size: 1rem;
   line-height: 1.5;
@@ -1389,6 +2045,7 @@ body {
   overflow: hidden;
   font-weight: 600;
   cursor: pointer;
+  will-change: transform, background-color, border-color;
 }
 
 .toc-link::before {
@@ -1398,35 +2055,81 @@ body {
   left: -100%;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(229, 62, 62, 0.1), transparent);
+  background: linear-gradient(90deg, transparent, rgba(229, 62, 62, 0.12), transparent);
   transition: left 0.5s ease;
+  will-change: left;
 }
-
-.toc-link:hover::before {
+.toc-link:hover::before,
+.toc-link:focus::before {
   left: 100%;
+  transition: left 0.5s ease;
 }
 
 .toc-link:hover,
 .toc-link:focus,
 .toc-link.active {
-  background: rgba(229, 62, 62, 0.1);
+  background: rgba(229, 62, 62, 0.15);
   border-left-color: var(--accent-color);
   color: var(--accent-color);
   font-weight: 800;
-  transform: translateX(10px);
+  transform: translateX(12px);
+  outline-offset: 4px;
 }
 
+/* Highlight on Target */
 .toc-target-highlight {
-  background: linear-gradient(90deg, rgba(229, 62, 62, 0.3), transparent);
+  background: linear-gradient(90deg, rgba(229, 62, 62, 0.4), transparent);
   animation: tocHighlight 3s ease-out;
+  will-change: background;
 }
 
 @keyframes tocHighlight {
   from {
-    background: linear-gradient(90deg, rgba(229, 62, 62, 0.5), transparent);
+    background: linear-gradient(90deg, rgba(229, 62, 62, 0.6), transparent);
   }
   to {
     background: transparent;
+  }
+}
+
+/* Accessibility: Focus outlines */
+.toc-link:focus-visible {
+  outline: 3px solid var(--accent-color);
+  outline-offset: 3px;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 600px) {
+  .table-of-contents {
+    scrollbar-width: thin;
+    max-height: 300px;
+  }
+  .toc-list {
+    max-height: 280px;
+  }
+  .toc-toggle-btn {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+  .toc-link {
+    font-size: 0.9rem;
+    padding: 0.6rem 1rem;
+  }
+  .toc-header {
+    padding-bottom: 0.8rem;
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .table-of-contents.scroll-to-view,
+  .toc-item,
+  .toc-link::before,
+  .toc-link:hover,
+  .toc-link:focus,
+  .toc-toggle-btn.active {
+    animation: none !important;
+    transition: none !important;
   }
 }
 
