@@ -1,7 +1,7 @@
-const CACHE_NAME = 'pattibytes-v4';
+const CACHE_NAME = 'pattibytes-v5';
 const APP_VERSION = '2.0.0';
 
-// Separate caching strategies for website vs app
+// Cache website assets (no app-specific assets)
 const WEBSITE_ASSETS = [
   '/',
   '/index.html',
@@ -12,55 +12,31 @@ const WEBSITE_ASSETS = [
   '/shop/',
   '/shop/index.html',
   '/style.css',
-  '/script.js'
-];
-
-const APP_ASSETS = [
-  '/app/',
-  '/app/index.html',
-  '/app/app.css',
-  '/app/app.js',
-  '/app/shared/navigation.js',
-  '/app/shared/styles/navigation.css',
-  '/app/news/',
-  '/app/news/index.html',
-  '/app/places/',
-  '/app/places/index.html',
-  '/app/shop/',
-  '/app/shop/index.html',
-  '/app/community/',
-  '/app/community/index.html',
-  '/app/dashboard/',
-  '/app/dashboard/index.html',
-  '/app/profile/',
-  '/app/auth/',
-  '/app/offline.html'
-];
-
-const SHARED_ASSETS = [
-  '/manifest.json',
+  '/script.js',
+  '/index.css',
+  '/manifest.webmanifest',
   '/icons/pwab-192.jpg',
   '/icons/pwab-512.jpg',
   '/icons/favicon.ico'
 ];
 
-// Install event
+// Install event - cache website assets only
 self.addEventListener('install', event => {
-  console.log('[SW] Installing...');
+  console.log('[SW] Installing website service worker...');
   
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[SW] Caching app shell');
-        return cache.addAll([...APP_ASSETS, ...SHARED_ASSETS]);
+        console.log('[SW] Caching website assets');
+        return cache.addAll(WEBSITE_ASSETS);
       })
       .then(() => self.skipWaiting())
   );
 });
 
-// Activate event
+// Activate event - clean old caches
 self.addEventListener('activate', event => {
-  console.log('[SW] Activating...');
+  console.log('[SW] Activating website service worker...');
   
   event.waitUntil(
     caches.keys()
@@ -75,7 +51,7 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch event - Smart routing without forced redirects
+// Fetch event - handle requests WITHOUT redirects
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   
@@ -89,85 +65,20 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Handle app routes with app-first strategy
+  // Skip /app/ routes entirely (let them handle their own caching)
   if (url.pathname.startsWith('/app/')) {
-    event.respondWith(handleAppRoute(event.request));
     return;
   }
   
   // Handle website routes with network-first strategy
-  if (isWebsiteRoute(url.pathname)) {
-    event.respondWith(handleWebsiteRoute(event.request));
-    return;
-  }
-  
-  // Handle shared assets
-  if (isSharedAsset(url.pathname)) {
-    event.respondWith(handleAssetRoute(event.request));
-    return;
-  }
-  
-  // Default handling
-  event.respondWith(
-    fetch(event.request)
-      .catch(() => caches.match(event.request))
-  );
+  event.respondWith(handleWebsiteRequest(event.request));
 });
 
-function isWebsiteRoute(pathname) {
-  const websiteRoutes = ['/', '/index.html', '/news/', '/places/', '/shop/'];
-  return websiteRoutes.some(route => pathname === route || pathname.startsWith(route));
-}
-
-function isSharedAsset(pathname) {
-  return pathname.includes('/icons/') || 
-         pathname.includes('/manifest.json') || 
-         pathname.includes('/style.css') ||
-         pathname.includes('/script.js');
-}
-
-async function handleAppRoute(request) {
+async function handleWebsiteRequest(request) {
+  const url = new URL(request.url);
+  
   try {
-    // For app routes, try cache first for better performance
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      // Fetch in background to update cache
-      fetch(request)
-        .then(response => {
-          if (response.ok) {
-            caches.open(CACHE_NAME)
-              .then(cache => cache.put(request, response));
-          }
-        })
-        .catch(() => {});
-      
-      return cachedResponse;
-    }
-    
-    // If not in cache, fetch from network
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
-    }
-    
-    return networkResponse;
-    
-  } catch (error) {
-    // Return offline fallback for app routes
-    const url = new URL(request.url);
-    if (url.pathname.endsWith('/') || url.pathname.endsWith('.html')) {
-      return caches.match('/app/offline.html') || 
-             new Response('App offline', { status: 503 });
-    }
-    
-    return new Response('Resource not available', { status: 503 });
-  }
-}
-
-async function handleWebsiteRoute(request) {
-  try {
-    // For website routes, always try network first
+    // Always try network first for fresh content
     const networkResponse = await fetch(request);
     
     if (networkResponse.ok) {
@@ -179,40 +90,49 @@ async function handleWebsiteRoute(request) {
     return networkResponse;
     
   } catch (error) {
-    // Fall back to cache for website routes
+    console.log('[SW] Network failed, trying cache:', url.pathname);
+    
+    // Try cache as fallback
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       return cachedResponse;
     }
     
-    // Return basic offline page for website
-    return new Response(
-      '<!DOCTYPE html><html><head><title>Offline</title></head><body><h1>ਔਫਲਾਈਨ</h1><p>ਇੰਟਰਨੈਟ ਕਨੈਕਸ਼ਨ ਚੈਕ ਕਰੋ</p></body></html>',
-      { 
+    // Return offline page for HTML requests
+    if (url.pathname.endsWith('/') || url.pathname.endsWith('.html')) {
+      return new Response(`
+        <!DOCTYPE html>
+        <html lang="pa">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>ਔਫਲਾਈਨ - ਪੱਟੀ ਬਾਈਟਸ</title>
+          <style>
+            body { font-family: system-ui; text-align: center; padding: 2rem; background: #f8fafc; }
+            .offline-container { max-width: 400px; margin: 2rem auto; }
+            .offline-icon { font-size: 4rem; margin-bottom: 1rem; }
+            .offline-title { font-size: 1.5rem; margin-bottom: 1rem; color: #1f2937; }
+            .offline-message { color: #6b7280; margin-bottom: 2rem; }
+            .retry-btn { background: #2563eb; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; cursor: pointer; }
+          </style>
+        </head>
+        <body>
+          <div class="offline-container">
+            <div class="offline-icon">📡</div>
+            <h1 class="offline-title">ਔਫਲਾਈਨ</h1>
+            <p class="offline-message">ਇੰਟਰਨੈਟ ਕਨੈਕਸ਼ਨ ਚੈਕ ਕਰੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ</p>
+            <button class="retry-btn" onclick="location.reload()">ਰਿਫਰੈਸ਼ ਕਰੋ</button>
+          </div>
+        </body>
+        </html>
+      `, {
         headers: { 'Content-Type': 'text/html' },
-        status: 503 
-      }
-    );
-  }
-}
-
-async function handleAssetRoute(request) {
-  // Cache first for assets
-  const cachedResponse = await caches.match(request);
-  if (cachedResponse) {
-    return cachedResponse;
-  }
-  
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
+        status: 503
+      });
     }
-    return networkResponse;
-  } catch (error) {
-    return new Response('Asset not available', { status: 404 });
+    
+    return new Response('Resource not available offline', { status: 503 });
   }
 }
 
-console.log(`[SW] Service Worker ${APP_VERSION} ready - No auto-redirects`);
+console.log(`[SW] Website Service Worker ${APP_VERSION} ready - No app redirects`);
