@@ -1421,330 +1421,385 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
 })();
-// PWA Install Handler
-class PWAInstallHandler {
+// Minimal PWA Handler - No Conflicts
+class SimplePWAHandler {
   constructor() {
     this.deferredPrompt = null;
-    this.isInstalled = this.checkIfInstalled();
-    this.initializeElements();
-    this.setupEventListeners();
+    this.isStandalone = this.checkStandalone();
     
-    console.log('PWA Install Handler initialized', { isInstalled: this.isInstalled });
+    console.log('Simple PWA Handler:', { 
+      isStandalone: this.isStandalone,
+      url: window.location.href 
+    });
+    
+    // Only initialize PWA features in browser mode
+    if (!this.isStandalone) {
+      this.initBrowserMode();
+    } else {
+      this.initPWAMode();
+    }
   }
 
-  checkIfInstalled() {
+  checkStandalone() {
     return window.matchMedia('(display-mode: standalone)').matches || 
            window.navigator.standalone === true;
   }
 
-  initializeElements() {
-    this.installBanner = document.getElementById('pwaInstallBanner');
-    this.installBtn = document.getElementById('pwaInstallBtn');
-    this.closeBtn = document.getElementById('pwaCloseBtn');
-    this.headerInstallBtn = document.getElementById('headerInstallBtn');
+  initBrowserMode() {
+    console.log('Initializing browser mode - normal website');
+    
+    // Setup install prompt
+    this.setupInstallPrompt();
+    
+    // Track website usage
+    this.trackEvent('website_visit');
   }
 
-  setupEventListeners() {
-    // Listen for beforeinstallprompt event
+  initPWAMode() {
+    console.log('Running as PWA - enhanced app mode');
+    
+    // Hide install prompts
+    this.hideInstallElements();
+    
+    // Add PWA-specific features
+    this.addPWAFeatures();
+    
+    // Track PWA usage
+    this.trackEvent('pwa_visit');
+  }
+
+  hideInstallElements() {
+    const installElements = document.querySelectorAll(
+      '.pwa-install-banner, .pwa-promo-section, .btn-app-install, .pwa-nav-item'
+    );
+    
+    installElements.forEach(el => {
+      if (el) el.style.display = 'none';
+    });
+  }
+
+  addPWAFeatures() {
+    // Add PWA-specific styles
+    document.body.classList.add('pwa-mode');
+    
+    // Add bottom navigation
+    this.addBottomNavigation();
+  }
+
+  addBottomNavigation() {
+    // Only add if not already exists
+    if (document.querySelector('.pwa-bottom-nav')) return;
+    
+    const nav = document.createElement('nav');
+    nav.className = 'pwa-bottom-nav';
+    nav.innerHTML = `
+      <div class="pwa-nav-container">
+        <a href="/" class="pwa-nav-link ${window.location.pathname === '/' ? 'active' : ''}">
+          <div class="nav-icon">🏠</div>
+          <span class="nav-label">ਘਰ</span>
+        </a>
+        <a href="/news/" class="pwa-nav-link ${window.location.pathname.includes('/news') ? 'active' : ''}">
+          <div class="nav-icon">📰</div>
+          <span class="nav-label">ਨਿਊਜ਼</span>
+        </a>
+        <a href="/places/" class="pwa-nav-link ${window.location.pathname.includes('/places') ? 'active' : ''}">
+          <div class="nav-icon">📍</div>
+          <span class="nav-label">ਸਥਾਨ</span>
+        </a>
+        <a href="/shop/" class="pwa-nav-link ${window.location.pathname.includes('/shop') ? 'active' : ''}">
+          <div class="nav-icon">🛍️</div>
+          <span class="nav-label">ਦੁਕਾਨ</span>
+        </a>
+      </div>
+    `;
+    
+    document.body.appendChild(nav);
+    this.addPWAStyles();
+  }
+
+  addPWAStyles() {
+    if (document.querySelector('#pwa-styles')) return;
+    
+    const styles = document.createElement('style');
+    styles.id = 'pwa-styles';
+    styles.textContent = `
+      .pwa-mode {
+        padding-bottom: 70px;
+      }
+      
+      .pwa-bottom-nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        border-top: 1px solid #e5e7eb;
+        z-index: 1000;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+      }
+      
+      .pwa-nav-container {
+        display: flex;
+        justify-content: space-around;
+        padding: 10px 0;
+        max-width: 500px;
+        margin: 0 auto;
+      }
+      
+      .pwa-nav-link {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-decoration: none;
+        color: #6b7280;
+        padding: 8px 12px;
+        border-radius: 8px;
+        transition: all 0.2s;
+      }
+      
+      .pwa-nav-link.active,
+      .pwa-nav-link:hover {
+        color: #2563eb;
+        background: rgba(37, 99, 235, 0.1);
+      }
+      
+      .pwa-nav-link .nav-icon {
+        font-size: 18px;
+        margin-bottom: 4px;
+      }
+      
+      .pwa-nav-link .nav-label {
+        font-size: 10px;
+        font-weight: 500;
+      }
+    `;
+    
+    document.head.appendChild(styles);
+  }
+
+  setupInstallPrompt() {
+    // Listen for install prompt
     window.addEventListener('beforeinstallprompt', (e) => {
-      console.log('beforeinstallprompt fired');
+      console.log('Install prompt available');
       e.preventDefault();
       this.deferredPrompt = e;
-      this.showInstallPrompt();
+      
+      // Show install UI after delay
+      setTimeout(() => this.showInstallBanner(), 3000);
     });
 
-    // Listen for app installed event
+    // Listen for successful install
     window.addEventListener('appinstalled', (evt) => {
-      console.log('PWA was installed');
+      console.log('App installed successfully');
       this.onAppInstalled();
     });
 
-    // Install button clicks
-    if (this.installBtn) {
-      this.installBtn.addEventListener('click', () => this.triggerInstall());
-    }
-    
-    if (this.headerInstallBtn) {
-      this.headerInstallBtn.addEventListener('click', () => this.triggerInstall());
-    }
-
-    // Close banner
-    if (this.closeBtn) {
-      this.closeBtn.addEventListener('click', () => this.dismissBanner());
-    }
-
-    // Check for updates
-    this.checkForUpdates();
+    // Setup install buttons
+    this.setupInstallButtons();
   }
 
-  showInstallPrompt() {
-    if (this.isInstalled) return;
+  setupInstallButtons() {
+    // Install button handlers
+    const installBtns = document.querySelectorAll(
+      '#pwaInstallBtn, #headerInstallBtn, .btn-app-install'
+    );
     
+    installBtns.forEach(btn => {
+      if (btn) {
+        btn.addEventListener('click', () => this.triggerInstall());
+      }
+    });
+
+    // Close button handlers
+    const closeBtns = document.querySelectorAll(
+      '#pwaCloseBtn, .pwa-close-btn'
+    );
+    
+    closeBtns.forEach(btn => {
+      if (btn) {
+        btn.addEventListener('click', () => this.dismissBanner());
+      }
+    });
+  }
+
+  showInstallBanner() {
+    if (this.isStandalone || !this.deferredPrompt) return;
+    
+    // Check if recently dismissed
     const dismissed = localStorage.getItem('pwa-banner-dismissed');
-    const dismissedTime = dismissed ? parseInt(dismissed) : 0;
-    const daysSinceDismissed = (Date.now() - dismissedTime) / (1000 * 60 * 60 * 24);
-    
-    if (daysSinceDismissed < 7) {
-      console.log('Banner recently dismissed, not showing');
-      return;
+    if (dismissed) {
+      const daysSince = (Date.now() - parseInt(dismissed)) / (1000 * 60 * 60 * 24);
+      if (daysSince < 7) return;
     }
     
-    // Show banner after 3 seconds
-    setTimeout(() => {
-      if (this.installBanner && this.deferredPrompt) {
-        this.installBanner.classList.add('show');
-        this.logEvent('pwa_banner_shown');
-      }
-    }, 3000);
-    
-    // Enable header install button
-    if (this.headerInstallBtn) {
-      this.headerInstallBtn.style.display = 'inline-block';
+    const banner = document.querySelector('.pwa-install-banner');
+    if (banner) {
+      banner.classList.add('show');
+      this.trackEvent('install_banner_shown');
     }
   }
 
   async triggerInstall() {
     if (!this.deferredPrompt) {
-      this.showManualInstallInstructions();
+      this.showManualInstructions();
       return;
     }
 
     try {
       // Hide banner
-      if (this.installBanner) {
-        this.installBanner.classList.remove('show');
-      }
+      const banner = document.querySelector('.pwa-install-banner');
+      if (banner) banner.classList.remove('show');
       
-      // Show install dialog
+      // Trigger install
       this.deferredPrompt.prompt();
-      
-      // Wait for user choice
       const { outcome } = await this.deferredPrompt.userChoice;
       
-      console.log('Install prompt result:', outcome);
+      console.log('Install result:', outcome);
+      this.trackEvent('install_' + outcome);
       
-      if (outcome === 'accepted') {
-        this.logEvent('pwa_install_accepted');
-        this.showNotification('Installing app...', 'info');
-      } else {
-        this.logEvent('pwa_install_dismissed');
-      }
-      
-      // Clear the prompt
       this.deferredPrompt = null;
       
     } catch (error) {
       console.error('Install failed:', error);
-      this.showManualInstallInstructions();
+      this.showManualInstructions();
     }
   }
 
   dismissBanner() {
-    if (this.installBanner) {
-      this.installBanner.classList.remove('show');
-    }
+    const banner = document.querySelector('.pwa-install-banner');
+    if (banner) banner.classList.remove('show');
     
     localStorage.setItem('pwa-banner-dismissed', Date.now().toString());
-    this.logEvent('pwa_banner_dismissed');
+    this.trackEvent('install_banner_dismissed');
   }
 
-  showManualInstallInstructions() {
+  showManualInstructions() {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isAndroid = /Android/.test(navigator.userAgent);
+    const message = isIOS ? 
+      'Safari ਮੈਨੂ ਖੋਲੋ ਅਤੇ "Add to Home Screen" ਚੁਣੋ' :
+      'ਬ੍ਰਾਊਜ਼ਰ ਮੈਨੂ ਤੋਂ "Install App" ਚੁਣੋ';
     
-    let message = '';
-    if (isIOS) {
-      message = 'Safari ਮੈਨੂ ਖੋਲੋ ਅਤੇ "Add to Home Screen" ਚੁਣੋ';
-    } else if (isAndroid) {
-      message = 'Chrome ਮੈਨੂ ਖੋਲੋ ਅਤੇ "Add to Home Screen" ਚੁਣੋ';
-    } else {
-      message = 'ਬ੍ਰਾਊਜ਼ਰ ਮੈਨੂ ਤੋਂ "Install App" ਜਾਂ "Add to Home Screen" ਚੁਣੋ';
-    }
-    
-    this.showNotification(message, 'info');
+    alert(message);
   }
 
   onAppInstalled() {
-    this.isInstalled = true;
-    
     // Hide install elements
-    if (this.installBanner) {
-      this.installBanner.classList.remove('show');
-    }
+    const installElements = document.querySelectorAll(
+      '.pwa-install-banner, .pwa-promo-section'
+    );
     
-    if (this.headerInstallBtn) {
-      this.headerInstallBtn.style.display = 'none';
-    }
+    installElements.forEach(el => {
+      if (el) el.style.display = 'none';
+    });
     
-    // Clear dismissal flag
     localStorage.removeItem('pwa-banner-dismissed');
+    this.trackEvent('app_installed');
     
     // Show success message
     setTimeout(() => {
-      this.showNotification('🎉 ਐਪ ਸਫਲਤਾ ਨਾਲ ਇੰਸਟਾਲ ਹੋ ਗਈ!', 'success');
-    }, 1000);
-    
-    this.logEvent('pwa_install_completed');
+      alert('🎉 ਐਪ ਸਫਲਤਾ ਨਾਲ ਇੰਸਟਾਲ ਹੋ ਗਈ!');
+    }, 500);
   }
 
-  showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `pwa-notification ${type}`;
-    
-    const title = type === 'success' ? '✅ ਸਫਲ' : 
-                  type === 'error' ? '❌ ਗਲਤੀ' : 
-                  type === 'warning' ? '⚠️ ਚੇਤਾਵਨੀ' : 'ℹ️ ਜਾਣਕਾਰੀ';
-    
-    notification.innerHTML = `
-      <div class="pwa-notification-title">${title}</div>
-      <div class="pwa-notification-message">${message}</div>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Show notification
-    setTimeout(() => notification.classList.add('show'), 100);
-    
-    // Hide notification
-    setTimeout(() => {
-      notification.classList.remove('show');
-      setTimeout(() => notification.remove(), 300);
-    }, 4000);
-  }
-
-  checkForUpdates() {
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('New service worker activated');
-        this.showUpdateNotification();
-      });
-      
-      // Check for updates every 5 minutes
-      setInterval(() => {
-        navigator.serviceWorker.getRegistration().then(registration => {
-          if (registration) {
-            registration.update();
-          }
-        });
-      }, 5 * 60 * 1000);
-    }
-  }
-
-  showUpdateNotification() {
-    const updateDiv = document.createElement('div');
-    updateDiv.className = 'pwa-update-available';
-    updateDiv.innerHTML = `
-      <span>🔄 ਨਵਾਂ ਅਪਡੇਟ ਉਪਲਬਧ ਹੈ</span>
-      <button class="pwa-update-btn" onclick="window.location.reload()">ਰਿਫਰੈਸ਼ ਕਰੋ</button>
-    `;
-    
-    document.body.appendChild(updateDiv);
-    updateDiv.classList.add('show');
-    
-    // Auto hide after 10 seconds
-    setTimeout(() => {
-      updateDiv.classList.remove('show');
-      setTimeout(() => updateDiv.remove(), 300);
-    }, 10000);
-  }
-
-  logEvent(eventName, data = {}) {
+  trackEvent(eventName, data = {}) {
     console.log('PWA Event:', eventName, data);
     
-    // Google Analytics tracking
+    // Google Analytics
     if (typeof gtag !== 'undefined') {
       gtag('event', eventName, {
-        event_category: 'PWA',
+        event_category: this.isStandalone ? 'PWA' : 'Website',
         ...data
       });
     }
-    
-    // Store for later analysis
-    const events = JSON.parse(localStorage.getItem('pwa_events') || '[]');
-    events.push({
-      event: eventName,
-      timestamp: new Date().toISOString(),
-      data: data
-    });
-    localStorage.setItem('pwa_events', JSON.stringify(events.slice(-50))); // Keep last 50 events
   }
 }
 
-// Network Status Handler
-class PWANetworkHandler {
+// Simple Network Status
+class NetworkStatus {
   constructor() {
-    this.isOnline = navigator.onLine;
-    this.setupNetworkListeners();
-    this.showNetworkStatus();
+    this.showStatus();
+    this.setupListeners();
   }
 
-  setupNetworkListeners() {
-    window.addEventListener('online', () => {
-      this.isOnline = true;
-      this.showNetworkStatus();
-      console.log('App is online');
-    });
-
-    window.addEventListener('offline', () => {
-      this.isOnline = false;
-      this.showNetworkStatus();
-      console.log('App is offline');
-    });
+  setupListeners() {
+    window.addEventListener('online', () => this.showStatus(true));
+    window.addEventListener('offline', () => this.showStatus(false));
   }
 
-  showNetworkStatus() {
-    let statusDiv = document.querySelector('.pwa-status');
+  showStatus(isOnline = navigator.onLine) {
+    // Only show status changes, not initial state
+    if (this.lastStatus === isOnline) return;
+    this.lastStatus = isOnline;
     
-    if (!statusDiv) {
-      statusDiv = document.createElement('div');
-      statusDiv.className = 'pwa-status';
-      document.body.appendChild(statusDiv);
-    }
+    const status = document.createElement('div');
+    status.className = `network-status ${isOnline ? 'online' : 'offline'}`;
+    status.textContent = isOnline ? '🟢 ਔਨਲਾਈਨ' : '🔴 ਔਫਲਾਈਨ';
     
-    statusDiv.className = `pwa-status ${this.isOnline ? 'online' : 'offline'}`;
-    statusDiv.textContent = this.isOnline ? '🟢 ਔਨਲਾਈਨ' : '🔴 ਔਫਲਾਈਨ';
+    status.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: ${isOnline ? '#10b981' : '#ef4444'};
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      z-index: 9999;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
     
-    // Show status temporarily
-    statusDiv.classList.add('show');
+    document.body.appendChild(status);
+    
+    // Remove after 3 seconds
     setTimeout(() => {
-      statusDiv.classList.remove('show');
+      status.style.opacity = '0';
+      status.style.transform = 'translateX(100px)';
+      setTimeout(() => status.remove(), 300);
     }, 3000);
   }
 }
 
-// Initialize PWA features when DOM is ready
+// Initialize everything when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  // Only initialize PWA features if not already running as installed PWA
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
-                      window.navigator.standalone === true;
+  // Initialize PWA handler
+  window.pwaHandler = new SimplePWAHandler();
   
-  if (!isStandalone) {
-    window.pwaInstaller = new PWAInstallHandler();
-    console.log('PWA features initialized for browser');
-  } else {
-    console.log('Running as installed PWA - install prompts disabled');
-  }
+  // Initialize network status
+  window.networkStatus = new NetworkStatus();
   
-  // Always initialize network handler
-  window.pwaNetwork = new PWANetworkHandler();
+  console.log('Website loaded successfully');
 });
 
-// Global PWA utilities
+// Register service worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(registration => {
+        console.log('Service Worker registered:', registration.scope);
+      })
+      .catch(error => {
+        console.error('Service Worker registration failed:', error);
+      });
+  });
+} else {
+  console.log('Service Worker not supported');
+}
+
+// Global utilities
 window.PWAUtils = {
   isInstalled: () => {
     return window.matchMedia('(display-mode: standalone)').matches || 
            window.navigator.standalone === true;
   },
   
-  isOnline: () => navigator.onLine,
-  
-  showInstallPrompt: () => {
-    if (window.pwaInstaller) {
-      window.pwaInstaller.triggerInstall();
+  install: () => {
+    if (window.pwaHandler) {
+      window.pwaHandler.triggerInstall();
     }
   },
   
-  getInstallEvents: () => {
-    return JSON.parse(localStorage.getItem('pwa_events') || '[]');
-  }
+  isOnline: () => navigator.onLine
 };
+
+console.log('PWA Script loaded - Website should work normally');
