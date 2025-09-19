@@ -1,24 +1,31 @@
-const CACHE_NAME = 'pattibytes-app-v3';
+const CACHE_NAME = 'pattibytes-v4';
 const APP_VERSION = '2.0.0';
 
-// Define what constitutes the app shell
-const APP_SHELL_ASSETS = [
-  // Core app files
+// Separate caching strategies for website vs app
+const WEBSITE_ASSETS = [
   '/',
+  '/index.html',
+  '/news/',
+  '/news/index.html',
+  '/places/',
+  '/places/index.html',
+  '/shop/',
+  '/shop/index.html',
+  '/style.css',
+  '/script.js'
+];
+
+const APP_ASSETS = [
   '/app/',
   '/app/index.html',
-  '/app/app.css', 
+  '/app/app.css',
   '/app/app.js',
-  
-  // Navigation
   '/app/shared/navigation.js',
   '/app/shared/styles/navigation.css',
-  
-  // Main pages
   '/app/news/',
   '/app/news/index.html',
   '/app/places/',
-  '/app/places/index.html', 
+  '/app/places/index.html',
   '/app/shop/',
   '/app/shop/index.html',
   '/app/community/',
@@ -27,43 +34,33 @@ const APP_SHELL_ASSETS = [
   '/app/dashboard/index.html',
   '/app/profile/',
   '/app/auth/',
-  
-  // Assets
-  '/style.css',
-  '/script.js',
-  '/manifest.json',
-  '/icons/pwab-192.jpg',
-  '/icons/pwab-512.jpg',
-  '/icons/favicon.ico',
-  
-  // Offline fallback
   '/app/offline.html'
 ];
 
-// Install event - cache app shell
+const SHARED_ASSETS = [
+  '/manifest.json',
+  '/icons/pwab-192.jpg',
+  '/icons/pwab-512.jpg',
+  '/icons/favicon.ico'
+];
+
+// Install event
 self.addEventListener('install', event => {
-  console.log('[SW] Install event');
+  console.log('[SW] Installing...');
   
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[SW] Pre-caching app shell');
-        return cache.addAll(APP_SHELL_ASSETS);
+        console.log('[SW] Caching app shell');
+        return cache.addAll([...APP_ASSETS, ...SHARED_ASSETS]);
       })
-      .then(() => {
-        console.log('[SW] App shell cached successfully');
-        // Force activation of new service worker
-        return self.skipWaiting();
-      })
-      .catch(error => {
-        console.error('[SW] Pre-caching failed:', error);
-      })
+      .then(() => self.skipWaiting())
   );
 });
 
-// Activate event - clean up old caches
+// Activate event
 self.addEventListener('activate', event => {
-  console.log('[SW] Activate event');
+  console.log('[SW] Activating...');
   
   event.waitUntil(
     caches.keys()
@@ -71,21 +68,14 @@ self.addEventListener('activate', event => {
         return Promise.all(
           cacheNames
             .filter(cacheName => cacheName !== CACHE_NAME)
-            .map(cacheName => {
-              console.log('[SW] Deleting old cache:', cacheName);
-              return caches.delete(cacheName);
-            })
+            .map(cacheName => caches.delete(cacheName))
         );
       })
-      .then(() => {
-        console.log('[SW] Service worker activated');
-        // Take control of all clients
-        return self.clients.claim();
-      })
+      .then(() => self.clients.claim())
   );
 });
 
-// Fetch event - serve cached content when offline
+// Fetch event - Smart routing without forced redirects
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   
@@ -99,121 +89,130 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // Handle app routes
+  // Handle app routes with app-first strategy
   if (url.pathname.startsWith('/app/')) {
-    event.respondWith(handleAppRequest(event.request));
+    event.respondWith(handleAppRoute(event.request));
     return;
   }
   
-  // Redirect main site routes to app
-  if (shouldRedirectToApp(url.pathname)) {
-    event.respondWith(handleWebsiteRedirect(url.pathname));
+  // Handle website routes with network-first strategy
+  if (isWebsiteRoute(url.pathname)) {
+    event.respondWith(handleWebsiteRoute(event.request));
     return;
   }
   
-  // Handle other requests
+  // Handle shared assets
+  if (isSharedAsset(url.pathname)) {
+    event.respondWith(handleAssetRoute(event.request));
+    return;
+  }
+  
+  // Default handling
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-        
-        return fetch(event.request)
-          .then(fetchResponse => {
-            // Don't cache non-successful responses
-            if (!fetchResponse || fetchResponse.status !== 200 || fetchResponse.type !== 'basic') {
-              return fetchResponse;
-            }
-            
-            // Cache successful responses
-            const responseToCache = fetchResponse.clone();
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                cache.put(event.request, responseToCache);
-              });
-            
-            return fetchResponse;
-          });
-      })
+    fetch(event.request)
+      .catch(() => caches.match(event.request))
   );
 });
 
-function shouldRedirectToApp(pathname) {
-  const redirects = {
-    '/': '/app/',
-    '/index.html': '/app/',
-    '/news/': '/app/news/',
-    '/news/index.html': '/app/news/',
-    '/places/': '/app/places/',
-    '/places/index.html': '/app/places/',
-    '/shop/': '/app/shop/',
-    '/shop/index.html': '/app/shop/'
-  };
-  
-  return redirects.hasOwnProperty(pathname);
+function isWebsiteRoute(pathname) {
+  const websiteRoutes = ['/', '/index.html', '/news/', '/places/', '/shop/'];
+  return websiteRoutes.some(route => pathname === route || pathname.startsWith(route));
 }
 
-async function handleWebsiteRedirect(pathname) {
-  const redirects = {
-    '/': '/app/',
-    '/index.html': '/app/',
-    '/news/': '/app/news/', 
-    '/news/index.html': '/app/news/',
-    '/places/': '/app/places/',
-    '/places/index.html': '/app/places/',
-    '/shop/': '/app/shop/',
-    '/shop/index.html': '/app/shop/'
-  };
-  
-  const appRoute = redirects[pathname];
-  if (appRoute) {
-    return Response.redirect(appRoute, 301);
-  }
-  
-  return new Response('Not Found', { status: 404 });
+function isSharedAsset(pathname) {
+  return pathname.includes('/icons/') || 
+         pathname.includes('/manifest.json') || 
+         pathname.includes('/style.css') ||
+         pathname.includes('/script.js');
 }
 
-async function handleAppRequest(request) {
+async function handleAppRoute(request) {
   try {
-    // Try network first for HTML pages
+    // For app routes, try cache first for better performance
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      // Fetch in background to update cache
+      fetch(request)
+        .then(response => {
+          if (response.ok) {
+            caches.open(CACHE_NAME)
+              .then(cache => cache.put(request, response));
+          }
+        })
+        .catch(() => {});
+      
+      return cachedResponse;
+    }
+    
+    // If not in cache, fetch from network
+    const networkResponse = await fetch(request);
+    if (networkResponse.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, networkResponse.clone());
+    }
+    
+    return networkResponse;
+    
+  } catch (error) {
+    // Return offline fallback for app routes
+    const url = new URL(request.url);
+    if (url.pathname.endsWith('/') || url.pathname.endsWith('.html')) {
+      return caches.match('/app/offline.html') || 
+             new Response('App offline', { status: 503 });
+    }
+    
+    return new Response('Resource not available', { status: 503 });
+  }
+}
+
+async function handleWebsiteRoute(request) {
+  try {
+    // For website routes, always try network first
     const networkResponse = await fetch(request);
     
     if (networkResponse.ok) {
       // Cache successful responses
       const cache = await caches.open(CACHE_NAME);
       cache.put(request, networkResponse.clone());
-      return networkResponse;
     }
     
-    throw new Error('Network response not ok');
+    return networkResponse;
     
   } catch (error) {
-    // Fall back to cache
+    // Fall back to cache for website routes
     const cachedResponse = await caches.match(request);
-    
     if (cachedResponse) {
       return cachedResponse;
     }
     
-    // Return offline page for HTML requests
-    const url = new URL(request.url);
-    if (url.pathname.endsWith('/') || url.pathname.endsWith('.html')) {
-      return caches.match('/app/offline.html') || 
-             new Response('Offline', { status: 503 });
-    }
-    
-    return new Response('Resource not available offline', { 
-      status: 503 
-    });
+    // Return basic offline page for website
+    return new Response(
+      '<!DOCTYPE html><html><head><title>Offline</title></head><body><h1>ਔਫਲਾਈਨ</h1><p>ਇੰਟਰਨੈਟ ਕਨੈਕਸ਼ਨ ਚੈਕ ਕਰੋ</p></body></html>',
+      { 
+        headers: { 'Content-Type': 'text/html' },
+        status: 503 
+      }
+    );
   }
 }
 
-// Handle app updates
-self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
+async function handleAssetRoute(request) {
+  // Cache first for assets
+  const cachedResponse = await caches.match(request);
+  if (cachedResponse) {
+    return cachedResponse;
   }
-});
+  
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse.ok) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, networkResponse.clone());
+    }
+    return networkResponse;
+  } catch (error) {
+    return new Response('Asset not available', { status: 404 });
+  }
+}
 
-console.log(`[SW] Service Worker version ${APP_VERSION} loaded`);
+console.log(`[SW] Service Worker ${APP_VERSION} ready - No auto-redirects`);
