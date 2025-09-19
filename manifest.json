@@ -1,0 +1,145 @@
+{
+  "name": "ਪੱਟੀ ਬਾਈਟਸ - PattiBytes Local News & Services",
+  "short_name": "ਪੱਟੀ ਬਾਈਟਸ",
+  "description": "ਪੱਟੀ ਦੀ ਸਭ ਤੋਂ ਵੱਡੀ ਸਥਾਨੀ ਨਿਊਜ਼, ਸਥਾਨਾਂ ਅਤੇ ਸੇਵਾਵਾਂ ਦੀ ਐਪ। Get latest news, explore famous places, shop local products and connect with community in Patti, Punjab.",
+  "start_url": "/app/",
+  "scope": "/",
+  "id": "com.pattibytes.app",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "theme_color": "#2563eb",
+  "background_color": "#f8fafc",
+  "categories": ["news", "lifestyle", "social", "shopping", "travel"],
+  "lang": "pa",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icons/pwab-192.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/pwab-192.jpg",
+      "sizes": "192x192", 
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/pwab-512.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg", 
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/pwab-512.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/favicon.ico",
+      "sizes": "16x16 32x32",
+      "type": "image/x-icon",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icons/screenshot-mobile-1.jpg",
+      "sizes": "390x844",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Home screen with latest news and features"
+    },
+    {
+      "src": "/icons/screenshot-mobile-2.jpg", 
+      "sizes": "390x844",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "News section with local updates"
+    },
+    {
+      "src": "/icons/screenshot-desktop.jpg",
+      "sizes": "1920x1080",
+      "type": "image/jpeg", 
+      "form_factor": "wide",
+      "label": "Desktop view of Patti Bytes app"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "ਤਾਜ਼ਾ ਨਿਊਜ਼",
+      "short_name": "ਨਿਊਜ਼", 
+      "description": "ਪੱਟੀ ਦੀ ਸਭ ਤੋਂ ਤਾਜ਼ੀ ਖਬਰਾਂ ਪੜ੍ਹੋ",
+      "url": "/app/news/",
+      "icons": [
+        {
+          "src": "/icons/news-shortcut.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "ਮਸ਼ਹੂਰ ਸਥਾਨ",
+      "short_name": "ਸਥਾਨ",
+      "description": "ਪੱਟੀ ਦੇ ਐਤਿਹਾਸਿਕ ਅਤੇ ਮਸ਼ਹੂਰ ਸਥਾਨਾਂ ਦੀ ਜਾਣਕਾਰੀ",
+      "url": "/app/places/",
+      "icons": [
+        {
+          "src": "/icons/places-shortcut.png", 
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "ਸਥਾਨੀ ਦੁਕਾਨ",
+      "short_name": "ਦੁਕਾਨ",
+      "description": "ਸਥਾਨੀ ਕਾਰੋਬਾਰਾਂ ਤੋਂ ਖਰੀਦਦਾਰੀ ਕਰੋ",
+      "url": "/app/shop/",
+      "icons": [
+        {
+          "src": "/icons/shop-shortcut.png",
+          "sizes": "96x96", 
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/app/community/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "media",
+          "accept": ["image/*", "video/*"]
+        }
+      ]
+    }
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+pattibytes",
+      "url": "/app/?action=%s"
+    }
+  ],
+  "related_applications": [],
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
+}
