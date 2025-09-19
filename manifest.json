@@ -2,7 +2,7 @@
   "name": "ਪੱਟੀ ਬਾਈਟਸ - PattiBytes Local News & Services",
   "short_name": "ਪੱਟੀ ਬਾਈਟਸ",
   "description": "ਪੱਟੀ ਦੀ ਸਭ ਤੋਂ ਵੱਡੀ ਸਥਾਨੀ ਨਿਊਜ਼, ਸਥਾਨਾਂ ਅਤੇ ਸੇਵਾਵਾਂ ਦੀ ਐਪ। Get latest news, explore famous places, shop local products and connect with community in Patti, Punjab.",
-  "start_url": "/app/",
+  "start_url": "/app/?utm_source=pwa&utm_medium=homescreen",
   "scope": "/",
   "id": "com.pattibytes.app",
   "display": "standalone",
@@ -83,9 +83,9 @@
       "url": "/app/news/",
       "icons": [
         {
-          "src": "/icons/news-shortcut.png",
-          "sizes": "96x96",
-          "type": "image/png"
+          "src": "/icons/pwab-192.jpg",
+          "sizes": "192x192",
+          "type": "image/jpeg"
         }
       ]
     },
@@ -96,9 +96,9 @@
       "url": "/app/places/",
       "icons": [
         {
-          "src": "/icons/places-shortcut.png", 
-          "sizes": "96x96",
-          "type": "image/png"
+          "src": "/icons/pwab-192.jpg", 
+          "sizes": "192x192",
+          "type": "image/jpeg"
         }
       ]
     },
@@ -109,9 +109,9 @@
       "url": "/app/shop/",
       "icons": [
         {
-          "src": "/icons/shop-shortcut.png",
-          "sizes": "96x96", 
-          "type": "image/png"
+          "src": "/icons/pwab-192.jpg",
+          "sizes": "192x192", 
+          "type": "image/jpeg"
         }
       ]
     }
