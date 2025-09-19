@@ -1664,97 +1664,236 @@
   }
 
 })();
-// Enhanced TOC Scroll Effect
-document.addEventListener('DOMContentLoaded', function() {
+
+// Enhanced Responsive TOC - Full Cross-Device Compatibility
+document.addEventListener('DOMContentLoaded', function () {
   const tocButton = document.querySelector('.toc-toggle-btn');
   const toc = document.querySelector('.table-of-contents');
-  const modalBody = document.querySelector('.modal-body');
+  const modalBody = document.querySelector('.modal-body') || document.body;
+  let tocVisible = false;
+  let isAnimating = false;
+
+  // Enhanced device detection
+  const isMobile = () => window.innerWidth <= 768 || 
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   
+  const isTablet = () => window.innerWidth > 768 && window.innerWidth <= 1024;
+  const isTouch = () => 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+  // Improved toggle with device-specific behavior
   if (tocButton && toc) {
-    let tocVisible = false;
-    
-    tocButton.addEventListener('click', function() {
+    // Enhanced click/touch handler
+    const handleToggle = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      if (isAnimating) return;
+      isAnimating = true;
+      
       tocVisible = !tocVisible;
       
       if (tocVisible) {
-        // Show TOC
+        // Show TOC with device-specific animation
         toc.style.display = 'block';
         toc.classList.add('scroll-to-view');
         tocButton.classList.add('active');
+        tocButton.setAttribute('aria-expanded', 'true');
         
-        // Smooth scroll to TOC
-        setTimeout(() => {
-          toc.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'start',
+        // Device-specific scroll behavior
+        requestAnimationFrame(() => {
+          const scrollOptions = {
+            behavior: 'smooth',
+            block: isMobile() ? 'nearest' : 'start',
             inline: 'nearest'
-          });
-        }, 100);
+          };
+          
+          // Enhanced scroll with fallback for older devices
+          if (toc.scrollIntoView) {
+            toc.scrollIntoView(scrollOptions);
+          } else {
+            // Fallback for older browsers
+            toc.scrollTop = 0;
+            window.scrollTo({
+              top: toc.offsetTop - (isMobile() ? 60 : 20),
+              behavior: 'smooth'
+            });
+          }
+        });
         
-        // Remove highlight animation after it completes
+        // Visual feedback removal
         setTimeout(() => {
           toc.classList.remove('scroll-to-view');
-        }, 2000);
+          isAnimating = false;
+        }, isMobile() ? 1500 : 2000);
         
       } else {
         // Hide TOC
         toc.style.display = 'none';
         tocButton.classList.remove('active');
+        tocButton.setAttribute('aria-expanded', 'false');
+        setTimeout(() => isAnimating = false, 300);
       }
-    });
-    
-    // Enhanced TOC link clicks with smooth scrolling
-    const tocLinks = document.querySelectorAll('.toc-link');
-    tocLinks.forEach(link => {
-      link.addEventListener('click', function(e) {
+    };
+
+    // Multi-event support for all devices
+    tocButton.addEventListener('click', handleToggle);
+    if (isTouch()) {
+      tocButton.addEventListener('touchend', function(e) {
         e.preventDefault();
-        
-        const targetId = this.getAttribute('href');
-        const targetElement = document.querySelector(targetId);
-        
-        if (targetElement) {
-          // Remove active class from all links
-          tocLinks.forEach(l => l.classList.remove('active'));
-          
-          // Add active class to clicked link
-          this.classList.add('active');
-          
-          // Smooth scroll to target
-          targetElement.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start',
-            inline: 'nearest'
-          });
-          
-          // Add highlight effect to target
-          targetElement.classList.add('toc-target-highlight');
-          setTimeout(() => {
-            targetElement.classList.remove('toc-target-highlight');
-          }, 3000);
-          
-          // Auto-hide TOC on mobile after clicking
-          if (window.innerWidth <= 768) {
-            setTimeout(() => {
-              toc.style.display = 'none';
-              tocButton.classList.remove('active');
-              tocVisible = false;
-            }, 1000);
-          }
-        }
-      });
-    });
-    
-    // Auto-hide TOC when clicking outside (mobile)
-    if (window.innerWidth <= 768) {
-      document.addEventListener('click', function(e) {
-        if (tocVisible && 
-            !toc.contains(e.target) && 
-            !tocButton.contains(e.target)) {
-          toc.style.display = 'none';
-          tocButton.classList.remove('active');
-          tocVisible = false;
-        }
+        handleToggle(e);
       });
     }
+  }
+
+  // Enhanced TOC link navigation
+  const tocLinks = document.querySelectorAll('.toc-link, .table-of-contents a[href^="#"]');
+  
+  tocLinks.forEach(link => {
+    const handleLinkClick = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Get target from data-target or href
+      const targetId = this.getAttribute('data-target') || 
+                      this.getAttribute('href')?.substring(1);
+      const targetElement = targetId ? document.getElementById(targetId) : null;
+      
+      if (!targetElement) return;
+      
+      // Update active states
+      tocLinks.forEach(l => l.classList.remove('active'));
+      this.classList.add('active');
+      
+      // Enhanced smooth scrolling with device optimization
+      const offset = isMobile() ? 80 : isTablet() ? 60 : 40;
+      const targetPosition = targetElement.offsetTop - offset;
+      
+      // Smooth scroll with fallbacks
+      if (window.scrollTo && 'behavior' in document.documentElement.style) {
+        window.scrollTo({
+          top: targetPosition,
+          behavior: 'smooth'
+        });
+      } else {
+        // Fallback animation for older browsers
+        const startPosition = window.pageYOffset;
+        const distance = targetPosition - startPosition;
+        const duration = 800;
+        let start = null;
+        
+        function step(timestamp) {
+          if (!start) start = timestamp;
+          const progress = timestamp - start;
+          const ease = Math.min(progress / duration, 1);
+          
+          window.scrollTo(0, startPosition + (distance * ease));
+          
+          if (progress < duration) {
+            window.requestAnimationFrame(step);
+          }
+        }
+        window.requestAnimationFrame(step);
+      }
+      
+      // Target highlighting
+      targetElement.classList.add('toc-target-highlight');
+      setTimeout(() => targetElement.classList.remove('toc-target-highlight'), 
+                 isMobile() ? 2000 : 3000);
+      
+      // Auto-hide on mobile/tablet after navigation
+      if (isMobile() || isTablet()) {
+        setTimeout(() => {
+          if (toc && tocButton) {
+            toc.style.display = 'none';
+            tocButton.classList.remove('active');
+            tocButton.setAttribute('aria-expanded', 'false');
+            tocVisible = false;
+          }
+        }, isMobile() ? 800 : 1200);
+      }
+    };
+
+    // Multi-event support
+    link.addEventListener('click', handleLinkClick);
+    if (isTouch()) {
+      link.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        handleLinkClick.call(this, e);
+      });
+    }
+  });
+
+  // Enhanced outside click detection for mobile/tablet
+  const handleOutsideClick = function(e) {
+    if (!tocVisible || !toc || !tocButton) return;
+    
+    if (!toc.contains(e.target) && !tocButton.contains(e.target)) {
+      toc.style.display = 'none';
+      tocButton.classList.remove('active');
+      tocButton.setAttribute('aria-expanded', 'false');
+      tocVisible = false;
+    }
+  };
+
+  if (isMobile() || isTablet()) {
+    document.addEventListener('click', handleOutsideClick);
+    document.addEventListener('touchend', handleOutsideClick);
+  }
+
+  // Responsive resize handler
+  let resizeTimeout;
+  window.addEventListener('resize', function() {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      // Reset TOC state on significant resize
+      if (Math.abs(window.innerWidth - (window.lastWidth || 0)) > 200) {
+        if (toc && tocButton) {
+          toc.style.display = 'none';
+          tocButton.classList.remove('active');
+          tocButton.setAttribute('aria-expanded', 'false');
+          tocVisible = false;
+        }
+      }
+      window.lastWidth = window.innerWidth;
+    }, 150);
+  });
+
+  // Enhanced keyboard accessibility
+  if (tocButton) {
+    tocButton.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this.click();
+      }
+    });
+  }
+
+  // Focus management for accessibility
+  tocLinks.forEach(link => {
+    link.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.click();
+      }
+    });
+  });
+
+  // Prevent zoom on double-tap (iOS Safari)
+  if (isTouch()) {
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', function(event) {
+      const now = (new Date()).getTime();
+      if (now - lastTouchEnd <= 300) {
+        event.preventDefault();
+      }
+      lastTouchEnd = now;
+    }, false);
+  }
+
+  // Initialize ARIA attributes
+  if (tocButton && toc) {
+    tocButton.setAttribute('aria-expanded', 'false');
+    tocButton.setAttribute('aria-controls', toc.id || 'table-of-contents');
+    if (!toc.id) toc.id = 'table-of-contents';
   }
 });
