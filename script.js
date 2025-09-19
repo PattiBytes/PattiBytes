@@ -1095,128 +1095,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // Universal In-App Browser Detection - Enhanced for pattibytes.com
-(function() {
-    'use strict';
-    
-    // Enhanced detection for your website
-    function detectInAppBrowser() {
-        const ua = navigator.userAgent.toLowerCase();
-        const inAppPatterns = [
-            'instagram', 'fban', 'fbav', 'fb_iab', 'fb4a',
-            'tiktok', 'twitter', 'linkedinapp', 'pinterest',
-            'whatsapp', 'telegram', 'snapchat', 'reddit'
-        ];
-        
-        return inAppPatterns.some(pattern => ua.includes(pattern)) || 
-               /; wv\)/.test(ua);
+// Modified version that WORKS with Instagram
+function detectInstagram() {
+    const ua = navigator.userAgent.toLowerCase();
+    if (ua.includes('instagram')) {
+        showInstagramInstructions();
+        return true;
     }
+    return false;
+}
+
+function showInstagramInstructions() {
+    const popup = document.createElement('div');
+    popup.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.9); z-index: 999999;
+        display: flex; align-items: center; justify-content: center;
+        font-family: Arial, sans-serif; color: white;
+    `;
     
-    function getDeviceInfo() {
-        const ua = navigator.userAgent;
-        return {
-            isIOS: /iPad|iPhone|iPod/.test(ua),
-            isAndroid: /Android/.test(ua),
-            isMobile: /Mobi|Android/i.test(ua)
-        };
-    }
-    
-    function showBrowserRedirectPopup(deviceInfo) {
-        // Use your existing notification system
-        if (typeof showNotification === 'function') {
-            showNotification(
-                'For best experience, tap ⋯ menu → "Open in Browser"', 
-                'info', 
-                8000
-            );
-            return;
-        }
-        
-        // Fallback popup using your existing styling
-        const popup = document.createElement('div');
-        popup.className = 'inapp-browser-popup';
-        popup.style.cssText = `
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            background: var(--accent-color, #e53e3e); color: white;
-            padding: 15px 20px; border-radius: 8px; z-index: 999999;
-            font-family: inherit; text-align: center; max-width: 90%;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        `;
-        
-        const instructions = deviceInfo.isIOS 
-            ? 'Tap Share → "Open in Safari"'
-            : 'Tap ⋯ menu → "Open in Browser"';
-            
-        popup.innerHTML = `
-            <div style="margin-bottom: 10px;">🌐 Open in Browser</div>
-            <div style="font-size: 0.9em; opacity: 0.9;">${instructions}</div>
-            <button onclick="this.parentElement.remove()" 
-                    style="background: rgba(255,255,255,0.2); border: none; 
-                           color: white; padding: 5px 10px; border-radius: 4px; 
-                           margin-top: 10px; cursor: pointer;">
+    popup.innerHTML = `
+        <div style="text-align: center; max-width: 300px; padding: 20px;">
+            <div style="font-size: 40px; margin-bottom: 20px;">📱</div>
+            <h3>Open in Browser</h3>
+            <p style="margin: 15px 0;">For the best experience:</p>
+            <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <strong>Tap the three dots (⋯)</strong><br>
+                at the bottom right<br><br>
+                Then select<br>
+                <strong>"Open in Browser"</strong>
+            </div>
+            <button onclick="this.parentElement.parentElement.remove()" 
+                    style="background: #e53e3e; color: white; border: none; 
+                           padding: 10px 20px; border-radius: 5px; margin-top: 15px;">
                 Continue Here
             </button>
-        `;
-        
-        document.body.appendChild(popup);
-        
-        // Auto-remove after 8 seconds
-        setTimeout(() => popup.remove(), 8000);
-    }
+        </div>
+    `;
     
-    function performRedirect(deviceInfo) {
-        const currentURL = window.location.href;
-        let redirectURL;
-        
-        if (deviceInfo.isAndroid) {
-            redirectURL = `intent://${window.location.host}${window.location.pathname}${window.location.search}#Intent;scheme=https;package=com.android.chrome;end`;
-        } else if (deviceInfo.isIOS) {
-            redirectURL = `x-safari-https://${window.location.host}${window.location.pathname}${window.location.search}`;
-        } else {
-            redirectURL = currentURL;
-        }
-        
-        try {
-            window.location.href = redirectURL;
-            
-            // Fallback after 3 seconds
-            setTimeout(() => {
-                if (!document.hidden) {
-                    window.open(currentURL, '_blank');
-                }
-            }, 3000);
-        } catch (error) {
-            window.open(currentURL, '_blank');
-        }
-    }
-    
-    function initInAppBrowserDetection() {
-        // Skip if already processed
-        if (sessionStorage.getItem('inapp_redirect_checked') || 
-            window.location.search.includes('external_browser=true')) {
-            return;
-        }
-        
-        if (!detectInAppBrowser()) {
-            return;
-        }
-        
-        sessionStorage.setItem('inapp_redirect_checked', 'true');
-        
-        const deviceInfo = getDeviceInfo();
-        
-        // Show popup first (integrates with your existing UI)
-        showBrowserRedirectPopup(deviceInfo);
-        
-        // Optional: Auto-redirect after delay
-        // setTimeout(() => performRedirect(deviceInfo), 5000);
-    }
-    
-    // Initialize with your existing DOMContentLoaded pattern
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initInAppBrowserDetection);
-    } else {
-        initInAppBrowserDetection();
-    }
-    
-})();
+    document.body.appendChild(popup);
+}
 
+// Initialize
+document.addEventListener('DOMContentLoaded', detectInstagram);
