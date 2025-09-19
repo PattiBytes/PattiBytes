@@ -1095,7 +1095,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // Universal In-App Browser Detection - Enhanced for pattibytes.com
-// Enhanced Instagram Detection - Works on ALL Devices
+// Enhanced Instagram Detection - Punjabi/English + Pattibytes Theme
 (function() {
     'use strict';
     
@@ -1116,18 +1116,62 @@ document.addEventListener('DOMContentLoaded', () => {
     function detectInstagram() {
         const ua = navigator.userAgent.toLowerCase();
         const patterns = [
-            'instagram',           // Standard Instagram app
-            'ig_user_agent',      // Instagram internal browser
-            'instagrambot',       // Instagram bot
-            'instagram android',  // Android Instagram
-            'instagram ios'       // iOS Instagram
+            'instagram', 'ig_user_agent', 'instagrambot', 
+            'instagram android', 'instagram ios'
         ];
         
         return patterns.some(pattern => ua.includes(pattern)) || 
                (ua.includes('mobile safari') && ua.includes('instagram'));
     }
     
-    // Enhanced popup with device-specific instructions
+    // Bilingual content
+    const content = {
+        en: {
+            title: 'Open in Browser',
+            subtitle: 'For the best experience on Pattibytes',
+            iosInstructions: 'iOS Instructions:',
+            iosSteps: '1. Tap the <strong>Share button</strong> (square with arrow)<br>2. Select <strong>"Open in Safari"</strong><br><br><em>Or tap the three dots (⋯) and choose "Open in Browser"</em>',
+            androidInstructions: 'Android Instructions:',
+            androidSteps: '1. Tap the <strong>three dots (⋯)</strong> at the top-right<br>2. Select <strong>"Open in Browser"</strong> or <strong>"Open in Chrome"</strong><br><br><em>Look for the browser icon or "External Browser" option</em>',
+            desktopInstructions: 'Desktop Instructions:',
+            desktopSteps: 'Copy this URL and paste it in your preferred browser for the best experience.',
+            openButton: 'Open in Browser',
+            continueButton: 'Continue Here',
+            sessionNote: 'This popup appears once per session'
+        },
+        pa: {
+            title: 'ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਖੋਲ੍ਹੋ',
+            subtitle: 'ਪੱਟੀਬਾਈਟਸ ਤੇ ਸਭ ਤੋਂ ਚੰਗਾ ਤਜਰਬਾ ਲਈ',
+            iosInstructions: 'iOS ਨਿਰਦੇਸ਼:',
+            iosSteps: '1. <strong>Share button</strong> (ਤੀਰ ਵਾਲਾ ਵਰਗ) ਨੂੰ ਦਬਾਓ<br>2. <strong>"Open in Safari"</strong> ਚੁਣੋ<br><br><em>ਜਾਂ ਤਿੰਨ ਬਿੰਦੀਆਂ (⋯) ਦਬਾਓ ਅਤੇ "Open in Browser" ਚੁਣੋ</em>',
+            androidInstructions: 'Android ਨਿਰਦੇਸ਼:',
+            androidSteps: '1. ਉੱਪਰ ਸੱਜੇ ਪਾਸੇ <strong>ਤਿੰਨ ਬਿੰਦੀਆਂ (⋯)</strong> ਦਬਾਓ<br>2. <strong>"Open in Browser"</strong> ਜਾਂ <strong>"Open in Chrome"</strong> ਚੁਣੋ<br><br><em>ਬ੍ਰਾਊਜ਼ਰ ਆਈਕਨ ਜਾਂ "External Browser" ਵਿਕਲਪ ਲੱਭੋ</em>',
+            desktopInstructions: 'Desktop ਨਿਰਦੇਸ਼:',
+            desktopSteps: 'ਸਭ ਤੋਂ ਚੰਗੇ ਤਜਰਬੇ ਲਈ ਇਸ URL ਨੂੰ ਕਾਪੀ ਕਰੋ ਅਤੇ ਆਪਣੇ ਪਸੰਦੀਦਾ ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਪੇਸਟ ਕਰੋ।',
+            openButton: 'ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਖੋਲ੍ਹੋ',
+            continueButton: 'ਇੱਥੇ ਜਾਰੀ ਰੱਖੋ',
+            sessionNote: 'ਇਹ ਪੌਪਅੱਪ ਪ੍ਰਤੀ ਸੈਸ਼ਨ ਵਿੱਚ ਇੱਕ ਵਾਰ ਦਿਖਾਈ ਦਿੰਦਾ ਹੈ'
+        }
+    };
+    
+    // Language detection (default to English)
+    function getLanguage() {
+        // Check if Punjabi is preferred (from browser language or page content)
+        const browserLang = navigator.language || navigator.userLanguage || '';
+        const pageTitle = document.title.toLowerCase();
+        const pageContent = document.body ? document.body.textContent.substring(0, 200) : '';
+        
+        // Detect Punjabi content or preference
+        if (browserLang.includes('pa') || 
+            pageTitle.includes('ਪੰਜਾਬ') || 
+            pageContent.includes('ਪੱਟੀ') ||
+            window.location.href.includes('pattibytes.com')) {
+            return 'pa';
+        }
+        return 'en';
+    }
+    
+    // Enhanced popup with bilingual support and Pattibytes theme
     function showInstagramInstructions() {
         // Prevent multiple popups
         if (document.getElementById('instagram-popup') || 
@@ -1138,8 +1182,10 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.setItem('instagram-popup-shown', 'true');
         
         const deviceInfo = getDeviceInfo();
+        const lang = getLanguage();
+        const text = content[lang];
         
-        // Create responsive popup
+        // Create responsive popup with Pattibytes yellow-white theme
         const popup = document.createElement('div');
         popup.id = 'instagram-popup';
         popup.style.cssText = `
@@ -1147,117 +1193,130 @@ document.addEventListener('DOMContentLoaded', () => {
             background: rgba(0,0,0,0.95); z-index: 999999;
             display: flex; align-items: center; justify-content: center;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-            color: white; padding: 20px; box-sizing: border-box;
+            color: #333; padding: 20px; box-sizing: border-box;
             animation: fadeInPopup 0.4s ease-out;
         `;
         
-        // Device-specific instructions
+        // Device-specific instructions with bilingual content
         let instructions = '';
-        let buttonText = 'Open in Browser';
         
         if (deviceInfo.isIOS) {
             instructions = `
-                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; margin: 20px 0;">
+                <div style="background: linear-gradient(135deg, #fff9c4 0%, #ffeaa7 100%); 
+                           padding: 20px; border-radius: 12px; margin: 20px 0; 
+                           border: 2px solid #fdcb6e; box-shadow: 0 4px 15px rgba(253, 203, 110, 0.3);">
                     <div style="font-size: 32px; margin-bottom: 15px;">📱</div>
-                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 15px;">iOS Instructions:</div>
-                    <div style="line-height: 1.6;">
-                        1. Tap the <strong>Share button</strong> (square with arrow)<br>
-                        2. Select <strong>"Open in Safari"</strong><br><br>
-                        <em>Or tap the three dots (⋯) and choose "Open in Browser"</em>
+                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #2d3436;">
+                        ${text.iosInstructions}
+                    </div>
+                    <div style="line-height: 1.6; color: #636e72;">
+                        ${text.iosSteps}
                     </div>
                 </div>
             `;
         } else if (deviceInfo.isAndroid) {
             instructions = `
-                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; margin: 20px 0;">
+                <div style="background: linear-gradient(135deg, #fff9c4 0%, #ffeaa7 100%); 
+                           padding: 20px; border-radius: 12px; margin: 20px 0; 
+                           border: 2px solid #fdcb6e; box-shadow: 0 4px 15px rgba(253, 203, 110, 0.3);">
                     <div style="font-size: 32px; margin-bottom: 15px;">🤖</div>
-                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 15px;">Android Instructions:</div>
-                    <div style="line-height: 1.6;">
-                        1. Tap the <strong>three dots (⋯)</strong> at the top-right<br>
-                        2. Select <strong>"Open in Browser"</strong> or <strong>"Open in Chrome"</strong><br><br>
-                        <em>Look for the browser icon or "External Browser" option</em>
+                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #2d3436;">
+                        ${text.androidInstructions}
+                    </div>
+                    <div style="line-height: 1.6; color: #636e72;">
+                        ${text.androidSteps}
                     </div>
                 </div>
             `;
         } else {
             instructions = `
-                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; margin: 20px 0;">
+                <div style="background: linear-gradient(135deg, #fff9c4 0%, #ffeaa7 100%); 
+                           padding: 20px; border-radius: 12px; margin: 20px 0; 
+                           border: 2px solid #fdcb6e; box-shadow: 0 4px 15px rgba(253, 203, 110, 0.3);">
                     <div style="font-size: 32px; margin-bottom: 15px;">🌐</div>
-                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 15px;">Desktop Instructions:</div>
-                    <div style="line-height: 1.6;">
-                        Copy this URL and paste it in your preferred browser for the best experience.
+                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #2d3436;">
+                        ${text.desktopInstructions}
+                    </div>
+                    <div style="line-height: 1.6; color: #636e72;">
+                        ${text.desktopSteps}
                     </div>
                 </div>
             `;
         }
         
-        // Responsive content container
-        const content = document.createElement('div');
-        content.style.cssText = `
-            text-align: center; max-width: ${deviceInfo.isMobile ? '350px' : '400px'}; 
-            width: 90%; background: rgba(30,30,30,0.95); padding: 30px; 
-            border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-            backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
+        // Responsive content container with Pattibytes theme
+        const content_container = document.createElement('div');
+        content_container.style.cssText = `
+            text-align: center; max-width: ${deviceInfo.isMobile ? '350px' : '420px'}; 
+            width: 90%; background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); 
+            padding: 30px; border-radius: 20px; 
+            box-shadow: 0 15px 50px rgba(253, 203, 110, 0.4);
+            border: 3px solid #fdcb6e; color: #2d3436;
         `;
         
-        content.innerHTML = `
-            <div style="margin-bottom: 20px;">
-                <div style="font-size: 48px; margin-bottom: 15px;">🔓</div>
-                <h2 style="margin: 0 0 10px 0; font-size: 24px; font-weight: 600;">
-                    Open in Browser
+        content_container.innerHTML = `
+            <div style="margin-bottom: 25px;">
+                <div style="font-size: 48px; margin-bottom: 15px;">📰</div>
+                <h2 style="margin: 0 0 10px 0; font-size: 26px; font-weight: 700; color: #2d3436;">
+                    ${text.title}
                 </h2>
-                <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 16px;">
-                    For the best experience and full functionality
+                <p style="margin: 0; color: #636e72; font-size: 16px; font-weight: 500;">
+                    ${text.subtitle}
                 </p>
             </div>
             
             ${instructions}
             
-            <div style="margin-top: 25px;">
+            <div style="margin-top: 25px; display: flex; flex-direction: column; gap: 10px; align-items: center;">
                 <button id="try-open-btn" style="
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white; border: none; padding: 14px 28px; 
-                    border-radius: 25px; font-size: 16px; font-weight: 600;
-                    cursor: pointer; margin: 8px; min-width: 140px;
-                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-                    transition: all 0.3s ease;
-                " onmouseover="this.style.transform='translateY(-2px)'" 
-                   onmouseout="this.style.transform='translateY(0)'">
-                    ${buttonText}
+                    background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%);
+                    color: white; border: none; padding: 15px 30px; 
+                    border-radius: 25px; font-size: 16px; font-weight: 700;
+                    cursor: pointer; min-width: 200px; text-transform: uppercase;
+                    box-shadow: 0 6px 20px rgba(253, 203, 110, 0.4);
+                    transition: all 0.3s ease; letter-spacing: 0.5px;
+                " onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 25px rgba(253, 203, 110, 0.6)'" 
+                   onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 6px 20px rgba(253, 203, 110, 0.4)'">
+                    ${text.openButton}
                 </button>
-                <br>
+                
                 <button id="continue-btn" style="
-                    background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8);
-                    border: 1px solid rgba(255,255,255,0.2); padding: 12px 24px;
-                    border-radius: 20px; font-size: 14px; cursor: pointer;
-                    margin: 8px; transition: all 0.3s ease;
-                " onmouseover="this.style.background='rgba(255,255,255,0.15)'" 
-                   onmouseout="this.style.background='rgba(255,255,255,0.1)'">
-                    Continue Here
+                    background: rgba(253, 203, 110, 0.2); color: #2d3436;
+                    border: 2px solid #fdcb6e; padding: 12px 25px;
+                    border-radius: 20px; font-size: 14px; cursor: pointer; font-weight: 600;
+                    transition: all 0.3s ease; min-width: 160px;
+                " onmouseover="this.style.background='rgba(253, 203, 110, 0.3)'" 
+                   onmouseout="this.style.background='rgba(253, 203, 110, 0.2)'">
+                    ${text.continueButton}
                 </button>
             </div>
             
-            <div style="margin-top: 20px; font-size: 12px; color: rgba(255,255,255,0.6);">
-                This popup appears once per session
+            <div style="margin-top: 20px; font-size: 12px; color: #74b9ff; font-weight: 500;">
+                ${lang === 'pa' ? '• ' : ''}${text.sessionNote}${lang === 'pa' ? ' •' : ''}
             </div>
         `;
         
-        popup.appendChild(content);
+        popup.appendChild(content_container);
         
-        // Add animation styles
+        // Add Pattibytes-themed animation styles
         if (!document.getElementById('instagram-popup-styles')) {
             const styles = document.createElement('style');
             styles.id = 'instagram-popup-styles';
             styles.textContent = `
                 @keyframes fadeInPopup {
-                    from { opacity: 0; transform: scale(0.9) translateY(20px); }
+                    from { opacity: 0; transform: scale(0.8) translateY(30px); }
                     to { opacity: 1; transform: scale(1) translateY(0); }
                 }
                 @media (max-width: 480px) {
                     #instagram-popup > div {
                         padding: 20px !important;
                         font-size: 14px !important;
+                        max-width: 320px !important;
                     }
+                }
+                #instagram-popup button:focus {
+                    outline: 3px solid #fdcb6e;
+                    outline-offset: 2px;
                 }
             `;
             document.head.appendChild(styles);
@@ -1275,11 +1334,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             try {
                 if (deviceInfo.isAndroid) {
-                    // Android Chrome intent
                     const intentUrl = `intent://${window.location.host}${window.location.pathname}${window.location.search}#Intent;scheme=https;package=com.android.chrome;end`;
                     window.location.href = intentUrl;
                     
-                    // Fallback after 2 seconds
                     setTimeout(() => {
                         if (!document.hidden) {
                             window.open(currentUrl, '_blank');
@@ -1287,10 +1344,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, 2000);
                     
                 } else if (deviceInfo.isIOS) {
-                    // iOS Safari intent
                     window.location.href = `x-safari-https://${window.location.host}${window.location.pathname}${window.location.search}`;
                     
-                    // Fallback
                     setTimeout(() => {
                         if (!document.hidden) {
                             window.open(currentUrl, '_blank');
@@ -1298,11 +1353,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, 2000);
                     
                 } else {
-                    // Desktop/other fallback
                     window.open(currentUrl, '_blank');
                 }
             } catch (error) {
-                // Ultimate fallback
                 window.open(currentUrl, '_blank');
             }
             
@@ -1333,7 +1386,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => tryOpenBtn.focus(), 500);
         }
         
-        // Auto-remove after 30 seconds to prevent blocking
+        // Auto-remove after 30 seconds
         setTimeout(() => {
             if (document.getElementById('instagram-popup')) {
                 popup.remove();
@@ -1343,14 +1396,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Enhanced initialization
     function initInstagramDetection() {
-        // Skip if already shown or not Instagram
         if (sessionStorage.getItem('instagram-popup-shown') || 
             window.location.search.includes('external_browser=true')) {
             return;
         }
         
         if (detectInstagram()) {
-            // Small delay to ensure page is fully loaded
             setTimeout(showInstagramInstructions, 1000);
         }
     }
