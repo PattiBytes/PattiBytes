@@ -1,53 +1,61 @@
 <!DOCTYPE html>
 <html lang="pa">
 <head>
-  <!-- put in <head> of /index.html, /news/index.html, /places/index.html, /shop/index.html -->
-<link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#111111">
-<link rel="apple-touch-icon" href="/icons/pwab-512.jpg">
-
+  <!-- PWA Manifest - Updated path -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#111111">
+  <link rel="apple-touch-icon" href="/icons/pwab-512.jpg">
+  
+  <!-- PWA Meta Tags -->
+  <meta name="application-name" content="ਪੱਟੀ ਬਾਈਟਸ">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="ਪੱਟੀ ਬਾਈਟਸ">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="msapplication-TileColor" content="#111111">
+  <meta name="format-detection" content="telephone=no">
+  
   <!-- CMP should load before ad scripts so consent can be applied -->
   <script src="https://cmp.gatekeeperconsent.com/min.js" data-cfasync="false"></script>
   <script src="https://the.gatekeeperconsent.com/cmp.min.js" data-cfasync="false"></script>
-
-  <!-- Ezoic (if you use Ezoic, they may manage ad tags; do NOT double-insert AdSense if Ezoic manages it) -->
+  
+  <!-- Ezoic -->
   <script async src="//www.ezojs.com/ezoic/sa.min.js"></script>
   <script>window.ezstandalone = window.ezstandalone || {}; ezstandalone.cmd = ezstandalone.cmd || [];</script>
-
-  <!-- If you keep a manual AdSense script, include it ONCE. 
-       If Ezoic manages ads for you, remove this manual AdSense snippet. -->
+  
+  <!-- AdSense -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5755659850244383"
     crossorigin="anonymous"></script>
-
+  
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title class="notranslate">ਪੱਟੀ ਬਾਈਟਸ | ਮੁੱਖ ਪੰਨਾ</title>
-
+  
   <!-- SEO basics -->
-  <meta name="description" content="ਪੱਟੀ ਬਾਈਟਸ: ਪੱਟੀ ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ, ਉਪਲਬਧੀਆਂ ਅਤੇ ਸੰਸਕ੍ਰਿਤੀ ਲਈ ਕੋਰ ਸੰਥਾਨ।" />
+  <meta name="description" content="ਪੱਟੀ ਬਾਈਟਸ: ਪੱਟੀ ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ, ਉਪਲਬਧੀਆਂ ਅਤੇ ਸੰਸਕ੍ਰਿਤੀ ਲਈ ਕੋਰ ਸੰਥਾਨ।" />
   <meta name="keywords" content="ਪੱਟੀ ਬਾਈਟਸ, pattibytes, PattiBytes, patti history, patti, Patti Bytes, Patti News, Punjabi Culture, ਪੰਜਾਬੀ ਖਬਰਾਂ" />
   <link rel="canonical" href="https://www.pattibytes.com/" />
-
+  
   <!-- Open Graph / Twitter -->
   <meta property="og:site_name" content="ਪੱਟੀ ਬਾਈਟਸ" />
   <meta property="og:title" content="ਪੱਟੀ ਬਾਈਟਸ | ਮੁੱਖ ਪੰਨਾ" />
-  <meta property="og:description" content="ਪੱਟੀ ਬਾਈਟਸ: ਪੱਟੀ ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ, ਉਪਲਬਧੀਆਂ ਅਤੇ ਸੰਸਕ੍ਰਿਤੀ ਲਈ ਕੋਰ ਸੰਥਾਨ।" />
+  <meta property="og:description" content="ਪੱਟੀ ਬਾਈਟਸ: ਪੱਟੀ ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ, ਉਪਲਬਧੀਆਂ ਅਤੇ ਸੰਸਕ੍ਰਿਤੀ ਲਈ ਕੋਰ ਸੰਥਾਨ।" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://www.pattibytes.com/" />
   <meta property="og:image" content="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="ਪੱਟੀ ਬਾਈਟਸ | ਮੁੱਖ ਪੰਨਾ" />
-  <meta name="twitter:description" content="ਪੱਟੀ ਬਾਈਟਸ: ਪੱਟੀ ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ..." />
+  <meta name="twitter:description" content="ਪੱਟੀ ਬਾਈਟਸ: ਪੱਟੀ ਸ਼ਹਿਰ ਦੀਆਂ ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ..." />
   <meta name="twitter:image" content="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg" />
-
+  
   <!-- Favicon -->
   <link rel="icon" href="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg" sizes="32x32" type="image/jpg" />
   <link rel="apple-touch-icon" href="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg" />
-
-  <!-- Styles (keep external files; inline critical CSS if you want faster LCP) -->
+  
+  <!-- Styles -->
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/index.css" />
-
+  
   <!-- Google Tag Manager -->
   <script>
   (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
@@ -56,7 +64,7 @@
   'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
   })(window,document,'script','dataLayer','GTM-5WKZPF3F');
   </script>
-
+  
   <!-- gtag (analytics) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-NS67B8VKCZ"></script>
   <script>
@@ -65,8 +73,8 @@
     gtag('js', new Date());
     gtag('config', 'G-NS67B8VKCZ', { 'anonymize_ip': true });
   </script>
-
-  <!-- If you have structured data, include it in the head (organization / website) -->
+  
+  <!-- Structured Data -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -77,15 +85,32 @@
     "sameAs": ["https://instagram.com/patti_bytes","https://www.facebook.com/ipattibytes/"]
   }
   </script>
-
 </head>
+
 <body>
   <!-- GTM noscript -->
   <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5WKZPF3F"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
-  <div class="bubble-container"></div>
+  <!-- PWA Install Banner -->
+  <div class="pwa-install-banner" id="pwaInstallBanner">
+    <div class="pwa-banner-content">
+      <div class="pwa-banner-info">
+        <div class="pwa-banner-icon">📱</div>
+        <div class="pwa-banner-text">
+          <div class="pwa-banner-title">ਪੱਟੀ ਬਾਈਟਸ ਐਪ ਇੰਸਟਾਲ ਕਰੋ</div>
+          <div class="pwa-banner-subtitle">ਬਿਹਤਰ ਅਨੁਭਵ ਅਤੇ ਤੇਜ਼ ਪਹੁੰਚ ਲਈ</div>
+        </div>
+      </div>
+      <div class="pwa-banner-actions">
+        <button class="pwa-install-btn" id="pwaInstallBtn">ਇੰਸਟਾਲ</button>
+        <button class="pwa-close-btn" id="pwaCloseBtn">✕</button>
+      </div>
+    </div>
+  </div>
 
+  <div class="bubble-container"></div>
+  
   <!-- Shared Header -->
   <header class="site-header" role="banner">
     <div class="container branding">
@@ -101,9 +126,9 @@
       </a>
       <h1 class="site-title"><span class="notranslate" translate="no">ਪੱਟੀ ਬਾਈਟਸ</span></h1>
     </div>
-
+    
     <button id="hamburger" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="mobile-menu" type="button">☰</button>
-
+    
     <nav id="mobile-menu" class="site-nav" aria-hidden="true" role="navigation">
       <ul class="nav-list">
         <li class="nav-item has-dropdown">
@@ -122,12 +147,30 @@
         <li class="nav-item"><a href="/places">ਪੱਟੀ ਦੇ ਪ੍ਰਸਿੱਧ ਸਥਾਨ</a></li>
         <li class="nav-item"><a href="/shop">ਦੁਕਾਨ</a></li>
         <li class="nav-item"><a href="/#collaboration">ਸੰਪਰਕ ਕਰੋ</a></li>
+        <!-- PWA App Link in Navigation -->
+        <li class="nav-item pwa-nav-item"><a href="/app/" class="pwa-nav-link">📱 ਐਪ ਚਲਾਓ</a></li>
       </ul>
     </nav>
   </header>
 
-
   <div class="header-spacer"></div>
+
+  <!-- PWA Features Promotion Section -->
+  <section class="pwa-promo-section">
+    <div class="container">
+      <div class="pwa-promo-content">
+        <div class="pwa-promo-text">
+          <h2>🚀 ਨਵਾਂ ਐਪ ਤਜਰਬਾ!</h2>
+          <p>ਬਿਹਤਰ ਫੀਚਰਜ਼, ਤੇਜ਼ ਲੋਡਿੰਗ, ਅਤੇ ਔਫਲਾਈਨ ਪੜ੍ਹਨ ਲਈ ਸਾਡੀ ਐਪ ਅਜ਼ਮਾਓ</p>
+        </div>
+        <div class="pwa-promo-actions">
+          <a href="/app/" class="btn-app-try">ਐਪ ਅਜ਼ਮਾਓ</a>
+          <button class="btn-app-install" id="headerInstallBtn">ਇੰਸਟਾਲ ਕਰੋ</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <main>
   <!-- History of Patti City (with Read More Modal) -->
 <section id="history" class="history-section">
@@ -456,6 +499,8 @@
           <li><a href="/#about">About Us</a></li>
           <li><a href="/#collaboration">Contact Us</a></li>
          <li><a href="/privacy-policy">Privacy Policy</a></li>
+        
+          <li><a href="/app/" class="footer-app-link">📱 Try App</a></li>
       </ul>
     </div>
 
@@ -545,6 +590,21 @@
     'sw': 'none'
   });
 </script>
+  <!-- PWA Service Worker Registration -->
+  <script>
+    // Register service worker for PWA functionality
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+          .then((registration) => {
+            console.log('PWA Service Worker registered:', registration.scope);
+          })
+          .catch((registrationError) => {
+            console.log('PWA Service Worker registration failed:', registrationError);
+          });
+      });
+    }
+  </script>
 
 </body>
 </html>
