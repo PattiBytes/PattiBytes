@@ -480,3 +480,172 @@ function truncateText(text, length = 150) {
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
+// App-specific logic
+class PattiByteApp {
+  constructor() {
+    this.isAppMode = true;
+    this.currentPage = this.detectCurrentPage();
+    
+    console.log('Patti Bytes App initialized:', { currentPage: this.currentPage });
+    
+    this.init();
+  }
+
+  detectCurrentPage() {
+    const path = window.location.pathname;
+    
+    if (path.includes('/news')) return 'news';
+    if (path.includes('/places')) return 'places';
+    if (path.includes('/shop')) return 'shop';
+    if (path.includes('/community')) return 'community';
+    if (path.includes('/dashboard')) return 'dashboard';
+    if (path.includes('/profile')) return 'profile';
+    
+    return 'home';
+  }
+
+  init() {
+    this.setupAppUI();
+    this.setupNavigation();
+    this.trackAppUsage();
+  }
+
+  setupAppUI() {
+    // Add app-specific classes
+    document.body.classList.add('app-mode');
+    
+    // Setup page-specific features
+    switch(this.currentPage) {
+      case 'home':
+        this.setupHomePage();
+        break;
+      case 'news':
+        this.setupNewsPage();
+        break;
+      case 'places':
+        this.setupPlacesPage();
+        break;
+      case 'shop':
+        this.setupShopPage();
+        break;
+      case 'community':
+        this.setupCommunityPage();
+        break;
+      case 'dashboard':
+        this.setupDashboardPage();
+        break;
+      case 'profile':
+        this.setupProfilePage();
+        break;
+    }
+  }
+
+  setupNavigation() {
+    // Add bottom navigation if not exists
+    if (!document.querySelector('.app-bottom-nav')) {
+      this.addBottomNavigation();
+    }
+    
+    // Update active navigation item
+    this.updateActiveNavItem();
+  }
+
+  addBottomNavigation() {
+    const nav = document.createElement('nav');
+    nav.className = 'app-bottom-nav';
+    nav.innerHTML = `
+      <div class="app-nav-container">
+        <a href="/app/" class="app-nav-item ${this.currentPage === 'home' ? 'active' : ''}">
+          <div class="nav-icon">🏠</div>
+          <span class="nav-label">ਘਰ</span>
+        </a>
+        <a href="/app/news/" class="app-nav-item ${this.currentPage === 'news' ? 'active' : ''}">
+          <div class="nav-icon">📰</div>
+          <span class="nav-label">ਨਿਊਜ਼</span>
+        </a>
+        <a href="/app/places/" class="app-nav-item ${this.currentPage === 'places' ? 'active' : ''}">
+          <div class="nav-icon">📍</div>
+          <span class="nav-label">ਸਥਾਨ</span>
+        </a>
+        <a href="/app/shop/" class="app-nav-item ${this.currentPage === 'shop' ? 'active' : ''}">
+          <div class="nav-icon">🛍️</div>
+          <span class="nav-label">ਦੁਕਾਨ</span>
+        </a>
+        <a href="/app/community/" class="app-nav-item ${this.currentPage === 'community' ? 'active' : ''}">
+          <div class="nav-icon">👥</div>
+          <span class="nav-label">ਕਮਿਊਨਿਟੀ</span>
+        </a>
+      </div>
+    `;
+    
+    document.body.appendChild(nav);
+  }
+
+  updateActiveNavItem() {
+    const navItems = document.querySelectorAll('.app-nav-item');
+    navItems.forEach(item => {
+      const href = item.getAttribute('href');
+      const isActive = (href === '/app/' && this.currentPage === 'home') ||
+                      href.includes(`/${this.currentPage}/`);
+      
+      item.classList.toggle('active', isActive);
+    });
+  }
+
+  // Page-specific setup methods
+  setupHomePage() {
+    console.log('Setting up app home page');
+    // Add home-specific features
+  }
+
+  setupNewsPage() {
+    console.log('Setting up app news page');
+    // Add news-specific features like commenting, sharing
+  }
+
+  setupPlacesPage() {
+    console.log('Setting up app places page');
+    // Add places-specific features like maps, reviews
+  }
+
+  setupShopPage() {
+    console.log('Setting up app shop page');
+    // Add shop-specific features like cart, wishlist
+  }
+
+  setupCommunityPage() {
+    console.log('Setting up app community page');
+    // Add community features like chat, forums
+  }
+
+  setupDashboardPage() {
+    console.log('Setting up app dashboard page');
+    // Add dashboard features like analytics, settings
+  }
+
+  setupProfilePage() {
+    console.log('Setting up app profile page');
+    // Add profile features like edit, preferences
+  }
+
+  trackAppUsage() {
+    // Track app page views
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'page_view', {
+        event_category: 'App',
+        page_title: this.currentPage,
+        app_mode: true
+      });
+    }
+    
+    console.log('App page tracked:', this.currentPage);
+  }
+}
+
+// Initialize app when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  window.pattiBytesApp = new PattiByteApp();
+});
+
+console.log('App script loaded - app-specific features enabled');
+
