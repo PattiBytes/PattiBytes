@@ -2,24 +2,28 @@ const CACHE_NAME = 'pattibytes-v1';
 const ASSETS = [
   '/',
   '/index.html',
-  '/index.css',
-  '/index.js',
   '/style.css',
   '/script.js',
   '/manifest.webmanifest',
   '/icons/pwab-192.jpg',
   '/icons/pwab-512.jpg',
+  // Add app routes
+  '/app/',
+  '/app/index.html',
+  '/app/app.css',
+  '/app/app.js',
+  '/app/auth/index.html',
+  '/app/auth/auth.css',
+  '/app/auth/auth.js',
+  '/app/dashboard/index.html',
+  '/app/community/index.html',
+  // Existing routes
   '/news/index.html',
-  '/news/news.css',
-  '/news/news.js',
   '/places/index.html',
-  '/places/places.css',
-  '/places/places.js',
-  '/shop/index.html',
-  '/shop/shop.css',
-  '/shop/shop.js',
-  '/privacy-policy/index.html'
+  '/shop/index.html'
 ];
+
+
 
 // Pre-cache on install (static app shell)
 self.addEventListener('install', event => {
