@@ -12,14 +12,33 @@
   "background_color": "#f8fafc",
   "lang": "pa",
   "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
     { "src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any maskable" },
     { "src": "/icons/pwab-512.jpg", "sizes": "512x512", "type": "image/jpeg", "purpose": "any maskable" }
   ],
   "shortcuts": [
-    { "name": "ਤਾਜ਼ਾ ਨਿਊਜ਼", "short_name": "ਨਿਊਜ਼", "description": "ਪੱਟੀ ਦੀ ਸਭ ਤੋਂ ਤਾਜ਼ੀ ਖਬਰਾਂ ਪੜ੍ਹੋ", "url": "/app/news/index.html", "icons": [{ "src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpeg" }] },
-    { "name": "ਮਸ਼ਹੂਰ ਸਥਾਨ", "short_name": "ਸਥਾਨ", "description": "ਪੱਟੀ ਦੇ ਐਤਿਹਾਸਿਕ ਅਤੇ ਮਸ਼ਹੂਰ ਸਥਾਨਾਂ ਦੀ ਜਾਣਕਾਰੀ", "url": "/app/places/index.html", "icons": [{ "src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpeg" }] },
-    { "name": "ਸਥਾਨੀ ਦੁਕਾਨ", "short_name": "ਦੁਕਾਨ", "description": "ਸਥਾਨੀ ਕਾਰੋਬਾਰਾਂ ਤੋਂ ਖਰੀਦਦਾਰੀ ਕਰੋ", "url": "/app/shop/index.html", "icons": [{ "src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpeg" }] }
+    {
+      "name": "ਤਾਜ਼ਾ ਨਿਊਜ਼",
+      "short_name": "ਨਿਊਜ਼",
+      "description": "ਪੱਟੀ ਦੀ ਸਭ ਤੋਂ ਤਾਜ਼ੀ ਖਬਰਾਂ ਪੜ੍ਹੋ",
+      "url": "/app/news/index.html",
+      "icons": [{ "src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpeg" }]
+    },
+    {
+      "name": "ਮਸ਼ਹੂਰ ਸਥਾਨ",
+      "short_name": "ਸਥਾਨ",
+      "description": "ਪੱਟੀ ਦੇ ਐਤਿਹਾਸਿਕ ਅਤੇ ਮਸ਼ਹੂਰ ਸਥਾਨਾਂ ਦੀ ਜਾਣਕਾਰੀ",
+      "url": "/app/places/index.html",
+      "icons": [{ "src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpeg" }]
+    },
+    {
+      "name": "ਸਥਾਨੀ ਦੁਕਾਨ",
+      "short_name": "ਦੁਕਾਨ",
+      "description": "ਸਥਾਨੀ ਕਾਰੋਬਾਰਾਂ ਤੋਂ ਖਰੀਦਦਾਰੀ ਕਰੋ",
+      "url": "/app/shop/index.html",
+      "icons": [{ "src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpeg" }]
+    }
   ],
   "share_target": {
     "action": "/app/community/share",
