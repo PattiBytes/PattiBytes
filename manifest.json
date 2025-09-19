@@ -8,7 +8,7 @@
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "portrait-primary",
-  "theme_color": "#2563eb",
+  "theme_color": "#111111",
   "background_color": "#f8fafc",
   "categories": ["news", "lifestyle", "social", "shopping", "travel"],
   "lang": "pa",
@@ -38,41 +38,6 @@
       "sizes": "512x512",
       "type": "image/jpeg",
       "purpose": "maskable"
-    },
-    {
-      "src": "/icons/favicon.ico",
-      "sizes": "16x16 32x32",
-      "type": "image/x-icon",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/apple-touch-icon.png",
-      "sizes": "180x180",
-      "type": "image/png",
-      "purpose": "any"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/icons/screenshot-mobile-1.jpg",
-      "sizes": "390x844",
-      "type": "image/jpeg",
-      "form_factor": "narrow",
-      "label": "Home screen with latest news and features"
-    },
-    {
-      "src": "/icons/screenshot-mobile-2.jpg", 
-      "sizes": "390x844",
-      "type": "image/jpeg",
-      "form_factor": "narrow",
-      "label": "News section with local updates"
-    },
-    {
-      "src": "/icons/screenshot-desktop.jpg",
-      "sizes": "1920x1080",
-      "type": "image/jpeg", 
-      "form_factor": "wide",
-      "label": "Desktop view of Patti Bytes app"
     }
   ],
   "shortcuts": [
@@ -81,39 +46,21 @@
       "short_name": "ਨਿਊਜ਼", 
       "description": "ਪੱਟੀ ਦੀ ਸਭ ਤੋਂ ਤਾਜ਼ੀ ਖਬਰਾਂ ਪੜ੍ਹੋ",
       "url": "/app/news/",
-      "icons": [
-        {
-          "src": "/icons/pwab-192.jpg",
-          "sizes": "192x192",
-          "type": "image/jpeg"
-        }
-      ]
+      "icons": [{"src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpeg"}]
     },
     {
       "name": "ਮਸ਼ਹੂਰ ਸਥਾਨ",
       "short_name": "ਸਥਾਨ",
       "description": "ਪੱਟੀ ਦੇ ਐਤਿਹਾਸਿਕ ਅਤੇ ਮਸ਼ਹੂਰ ਸਥਾਨਾਂ ਦੀ ਜਾਣਕਾਰੀ",
       "url": "/app/places/",
-      "icons": [
-        {
-          "src": "/icons/pwab-192.jpg", 
-          "sizes": "192x192",
-          "type": "image/jpeg"
-        }
-      ]
+      "icons": [{"src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpeg"}]
     },
     {
       "name": "ਸਥਾਨੀ ਦੁਕਾਨ",
       "short_name": "ਦੁਕਾਨ",
       "description": "ਸਥਾਨੀ ਕਾਰੋਬਾਰਾਂ ਤੋਂ ਖਰੀਦਦਾਰੀ ਕਰੋ",
       "url": "/app/shop/",
-      "icons": [
-        {
-          "src": "/icons/pwab-192.jpg",
-          "sizes": "192x192", 
-          "type": "image/jpeg"
-        }
-      ]
+      "icons": [{"src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpeg"}]
     }
   ],
   "share_target": {
@@ -123,23 +70,7 @@
     "params": {
       "title": "title",
       "text": "text",
-      "url": "url",
-      "files": [
-        {
-          "name": "media",
-          "accept": ["image/*", "video/*"]
-        }
-      ]
+      "url": "url"
     }
-  },
-  "protocol_handlers": [
-    {
-      "protocol": "web+pattibytes",
-      "url": "/app/?action=%s"
-    }
-  ],
-  "related_applications": [],
-  "edge_side_panel": {
-    "preferred_width": 400
   }
 }
