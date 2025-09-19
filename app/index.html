@@ -3,13 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    
+    <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#2563eb">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="ਪੱਟੀ ਬਾਈਟਸ">
+    <meta name="application-name" content="ਪੱਟੀ ਬਾਈਟਸ">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="msapplication-TileColor" content="#2563eb">
+    <meta name="format-detection" content="telephone=no">
     
-    <title>[translate:ਪੱਟੀ ਬਾਈਟਸ - ਐਪ ਡੈਸ਼ਬੋਰਡ]</title>
-    <meta name="description" content="[translate:ਪੱਟੀ ਦੀ ਸਭ ਤੋਂ ਵੱਡੀ ਨਿਊਜ਼ ਅਤੇ ਸੇਵਾ ਐਪ]">
+    <title>ਪੱਟੀ ਬਾਈਟਸ - ਐਪ ਡੈਸ਼ਬੋਰਡ</title>
+    <meta name="description" content="ਪੱਟੀ ਦੀ ਸਭ ਤੋਂ ਵੱਡੀ ਨਿਊਜ਼ ਅਤੇ ਸੇਵਾ ਐਪ">
+    
+    <!-- Canonical and alternate links -->
+    <link rel="canonical" href="https://pattibytes.com/app/">
+    <link rel="alternate" href="https://pattibytes.com/" title="ਪੱਟੀ ਬਾਈਟਸ ਵੈਬਸਾਈਟ">
     
     <!-- Stylesheets -->
     <link rel="stylesheet" href="/style.css">
@@ -17,7 +27,7 @@
     <link rel="stylesheet" href="/app/shared/styles/navigation.css">
     
     <!-- PWA Manifest -->
-    <link rel="manifest" href="/app/manifest.json">
+    <link rel="manifest" href="/manifest.json">
     
     <!-- Icons -->
     <link rel="apple-touch-icon" href="/icons/pwab-192.jpg">
@@ -27,22 +37,22 @@
     <link rel="preload" href="/app/shared/navigation.js" as="script">
     <link rel="preload" href="/app/app.js" as="script">
 </head>
-<body>
+<body class="app-mode">
     <!-- App Header -->
-    <header class="app-header native-header">
+    <header class="app-header">
         <div class="header-left">
             <button class="menu-btn" onclick="toggleSideDrawer()" aria-label="Menu">
                 <span class="hamburger"></span>
             </button>
-            <h1 class="app-title">[translate:ਪੱਟੀ ਬਾਈਟਸ]</h1>
+            <h1 class="app-title">ਪੱਟੀ ਬਾਈਟਸ</h1>
         </div>
         <div class="header-right">
-            <button class="search-btn" onclick="openSearch()" aria-label="Search">🔍</button>
-            <button class="notification-btn" onclick="openNotifications()" aria-label="Notifications">
+            <button class="header-btn search-btn" onclick="openSearch()" aria-label="Search">🔍</button>
+            <button class="header-btn notification-btn" onclick="openNotifications()" aria-label="Notifications">
                 <span class="notification-icon">🔔</span>
                 <span class="notification-badge" id="notification-count"></span>
             </button>
-            <button class="lang-toggle" onclick="toggleLanguage()" aria-label="Language">
+            <button class="header-btn lang-toggle" onclick="toggleLanguage()" aria-label="Language">
                 <span class="lang-text">ਪੰ</span>
             </button>
         </div>
@@ -50,11 +60,22 @@
 
     <!-- Main App Content -->
     <main class="app-container">
+        <!-- App vs Website Toggle -->
+        <section class="mode-toggle">
+            <div class="mode-info">
+                <span class="mode-icon">📱</span>
+                <div class="mode-text">
+                    <div class="mode-title">ਤੁਸੀਂ ਐਪ ਮੋਡ ਵਿੱਚ ਹੋ</div>
+                    <div class="mode-subtitle">ਵੈਬਸਾਈਟ ਵੇਖਣ ਲਈ <a href="/" class="website-link">ਇੱਥੇ ਕਲਿੱਕ ਕਰੋ</a></div>
+                </div>
+            </div>
+        </section>
+
         <!-- Welcome Section -->
         <section class="hero-section animate-fade-in">
             <div class="hero-content">
-                <h1 class="section-title">[translate:ਪੱਟੀ ਬਾਈਟਸ ਐਪ ਵਿੱਚ ਜੀ ਆਇਆਂ ਨੂੰ]</h1>
-                <p class="subtitle">[translate:ਆਪਣੀ ਪਸੰਦੀਦਾ ਸਥਾਨੀ ਨਿਊਜ਼, ਸਥਾਨਾਂ ਅਤੇ ਸੇਵਾਵਾਂ ਤੱਕ ਪਹੁੰਚ ਕਰੋ]</p>
+                <h1 class="section-title">ਪੱਟੀ ਬਾਈਟਸ ਐਪ ਵਿੱਚ ਜੀ ਆਇਆਂ ਨੂੰ</h1>
+                <p class="subtitle">ਆਪਣੀ ਪਸੰਦੀਦਾ ਸਥਾਨੀ ਨਿਊਜ਼, ਸਥਾਨਾਂ ਅਤੇ ਸੇਵਾਵਾਂ ਤੱਕ ਪਹੁੰਚ ਕਰੋ</p>
             </div>
         </section>
 
@@ -64,22 +85,22 @@
                 <div class="stat-card">
                     <div class="stat-icon">📰</div>
                     <div class="stat-number" id="news-count">0</div>
-                    <div class="stat-label">[translate:ਨਿਊਜ਼ ਆਰਟੀਕਲ]</div>
+                    <div class="stat-label">ਨਿਊਜ਼ ਆਰਟੀਕਲ</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-icon">📍</div>
                     <div class="stat-number" id="places-count">0</div>
-                    <div class="stat-label">[translate:ਮਸ਼ਹੂਰ ਸਥਾਨ]</div>
+                    <div class="stat-label">ਮਸ਼ਹੂਰ ਸਥਾਨ</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-icon">🛍️</div>
                     <div class="stat-number" id="shop-count">0</div>
-                    <div class="stat-label">[translate:ਦੁਕਾਨ ਆਈਟਮ]</div>
+                    <div class="stat-label">ਦੁਕਾਨ ਆਈਟਮ</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-icon">👥</div>
                     <div class="stat-number" id="users-count">0</div>
-                    <div class="stat-label">[translate:ਐਕਟਿਵ ਯੂਜ਼ਰ]</div>
+                    <div class="stat-label">ਐਕਟਿਵ ਯੂਜ਼ਰ</div>
                 </div>
             </div>
         </section>
@@ -90,58 +111,58 @@
                 <!-- News Feature -->
                 <div class="feature-card animate-fade-in">
                     <div class="feature-icon">📰</div>
-                    <h3 class="feature-title">[translate:ਤਾਜ਼ਾ ਨਿਊਜ਼]</h3>
-                    <p class="feature-description">[translate:ਪੱਟੀ ਅਤੇ ਆਸਪਾਸ ਦੀ ਸਭ ਤੋਂ ਤਾਜ਼ਾ ਅਤੇ ਭਰੋਸੇਮੰਦ ਖਬਰਾਂ ਪੜ੍ਹੋ]</p>
+                    <h3 class="feature-title">ਤਾਜ਼ਾ ਨਿਊਜ਼</h3>
+                    <p class="feature-description">ਪੱਟੀ ਅਤੇ ਆਸਪਾਸ ਦੀ ਸਭ ਤੋਂ ਤਾਜ਼ਾ ਅਤੇ ਭਰੋਸੇਮੰਦ ਖਬਰਾਂ ਪੜ੍ਹੋ</p>
                     <div class="feature-actions">
-                        <a href="/app/news/" class="btn btn-primary">[translate:ਨਿਊਜ਼ ਪੜ੍ਹੋ]</a>
-                        <button class="btn btn-secondary" onclick="subscribeToNews()">[translate:ਸਬਸਕਰਾਈਬ]</button>
+                        <a href="/app/news/" class="btn btn-primary">ਨਿਊਜ਼ ਪੜ੍ਹੋ</a>
+                        <button class="btn btn-secondary" onclick="subscribeToNews()">ਸਬਸਕਰਾਈਬ</button>
                     </div>
                     <div class="feature-preview" id="news-preview">
-                        <div class="loading">[translate:ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ...]</div>
+                        <div class="loading">ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ...</div>
                     </div>
                 </div>
 
                 <!-- Places Feature -->
                 <div class="feature-card animate-fade-in">
                     <div class="feature-icon">📍</div>
-                    <h3 class="feature-title">[translate:ਮਸ਼ਹੂਰ ਸਥਾਨ]</h3>
-                    <p class="feature-description">[translate:ਪੱਟੀ ਦੇ ਐਤਿਹਾਸਿਕ ਅਤੇ ਮਸ਼ਹੂਰ ਸਥਾਨਾਂ ਬਾਰੇ ਜਾਣੋ]</p>
+                    <h3 class="feature-title">ਮਸ਼ਹੂਰ ਸਥਾਨ</h3>
+                    <p class="feature-description">ਪੱਟੀ ਦੇ ਐਤਿਹਾਸਿਕ ਅਤੇ ਮਸ਼ਹੂਰ ਸਥਾਨਾਂ ਬਾਰੇ ਜਾਣੋ</p>
                     <div class="feature-actions">
-                        <a href="/app/places/" class="btn btn-primary">[translate:ਸਥਾਨ ਦੇਖੋ]</a>
-                        <button class="btn btn-secondary" onclick="exploreMap()">[translate:ਨਕਸ਼ਾ ਦੇਖੋ]</button>
+                        <a href="/app/places/" class="btn btn-primary">ਸਥਾਨ ਦੇਖੋ</a>
+                        <button class="btn btn-secondary" onclick="exploreMap()">ਨਕਸ਼ਾ ਦੇਖੋ</button>
                     </div>
                     <div class="feature-preview" id="places-preview">
-                        <div class="loading">[translate:ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ...]</div>
+                        <div class="loading">ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ...</div>
                     </div>
                 </div>
 
                 <!-- Shop Feature -->
                 <div class="feature-card animate-fade-in">
                     <div class="feature-icon">🛍️</div>
-                    <h3 class="feature-title">[translate:ਸਥਾਨੀ ਦੁਕਾਨ]</h3>
-                    <p class="feature-description">[translate:ਸਥਾਨੀ ਕਾਰੋਬਾਰਾਂ ਤੋਂ ਖਰੀਦਦਾਰੀ ਕਰੋ ਅਤੇ ਕਮਿਊਨਿਟੀ ਦਾ ਸਾਥ ਦਿਓ]</p>
+                    <h3 class="feature-title">ਸਥਾਨੀ ਦੁਕਾਨ</h3>
+                    <p class="feature-description">ਸਥਾਨੀ ਕਾਰੋਬਾਰਾਂ ਤੋਂ ਖਰੀਦਦਾਰੀ ਕਰੋ ਅਤੇ ਕਮਿਊਨਿਟੀ ਦਾ ਸਾਥ ਦਿਓ</p>
                     <div class="feature-actions">
-                        <a href="/app/shop/" class="btn btn-primary">[translate:ਖਰੀਦਦਾਰੀ ਕਰੋ]</a>
-                        <button class="btn btn-secondary" onclick="viewCart()">[translate:ਕਾਰਟ ਦੇਖੋ] (<span id="cart-count">0</span>)</button>
+                        <a href="/app/shop/" class="btn btn-primary">ਖਰੀਦਦਾਰੀ ਕਰੋ</a>
+                        <button class="btn btn-secondary" onclick="viewCart()">ਕਾਰਟ ਦੇਖੋ (<span id="cart-count">0</span>)</button>
                     </div>
                     <div class="feature-preview" id="shop-preview">
-                        <div class="loading">[translate:ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ...]</div>
+                        <div class="loading">ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ...</div>
                     </div>
                 </div>
 
                 <!-- Community Feature -->
                 <div class="feature-card animate-fade-in">
                     <div class="feature-icon">👥</div>
-                    <h3 class="feature-title">[translate:ਕਮਿਊਨਿਟੀ]</h3>
-                    <p class="feature-description">[translate:ਸਥਾਨਿਕ ਲੋਕਾਂ ਨਾਲ ਜੁੜੋ, ਚਰਚਾ ਕਰੋ ਅਤੇ ਸਾਂਝਾ ਕਰੋ]</p>
+                    <h3 class="feature-title">ਕਮਿਊਨਿਟੀ</h3>
+                    <p class="feature-description">ਸਥਾਨਿਕ ਲੋਕਾਂ ਨਾਲ ਜੁੜੋ, ਚਰਚਾ ਕਰੋ ਅਤੇ ਸਾਂਝਾ ਕਰੋ</p>
                     <div class="feature-actions">
-                        <a href="/app/community/" class="btn btn-primary">[translate:ਕਮਿਊਨਿਟੀ ਜੁੜੋ]</a>
-                        <button class="btn btn-secondary" onclick="startChat()">[translate:ਚੈਟ ਸ਼ੁਰੂ ਕਰੋ]</button>
+                        <a href="/app/community/" class="btn btn-primary">ਕਮਿਊਨਿਟੀ ਜੁੜੋ</a>
+                        <button class="btn btn-secondary" onclick="startChat()">ਚੈਟ ਸ਼ੁਰੂ ਕਰੋ</button>
                     </div>
                     <div class="feature-preview" id="community-preview">
                         <div class="preview-item">
                             <span class="preview-icon">💬</span>
-                            <span class="preview-text">[translate:ਔਨਲਾਈਨ ਮੈਂਬਰ]: <span id="online-users">0</span></span>
+                            <span class="preview-text">ਔਨਲਾਈਨ ਮੈਂਬਰ: <span id="online-users">0</span></span>
                         </div>
                     </div>
                 </div>
@@ -149,16 +170,16 @@
                 <!-- Dashboard Feature -->
                 <div class="feature-card animate-fade-in">
                     <div class="feature-icon">📊</div>
-                    <h3 class="feature-title">[translate:ਡੈਸ਼ਬੋਰਡ]</h3>
-                    <p class="feature-description">[translate:ਆਪਣੀ ਗਤੀਵਿਧੀ, ਪਸੰਦਾਂ ਅਤੇ ਸੈਟਿੰਗਜ਼ ਮੈਨੇਜ ਕਰੋ]</p>
+                    <h3 class="feature-title">ਡੈਸ਼ਬੋਰਡ</h3>
+                    <p class="feature-description">ਆਪਣੀ ਗਤੀਵਿਧੀ, ਪਸੰਦਾਂ ਅਤੇ ਸੈਟਿੰਗਜ਼ ਮੈਨੇਜ ਕਰੋ</p>
                     <div class="feature-actions">
-                        <a href="/app/dashboard/" class="btn btn-primary">[translate:ਡੈਸ਼ਬੋਰਡ ਖੋਲ੍ਹੋ]</a>
-                        <button class="btn btn-secondary" onclick="viewProfile()">[translate:ਪ੍ਰੋਫਾਈਲ ਦੇਖੋ]</button>
+                        <a href="/app/dashboard/" class="btn btn-primary">ਡੈਸ਼ਬੋਰਡ ਖੋਲ੍ਹੋ</a>
+                        <button class="btn btn-secondary" onclick="viewProfile()">ਪ੍ਰੋਫਾਈਲ ਦੇਖੋ</button>
                     </div>
                     <div class="feature-preview" id="dashboard-preview">
                         <div class="preview-stats">
                             <div class="preview-stat">
-                                <span class="preview-label">[translate:ਅੱਜ ਦੇ ਵਿਊਜ਼]:</span>
+                                <span class="preview-label">ਅੱਜ ਦੇ ਵਿਊਜ਼:</span>
                                 <span class="preview-value" id="today-views">0</span>
                             </div>
                         </div>
@@ -168,28 +189,28 @@
                 <!-- Profile/Auth Feature -->
                 <div class="feature-card animate-fade-in user-guest">
                     <div class="feature-icon">🔐</div>
-                    <h3 class="feature-title">[translate:ਲਾਗਇਨ ਕਰੋ]</h3>
-                    <p class="feature-description">[translate:ਵੱਧ ਫੀਚਰਜ਼ ਅਤੇ ਪਰਸਨਲਾਈਜ਼ਡ ਤਜਰਬੇ ਲਈ ਲਾਗਇਨ ਕਰੋ]</p>
+                    <h3 class="feature-title">ਲਾਗਇਨ ਕਰੋ</h3>
+                    <p class="feature-description">ਵੱਧ ਫੀਚਰਜ਼ ਅਤੇ ਪਰਸਨਲਾਈਜ਼ਡ ਤਜਰਬੇ ਲਈ ਲਾਗਇਨ ਕਰੋ</p>
                     <div class="feature-actions">
-                        <a href="/app/auth/" class="btn btn-primary">[translate:ਲਾਗਇਨ]</a>
-                        <a href="/app/register/" class="btn btn-secondary">[translate:ਰਜਿਸਟਰ]</a>
+                        <a href="/app/auth/" class="btn btn-primary">ਲਾਗਇਨ</a>
+                        <a href="/app/auth/?register=true" class="btn btn-secondary">ਰਜਿਸਟਰ</a>
                     </div>
                 </div>
 
                 <!-- Profile Feature (for authenticated users) -->
                 <div class="feature-card animate-fade-in user-authenticated" style="display: none;">
                     <div class="feature-icon">👤</div>
-                    <h3 class="feature-title">[translate:ਮੇਰਾ ਪ੍ਰੋਫਾਈਲ]</h3>
-                    <p class="feature-description">[translate:ਆਪਣੀ ਜਾਣਕਾਰੀ ਅਤੇ ਪਸੰਦਾਂ ਅਪਡੇਟ ਕਰੋ]</p>
+                    <h3 class="feature-title">ਮੇਰਾ ਪ੍ਰੋਫਾਈਲ</h3>
+                    <p class="feature-description">ਆਪਣੀ ਜਾਣਕਾਰੀ ਅਤੇ ਪਸੰਦਾਂ ਅਪਡੇਟ ਕਰੋ</p>
                     <div class="feature-actions">
-                        <a href="/app/profile/" class="btn btn-primary">[translate:ਪ੍ਰੋਫਾਈਲ ਦੇਖੋ]</a>
-                        <button class="btn btn-secondary" onclick="logout()">[translate:ਲਾਗਆਉਟ]</button>
+                        <a href="/app/profile/" class="btn btn-primary">ਪ੍ਰੋਫਾਈਲ ਦੇਖੋ</a>
+                        <button class="btn btn-secondary" onclick="logout()">ਲਾਗਆਉਟ</button>
                     </div>
                     <div class="feature-preview" id="profile-preview">
                         <div class="user-info">
                             <div class="user-avatar" id="user-avatar">👤</div>
                             <div class="user-details">
-                                <div class="user-name" id="user-name">[translate:ਯੂਜ਼ਰ]</div>
+                                <div class="user-name" id="user-name">ਯੂਜ਼ਰ</div>
                                 <div class="user-email" id="user-email"></div>
                             </div>
                         </div>
@@ -200,35 +221,35 @@
 
         <!-- Recent Activity -->
         <section class="activity-section">
-            <h2 class="section-title">[translate:ਤਾਜ਼ਾ ਗਤੀਵਿਧੀ]</h2>
+            <h2 class="section-title">ਤਾਜ਼ਾ ਗਤੀਵਿਧੀ</h2>
             <div class="activity-feed" id="activity-feed">
-                <div class="loading">[translate:ਗਤੀਵਿਧੀ ਲੋਡ ਹੋ ਰਹੀ ਹੈ...]</div>
+                <div class="loading">ਗਤੀਵਿਧੀ ਲੋਡ ਹੋ ਰਹੀ ਹੈ...</div>
             </div>
         </section>
     </main>
 
     <!-- Bottom Navigation -->
     <nav class="bottom-navigation">
-        <div class="nav-item active" data-route="/app/">
+        <a href="/app/" class="nav-item active" data-route="/app/">
             <div class="nav-icon">🏠</div>
-            <span class="nav-label">[translate:ਹੋਮ]</span>
-        </div>
-        <div class="nav-item" data-route="/app/news/">
+            <span class="nav-label">ਹੋਮ</span>
+        </a>
+        <a href="/app/news/" class="nav-item" data-route="/app/news/">
             <div class="nav-icon">📰</div>
-            <span class="nav-label">[translate:ਨਿਊਜ਼]</span>
-        </div>
-        <div class="nav-item" data-route="/app/places/">
+            <span class="nav-label">ਨਿਊਜ਼</span>
+        </a>
+        <a href="/app/places/" class="nav-item" data-route="/app/places/">
             <div class="nav-icon">📍</div>
-            <span class="nav-label">[translate:ਸਥਾਨ]</span>
-        </div>
-        <div class="nav-item" data-route="/app/community/">
+            <span class="nav-label">ਸਥਾਨ</span>
+        </a>
+        <a href="/app/community/" class="nav-item" data-route="/app/community/">
             <div class="nav-icon">👥</div>
-            <span class="nav-label">[translate:ਕਮਿਊਨਿਟੀ]</span>
-        </div>
-        <div class="nav-item" data-route="/app/profile/">
+            <span class="nav-label">ਕਮਿਊਨਿਟੀ</span>
+        </a>
+        <a href="/app/profile/" class="nav-item" data-route="/app/profile/">
             <div class="nav-icon">👤</div>
-            <span class="nav-label">[translate:ਪ੍ਰੋਫਾਈਲ]</span>
-        </div>
+            <span class="nav-label">ਪ੍ਰੋਫਾਈਲ</span>
+        </a>
     </nav>
 
     <!-- Side Drawer -->
@@ -239,62 +260,67 @@
                 <div class="user-info">
                     <div class="user-avatar">👤</div>
                     <div class="user-details">
-                        <div class="user-name">[translate:ਪੱਟੀ ਬਾਈਟਸ ਯੂਜ਼ਰ]</div>
-                        <div class="user-location">[translate:ਪੱਟੀ, ਪੰਜਾਬ]</div>
+                        <div class="user-name">ਪੱਟੀ ਬਾਈਟਸ ਯੂਜ਼ਰ</div>
+                        <div class="user-location">ਪੱਟੀ, ਪੰਜਾਬ</div>
                     </div>
                 </div>
             </div>
             <nav class="drawer-nav">
                 <a href="/app/" class="drawer-item active">
                     <span class="drawer-icon">🏠</span>
-                    <span class="drawer-label">[translate:ਹੋਮ]</span>
+                    <span class="drawer-label">ਹੋਮ</span>
                     <span class="drawer-arrow">›</span>
                 </a>
                 <a href="/app/news/" class="drawer-item">
                     <span class="drawer-icon">📰</span>
-                    <span class="drawer-label">[translate:ਨਿਊਜ਼]</span>
+                    <span class="drawer-label">ਨਿਊਜ਼</span>
                     <span class="drawer-arrow">›</span>
                 </a>
                 <a href="/app/places/" class="drawer-item">
                     <span class="drawer-icon">📍</span>
-                    <span class="drawer-label">[translate:ਸਥਾਨ]</span>
+                    <span class="drawer-label">ਸਥਾਨ</span>
                     <span class="drawer-arrow">›</span>
                 </a>
                 <a href="/app/shop/" class="drawer-item">
                     <span class="drawer-icon">🛍️</span>
-                    <span class="drawer-label">[translate:ਦੁਕਾਨ]</span>
+                    <span class="drawer-label">ਦੁਕਾਨ</span>
                     <span class="drawer-arrow">›</span>
                 </a>
                 <a href="/app/community/" class="drawer-item">
                     <span class="drawer-icon">👥</span>
-                    <span class="drawer-label">[translate:ਕਮਿਊਨਿਟੀ]</span>
+                    <span class="drawer-label">ਕਮਿਊਨਿਟੀ</span>
                     <span class="drawer-arrow">›</span>
                 </a>
                 <div class="drawer-divider"></div>
                 <a href="/app/dashboard/" class="drawer-item">
                     <span class="drawer-icon">📊</span>
-                    <span class="drawer-label">[translate:ਡੈਸ਼ਬੋਰਡ]</span>
+                    <span class="drawer-label">ਡੈਸ਼ਬੋਰਡ</span>
                     <span class="drawer-arrow">›</span>
                 </a>
                 <a href="/app/profile/" class="drawer-item">
                     <span class="drawer-icon">👤</span>
-                    <span class="drawer-label">[translate:ਪ੍ਰੋਫਾਈਲ]</span>
+                    <span class="drawer-label">ਪ੍ਰੋਫਾਈਲ</span>
                     <span class="drawer-arrow">›</span>
                 </a>
                 <a href="/app/settings/" class="drawer-item">
                     <span class="drawer-icon">⚙️</span>
-                    <span class="drawer-label">[translate:ਸੈਟਿੰਗਜ਼]</span>
+                    <span class="drawer-label">ਸੈਟਿੰਗਜ਼</span>
                     <span class="drawer-arrow">›</span>
                 </a>
                 <div class="drawer-divider"></div>
+                <a href="/" class="drawer-item">
+                    <span class="drawer-icon">🌐</span>
+                    <span class="drawer-label">ਵੈਬਸਾਈਟ ਦੇਖੋ</span>
+                    <span class="drawer-arrow">›</span>
+                </a>
                 <a href="/privacy-policy/" class="drawer-item">
                     <span class="drawer-icon">🛡️</span>
-                    <span class="drawer-label">[translate:ਪ੍ਰਾਈਵੇਸੀ ਪਾਲਿਸੀ]</span>
+                    <span class="drawer-label">ਪ੍ਰਾਈਵੇਸੀ ਪਾਲਿਸੀ</span>
                     <span class="drawer-arrow">›</span>
                 </a>
                 <a href="/contact/" class="drawer-item">
                     <span class="drawer-icon">📞</span>
-                    <span class="drawer-label">[translate:ਸੰਪਰਕ]</span>
+                    <span class="drawer-label">ਸੰਪਰਕ</span>
                     <span class="drawer-arrow">›</span>
                 </a>
             </nav>
@@ -312,11 +338,26 @@
 
     <!-- Scripts -->
     <script src="/app/shared/navigation.js"></script>
+    <script src="/app/shared/install-handler.js"></script>
     <script src="/app/app.js"></script>
     
-    <!-- Page specific script -->
+    <!-- Register Service Worker -->
     <script>
-        // Dashboard specific functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                    .then(registration => {
+                        console.log('SW registered for app:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('SW registration failed:', error);
+                    });
+            });
+        }
+    </script>
+    
+    <!-- Dashboard specific functionality -->
+    <script>
         document.addEventListener('DOMContentLoaded', async () => {
             await loadDashboardData();
             setupDashboardInteractions();
@@ -324,23 +365,16 @@
 
         async function loadDashboardData() {
             try {
-                // Load stats
                 const stats = await fetchAppStats();
                 updateStatsDisplay(stats);
-                
-                // Load preview content
                 await loadContentPreviews();
-                
-                // Load recent activity
                 await loadRecentActivity();
-                
             } catch (error) {
                 console.error('Error loading dashboard data:', error);
             }
         }
 
         async function fetchAppStats() {
-            // Simulate API call
             return new Promise(resolve => {
                 setTimeout(() => {
                     resolve({
@@ -398,50 +432,49 @@
 
         async function fetchLatestNews(limit) {
             return [
-                { title: '[translate:ਪੱਟੀ ਵਿੱਚ ਨਵਾਂ ਸਕੂਲ ਖੁਲ੍ਹਿਆ]', date: new Date() },
-                { title: '[translate:ਸਥਾਨਿਕ ਕਿਸਾਨ ਪੁਰਸਕਾਰ ਜਿੱਤਿਆ]', date: new Date(Date.now() - 86400000) }
+                { title: 'ਪੱਟੀ ਵਿੱਚ ਨਵਾਂ ਸਕੂਲ ਖੁਲ੍ਹਿਆ', date: new Date() },
+                { title: 'ਸਥਾਨਿਕ ਕਿਸਾਨ ਪੁਰਸਕਾਰ ਜਿੱਤਿਆ', date: new Date(Date.now() - 86400000) }
             ];
         }
 
         async function fetchFeaturedPlaces(limit) {
             return [
-                { title: '[translate:ਗੁਰਦੁਆਰਾ ਸਾਹਿਬ]', rating: 4.8 },
-                { title: '[translate:ਐਤਿਹਾਸਿਕ ਕਿਲਾ]', rating: 4.5 }
+                { title: 'ਗੁਰਦੁਆਰਾ ਸਾਹਿਬ', rating: 4.8 },
+                { title: 'ਐਤਿਹਾਸਿਕ ਕਿਲਾ', rating: 4.5 }
             ];
         }
 
         async function fetchFeaturedProducts(limit) {
             return [
-                { name: '[translate:ਸਥਾਨਿਕ ਬਾਸਮਤੀ ਚਾਵਲ]', price: 120 },
-                { name: '[translate:ਘਰੇਲੂ ਘਿਓ]', price: 450 }
+                { name: 'ਸਥਾਨਿਕ ਬਾਸਮਤੀ ਚਾਵਲ', price: 120 },
+                { name: 'ਘਰੇਲੂ ਘਿਓ', price: 450 }
             ];
         }
 
         async function loadRecentActivity() {
             const activityFeed = document.getElementById('activity-feed');
             
-            // Simulate loading recent activity
             setTimeout(() => {
                 activityFeed.innerHTML = `
                     <div class="activity-item">
                         <div class="activity-icon">📰</div>
                         <div class="activity-content">
-                            <div class="activity-text">[translate:ਨਵੀਂ ਨਿਊਜ਼ ਪੋਸਟ ਕੀਤੀ ਗਈ]</div>
-                            <div class="activity-time">[translate:੫ ਮਿੰਟ ਪਹਿਲਾਂ]</div>
+                            <div class="activity-text">ਨਵੀਂ ਨਿਊਜ਼ ਪੋਸਟ ਕੀਤੀ ਗਈ</div>
+                            <div class="activity-time">੫ ਮਿੰਟ ਪਹਿਲਾਂ</div>
                         </div>
                     </div>
                     <div class="activity-item">
                         <div class="activity-icon">👤</div>
                         <div class="activity-content">
-                            <div class="activity-text">[translate:ਨਵਾਂ ਯੂਜ਼ਰ ਰਜਿਸਟਰ ਹੋਇਆ]</div>
-                            <div class="activity-time">[translate:੧੦ ਮਿੰਟ ਪਹਿਲਾਂ]</div>
+                            <div class="activity-text">ਨਵਾਂ ਯੂਜ਼ਰ ਰਜਿਸਟਰ ਹੋਇਆ</div>
+                            <div class="activity-time">੧੦ ਮਿੰਟ ਪਹਿਲਾਂ</div>
                         </div>
                     </div>
                     <div class="activity-item">
                         <div class="activity-icon">💬</div>
                         <div class="activity-content">
-                            <div class="activity-text">[translate:ਕਮਿਊਨਿਟੀ ਵਿੱਚ ਨਵਾਂ ਸੁਨੇਹਾ]</div>
-                            <div class="activity-time">[translate:੧੫ ਮਿੰਟ ਪਹਿਲਾਂ]</div>
+                            <div class="activity-text">ਕਮਿਊਨਿਟੀ ਵਿੱਚ ਨਵਾਂ ਸੁਨੇਹਾ</div>
+                            <div class="activity-time">੧੫ ਮਿੰਟ ਪਹਿਲਾਂ</div>
                         </div>
                     </div>
                 `;
@@ -449,10 +482,9 @@
         }
 
         function setupDashboardInteractions() {
-            // Update user info if authenticated
             const user = JSON.parse(localStorage.getItem('pattibytes_auth'));
             if (user) {
-                document.getElementById('user-name').textContent = user.name || '[translate:ਯੂਜ਼ਰ]';
+                document.getElementById('user-name').textContent = user.name || 'ਯੂਜ਼ਰ';
                 document.getElementById('user-email').textContent = user.email || '';
                 document.getElementById('user-avatar').textContent = user.avatar || '👤';
             }
@@ -463,14 +495,15 @@
             if ('Notification' in window) {
                 Notification.requestPermission().then(permission => {
                     if (permission === 'granted') {
-                        app.showNotification('[translate:ਨਿਊਜ਼ ਨੋਟੀਫਿਕੇਸ਼ਨ ਚਾਲੂ ਹੋ ਗਏ]', 'success');
+                        if (window.appNavigation) {
+                            window.appNavigation.showNotification('ਨਿਊਜ਼ ਨੋਟੀਫਿਕੇਸ਼ਨ ਚਾਲੂ ਹੋ ਗਏ', 'success');
+                        }
                     }
                 });
             }
         }
 
         function exploreMap() {
-            // Navigate to map view
             window.location.href = '/app/places/?view=map';
         }
 
@@ -487,11 +520,23 @@
         }
 
         function logout() {
-            if (confirm('[translate:ਕੀ ਤੁਸੀਂ ਲਾਗਆਉਟ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ?]')) {
+            if (confirm('ਕੀ ਤੁਸੀਂ ਲਾਗਆਉਟ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ?')) {
                 localStorage.removeItem('pattibytes_auth');
                 localStorage.removeItem('userPreferences');
                 window.location.reload();
             }
+        }
+
+        // Utility function
+        function formatDate(date) {
+            const d = new Date(date);
+            const now = new Date();
+            const diffMs = now - d;
+            const diffHours = diffMs / (1000 * 60 * 60);
+            
+            if (diffHours < 1) return 'ਹੁਣੇ ਹੁਣੇ';
+            if (diffHours < 24) return `${Math.floor(diffHours)} ਘੰਟੇ ਪਹਿਲਾਂ`;
+            return d.toLocaleDateString('pa-IN');
         }
     </script>
 </body>
