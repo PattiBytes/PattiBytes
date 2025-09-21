@@ -1,13 +1,17 @@
 /**
- * Authentication System - Complete Implementation
- * Firebase Auth with Google/Email authentication
+ * Optional Authentication System
+ * Auth only required for user-specific features like commenting, posting, etc.
  */
 
-class AuthManager {
+class OptionalAuthManager {
     constructor() {
         this.isInitialized = false;
         this.currentUser = null;
         this.authStateListeners = new Set();
+        this.authRequiredFeatures = [
+            'comment', 'like', 'post', 'favorite', 'visit', 'profile', 
+            'settings', 'upload', 'edit', 'delete', 'follow'
+        ];
         
         this.init();
     }
@@ -18,13 +22,13 @@ class AuthManager {
             this.setupEventListeners();
             this.setupFormValidation();
             this.setupPasswordStrength();
-            this.checkAuthState();
+            this.checkExistingAuth();
             
             this.isInitialized = true;
-            console.log('✅ AuthManager initialized');
+            console.log('✅ OptionalAuthManager initialized');
         } catch (error) {
-            console.error('❌ AuthManager initialization failed:', error);
-            Toast.show('Authentication system failed to load', 'error');
+            console.error('❌ OptionalAuthManager initialization failed:', error);
+            Toast?.show('Authentication system loaded with limited features', 'warning');
         }
     }
 
@@ -64,6 +68,22 @@ class AuthManager {
             });
         }
 
+        // Skip authentication buttons
+        const skipSignInBtn = document.getElementById('skipSignInBtn');
+        const skipSignUpBtn = document.getElementById('skipSignUpBtn');
+
+        if (skipSignInBtn) {
+            skipSignInBtn.addEventListener('click', () => {
+                this.skipAuthentication();
+            });
+        }
+
+        if (skipSignUpBtn) {
+            skipSignUpBtn.addEventListener('click', () => {
+                this.skipAuthentication();
+            });
+        }
+
         // Form submissions
         const signInForm = document.getElementById('signInForm');
         const signUpForm = document.getElementById('signUpForm');
@@ -82,7 +102,7 @@ class AuthManager {
             });
         }
 
-        // Google authentication
+        // Social authentication
         const googleSignInBtn = document.getElementById('googleSignInBtn');
         const googleSignUpBtn = document.getElementById('googleSignUpBtn');
 
@@ -103,6 +123,13 @@ class AuthManager {
 
         // Forgot password
         this.setupForgotPassword();
+
+        // Close modal on outside click
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal-overlay')) {
+                this.closeAuthModal();
+            }
+        });
     }
 
     setupPasswordToggles() {
@@ -133,11 +160,15 @@ class AuthManager {
     }
 
     setupFormValidation() {
-        // Email validation
+        // Real-time validation
         const emailInputs = document.querySelectorAll('input[type="email"]');
         emailInputs.forEach(input => {
             input.addEventListener('blur', () => {
                 this.validateEmail(input);
+            });
+            
+            input.addEventListener('input', () => {
+                input.classList.remove('invalid');
             });
         });
 
@@ -149,17 +180,32 @@ class AuthManager {
             confirmPassword.addEventListener('input', () => {
                 this.validatePasswordMatch(signUpPassword, confirmPassword);
             });
+
+            signUpPassword.addEventListener('input', () => {
+                if (confirmPassword.value) {
+                    this.validatePasswordMatch(signUpPassword, confirmPassword);
+                }
+            });
         }
 
         // Terms agreement
         const agreeTerms = document.getElementById('agreeTerms');
-        const signUpSubmit = document.getElementById('signUpSubmitBtn');
-
-        if (agreeTerms && signUpSubmit) {
+        if (agreeTerms) {
             agreeTerms.addEventListener('change', () => {
                 this.updateSignUpButton();
             });
         }
+
+        // Update signup button state on input
+        const signUpInputs = ['firstName', 'lastName', 'signUpEmail', 'signUpPassword', 'confirmPassword'];
+        signUpInputs.forEach(inputId => {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.addEventListener('input', () => {
+                    this.updateSignUpButton();
+                });
+            }
+        });
     }
 
     setupPasswordStrength() {
@@ -182,13 +228,15 @@ class AuthManager {
 
         if (forgotPasswordBtn && forgotPasswordModal) {
             forgotPasswordBtn.addEventListener('click', () => {
-                forgotPasswordModal.style.display = 'flex';
+                forgotPasswordModal.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
             });
         }
 
         const closeModal = () => {
             if (forgotPasswordModal) {
-                forgotPasswordModal.style.display = 'none';
+                forgotPasswordModal.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
             }
         };
 
@@ -198,14 +246,6 @@ class AuthManager {
 
         if (cancelResetBtn) {
             cancelResetBtn.addEventListener('click', closeModal);
-        }
-
-        if (forgotPasswordModal) {
-            forgotPasswordModal.addEventListener('click', (e) => {
-                if (e.target === forgotPasswordModal) {
-                    closeModal();
-                }
-            });
         }
 
         if (forgotPasswordForm) {
@@ -334,11 +374,14 @@ class AuthManager {
                 email
             );
 
-            Toast.show('Password reset email sent! Check your inbox.', 'success');
+            Toast?.show('Password reset email sent! Check your inbox.', 'success');
             
             // Close modal
             const modal = document.getElementById('forgotPasswordModal');
-            if (modal) modal.style.display = 'none';
+            if (modal) {
+                modal.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+            }
 
             // Clear form
             event.target.reset();
@@ -362,7 +405,7 @@ class AuthManager {
                 emailVerified: user.emailVerified
             };
 
-            // Save to localStorage if remember me is checked
+            // Save to localStorage/sessionStorage
             if (rememberMe) {
                 localStorage.setItem('pattibytes-user', JSON.stringify(userData));
             } else {
@@ -370,28 +413,35 @@ class AuthManager {
             }
 
             // Update global state
+            window.PattiApp = window.PattiApp || {};
             window.PattiApp.currentUser = userData;
 
-            // Create user profile in Firestore
+            // Create user profile in Firestore if needed
             if (window.pattiDataService) {
                 await window.pattiDataService.createUserProfile(user);
             }
 
-            Toast.show(`Welcome ${user.displayName || 'to PattiBytes'}!`, 'success');
+            Toast?.show(`Welcome ${user.displayName || 'to PattiBytes'}!`, 'success');
 
-            // Redirect to dashboard
+            // Close auth modal and redirect
+            this.closeAuthModal();
+            
+            // Redirect based on where user was before auth
+            const returnUrl = sessionStorage.getItem('auth-return-url') || '/app/';
+            sessionStorage.removeItem('auth-return-url');
+            
             setTimeout(() => {
-                window.location.href = '/app/';
+                if (returnUrl !== window.location.pathname) {
+                    window.location.href = returnUrl;
+                } else {
+                    window.location.reload();
+                }
             }, 1500);
 
         } catch (error) {
             console.error('Error in auth success handler:', error);
-            Toast.show('Sign in successful, but there was an issue saving your data', 'warning');
-            
-            // Still redirect, but with a delay
-            setTimeout(() => {
-                window.location.href = '/app/';
-            }, 2000);
+            Toast?.show('Sign in successful!', 'success');
+            this.closeAuthModal();
         }
     }
 
@@ -420,16 +470,138 @@ class AuthManager {
             case 'auth/network-request-failed':
                 message = 'Network error. Please check your connection.';
                 break;
+            case 'auth/user-disabled':
+                message = 'This account has been disabled.';
+                break;
             default:
                 message = error.message || message;
         }
 
-        Toast.show(message, 'error');
+        Toast?.show(message, 'error');
+    }
+
+    // Skip Authentication
+    skipAuthentication() {
+        // Set guest mode
+        window.PattiApp = window.PattiApp || {};
+        window.PattiApp.currentUser = null;
+        window.PattiApp.guestMode = true;
+        
+        this.closeAuthModal();
+        
+        // Redirect to where user wanted to go
+        const returnUrl = sessionStorage.getItem('auth-return-url') || '/app/';
+        sessionStorage.removeItem('auth-return-url');
+        
+        Toast?.show('Continuing as guest. Sign in anytime to access all features!', 'info', 5000);
+        
+        setTimeout(() => {
+            window.location.href = returnUrl;
+        }, 1000);
+    }
+
+    closeAuthModal() {
+        // Close any auth modals
+        const authModals = document.querySelectorAll('.auth-modal, .modal-overlay');
+        authModals.forEach(modal => {
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+        });
+        
+        document.body.style.overflow = '';
+    }
+
+    // Feature Access Control
+    requireAuth(feature, callback, fallbackMessage = null) {
+        if (this.isAuthenticated()) {
+            return callback();
+        }
+
+        // Show auth prompt with context
+        this.showAuthPrompt(feature, fallbackMessage);
+    }
+
+    showAuthPrompt(feature, customMessage = null) {
+        const messages = {
+            comment: 'Sign in to join the conversation and share your thoughts!',
+            like: 'Sign in to show your appreciation and connect with the community!',
+            post: 'Sign in to share your stories and experiences with everyone!',
+            favorite: 'Sign in to save your favorite places and content!',
+            visit: 'Sign in to track the places you\'ve visited!',
+            profile: 'Sign in to create your personal profile!',
+            settings: 'Sign in to customize your experience!',
+            upload: 'Sign in to share photos and videos!',
+            edit: 'Sign in to manage your content!',
+            delete: 'Sign in to manage your content!',
+            follow: 'Sign in to follow people and stay connected!'
+        };
+
+        const message = customMessage || messages[feature] || 
+                       'Sign in to access this feature and get the full PattiBytes experience!';
+
+        // Store current location for return after auth
+        sessionStorage.setItem('auth-return-url', window.location.pathname);
+
+        // Show custom auth prompt
+        this.showCustomAuthPrompt(message, feature);
+    }
+
+    showCustomAuthPrompt(message, feature) {
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay auth-prompt-modal';
+        modal.setAttribute('aria-hidden', 'false');
+        modal.innerHTML = `
+            <div class="modal-content auth-prompt-content">
+                <button class="modal-close" onclick="this.closest('.modal-overlay').remove(); document.body.style.overflow = ''">&times;</button>
+                
+                <div class="auth-prompt-header">
+                    <div class="auth-prompt-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                    </div>
+                    <h3 class="auth-prompt-title">Join PattiBytes Community</h3>
+                    <p class="auth-prompt-message">${message}</p>
+                </div>
+                
+                <div class="auth-prompt-actions">
+                    <button class="btn btn-primary btn-full" onclick="window.location.href='/app/auth.html'">
+                        Sign In / Sign Up
+                    </button>
+                    <button class="btn btn-ghost btn-full" onclick="this.closest('.modal-overlay').remove(); document.body.style.overflow = ''">
+                        Continue as Guest
+                    </button>
+                </div>
+                
+                <div class="auth-prompt-features">
+                    <p class="features-title">What you'll get:</p>
+                    <ul class="features-list">
+                        <li>💬 Comment and interact with posts</li>
+                        <li>❤️ Like and save favorite content</li>
+                        <li>📍 Track places you've visited</li>
+                        <li>📱 Personalized experience</li>
+                        <li>🔔 Get notified about updates</li>
+                    </ul>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        document.body.style.overflow = 'hidden';
+
+        // Auto remove after 10 seconds
+        setTimeout(() => {
+            if (modal.parentNode) {
+                modal.remove();
+                document.body.style.overflow = '';
+            }
+        }, 10000);
     }
 
     // Validation Methods
     validateSignUpForm(firstName, lastName, email, password, confirmPassword, agreeTerms) {
-        if (!firstName || !lastName) {
+        if (!firstName?.trim() || !lastName?.trim()) {
             throw new Error('Please enter your first and last name');
         }
 
@@ -506,7 +678,7 @@ class AuthManager {
         const confirmPassword = document.getElementById('confirmPassword');
 
         if (agreeTerms && submitBtn) {
-            const allFieldsFilled = firstName?.value && lastName?.value && 
+            const allFieldsFilled = firstName?.value?.trim() && lastName?.value?.trim() && 
                                   email?.value && password?.value && 
                                   confirmPassword?.value;
             const termsAgreed = agreeTerms.checked;
@@ -564,21 +736,21 @@ class AuthManager {
             }
             if (text) text.textContent = 'Password strength';
         }
+
+        // Reset signup button
+        const signUpBtn = document.getElementById('signUpSubmitBtn');
+        if (signUpBtn) signUpBtn.disabled = true;
     }
 
-    checkAuthState() {
+    checkExistingAuth() {
         // Check for existing session
         const savedUser = localStorage.getItem('pattibytes-user') || 
                          sessionStorage.getItem('pattibytes-user');
         
         if (savedUser) {
             try {
+                window.PattiApp = window.PattiApp || {};
                 window.PattiApp.currentUser = JSON.parse(savedUser);
-                
-                // If already on auth page and logged in, redirect
-                if (window.location.pathname.includes('auth.html')) {
-                    window.location.href = '/app/';
-                }
             } catch (error) {
                 console.error('Error parsing saved user data:', error);
                 localStorage.removeItem('pattibytes-user');
@@ -600,6 +772,8 @@ class AuthManager {
     handleAuthStateChange(user) {
         this.currentUser = user;
         
+        window.PattiApp = window.PattiApp || {};
+        
         if (user) {
             // User is signed in
             const userData = {
@@ -611,26 +785,19 @@ class AuthManager {
             };
 
             window.PattiApp.currentUser = userData;
+            window.PattiApp.guestMode = false;
 
             // Update components if they exist
             if (window.componentLoader) {
                 window.componentLoader.updateUserInfo();
             }
-
-            // Redirect from auth page
-            if (window.location.pathname.includes('auth.html')) {
-                window.location.href = '/app/';
-            }
         } else {
-            // User is signed out
+            // User is signed out - but don't force auth
             window.PattiApp.currentUser = null;
+            window.PattiApp.guestMode = true;
+            
             localStorage.removeItem('pattibytes-user');
             sessionStorage.removeItem('pattibytes-user');
-
-            // Redirect to auth page if not already there
-            if (!window.location.pathname.includes('auth.html')) {
-                window.location.href = '/app/auth.html';
-            }
         }
 
         // Notify listeners
@@ -661,18 +828,21 @@ class AuthManager {
             // Clear local storage
             localStorage.removeItem('pattibytes-user');
             sessionStorage.removeItem('pattibytes-user');
-            window.PattiApp.currentUser = null;
-
-            Toast.show('Signed out successfully', 'success');
             
-            // Redirect to auth page
+            window.PattiApp = window.PattiApp || {};
+            window.PattiApp.currentUser = null;
+            window.PattiApp.guestMode = true;
+
+            Toast?.show('Signed out successfully. You can continue browsing as a guest!', 'success', 4000);
+            
+            // Refresh current page instead of redirecting
             setTimeout(() => {
-                window.location.href = '/app/auth.html';
+                window.location.reload();
             }, 1000);
 
         } catch (error) {
             console.error('Sign out error:', error);
-            Toast.show('Failed to sign out', 'error');
+            Toast?.show('Failed to sign out', 'error');
         }
     }
 
@@ -681,14 +851,18 @@ class AuthManager {
     }
 
     isAuthenticated() {
-        return !!this.currentUser;
+        return !!this.currentUser && !!window.PattiApp?.currentUser;
+    }
+
+    isGuest() {
+        return !this.isAuthenticated();
     }
 }
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    window.authManager = new AuthManager();
+    window.optionalAuth = new OptionalAuthManager();
 });
 
 // Export
-window.AuthManager = AuthManager;
+window.OptionalAuthManager = OptionalAuthManager;
