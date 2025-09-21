@@ -1,552 +1,1212 @@
 /**
- * PattiBytes Dashboard Script
- * Handles dashboard-specific functionality and interactions
+ * PattiBytes Dashboard Script - Complete Integration
+ * Handles news fetching from NetlifyCMS and all app features
  */
 
 class DashboardManager {
     constructor() {
-        this.currentUser = null;
-        this.currentSection = 'dashboard';
-        this.isMobile = window.innerWidth <= 1024;
-        this.sidebarOpen = false;
+        this.currentSection = 'news'; // Default to news
+        this.newsData = [];
+        this.currentFilter = 'all';
+        this.currentArticle = null;
+        this.comments = new Map();
+        
         this.init();
     }
 
-    init() {
-        this.setupAuthCheck();
-        this.bindEvents();
-        this.setupMobileHandlers();
-        this.loadDashboardData();
-        this.setupNotifications();
+    async init() {
+        try {
+            // Wait for Firebase to be ready
+            await this.waitForFirebase();
+            
+            // Check authentication
+            await this.checkAuth();
+            
+            // Initialize UI components
+            this.setupEventListeners();
+            this.setupNavigation();
+            this.setupModals();
+            
+            // Load initial data
+            await this.loadNewsData();
+            this.updateUserProfile();
+            this.animateCounters();
+            
+            console.log('✅ Dashboard initialized successfully');
+        } catch (error) {
+            console.error('❌ Dashboard initialization failed:', error);
+            this.handleError('Failed to initialize dashboard');
+        }
     }
 
-    setupAuthCheck() {
-        if (!window.firebaseAuth) {
-            console.error('Firebase not initialized');
-            this.redirectToAuth();
-            return;
-        }
-
-        window.firebaseAuth.onAuthStateChanged(window.firebaseAuth.auth, (user) => {
-            if (user) {
-                this.currentUser = user;
-                this.updateUserUI();
-                this.hideLoading();
-            } else {
-                this.redirectToAuth();
-            }
+    /**
+     * Wait for Firebase services to be available
+     */
+    async waitForFirebase() {
+        return new Promise((resolve) => {
+            const checkFirebase = () => {
+                if (window.firebaseAuth && window.firebaseFirestore && window.cloudinaryService) {
+                    resolve();
+                } else {
+                    setTimeout(checkFirebase, 100);
+                }
+            };
+            checkFirebase();
         });
     }
 
-    bindEvents() {
-        // Navigation events
-        const navItems = document.querySelectorAll('.nav-item');
-        navItems.forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                const section = e.currentTarget.dataset.section;
-                if (section) {
-                    this.navigateToSection(section);
-                    this.updateActiveNavigation(e.currentTarget);
-                    
-                    if (this.isMobile) {
-                        this.closeSidebar();
-                    }
+    /**
+     * Check user authentication
+     */
+    async checkAuth() {
+        return new Promise((resolve) => {
+            window.firebaseAuth.onAuthStateChanged(window.firebaseAuth.auth, async (user) => {
+                if (user) {
+                    await this.handleUserLogin(user);
+                    resolve();
+                } else {
+                    // Redirect to auth page
+                    window.location.href = '/app/auth.html';
                 }
             });
         });
-
-        // Sign out event
-        const signOutBtn = document.getElementById('signOutBtn');
-        if (signOutBtn) {
-            signOutBtn.addEventListener('click', () => {
-                this.handleSignOut();
-            });
-        }
-
-        // Profile update event
-        const profileForm = document.getElementById('profileForm');
-        if (profileForm) {
-            profileForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.updateProfile();
-            });
-        }
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            this.handleKeyboardShortcuts(e);
-        });
-
-        // Window resize
-        window.addEventListener('resize', () => {
-            this.handleResize();
-        });
-
-        // Hash change for navigation
-        window.addEventListener('hashchange', () => {
-            this.handleHashChange();
-        });
     }
 
-    setupMobileHandlers() {
-        // Create mobile menu button if not exists
-        if (this.isMobile && !document.querySelector('.mobile-menu-btn')) {
-            this.createMobileMenuButton();
-        }
-
-        // Create mobile overlay
-        if (this.isMobile && !document.querySelector('.mobile-overlay')) {
-            this.createMobileOverlay();
+    /**
+     * Handle user login and profile setup
+     */
+    async handleUserLogin(user) {
+        try {
+            // Create/update user profile in Firestore
+            await window.firebaseService.createUserProfile(user);
+            
+            // Update UI with user info
+            this.updateUserUI(user);
+            
+            console.log('User logged in:', user.uid);
+        } catch (error) {
+            console.error('Error handling user login:', error);
         }
     }
 
-    createMobileMenuButton() {
-        const menuBtn = document.createElement('button');
-        menuBtn.className = 'mobile-menu-btn';
-        menuBtn.innerHTML = '☰';
-        menuBtn.setAttribute('aria-label', 'Toggle menu');
-        
-        menuBtn.addEventListener('click', () => {
-            this.toggleSidebar();
-        });
-        
-        const headerContent = document.querySelector('.header-content');
-        if (headerContent) {
-            headerContent.insertBefore(menuBtn, headerContent.firstChild);
-        }
-    }
-
-    createMobileOverlay() {
-        const overlay = document.createElement('div');
-        overlay.className = 'mobile-overlay';
-        
-        overlay.addEventListener('click', () => {
-            this.closeSidebar();
-        });
-        
-        document.body.appendChild(overlay);
-    }
-
-    toggleSidebar() {
-        const sidebar = document.querySelector('.sidebar');
-        const overlay = document.querySelector('.mobile-overlay');
-        
-        this.sidebarOpen = !this.sidebarOpen;
-        
-        if (sidebar) {
-            sidebar.classList.toggle('open', this.sidebarOpen);
-        }
-        
-        if (overlay) {
-            overlay.classList.toggle('active', this.sidebarOpen);
-        }
-        
-        // Prevent body scroll when sidebar is open
-        document.body.style.overflow = this.sidebarOpen ? 'hidden' : '';
-    }
-
-    closeSidebar() {
-        if (this.sidebarOpen) {
-            this.toggleSidebar();
-        }
-    }
-
-    updateUserUI() {
-        if (!this.currentUser) return;
-
+    /**
+     * Update user UI elements
+     */
+    updateUserUI(user) {
         // Update user name
-        const userName = document.getElementById('userName');
-        if (userName) {
-            userName.textContent = this.currentUser.displayName || 'User';
+        const userNameEl = document.getElementById('userName');
+        if (userNameEl) {
+            userNameEl.textContent = user.displayName || 'User';
         }
 
         // Update user avatar
-        const userAvatar = document.querySelector('.user-avatar');
-        if (userAvatar) {
-            const initials = this.getUserInitials(this.currentUser.displayName || this.currentUser.email);
-            userAvatar.textContent = initials;
+        const userAvatarImg = document.getElementById('userAvatarImg');
+        const userAvatarInitials = document.getElementById('userAvatarInitials');
+        
+        if (user.photoURL) {
+            userAvatarImg.src = user.photoURL;
+            userAvatarImg.style.display = 'block';
+            userAvatarInitials.style.display = 'none';
+        } else {
+            userAvatarImg.style.display = 'none';
+            userAvatarInitials.style.display = 'flex';
+            userAvatarInitials.textContent = (user.displayName || 'U').charAt(0).toUpperCase();
         }
 
-        // Update profile form
-        const profileName = document.getElementById('profileName');
-        const profileEmail = document.getElementById('profileEmail');
+        // Update comment form avatar
+        const commentUserAvatar = document.getElementById('commentUserAvatar');
+        const commentUserInitials = document.getElementById('commentUserInitials');
         
-        if (profileName) {
-            profileName.value = this.currentUser.displayName || '';
-        }
-        
-        if (profileEmail) {
-            profileEmail.value = this.currentUser.email || '';
-        }
-
-        // Update profile avatar large
-        const profileAvatarLarge = document.querySelector('.profile-avatar-large');
-        if (profileAvatarLarge) {
-            const initials = this.getUserInitials(this.currentUser.displayName || this.currentUser.email);
-            profileAvatarLarge.textContent = initials;
+        if (user.photoURL && commentUserAvatar) {
+            commentUserAvatar.src = user.photoURL;
+            commentUserAvatar.style.display = 'block';
+            commentUserInitials.style.display = 'none';
+        } else if (commentUserInitials) {
+            commentUserAvatar.style.display = 'none';
+            commentUserInitials.style.display = 'flex';
+            commentUserInitials.textContent = (user.displayName || 'U').charAt(0).toUpperCase();
         }
     }
 
-    getUserInitials(name) {
-        if (!name) return '?';
+    /**
+     * Setup all event listeners
+     */
+    setupEventListeners() {
+        // Navigation
+        this.setupNavigationEvents();
         
-        const nameParts = name.split(' ');
-        if (nameParts.length >= 2) {
-            return (nameParts[0][0] + nameParts[1][0]).toUpperCase();
-        }
-        return name.substring(0, 2).toUpperCase();
+        // News functionality
+        this.setupNewsEvents();
+        
+        // User menu
+        this.setupUserMenuEvents();
+        
+        // Search functionality
+        this.setupSearchEvents();
+        
+        // Create post functionality
+        this.setupCreatePostEvents();
+        
+        // Mobile menu
+        this.setupMobileMenuEvents();
     }
 
-    navigateToSection(sectionName) {
-        // Hide all sections
-        const sections = document.querySelectorAll('.content-section');
-        sections.forEach(section => {
-            section.classList.remove('active');
+    /**
+     * Setup navigation events
+     */
+    setupNavigationEvents() {
+        // Desktop sidebar navigation
+        document.querySelectorAll('.nav-item[data-section]').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const section = item.getAttribute('data-section');
+                this.navigateToSection(section);
+            });
         });
 
-        // Show target section
-        const targetSection = document.getElementById(`${sectionName}-section`);
-        if (targetSection) {
-            targetSection.classList.add('active');
-            this.currentSection = sectionName;
-
-            // Update URL hash
-            window.location.hash = sectionName;
-
-            // Update page title
-            this.updatePageTitle(sectionName);
-
-            // Load section data
-            this.loadSectionData(sectionName);
-        }
-    }
-
-    updateActiveNavigation(activeItem) {
-        const navItems = document.querySelectorAll('.nav-item');
-        navItems.forEach(item => {
-            item.classList.remove('active');
+        // Bottom navigation
+        document.querySelectorAll('.bottom-nav-item[data-section]').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const section = item.getAttribute('data-section');
+                this.navigateToSection(section);
+            });
         });
-        
-        activeItem.classList.add('active');
+
+        // Quick action cards
+        document.querySelectorAll('.action-card[data-section]').forEach(card => {
+            card.addEventListener('click', () => {
+                const section = card.getAttribute('data-section');
+                this.navigateToSection(section);
+            });
+        });
     }
 
-    updatePageTitle(section) {
-        const titles = {
-            dashboard: 'Dashboard - PattiBytes',
-            news: 'Latest News - PattiBytes',
-            places: 'Famous Places - PattiBytes',
-            shop: 'Local Shop - PattiBytes',
-            profile: 'My Profile - PattiBytes'
-        };
+    /**
+     * Setup news-specific events
+     */
+    setupNewsEvents() {
+        // Refresh news button
+        document.getElementById('refreshNewsBtn')?.addEventListener('click', () => {
+            this.loadNewsData(true);
+        });
 
-        document.title = titles[section] || 'PattiBytes';
+        // Filter tabs
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const filter = tab.getAttribute('data-filter');
+                this.filterNews(filter);
+                
+                // Update active tab
+                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+            });
+        });
+
+        // News modal events
+        document.getElementById('newsModalClose')?.addEventListener('click', () => {
+            this.closeNewsModal();
+        });
+
+        // Article action buttons
+        document.getElementById('likeBtn')?.addEventListener('click', () => {
+            this.toggleLike();
+        });
+
+        document.getElementById('shareBtn')?.addEventListener('click', () => {
+            this.shareArticle();
+        });
+
+        document.getElementById('translateBtn')?.addEventListener('click', () => {
+            this.translateArticle();
+        });
+
+        // Comment functionality
+        this.setupCommentEvents();
     }
 
-    async loadSectionData(section) {
-        try {
-            switch (section) {
-                case 'dashboard':
-                    await this.loadDashboardData();
-                    break;
-                case 'news':
-                    await this.loadNewsData();
-                    break;
-                case 'places':
-                    await this.loadPlacesData();
-                    break;
-                case 'shop':
-                    await this.loadShopData();
-                    break;
+    /**
+     * Setup comment events
+     */
+    setupCommentEvents() {
+        const commentInput = document.getElementById('commentInput');
+        const submitBtn = document.getElementById('submitCommentBtn');
+        const cancelBtn = document.getElementById('cancelCommentBtn');
+
+        if (commentInput) {
+            commentInput.addEventListener('input', () => {
+                const hasContent = commentInput.value.trim().length > 0;
+                submitBtn.disabled = !hasContent;
+                cancelBtn.style.display = hasContent ? 'block' : 'none';
+            });
+
+            commentInput.addEventListener('focus', () => {
+                cancelBtn.style.display = commentInput.value.trim() ? 'block' : 'none';
+            });
+        }
+
+        submitBtn?.addEventListener('click', () => {
+            this.submitComment();
+        });
+
+        cancelBtn?.addEventListener('click', () => {
+            commentInput.value = '';
+            submitBtn.disabled = true;
+            cancelBtn.style.display = 'none';
+            commentInput.blur();
+        });
+    }
+
+    /**
+     * Setup user menu events
+     */
+    setupUserMenuEvents() {
+        const userDropdownBtn = document.getElementById('userDropdownBtn');
+        const userDropdown = document.getElementById('userDropdown');
+        const signOutBtn = document.getElementById('signOutBtn');
+
+        userDropdownBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userDropdown.classList.toggle('show');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', () => {
+            userDropdown?.classList.remove('show');
+        });
+
+        signOutBtn?.addEventListener('click', () => {
+            this.handleSignOut();
+        });
+    }
+
+    /**
+     * Setup search events
+     */
+    setupSearchEvents() {
+        const searchInput = document.getElementById('searchInput');
+        const searchBtn = document.getElementById('searchBtn');
+
+        if (searchInput) {
+            searchInput.addEventListener('input', window.pattiBytes.debounce(() => {
+                this.handleSearch(searchInput.value);
+            }, 300));
+
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.handleSearch(searchInput.value);
+                }
+            });
+        }
+
+        searchBtn?.addEventListener('click', () => {
+            this.handleSearch(searchInput.value);
+        });
+    }
+
+    /**
+     * Setup create post events
+     */
+    setupCreatePostEvents() {
+        const createPostBtn = document.getElementById('createPostBtn');
+        const createPostModal = document.getElementById('createPostModal');
+        const createPostModalClose = document.getElementById('createPostModalClose');
+        const createPostForm = document.getElementById('createPostForm');
+        const imageUploadArea = document.getElementById('imageUploadArea');
+        const postImage = document.getElementById('postImage');
+        const removeImageBtn = document.getElementById('removeImageBtn');
+
+        createPostBtn?.addEventListener('click', () => {
+            this.openCreatePostModal();
+        });
+
+        createPostModalClose?.addEventListener('click', () => {
+            this.closeCreatePostModal();
+        });
+
+        // Image upload handling
+        imageUploadArea?.addEventListener('click', () => {
+            postImage?.click();
+        });
+
+        imageUploadArea?.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            imageUploadArea.classList.add('dragover');
+        });
+
+        imageUploadArea?.addEventListener('dragleave', () => {
+            imageUploadArea.classList.remove('dragover');
+        });
+
+        imageUploadArea?.addEventListener('drop', (e) => {
+            e.preventDefault();
+            imageUploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                this.handleImageUpload(files[0]);
             }
+        });
+
+        postImage?.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                this.handleImageUpload(e.target.files[0]);
+            }
+        });
+
+        removeImageBtn?.addEventListener('click', () => {
+            this.removeUploadedImage();
+        });
+
+        createPostForm?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleCreatePost();
+        });
+    }
+
+    /**
+     * Setup mobile menu events
+     */
+    setupMobileMenuEvents() {
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const sidebar = document.getElementById('sidebar');
+        const mobileOverlay = document.getElementById('mobileOverlay');
+
+        mobileMenuBtn?.addEventListener('click', () => {
+            sidebar?.classList.toggle('show');
+            mobileOverlay?.classList.toggle('show');
+        });
+
+        mobileOverlay?.addEventListener('click', () => {
+            sidebar?.classList.remove('show');
+            mobileOverlay?.classList.remove('show');
+        });
+    }
+
+    /**
+     * Load news data from NetlifyCMS/Firebase
+     */
+    async loadNewsData(forceRefresh = false) {
+        try {
+            this.showNewsLoading();
+            
+            // Try to fetch from NetlifyCMS first (your existing source)
+            let newsData = [];
+            
+            try {
+                // Fetch from your existing NetlifyCMS endpoint
+                const response = await fetch('/admin/collections/news.json');
+                if (response.ok) {
+                    const cmsData = await response.json();
+                    newsData = this.transformCMSData(cmsData);
+                }
+            } catch (cmsError) {
+                console.log('CMS not available, using Firebase fallback');
+            }
+            
+            // If no CMS data, fetch from Firebase
+            if (newsData.length === 0) {
+                newsData = await this.loadNewsFromFirebase();
+            }
+            
+            // Store and render news
+            this.newsData = newsData;
+            this.renderNews(newsData);
+            this.updateNewsCounts(newsData.length);
+            
+            console.log(`✅ Loaded ${newsData.length} news articles`);
+            
         } catch (error) {
-            console.error(`Error loading ${section} data:`, error);
-            this.showToast(`Failed to load ${section} data`, 'error');
+            console.error('Error loading news:', error);
+            this.handleError('Failed to load news articles');
+        } finally {
+            this.hideNewsLoading();
         }
     }
 
-    async loadDashboardData() {
-        this.showSectionLoading('dashboard');
-        
-        // Simulate loading time
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Update stats with real data (placeholder for now)
-        this.updateStatsCards([
-            { title: 'Total News', value: '248', change: '+12%', positive: true },
-            { title: 'Famous Places', value: '45', change: '+3%', positive: true },
-            { title: 'Local Shops', value: '156', change: '+8%', positive: true },
-            { title: 'Active Users', value: '1,234', change: '+15%', positive: true }
-        ]);
-        
-        this.hideSectionLoading('dashboard');
+    /**
+     * Transform NetlifyCMS data to app format
+     */
+    transformCMSData(cmsData) {
+        return cmsData.map(article => ({
+            id: article.slug || Date.now().toString(),
+            title: article.title,
+            content: article.content || article.body,
+            preview: article.preview || article.excerpt || this.generatePreview(article.content),
+            author: article.author || 'PattiBytes',
+            date: article.date || new Date().toISOString(),
+            image: article.image || article.featured_image,
+            category: article.category || 'local',
+            tags: article.tags || [],
+            featured: article.featured || false,
+            likes: 0,
+            comments: 0,
+            views: 0,
+            language: article.lang || 'pa'
+        }));
     }
 
-    async loadNewsData() {
+    /**
+     * Load news from Firebase fallback
+     */
+    async loadNewsFromFirebase() {
+        try {
+            const posts = await window.firebaseService.getPosts({
+                limit: 20,
+                orderBy: 'createdAt',
+                orderDirection: 'desc'
+            });
+            
+            return posts.map(post => ({
+                id: post.id,
+                title: post.title,
+                content: post.content,
+                preview: post.preview || this.generatePreview(post.content),
+                author: post.author || 'PattiBytes',
+                date: post.createdAt?.toDate?.() || new Date(),
+                image: post.imageUrl,
+                category: post.category || 'local',
+                tags: post.tags || [],
+                featured: post.featured || false,
+                likes: post.likes || 0,
+                comments: post.comments || 0,
+                views: post.views || 0,
+                language: post.language || 'pa'
+            }));
+        } catch (error) {
+            console.error('Error loading from Firebase:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Generate preview text from content
+     */
+    generatePreview(content, maxLength = 150) {
+        if (!content) return '';
+        
+        const text = content.replace(/<[^>]*>/g, '').trim();
+        return text.length > maxLength 
+            ? text.substring(0, maxLength) + '...'
+            : text;
+    }
+
+    /**
+     * Render news articles
+     */
+    renderNews(newsData) {
         const newsContent = document.getElementById('newsContent');
         if (!newsContent) return;
 
-        this.showSectionLoading('news');
-        
-        try {
-            // In real implementation, this would fetch from your API
-            const newsData = [
-                {
-                    title: 'ਪੱਟੀ ਵਿੱਚ ਨਵਾਂ ਸਕੂਲ ਖੋਲ੍ਹਿਆ ਗਿਆ',
-                    excerpt: 'ਸਥਾਨਕ ਪ੍ਰਸ਼ਾਸਨ ਵੱਲੋਂ ਇੱਕ ਨਵਾਂ ਸਰਕਾਰੀ ਸਕੂਲ ਖੋਲ੍ਹਿਆ ਗਿਆ ਹੈ।',
-                    date: new Date().toISOString(),
-                    category: 'Education'
-                },
-                {
-                    title: 'ਕਿਸਾਨਾਂ ਲਈ ਨਵੀਂ ਸਕੀਮ ਦਾ ਐਲਾਨ',
-                    excerpt: 'ਕਿਸਾਨਾਂ ਦੀ ਆਰਥਿਕ ਸਹਾਇਤਾ ਲਈ ਨਵੀਂ ਯੋਜਨਾ ਸ਼ੁਰੂ ਕੀਤੀ ਗਈ।',
-                    date: new Date().toISOString(),
-                    category: 'Agriculture'
-                }
-            ];
-            
-            newsContent.innerHTML = this.renderNewsItems(newsData);
-        } catch (error) {
-            newsContent.innerHTML = '<p>Unable to load news at this time.</p>';
+        if (newsData.length === 0) {
+            newsContent.innerHTML = this.getEmptyNewsHTML();
+            return;
         }
+
+        const newsHTML = newsData.map(article => this.createNewsCardHTML(article)).join('');
+        newsContent.innerHTML = `<div class="news-grid">${newsHTML}</div>`;
         
-        this.hideSectionLoading('news');
+        // Bind click events to news cards
+        this.bindNewsCardEvents();
     }
 
-    renderNewsItems(newsData) {
-        return newsData.map(item => `
-            <article class="content-card">
-                <div class="card-header">
-                    <div>
-                        <h3 class="card-title">${item.title}</h3>
-                        <span class="card-category">${item.category}</span>
+    /**
+     * Create HTML for a news card
+     */
+    createNewsCardHTML(article) {
+        const formattedDate = this.formatDate(article.date);
+        const readingTime = this.calculateReadingTime(article.content);
+        const authorInitial = (article.author || 'P').charAt(0).toUpperCase();
+        
+        return `
+            <article class="news-card ${article.featured ? 'featured-card' : ''}" 
+                     data-article-id="${article.id}"
+                     data-category="${article.category}">
+                ${article.image ? `
+                    <div class="news-image-container">
+                        <img src="${article.image}" 
+                             alt="${article.title}" 
+                             class="news-image"
+                             loading="lazy">
+                        <div class="news-category-badge">${article.category}</div>
+                        <div class="news-reading-time">${readingTime} min read</div>
                     </div>
-                    <time class="card-date">${this.formatDate(item.date)}</time>
-                </div>
-                <div class="card-body">
-                    <p>${item.excerpt}</p>
-                    <a href="#" class="card-action">Read more →</a>
+                ` : ''}
+                
+                <div class="news-content">
+                    <h3 class="news-title">${article.title}</h3>
+                    
+                    <div class="news-meta">
+                        <div class="news-author">
+                            <div class="author-avatar">${authorInitial}</div>
+                            <span>${article.author}</span>
+                        </div>
+                        <span class="news-date">${formattedDate}</span>
+                    </div>
+                    
+                    <p class="news-preview">${article.preview}</p>
+                    
+                    <div class="news-actions">
+                        <div class="news-stats">
+                            <div class="news-stat">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                ${article.views || 0}
+                            </div>
+                            <div class="news-stat">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+                                </svg>
+                                ${article.likes || 0}
+                            </div>
+                            <div class="news-stat">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                                ${article.comments || 0}
+                            </div>
+                        </div>
+                        <button class="read-more-btn">
+                            Read More
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9,18 15,12 9,6"></polyline>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </article>
-        `).join('');
+        `;
     }
 
-    updateStatsCards(stats) {
-        const statCards = document.querySelectorAll('.stat-card');
-        
-        stats.forEach((stat, index) => {
-            const card = statCards[index];
-            if (card) {
-                const numberEl = card.querySelector('.stat-number');
-                const changeEl = card.querySelector('.stat-change');
-                
-                if (numberEl) {
-                    this.animateNumber(numberEl, parseInt(stat.value.replace(/,/g, '')));
-                }
-                
-                if (changeEl) {
-                    changeEl.textContent = stat.change;
-                    changeEl.className = `stat-change ${stat.positive ? 'positive' : 'negative'}`;
-                }
-            }
+    /**
+     * Bind events to news cards
+     */
+    bindNewsCardEvents() {
+        document.querySelectorAll('.news-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const articleId = card.getAttribute('data-article-id');
+                this.openNewsModal(articleId);
+            });
         });
     }
 
-    animateNumber(element, finalValue) {
-        const duration = 1000;
-        const start = 0;
-        const startTime = performance.now();
+    /**
+     * Open news modal with article content
+     */
+    openNewsModal(articleId) {
+        const article = this.newsData.find(a => a.id === articleId);
+        if (!article) return;
+
+        this.currentArticle = article;
         
-        const updateNumber = (currentTime) => {
-            const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1);
+        // Update modal content
+        document.getElementById('modalTitle').textContent = article.title;
+        document.getElementById('modalMeta').innerHTML = this.getModalMetaHTML(article);
+        document.getElementById('modalContent').innerHTML = article.content;
+        
+        // Update modal image
+        const modalImage = document.getElementById('modalImage');
+        if (article.image) {
+            modalImage.innerHTML = `<img src="${article.image}" alt="${article.title}">`;
+            modalImage.style.display = 'block';
+        } else {
+            modalImage.style.display = 'none';
+        }
+        
+        // Load comments
+        this.loadArticleComments(articleId);
+        
+        // Show modal
+        document.getElementById('newsModal').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        
+        // Track view
+        this.trackArticleView(articleId);
+    }
+
+    /**
+     * Get modal meta HTML
+     */
+    getModalMetaHTML(article) {
+        const formattedDate = this.formatDate(article.date);
+        const readingTime = this.calculateReadingTime(article.content);
+        
+        return `
+            <div class="news-author">
+                <div class="author-avatar">${(article.author || 'P').charAt(0).toUpperCase()}</div>
+                <span>By ${article.author}</span>
+            </div>
+            <span class="news-date">${formattedDate}</span>
+            <span>${readingTime} min read</span>
+            <span class="news-category">${article.category}</span>
+        `;
+    }
+
+    /**
+     * Close news modal
+     */
+    closeNewsModal() {
+        document.getElementById('newsModal').style.display = 'none';
+        document.body.style.overflow = '';
+        this.currentArticle = null;
+    }
+
+    /**
+     * Handle article actions
+     */
+    async toggleLike() {
+        if (!this.currentArticle) return;
+        
+        try {
+            const likeBtn = document.getElementById('likeBtn');
+            const likeCount = likeBtn.querySelector('.like-count');
             
-            const currentValue = Math.floor(start + (finalValue - start) * progress);
-            element.textContent = currentValue.toLocaleString();
+            const isLiked = likeBtn.classList.contains('active');
+            const newCount = isLiked 
+                ? Math.max(0, parseInt(likeCount.textContent) - 1)
+                : parseInt(likeCount.textContent) + 1;
             
-            if (progress < 1) {
-                requestAnimationFrame(updateNumber);
+            // Update UI immediately
+            likeBtn.classList.toggle('active');
+            likeCount.textContent = newCount;
+            
+            // Update in Firebase if available
+            if (window.firebaseService && this.currentArticle.id) {
+                await window.firebaseService.updateUserStats(
+                    window.firebaseAuth.auth.currentUser.uid,
+                    { likes: window.firebaseFirestore.increment(isLiked ? -1 : 1) }
+                );
             }
+            
+            window.pattiBytes?.showToast(
+                isLiked ? 'Like removed' : 'Article liked!', 
+                'success'
+            );
+            
+        } catch (error) {
+            console.error('Error toggling like:', error);
+            window.pattiBytes?.showToast('Failed to update like', 'error');
+        }
+    }
+
+    async shareArticle() {
+        if (!this.currentArticle) return;
+        
+        const shareData = {
+            title: this.currentArticle.title,
+            text: this.currentArticle.preview,
+            url: window.location.href
         };
         
-        requestAnimationFrame(updateNumber);
-    }
-
-    showSectionLoading(section) {
-        const sectionEl = document.getElementById(`${section}-section`);
-        if (sectionEl && !sectionEl.querySelector('.loading-skeleton')) {
-            const skeleton = this.createLoadingSkeleton();
-            sectionEl.appendChild(skeleton);
-        }
-    }
-
-    hideSectionLoading(section) {
-        const sectionEl = document.getElementById(`${section}-section`);
-        if (sectionEl) {
-            const skeleton = sectionEl.querySelector('.loading-skeleton');
-            if (skeleton) {
-                skeleton.remove();
+        try {
+            if (navigator.share) {
+                await navigator.share(shareData);
+            } else {
+                // Fallback: copy to clipboard
+                await navigator.clipboard.writeText(shareData.url);
+                window.pattiBytes?.showToast('Link copied to clipboard!', 'success');
             }
+        } catch (error) {
+            console.error('Error sharing:', error);
+            window.pattiBytes?.showToast('Failed to share article', 'error');
         }
     }
 
-    createLoadingSkeleton() {
-        const skeleton = document.createElement('div');
-        skeleton.className = 'loading-skeleton';
-        skeleton.innerHTML = `
-            <div class="loading-card">
-                <div class="skeleton skeleton-title"></div>
-                <div class="skeleton skeleton-text"></div>
-                <div class="skeleton skeleton-text" style="width: 80%;"></div>
+    async translateArticle() {
+        // Implement translation functionality
+        window.pattiBytes?.showToast('Translation feature coming soon!', 'info');
+    }
+
+    /**
+     * Submit comment
+     */
+    async submitComment() {
+        if (!this.currentArticle) return;
+        
+        const commentInput = document.getElementById('commentInput');
+        const comment = commentInput.value.trim();
+        
+        if (!comment) return;
+        
+        try {
+            const user = window.firebaseAuth.auth.currentUser;
+            if (!user) {
+                window.pattiBytes?.showToast('Please log in to comment', 'warning');
+                return;
+            }
+            
+            const commentData = {
+                articleId: this.currentArticle.id,
+                authorId: user.uid,
+                authorName: user.displayName || 'Anonymous',
+                authorAvatar: user.photoURL,
+                content: comment,
+                likes: 0,
+                timestamp: new Date()
+            };
+            
+            // Add comment to Firebase
+            if (window.firebaseService) {
+                await window.firebaseFirestore.addDoc(
+                    window.firebaseFirestore.collection(window.firebaseFirestore.db, 'comments'),
+                    {
+                        ...commentData,
+                        timestamp: window.firebaseFirestore.serverTimestamp()
+                    }
+                );
+            }
+            
+            // Update UI
+            this.addCommentToUI(commentData);
+            commentInput.value = '';
+            document.getElementById('submitCommentBtn').disabled = true;
+            document.getElementById('cancelCommentBtn').style.display = 'none';
+            
+            window.pattiBytes?.showToast('Comment posted!', 'success');
+            
+        } catch (error) {
+            console.error('Error submitting comment:', error);
+            window.pattiBytes?.showToast('Failed to post comment', 'error');
+        }
+    }
+
+    /**
+     * Add comment to UI
+     */
+    addCommentToUI(commentData) {
+        const commentsList = document.getElementById('commentsList');
+        const commentHTML = this.createCommentHTML(commentData);
+        
+        commentsList.insertAdjacentHTML('afterbegin', commentHTML);
+        
+        // Update comment count
+        const currentCount = parseInt(document.getElementById('commentCount').textContent);
+        document.getElementById('commentCount').textContent = currentCount + 1;
+    }
+
+    /**
+     * Create comment HTML
+     */
+    createCommentHTML(comment) {
+        const timeAgo = this.getTimeAgo(comment.timestamp);
+        const authorInitial = (comment.authorName || 'U').charAt(0).toUpperCase();
+        
+        return `
+            <div class="comment-item">
+                <div class="comment-avatar">
+                    ${comment.authorAvatar 
+                        ? `<img src="${comment.authorAvatar}" alt="${comment.authorName}">`
+                        : `<span>${authorInitial}</span>`
+                    }
+                </div>
+                <div class="comment-content">
+                    <div class="comment-author">${comment.authorName}</div>
+                    <div class="comment-text">${comment.content}</div>
+                    <div class="comment-meta">
+                        <span class="comment-time">${timeAgo}</span>
+                        <button class="comment-like-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+                            </svg>
+                            ${comment.likes || 0}
+                        </button>
+                    </div>
+                </div>
             </div>
         `;
-        return skeleton;
     }
 
-    setupNotifications() {
-        // Request notification permission
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission();
-        }
-    }
-
-    showToast(message, type = 'info') {
-        if (window.pattiBytes) {
-            window.pattiBytes.showToast(message, type);
-        }
-    }
-
-    showLoading() {
-        if (window.pattiBytes) {
-            window.pattiBytes.showLoading();
-        }
-    }
-
-    hideLoading() {
-        if (window.pattiBytes) {
-            window.pattiBytes.hideLoading();
-        }
-    }
-
-    handleKeyboardShortcuts(e) {
-        if (e.ctrlKey || e.metaKey) {
-            switch (e.key) {
-                case '1':
-                    e.preventDefault();
-                    this.navigateToSection('dashboard');
-                    break;
-                case '2':
-                    e.preventDefault();
-                    this.navigateToSection('news');
-                    break;
-                case '3':
-                    e.preventDefault();
-                    this.navigateToSection('places');
-                    break;
-                case '4':
-                    e.preventDefault();
-                    this.navigateToSection('shop');
-                    break;
-                case '5':
-                    e.preventDefault();
-                    this.navigateToSection('profile');
-                    break;
-            }
-        }
-        
-        // Escape key to close sidebar on mobile
-        if (e.key === 'Escape' && this.isMobile && this.sidebarOpen) {
-            this.closeSidebar();
-        }
-    }
-
-    handleResize() {
-        const wasMobile = this.isMobile;
-        this.isMobile = window.innerWidth <= 1024;
-        
-        if (wasMobile !== this.isMobile) {
-            if (this.isMobile) {
-                this.setupMobileHandlers();
-                this.closeSidebar();
-            } else {
-                const sidebar = document.querySelector('.sidebar');
-                const overlay = document.querySelector('.mobile-overlay');
-                
-                if (sidebar) sidebar.classList.remove('open');
-                if (overlay) overlay.classList.remove('active');
-                
-                document.body.style.overflow = '';
-                this.sidebarOpen = false;
-            }
-        }
-    }
-
-    handleHashChange() {
-        const hash = window.location.hash.slice(1);
-        if (hash && hash !== this.currentSection) {
-            this.navigateToSection(hash);
+    /**
+     * Load article comments
+     */
+    async loadArticleComments(articleId) {
+        try {
+            const commentsList = document.getElementById('commentsList');
+            commentsList.innerHTML = '<div class="loading-comments">Loading comments...</div>';
             
-            // Update active navigation
-            const navItem = document.querySelector(`[data-section="${hash}"]`);
-            if (navItem) {
-                this.updateActiveNavigation(navItem);
+            // Load from Firebase if available
+            if (window.firebaseService) {
+                const commentsQuery = window.firebaseFirestore.query(
+                    window.firebaseFirestore.collection(window.firebaseFirestore.db, 'comments'),
+                    window.firebaseFirestore.where('articleId', '==', articleId),
+                    window.firebaseFirestore.orderBy('timestamp', 'desc'),
+                    window.firebaseFirestore.limit(20)
+                );
+                
+                const snapshot = await window.firebaseFirestore.getDocs(commentsQuery);
+                const comments = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    timestamp: doc.data().timestamp?.toDate() || new Date()
+                }));
+                
+                this.renderComments(comments);
+            } else {
+                commentsList.innerHTML = '<p>Comments not available</p>';
             }
+            
+        } catch (error) {
+            console.error('Error loading comments:', error);
+            document.getElementById('commentsList').innerHTML = '<p>Failed to load comments</p>';
         }
+    }
+
+    /**
+     * Render comments list
+     */
+    renderComments(comments) {
+        const commentsList = document.getElementById('commentsList');
+        document.getElementById('commentCount').textContent = comments.length;
+        
+        if (comments.length === 0) {
+            commentsList.innerHTML = '<p class="no-comments">No comments yet. Be the first to comment!</p>';
+            return;
+        }
+        
+        const commentsHTML = comments.map(comment => this.createCommentHTML(comment)).join('');
+        commentsList.innerHTML = commentsHTML;
+    }
+
+    /**
+     * Handle create post
+     */
+    async handleCreatePost() {
+        const form = document.getElementById('createPostForm');
+        const formData = new FormData(form);
+        const submitBtn = document.getElementById('submitPostBtn');
+        
+        try {
+            // Show loading state
+            submitBtn.classList.add('loading');
+            submitBtn.disabled = true;
+            
+            const user = window.firebaseAuth.auth.currentUser;
+            if (!user) {
+                window.pattiBytes?.showToast('Please log in to create posts', 'warning');
+                return;
+            }
+            
+            // Prepare post data
+            const postData = {
+                title: formData.get('title'),
+                content: formData.get('content'),
+                category: formData.get('category'),
+                authorId: user.uid,
+                author: user.displayName || 'Anonymous',
+                authorAvatar: user.photoURL,
+                preview: this.generatePreview(formData.get('content')),
+                language: 'pa'
+            };
+            
+            // Handle image upload if present
+            const imageFile = formData.get('image');
+            if (imageFile && imageFile.size > 0) {
+                const uploadResult = await window.cloudinaryService.uploadFile(imageFile, {
+                    folder: 'posts',
+                    tags: 'user-post',
+                    onProgress: (percent) => {
+                        console.log(`Upload progress: ${percent}%`);
+                    }
+                });
+                
+                postData.imageUrl = uploadResult.url;
+                postData.imagePublicId = uploadResult.publicId;
+            }
+            
+            // Save to Firebase
+            const newPost = await window.firebaseService.createPost(postData);
+            
+            // Update UI
+            this.newsData.unshift({
+                id: newPost.id,
+                ...postData,
+                date: new Date(),
+                likes: 0,
+                comments: 0,
+                views: 0,
+                featured: false
+            });
+            
+            this.renderNews(this.newsData);
+            this.updateNewsCounts(this.newsData.length);
+            
+            // Close modal and show success
+            this.closeCreatePostModal();
+            window.pattiBytes?.showToast('Post created successfully!', 'success');
+            
+        } catch (error) {
+            console.error('Error creating post:', error);
+            window.pattiBytes?.showToast('Failed to create post', 'error');
+        } finally {
+            submitBtn.classList.remove('loading');
+            submitBtn.disabled = false;
+        }
+    }
+
+    /**
+     * Handle image upload for create post
+     */
+    async handleImageUpload(file) {
+        const uploadArea = document.getElementById('imageUploadArea');
+        const uploadPlaceholder = uploadArea.querySelector('.upload-placeholder');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewImg = document.getElementById('previewImg');
+        
+        try {
+            // Validate file
+            if (!file.type.startsWith('image/')) {
+                window.pattiBytes?.showToast('Please select an image file', 'error');
+                return;
+            }
+            
+            if (file.size > 10 * 1024 * 1024) {
+                window.pattiBytes?.showToast('Image size should be less than 10MB', 'error');
+                return;
+            }
+            
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImg.src = e.target.result;
+                uploadPlaceholder.style.display = 'none';
+                imagePreview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+            
+            // Set file to form
+            document.getElementById('postImage').files = file;
+            
+        } catch (error) {
+            console.error('Error handling image upload:', error);
+            window.pattiBytes?.showToast('Failed to process image', 'error');
+        }
+    }
+
+    /**
+     * Remove uploaded image
+     */
+    removeUploadedImage() {
+        const uploadArea = document.getElementById('imageUploadArea');
+        const uploadPlaceholder = uploadArea.querySelector('.upload-placeholder');
+        const imagePreview = document.getElementById('imagePreview');
+        const postImage = document.getElementById('postImage');
+        
+        uploadPlaceholder.style.display = 'flex';
+        imagePreview.style.display = 'none';
+        postImage.value = '';
+    }
+
+    /**
+     * Navigation and UI helper methods
+     */
+    navigateToSection(section) {
+        // Update active states
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+            item.removeAttribute('aria-current');
+        });
+        
+        document.querySelectorAll('.bottom-nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        
+        document.querySelectorAll('.content-section').forEach(section => {
+            section.classList.remove('active');
+        });
+        
+        // Activate current section
+        document.querySelectorAll(`[data-section="${section}"]`).forEach(item => {
+            item.classList.add('active');
+            if (item.classList.contains('nav-item')) {
+                item.setAttribute('aria-current', 'page');
+            }
+        });
+        
+        document.getElementById(`${section}-section`)?.classList.add('active');
+        
+        this.currentSection = section;
+        
+        // Load section-specific data
+        if (section === 'news' && this.newsData.length === 0) {
+            this.loadNewsData();
+        }
+    }
+
+    filterNews(filter) {
+        this.currentFilter = filter;
+        
+        if (filter === 'all') {
+            this.renderNews(this.newsData);
+        } else {
+            const filteredNews = this.newsData.filter(article => 
+                article.category === filter
+            );
+            this.renderNews(filteredNews);
+        }
+    }
+
+    handleSearch(query) {
+        if (!query.trim()) {
+            this.renderNews(this.newsData);
+            return;
+        }
+        
+        const searchResults = this.newsData.filter(article =>
+            article.title.toLowerCase().includes(query.toLowerCase()) ||
+            article.content.toLowerCase().includes(query.toLowerCase()) ||
+            article.preview.toLowerCase().includes(query.toLowerCase())
+        );
+        
+        this.renderNews(searchResults);
+        window.pattiBytes?.showToast(`Found ${searchResults.length} results`, 'info');
     }
 
     async handleSignOut() {
         try {
-            this.showLoading();
             await window.firebaseAuth.signOut(window.firebaseAuth.auth);
-            this.redirectToAuth();
+            window.location.href = '/app/auth.html';
         } catch (error) {
-            console.error('Error signing out:', error);
-            this.showToast('Error signing out. Please try again.', 'error');
-        } finally {
-            this.hideLoading();
+            console.error('Sign out error:', error);
+            window.pattiBytes?.showToast('Failed to sign out', 'error');
         }
     }
 
-    async updateProfile() {
-        const nameInput = document.getElementById('profileName');
-        const newName = nameInput?.value?.trim();
-        
-        if (!newName) {
-            this.showToast('Please enter a name', 'error');
-            return;
-        }
+    openCreatePostModal() {
+        document.getElementById('createPostModal').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
 
-        try {
-            this.showLoading();
-            
-            await window.firebaseAuth.updateProfile(this.currentUser, {
-                displayName: newName
+    closeCreatePostModal() {
+        document.getElementById('createPostModal').style.display = 'none';
+        document.body.style.overflow = '';
+        document.getElementById('createPostForm').reset();
+        this.removeUploadedImage();
+    }
+
+    setupModals() {
+        // Close modals on backdrop click
+        document.querySelectorAll('.modal-overlay').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = '';
+                }
             });
-            
-            this.updateUserUI();
-            this.showToast('Profile updated successfully!', 'success');
-        } catch (error) {
-            console.error('Error updating profile:', error);
-            this.showToast('Error updating profile. Please try again.', 'error');
-        } finally {
-            this.hideLoading();
-        }
+        });
     }
 
-    formatDate(dateString) {
-        return new Intl.DateTimeFormat('en-US', {
+    // Utility methods
+    formatDate(date) {
+        if (!date) return '';
+        const dateObj = date instanceof Date ? date : new Date(date);
+        return dateObj.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
             day: 'numeric'
-        }).format(new Date(dateString));
+        });
     }
 
-    redirectToAuth() {
-        window.location.href = '/app/auth.html';
+    calculateReadingTime(content) {
+        const wordsPerMinute = 200;
+        const wordCount = content.replace(/<[^>]*>/g, '').split(/\s+/).length;
+        return Math.ceil(wordCount / wordsPerMinute);
     }
-}
 
-// Initialize dashboard when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    new DashboardManager();
-});
+    getTimeAgo(date) {
+        const now = new Date();
+        const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+        
+        if (diffInMinutes < 1) return 'Just now';
+        if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+        
+        const diffInHours = Math.floor(diffInMinutes / 60);
+        if (diffInHours < 24) return `${diffInHours}h ago`;
+        
+        const diffInDays = Math.floor(diffInHours / 24);
+        return `${diffInDays}d ago`;
+    }
+
+    updateNewsCounts(count) {
+        document.getElementById('newsCount').textContent = count;
+        document.getElementById('bottomNewsCount').textContent = count;
+        document.getElementById('totalNewsCount').textContent = count;
+    }
+
+    showNewsLoading() {
+        const newsContent = document.getElementById('newsContent');
+        if (newsContent) {
+            newsContent.innerHTML = this.getLoadingSkeletonHTML();
+        }
+    }
+
+    hideNewsLoading() {
+        // Loading will be hidden when content is rendered
+    }
+
+    getLoadingSkeletonHTML() {
+        return `
+            <div class="loading-skeleton">
+                ${Array(6).fill(0).map(() => `
+                    <div class="news-card-skeleton">
+                        <div class="skeleton-image"></div>
+                        <div class="skeleton-content">
+                            <div class="skeleton-title"></div>
+                            <div class="skeleton-meta"></div>
+                            <div class="skeleton-preview"></div>
+                            <div class="skeleton-preview"></div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    getEmptyNewsHTML() {
+        return `
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                        <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
+                    </svg>
+                </div>
+                <h3>No News Available</h3>
+                <p>Check back later for the latest updates from Patti.</p>
+                <button class="btn btn-primary" onclick="window.dashboardManager.loadNewsData(true)">
+                    Refresh News
+                </button>
+            </div>
+        `;
+    }
+
+    animateCounters() {
+        document.querySelectorAll('.stat-number').forEach(counter => {
+            const target = parseInt(counter.getAttribute('data-target'));
+            const increment = target / 30;
+            let current = 0;
+            
+            const timer = setInterval(() => {
+                current += increment;
+                if (current >= target) {
+                    counter.textContent = target;
+                    clearInterval(timer);
+                } else {
+                    counter.textContent = Math.floor(current);
+                }
+            }, 50);
+        });
+    }
+
+    trackArticleView(articleId) {
+        // Increment view count
+        const article = this.newsData.find(a => a.id === articleId);
+        if (article) {
+            article.views = (article.views || 0) + 1;
+        }
+        
+        // Track in Firebase if available
+        if (window.firebaseService) {
+            // Implementation for view tracking
+        }
+    }
