@@ -1,391 +1,158 @@
 /**
  * PattiBytes Service Worker
- * Version: 2.1.0
- * Handles caching, offline functionality, and PWA features
+ * Version: 2.2.0
  */
+const VERSION = 'pattibytes-v2.2.0';
+const STATIC = 'pattibytes-static-v2.2.0';
+const DYNAMIC = 'pattibytes-dynamic-v2.2.0';
+const RUNTIME = 'pattibytes-runtime-v2.2.0';
 
-const CACHE_VERSION = 'pattibytes-v2.1.0';
-const STATIC_CACHE_NAME = 'pattibytes-static-v2.1.0';
-const DYNAMIC_CACHE_NAME = 'pattibytes-dynamic-v2.1.0';
-const RUNTIME_CACHE_NAME = 'pattibytes-runtime-v2.1.0';
-
-// Assets to precache [web:201][web:46]
-const STATIC_ASSETS = [
-    '/app/',
-    '/app/index.html',
-    '/app/auth.html',
-    '/app/manifest.webmanifest',
-    
-    // CSS Files
-    '/app/assets/css/common.css',
-    '/app/assets/css/dashboard.css',
-    '/app/assets/css/auth.css',
-    
-    // JavaScript Files
-    '/app/assets/js/app.js',
-    '/app/assets/js/firebase-config.js',
-    '/app/assets/js/auth-script.js',
-    '/app/assets/js/dashboard-script.js',
-    
-    // External Dependencies
-    'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js',
-    'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js',
-    
-    // Logo/Icon
-    'https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg',
-    
-    // Fonts (if any)
-    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
+// Precache only same-origin assets that won't go opaque
+const PRECACHE_URLS = [
+  '/app/',
+  '/app/index.html',
+  '/app/auth.html',
+  '/app/manifest.webmanifest',
+  // CSS
+  '/app/assets/css/common.css',
+  '/app/assets/css/dashboard.css',
+  '/app/assets/css/auth.css',
+  // JS (local)
+  '/app/assets/js/app.js',
+  '/app/assets/js/firebase-config.js',
+  '/app/assets/js/auth-script.js',
+  '/app/assets/js/dashboard-script.js'
 ];
 
-// API endpoints for dynamic caching
-const API_ENDPOINTS = [
-    '/app/data/news.json',
-    '/app/data/places.json',
-    '/app/data/shop.json'
+// External assets cached at runtime (avoid addAll with opaque)
+const EXTERNAL_ALLOWLIST = [
+  'https://www.gstatic.com/firebasejs/',
+  'https://fonts.googleapis.com/',
+  'https://fonts.gstatic.com/',
+  'https://i.ibb.co/'
 ];
 
-// Install Event - Precache static assets [web:46][web:128]
+// JSON/data endpoints
+const DATA_URLS = [
+  '/app/data/news.json',
+  '/app/data/places.json',
+  '/app/data/shop.json'
+];
+
 self.addEventListener('install', (event) => {
-    console.log('[SW] Installing Service Worker v2.1.0');
-    
-    event.waitUntil(
-        Promise.all([
-            // Cache static assets
-            caches.open(STATIC_CACHE_NAME)
-                .then((cache) => {
-                    console.log('[SW] Caching static assets');
-                    return cache.addAll(STATIC_ASSETS);
-                }),
-            
-            // Skip waiting to activate immediately
-            self.skipWaiting()
-        ])
-        .catch((error) => {
-            console.error('[SW] Error during install:', error);
-        })
-    );
+  event.waitUntil(
+    caches.open(STATIC).then((cache) => cache.addAll(PRECACHE_URLS)).then(() => self.skipWaiting())
+  );
 });
 
-// Activate Event - Clean up old caches [web:46][web:128]
 self.addEventListener('activate', (event) => {
-    console.log('[SW] Activating Service Worker v2.1.0');
-    
-    event.waitUntil(
-        Promise.all([
-            // Clean up old caches
-            caches.keys().then((cacheNames) => {
-                return Promise.all(
-                    cacheNames.map((cacheName) => {
-                        if (cacheName !== STATIC_CACHE_NAME && 
-                            cacheName !== DYNAMIC_CACHE_NAME &&
-                            cacheName !== RUNTIME_CACHE_NAME) {
-                            console.log('[SW] Deleting old cache:', cacheName);
-                            return caches.delete(cacheName);
-                        }
-                    })
-                );
-            }),
-            
-            // Take control of all clients
-            self.clients.claim()
-        ])
-        .then(() => {
-            console.log('[SW] Service Worker activated successfully');
-            
-            // Notify all clients of activation
-            return self.clients.matchAll().then((clients) => {
-                clients.forEach((client) => {
-                    client.postMessage({
-                        type: 'SW_ACTIVATED',
-                        version: CACHE_VERSION
-                    });
-                });
-            });
-        })
-        .catch((error) => {
-            console.error('[SW] Error during activation:', error);
-        })
-    );
+  event.waitUntil(
+    (async () => {
+      const names = await caches.keys();
+      await Promise.all(
+        names.map((n) => (n === STATIC || n === DYNAMIC || n === RUNTIME ? null : caches.delete(n)))
+      );
+      await self.clients.claim();
+      const clients = await self.clients.matchAll();
+      clients.forEach((c) => c.postMessage({ type: 'SW_ACTIVATED', version: VERSION }));
+    })()
+  );
 });
 
-// Fetch Event - Handle network requests with caching strategies [web:128][web:201]
 self.addEventListener('fetch', (event) => {
-    const { request } = event;
-    const url = new URL(request.url);
-    
-    // Skip non-GET requests
-    if (request.method !== 'GET') {
-        return;
-    }
-    
-    // Skip Chrome extension requests
-    if (url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:') {
-        return;
-    }
-    
-    // Handle different types of requests
-    if (STATIC_ASSETS.some(asset => url.href.includes(asset))) {
-        // Cache-first for static assets
-        event.respondWith(cacheFirstStrategy(request));
-    } else if (API_ENDPOINTS.some(endpoint => url.pathname.includes(endpoint))) {
-        // Stale-while-revalidate for API data
-        event.respondWith(staleWhileRevalidateStrategy(request));
-    } else if (url.origin === location.origin && url.pathname.startsWith('/app/')) {
-        // Network-first for app pages
-        event.respondWith(networkFirstStrategy(request));
-    } else if (url.origin.includes('firebase') || url.origin.includes('gstatic')) {
-        // Cache-first for Firebase assets
-        event.respondWith(cacheFirstStrategy(request));
-    } else if (url.origin.includes('fonts.googleapis.com') || url.origin.includes('fonts.gstatic.com')) {
-        // Cache-first for fonts
-        event.respondWith(cacheFirstStrategy(request));
-    } else if (url.href.includes('i.ibb.co')) {
-        // Cache-first for images from ibb.co (your logo)
-        event.respondWith(cacheFirstStrategy(request));
-    } else {
-        // Network-first for everything else
-        event.respondWith(networkFirstStrategy(request));
-    }
+  const req = event.request;
+  const url = new URL(req.url);
+
+  // Only GET
+  if (req.method !== 'GET') return;
+
+  // Navigation requests: network-first with HTML fallback
+  if (req.mode === 'navigate') {
+    event.respondWith(networkFirst(req, '/app/index.html'));
+    return;
+  }
+
+  // Same-origin static files we precached: cache-first
+  if (url.origin === location.origin && PRECACHE_URLS.includes(url.pathname)) {
+    event.respondWith(cacheFirst(req));
+    return;
+  }
+
+  // App data: stale-while-revalidate
+  if (url.origin === location.origin && DATA_URLS.some((p) => url.pathname.includes(p))) {
+    event.respondWith(staleWhileRevalidate(req));
+    return;
+  }
+
+  // External allowlist: runtime caching with cautious strategy
+  if (EXTERNAL_ALLOWLIST.some((prefix) => url.href.startsWith(prefix))) {
+    // Use cache-first for fonts/logo; tolerate opaque responses
+    event.respondWith(cacheFirstExternal(req));
+    return;
+  }
+
+  // Default inside /app/: network-first; otherwise passthrough
+  if (url.origin === location.origin && url.pathname.startsWith('/app/')) {
+    event.respondWith(networkFirst(req, '/app/index.html'));
+  }
 });
 
-// Cache-first Strategy
-async function cacheFirstStrategy(request) {
-    try {
-        const cachedResponse = await caches.match(request);
-        if (cachedResponse) {
-            return cachedResponse;
-        }
-        
-        const networkResponse = await fetch(request);
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-            const cache = await caches.open(STATIC_CACHE_NAME);
-            cache.put(request, networkResponse.clone());
-        }
-        
-        return networkResponse;
-    } catch (error) {
-        console.error('[SW] Cache-first strategy failed:', error);
-        
-        // Return offline fallback
-        if (request.destination === 'document') {
-            return caches.match('/app/index.html');
-        }
-        
-        return new Response('Offline', {
-            status: 503,
-            statusText: 'Service Unavailable'
-        });
-    }
+// Strategies
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  const res = await fetch(request);
+  if (res && res.ok) {
+    const cache = await caches.open(STATIC);
+    cache.put(request, res.clone());
+  }
+  return res;
 }
 
-// Network-first Strategy
-async function networkFirstStrategy(request) {
-    try {
-        const networkResponse = await fetch(request);
-        
-        if (networkResponse && networkResponse.status === 200) {
-            const cache = await caches.open(DYNAMIC_CACHE_NAME);
-            cache.put(request, networkResponse.clone());
-        }
-        
-        return networkResponse;
-    } catch (error) {
-        console.log('[SW] Network failed, trying cache:', error);
-        const cachedResponse = await caches.match(request);
-        
-        if (cachedResponse) {
-            return cachedResponse;
-        }
-        
-        // Return offline fallback
-        if (request.destination === 'document') {
-            return caches.match('/app/index.html') || caches.match('/app/auth.html');
-        }
-        
-        return new Response('Offline', {
-            status: 503,
-            statusText: 'Service Unavailable'
-        });
-    }
+async function cacheFirstExternal(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(request);
+    // Cache even if opaque (status 0)
+    const cache = await caches.open(RUNTIME);
+    cache.put(request, res.clone());
+    return res;
+  } catch (e) {
+    return cached || Response.error();
+  }
 }
 
-// Stale-while-revalidate Strategy
-async function staleWhileRevalidateStrategy(request) {
-    const cache = await caches.open(DYNAMIC_CACHE_NAME);
-    const cachedResponse = await cache.match(request);
-    
-    const fetchPromise = fetch(request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-            cache.put(request, networkResponse.clone());
-        }
-        return networkResponse;
-    }).catch(() => cachedResponse);
-    
-    return cachedResponse || fetchPromise;
+async function networkFirst(request, htmlFallbackPath = '/app/index.html') {
+  try {
+    const res = await fetch(request);
+    if (res && (res.ok || res.type === 'opaqueredirect')) {
+      const cache = await caches.open(DYNAMIC);
+      cache.put(request, res.clone());
+    }
+    return res;
+  } catch (e) {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    if (request.destination === 'document') {
+      const fallback = await caches.match(htmlFallbackPath);
+      if (fallback) return fallback;
+    }
+    return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+  }
 }
 
-// Background sync for offline actions
-self.addEventListener('sync', (event) => {
-    console.log('[SW] Background sync event:', event.tag);
-    
-    if (event.tag === 'background-sync') {
-        event.waitUntil(handleBackgroundSync());
-    }
-});
-
-async function handleBackgroundSync() {
-    try {
-        console.log('[SW] Handling background sync');
-        
-        // Notify clients of sync completion
-        const clients = await self.clients.matchAll();
-        clients.forEach((client) => {
-            client.postMessage({
-                type: 'SYNC_COMPLETE',
-                message: 'Background sync completed'
-            });
-        });
-    } catch (error) {
-        console.error('[SW] Background sync failed:', error);
-    }
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(DYNAMIC);
+  const cached = await cache.match(request);
+  const fetchPromise = fetch(request)
+    .then((res) => {
+      if (res && res.ok) cache.put(request, res.clone());
+      return res;
+    })
+    .catch(() => cached);
+  return cached || fetchPromise;
 }
 
-// Push notification handling
-self.addEventListener('push', (event) => {
-    console.log('[SW] Push notification received');
-    
-    let data = {};
-    if (event.data) {
-        data = event.data.json();
-    }
-    
-    const options = {
-        body: data.body || 'New update from PattiBytes',
-        icon: 'https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg',
-        badge: 'https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg',
-        vibrate: [100, 50, 100],
-        data: {
-            dateOfArrival: Date.now(),
-            primaryKey: data.primaryKey || '1',
-            url: data.url || '/app/'
-        },
-        actions: [
-            {
-                action: 'explore',
-                title: 'View',
-                icon: 'https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg'
-            },
-            {
-                action: 'close',
-                title: 'Close',
-                icon: 'https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg'
-            }
-        ],
-        tag: 'pattibytes-notification',
-        requireInteraction: false
-    };
-    
-    event.waitUntil(
-        self.registration.showNotification(data.title || 'PattiBytes', options)
-    );
-});
-
-// Notification click handling
-self.addEventListener('notificationclick', (event) => {
-    console.log('[SW] Notification clicked');
-    event.notification.close();
-    
-    const urlToOpen = event.notification.data?.url || '/app/';
-    
-    if (event.action === 'explore' || !event.action) {
-        event.waitUntil(
-            clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-                // Check if app is already open
-                for (const client of clientList) {
-                    if (client.url.includes('/app/') && 'focus' in client) {
-                        return client.focus();
-                    }
-                }
-                
-                // Open new window if app is not open
-                if (clients.openWindow) {
-                    return clients.openWindow(urlToOpen);
-                }
-            })
-        );
-    }
-});
-
-// Message handling from clients
-self.addEventListener('message', (event) => {
-    console.log('[SW] Message received:', event.data);
-    
-    if (event.data && event.data.type === 'SKIP_WAITING') {
-        self.skipWaiting();
-    }
-    
-    if (event.data && event.data.type === 'GET_VERSION') {
-        event.ports[0].postMessage({ version: CACHE_VERSION });
-    }
-    
-    if (event.data && event.data.type === 'CACHE_URLS') {
-        event.waitUntil(
-            caches.open(RUNTIME_CACHE_NAME).then((cache) => {
-                return cache.addAll(event.data.urls);
-            })
-        );
-    }
-});
-
-// Periodic background sync (if supported)
-if ('periodicsync' in self.registration) {
-    self.addEventListener('periodicsync', (event) => {
-        if (event.tag === 'content-sync') {
-            event.waitUntil(syncContent());
-        }
-    });
-}
-
-async function syncContent() {
-    try {
-        console.log('[SW] Syncing content...');
-        
-        // Sync API data
-        const cache = await caches.open(DYNAMIC_CACHE_NAME);
-        const apiPromises = API_ENDPOINTS.map(async (endpoint) => {
-            try {
-                const response = await fetch(endpoint);
-                if (response.ok) {
-                    cache.put(endpoint, response);
-                }
-            } catch (error) {
-                console.log('[SW] Failed to sync:', endpoint);
-            }
-        });
-        
-        await Promise.all(apiPromises);
-        
-        // Notify clients of updated content
-        const clients = await self.clients.matchAll();
-        clients.forEach((client) => {
-            client.postMessage({
-                type: 'CONTENT_UPDATED',
-                message: 'Content has been updated'
-            });
-        });
-    } catch (error) {
-        console.error('[SW] Content sync failed:', error);
-    }
-}
-
-// Error handling
-self.addEventListener('error', (event) => {
-    console.error('[SW] Error:', event.error);
-});
-
-self.addEventListener('unhandledrejection', (event) => {
-    console.error('[SW] Unhandled promise rejection:', event.reason);
-});
-
-console.log('[SW] Service Worker v2.1.0 loaded successfully');
+// Optional listeners (sync, push, message) can stay as in your file
