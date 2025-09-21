@@ -680,6 +680,312 @@ class NewsManager {
         }
     }
 
-    async submitComment() {
+      async submitComment() {
         const commentInput = PattiUtils.$('#commentInput');
-        const submitBtn = PattiUtils.$('#submit
+        const submitBtn = PattiUtils.$('#submitComment');
+        
+        if (!commentInput || !this.currentArticle) return;
+        
+        const content = commentInput.value.trim();
+        if (!content) return;
+
+        try {
+            submitBtn.disabled = true;
+            submitBtn.classList.add('loading');
+
+            const user = window.PattiApp.currentUser;
+            if (!user) {
+                Toast.show('Please sign in to comment', 'warning');
+                return;
+            }
+
+            const comment = {
+                id: this.generateId(),
+                content: content,
+                author: user.displayName || 'Anonymous',
+                authorAvatar: user.photoURL,
+                createdAt: new Date(),
+                likes: 0,
+                replies: []
+            };
+
+            // Add to UI immediately
+            this.addCommentToUI(comment);
+            
+            // Clear input
+            commentInput.value = '';
+            submitBtn.disabled = true;
+            const cancelBtn = PattiUtils.$('#cancelComment');
+            if (cancelBtn) cancelBtn.style.display = 'none';
+
+            // Save to backend
+            if (window.pattiDataService) {
+                await window.pattiDataService.addComment('news', this.currentArticle.id, content);
+            }
+
+            // Update comment count
+            this.currentArticle.comments++;
+            this.updateArticleActions(this.currentArticle);
+
+            Toast.show('Comment added successfully!', 'success');
+
+        } catch (error) {
+            console.error('Error submitting comment:', error);
+            Toast.show('Failed to add comment', 'error');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('loading');
+        }
+    }
+
+    addCommentToUI(comment) {
+        const commentsList = PattiUtils.$('#commentsList');
+        if (!commentsList) return;
+
+        const commentHTML = this.createCommentHTML(comment);
+        commentsList.insertAdjacentHTML('afterbegin', commentHTML);
+
+        // Update count
+        const commentsCount = PattiUtils.$('#commentsCount');
+        if (commentsCount) {
+            const currentCount = parseInt(commentsCount.textContent) || 0;
+            commentsCount.textContent = currentCount + 1;
+        }
+    }
+
+    createCommentHTML(comment) {
+        const timeAgo = PattiUtils.timeAgo(comment.createdAt);
+        const authorInitial = (comment.author || 'U').charAt(0).toUpperCase();
+        
+        return `
+            <div class="comment-item" data-comment-id="${comment.id}">
+                <div class="comment-header">
+                    <div class="comment-avatar">
+                        ${comment.authorAvatar 
+                            ? `<img src="${comment.authorAvatar}" alt="${comment.author}" loading="lazy">`
+                            : `<span>${authorInitial}</span>`
+                        }
+                    </div>
+                    <div class="comment-author">${PattiUtils.sanitizeHTML(comment.author)}</div>
+                    <div class="comment-time">${timeAgo}</div>
+                </div>
+                <div class="comment-content">${PattiUtils.sanitizeHTML(comment.content)}</div>
+                <div class="comment-actions">
+                    <button class="comment-action like-comment" onclick="newsManager.likeComment('${comment.id}')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+                        </svg>
+                        <span class="like-count">${comment.likes || 0}</span>
+                    </button>
+                    <button class="comment-action reply-comment" onclick="newsManager.replyToComment('${comment.id}')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9,17 4,12 9,7"></polyline>
+                            <path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>
+                        </svg>
+                        Reply
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    async loadComments(articleId) {
+        const commentsList = PattiUtils.$('#commentsList');
+        const commentsCount = PattiUtils.$('#commentsCount');
+        
+        if (!commentsList) return;
+
+        try {
+            commentsList.innerHTML = '<div class="comments-loading">Loading comments...</div>';
+
+            // Load from backend or generate mock comments
+            let comments = [];
+            
+            if (window.pattiDataService) {
+                comments = await window.pattiDataService.getComments('news', articleId);
+            } else {
+                comments = this.generateMockComments();
+            }
+
+            if (comments.length === 0) {
+                commentsList.innerHTML = '<div class="no-comments">No comments yet. Be the first to comment!</div>';
+            } else {
+                const commentsHTML = comments.map(comment => this.createCommentHTML(comment)).join('');
+                commentsList.innerHTML = commentsHTML;
+            }
+
+            if (commentsCount) {
+                commentsCount.textContent = comments.length;
+            }
+
+        } catch (error) {
+            console.error('Error loading comments:', error);
+            commentsList.innerHTML = '<div class="comments-error">Failed to load comments</div>';
+        }
+    }
+
+    generateMockComments() {
+        const authors = ['ਸੁਰਿੰਦਰ ਸਿੰਘ', 'ਮਨਜੀਤ ਕੌਰ', 'ਗੁਰਪ੍ਰੀਤ ਸਿੰਘ'];
+        const comments = ['ਬਹੁਤ ਵਧੀਆ ਖ਼ਬਰ!', 'ਧੰਨਵਾਦ ਜਾਣਕਾਰੀ ਲਈ', 'ਇਹ ਮਹੱਤਵਪੂਰਨ ਹੈ'];
+        
+        return Array.from({ length: 3 }, (_, i) => ({
+            id: `comment-${i}`,
+            content: comments[i % comments.length],
+            author: authors[i % authors.length],
+            authorAvatar: null,
+            createdAt: new Date(Date.now() - (i * 1800000)), // 30 minutes ago each
+            likes: Math.floor(Math.random() * 10),
+            replies: []
+        }));
+    }
+
+    // Additional Methods
+    async refreshArticles() {
+        Toast.show('Refreshing news...', 'info', 2000);
+        await this.loadArticles(true);
+        Toast.show('News updated!', 'success', 2000);
+    }
+
+    async loadMoreArticles() {
+        if (this.isLoading) return;
+        
+        this.currentPage++;
+        const hasMore = this.filteredArticles.length > this.currentPage * this.pageSize;
+        
+        if (!hasMore) {
+            Toast.show('No more articles to load', 'info');
+            const loadMoreBtn = PattiUtils.$('#loadMoreNews');
+            if (loadMoreBtn) {
+                loadMoreBtn.style.display = 'none';
+            }
+            return;
+        }
+
+        this.renderArticles();
+    }
+
+    updateLoadMoreButton() {
+        const loadMoreBtn = PattiUtils.$('#loadMoreNews');
+        const hasMore = this.filteredArticles.length > this.currentPage * this.pageSize;
+        
+        if (loadMoreBtn) {
+            loadMoreBtn.style.display = hasMore ? 'block' : 'none';
+        }
+    }
+
+    updateNoMatchMessage() {
+        const noMatchMessage = PattiUtils.$('#noMatchMessage');
+        const newsGrid = PattiUtils.$('#newsGrid');
+        
+        if (noMatchMessage && newsGrid) {
+            const hasResults = this.filteredArticles.length > 0;
+            noMatchMessage.style.display = hasResults ? 'none' : 'block';
+            newsGrid.style.display = hasResults ? 'block' : 'none';
+        }
+    }
+
+    updateNewsCount() {
+        // Update global news count
+        window.PattiApp.newsCount = this.articles.length;
+        
+        // Update badges in navigation
+        if (window.BottomNavManager) {
+            window.BottomNavManager.updateBadges();
+        }
+    }
+
+    showLoadingSkeleton() {
+        const newsGrid = PattiUtils.$('#newsGrid');
+        if (newsGrid) {
+            newsGrid.innerHTML = `
+                <div class="loading-skeleton">
+                    ${Array(6).fill(0).map(() => `
+                        <div class="skeleton-card skeleton">
+                            <div class="skeleton-image skeleton"></div>
+                            <div class="skeleton-content">
+                                <div class="skeleton-title skeleton"></div>
+                                <div class="skeleton-meta skeleton"></div>
+                                <div class="skeleton-preview skeleton"></div>
+                                <div class="skeleton-preview skeleton"></div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+    }
+
+    hideLoadingSkeleton() {
+        // Will be hidden when articles are rendered
+    }
+
+    showErrorState() {
+        const newsGrid = PattiUtils.$('#newsGrid');
+        if (newsGrid) {
+            newsGrid.innerHTML = `
+                <div class="error-state">
+                    <div class="error-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    </div>
+                    <h3>Failed to Load News</h3>
+                    <p>There was an error loading the news articles. Please try again.</p>
+                    <button class="btn btn-primary" onclick="newsManager.refreshArticles()">Retry</button>
+                </div>
+            `;
+        }
+    }
+
+    trackView(article) {
+        article.views = (article.views || 0) + 1;
+        
+        // Track in backend if available
+        if (window.pattiDataService && window.PattiApp.currentUser) {
+            window.pattiDataService.trackView('news', article.id, window.PattiApp.currentUser.uid);
+        }
+    }
+
+    setupAutoRefresh() {
+        // Refresh every 5 minutes
+        setInterval(() => {
+            if (!document.hidden) {
+                this.loadArticles();
+            }
+        }, 5 * 60 * 1000);
+    }
+
+    async likeComment(commentId) {
+        const commentElement = PattiUtils.$(`[data-comment-id="${commentId}"]`);
+        if (!commentElement) return;
+
+        const likeBtn = commentElement.querySelector('.like-comment');
+        const likeCount = likeBtn.querySelector('.like-count');
+        
+        if (!likeBtn || !likeCount) return;
+
+        const isLiked = likeBtn.classList.contains('liked');
+        const newCount = isLiked ? 
+            Math.max(0, parseInt(likeCount.textContent) - 1) :
+            parseInt(likeCount.textContent) + 1;
+
+        likeBtn.classList.toggle('liked');
+        likeCount.textContent = newCount;
+
+        Toast.show(isLiked ? 'Like removed' : 'Comment liked!', 'success', 1500);
+    }
+
+    openCreateModal() {
+        Toast.show('Create news feature coming soon!', 'info');
+    }
+}
+
+// Initialize NewsManager when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    window.newsManager = new NewsManager();
+});
+
+// Export for global access
+window.NewsManager = NewsManager;
