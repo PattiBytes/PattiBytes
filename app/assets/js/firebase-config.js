@@ -18,14 +18,15 @@ import {
     updateProfile
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
 
-// Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-    apiKey: "your-api-key-here",
-    authDomain: "your-project.firebaseapp.com",
-    projectId: "your-project-id",
-    storageBucket: "your-project.appspot.com",
-    messagingSenderId: "123456789",
-    appId: "your-app-id"
+  apiKey: "AIzaSyDSp4mE15rFn1Tdo4YARZ4MD3_vdnsYyog",
+  authDomain: "pattibytes-cf602.firebaseapp.com",
+  projectId: "pattibytes-cf602",
+  storageBucket: "pattibytes-cf602.firebasestorage.app",
+  messagingSenderId: "980629232960",
+  appId: "1:980629232960:web:c169821e1f4bb409c2aea5",
+  measurementId: "G-WGMH00XGJC"
 };
 
 // Initialize Firebase
