@@ -1,96 +1,384 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
-    <!-- Primary Meta Tags -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     
     <!-- SEO Meta Tags -->
     <title>Sign In - PattiBytes | ਪੱਟੀ ਬਾਈਟਸ Authentication</title>
-    <meta name="description" content="Sign in to PattiBytes to access local Patti news, places, and services. Secure authentication for your local digital companion.">
+    <meta name="description" content="Sign in to PattiBytes to access local Patti news, places, and services. Secure authentication.">
     <meta name="robots" content="noindex, nofollow">
     
-    <!-- Apple Meta Tags -->
+    <!-- Icons & Theme -->
+    <link rel="icon" type="image/x-icon" href="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg">
+    <link rel="apple-touch-icon" href="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg">
+    <meta name="theme-color" content="#667eea">
+    <link rel="manifest" href="/app/manifest.webmanifest">
+    
+    <!-- Apple PWA Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="PattiBytes">
     
-    <!-- Theme Colors -->
-    <meta name="theme-color" content="#667eea">
-    
-    <!-- Canonical URL -->
-    <link rel="canonical" href="https://pattibytes.com/app/auth.html">
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/app/assets/images/icons/favicon.ico">
-    
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="/app/manifest.webmanifest">
-    
     <!-- Stylesheets -->
-      <link rel="stylesheet" href="/app/assets/css/common.css">
+    <link rel="stylesheet" href="/app/assets/css/common.css">
     <link rel="stylesheet" href="/app/assets/css/auth.css">
 </head>
 <body>
     <div class="auth-container">
+        <!-- Background Elements -->
+        <div class="auth-background">
+            <div class="auth-pattern"></div>
+            <div class="floating-shapes">
+                <div class="shape shape-1"></div>
+                <div class="shape shape-2"></div>
+                <div class="shape shape-3"></div>
+            </div>
+        </div>
+        
         <div class="auth-card">
+            <!-- Enhanced Auth Header -->
             <header class="auth-header">
-                <h1 class="logo">
-                    <span class="logo-punjabi">ਪੱਟੀ ਬਾਈਟਸ</span>
-                    <span class="logo-english">PattiBytes</span>
-                </h1>
-                <p class="subtitle">Your local news companion</p>
+                <div class="auth-logo-container">
+                    <img src="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg" 
+                         alt="PattiBytes Logo" 
+                         class="auth-logo-image">
+                    <div class="auth-logo-text">
+                        <h1 class="logo-punjabi">ਪੱਟੀ ਬਾਈਟਸ</h1>
+                        <span class="logo-english">PattiBytes</span>
+                    </div>
+                </div>
+                <p class="auth-subtitle">Your local news companion for Patti, Punjab</p>
             </header>
-            
+
             <!-- Login Form -->
             <section id="login-form" class="auth-form active">
-                <h2>Welcome Back</h2>
+                <div class="form-header">
+                    <h2 class="form-title">Welcome Back</h2>
+                    <p class="form-description">Sign in to access your personalized news dashboard</p>
+                </div>
+                
                 <form id="loginForm" novalidate>
                     <div class="input-group">
-                        <label for="loginEmail" class="sr-only">Email Address</label>
-                        <input type="email" id="loginEmail" name="email" placeholder="Email" required aria-describedby="email-error">
-                        <span class="input-icon" aria-hidden="true">📧</span>
+                        <label for="loginEmail" class="input-label">Email Address</label>
+                        <div class="input-wrapper">
+                            <input type="email" 
+                                   id="loginEmail" 
+                                   name="email" 
+                                   class="form-input" 
+                                   placeholder="Enter your email" 
+                                   required 
+                                   autocomplete="email"
+                                   autocapitalize="off">
+                            <div class="input-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                    <polyline points="22,6 12,13 2,6"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                        <span class="input-error" id="emailError"></span>
                     </div>
+                    
                     <div class="input-group">
-                        <label for="loginPassword" class="sr-only">Password</label>
-                        <input type="password" id="loginPassword" name="password" placeholder="Password" required aria-describedby="password-error">
-                        <span class="input-icon" aria-hidden="true">🔒</span>
+                        <label for="loginPassword" class="input-label">Password</label>
+                        <div class="input-wrapper">
+                            <input type="password" 
+                                   id="loginPassword" 
+                                   name="password" 
+                                   class="form-input" 
+                                   placeholder="Enter your password" 
+                                   required 
+                                   autocomplete="current-password">
+                            <div class="input-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <circle cx="12" cy="16" r="1"></circle>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                            </div>
+                            <button type="button" class="password-toggle" id="toggleLoginPassword" aria-label="Toggle password visibility">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                        <span class="input-error" id="passwordError"></span>
                     </div>
-                    <button type="submit" class="auth-btn primary">Sign In</button>
+                    
+                    <div class="form-options">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="rememberMe" name="remember">
+                            <span class="checkmark"></span>
+                            Remember me
+                        </label>
+                        <a href="#" id="forgotPassword" class="forgot-link">Forgot password?</a>
+                    </div>
+                    
+                    <button type="submit" class="auth-btn primary" id="loginBtn">
+                        <span class="btn-text">Sign In</span>
+                        <span class="btn-loader">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="2" x2="12" y2="6"></line>
+                                <line x1="12" y1="18" x2="12" y2="22"></line>
+                                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                                <line x1="2" y1="12" x2="6" y2="12"></line>
+                                <line x1="18" y1="12" x2="22" y2="12"></line>
+                                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                            </svg>
+                        </span>
+                    </button>
                 </form>
+                
                 <div class="auth-divider">
                     <span>or continue with</span>
                 </div>
+                
                 <div class="social-auth">
-                    <button id="googleSignIn" class="auth-btn social google" type="button">
-                        <span class="social-icon" aria-hidden="true">🔍</span>Google
-                    </button>
-                    <button id="facebookSignIn" class="auth-btn social facebook" type="button">
-                        <span class="social-icon" aria-hidden="true">📘</span>Facebook
+                    <button id="googleSignIn" class="social-btn google" type="button">
+                        <span class="social-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                            </svg>
+                        </span>
+                        <span class="social-text">Continue with Google</span>
                     </button>
                 </div>
-                <p class="auth-switch">
-                    Don't have an account? 
-                    <a href="#" id="showSignup">Sign up</a>
-                </p>
-                <p class="forgot-password">
-                    <a href="#" id="showReset">Forgot password?</a>
-                </p>
+                
+                <div class="auth-footer">
+                    <p class="auth-switch">
+                        Don't have an account? 
+                        <a href="#" id="showSignup" class="auth-link">Create one here</a>
+                    </p>
+                </div>
             </section>
 
-            <!-- Additional forms omitted for brevity but follow same pattern -->
+            <!-- Signup Form -->
+            <section id="signup-form" class="auth-form">
+                <div class="form-header">
+                    <h2 class="form-title">Create Account</h2>
+                    <p class="form-description">Join PattiBytes community and stay connected with local news</p>
+                </div>
+                
+                <form id="signupForm" novalidate>
+                    <div class="input-group">
+                        <label for="signupName" class="input-label">Full Name</label>
+                        <div class="input-wrapper">
+                            <input type="text" 
+                                   id="signupName" 
+                                   name="name" 
+                                   class="form-input" 
+                                   placeholder="Enter your full name" 
+                                   required 
+                                   autocomplete="name">
+                            <div class="input-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                            </div>
+                        </div>
+                        <span class="input-error" id="nameError"></span>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="signupEmail" class="input-label">Email Address</label>
+                        <div class="input-wrapper">
+                            <input type="email" 
+                                   id="signupEmail" 
+                                   name="email" 
+                                   class="form-input" 
+                                   placeholder="Enter your email" 
+                                   required 
+                                   autocomplete="email"
+                                   autocapitalize="off">
+                            <div class="input-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                    <polyline points="22,6 12,13 2,6"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                        <span class="input-error" id="signupEmailError"></span>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="signupPassword" class="input-label">Password</label>
+                        <div class="input-wrapper">
+                            <input type="password" 
+                                   id="signupPassword" 
+                                   name="password" 
+                                   class="form-input" 
+                                   placeholder="Create a strong password" 
+                                   required 
+                                   autocomplete="new-password">
+                            <div class="input-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <circle cx="12" cy="16" r="1"></circle>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                            </div>
+                            <button type="button" class="password-toggle" id="toggleSignupPassword" aria-label="Toggle password visibility">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="password-strength" id="passwordStrength">
+                            <div class="strength-bar">
+                                <div class="strength-fill"></div>
+                            </div>
+                            <span class="strength-text">Password strength</span>
+                        </div>
+                        <span class="input-error" id="signupPasswordError"></span>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="confirmPassword" class="input-label">Confirm Password</label>
+                        <div class="input-wrapper">
+                            <input type="password" 
+                                   id="confirmPassword" 
+                                   name="confirm-password" 
+                                   class="form-input" 
+                                   placeholder="Confirm your password" 
+                                   required 
+                                   autocomplete="new-password">
+                            <div class="input-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <circle cx="12" cy="16" r="1"></circle>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <span class="input-error" id="confirmPasswordError"></span>
+                    </div>
+                    
+                    <div class="form-terms">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="agreeTerms" name="terms" required>
+                            <span class="checkmark"></span>
+                            I agree to the <a href="#" class="terms-link">Terms of Service</a> and <a href="#" class="privacy-link">Privacy Policy</a>
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="auth-btn primary" id="signupBtn">
+                        <span class="btn-text">Create Account</span>
+                        <span class="btn-loader">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="2" x2="12" y2="6"></line>
+                                <line x1="12" y1="18" x2="12" y2="22"></line>
+                                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                                <line x1="2" y1="12" x2="6" y2="12"></line>
+                                <line x1="18" y1="12" x2="22" y2="12"></line>
+                                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                            </svg>
+                        </span>
+                    </button>
+                </form>
+                
+                <div class="auth-footer">
+                    <p class="auth-switch">
+                        Already have an account? 
+                        <a href="#" id="showLogin" class="auth-link">Sign in here</a>
+                    </p>
+                </div>
+            </section>
+
+            <!-- Forgot Password Form -->
+            <section id="forgot-form" class="auth-form">
+                <div class="form-header">
+                    <h2 class="form-title">Reset Password</h2>
+                    <p class="form-description">Enter your email to receive a password reset link</p>
+                </div>
+                
+                <form id="forgotForm" novalidate>
+                    <div class="input-group">
+                        <label for="forgotEmail" class="input-label">Email Address</label>
+                        <div class="input-wrapper">
+                            <input type="email" 
+                                   id="forgotEmail" 
+                                   name="email" 
+                                   class="form-input" 
+                                   placeholder="Enter your email" 
+                                   required 
+                                   autocomplete="email">
+                            <div class="input-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                    <polyline points="22,6 12,13 2,6"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                        <span class="input-error" id="forgotEmailError"></span>
+                    </div>
+                    
+                    <button type="submit" class="auth-btn primary" id="forgotBtn">
+                        <span class="btn-text">Send Reset Link</span>
+                        <span class="btn-loader">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="2" x2="12" y2="6"></line>
+                                <line x1="12" y1="18" x2="12" y2="22"></line>
+                                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                                <line x1="2" y1="12" x2="6" y2="12"></line>
+                                <line x1="18" y1="12" x2="22" y2="12"></line>
+                                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                            </svg>
+                        </span>
+                    </button>
+                </form>
+                
+                <div class="auth-footer">
+                    <p class="auth-switch">
+                        Remember your password? 
+                        <a href="#" id="backToLogin" class="auth-link">Sign in here</a>
+                    </p>
+                </div>
+            </section>
         </div>
-        
-        <!-- Messages -->
+
+        <!-- Install App Banner -->
+        <div class="install-banner" id="installBanner">
+            <div class="install-content">
+                <img src="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg" 
+                     alt="PattiBytes" 
+                     class="install-icon">
+                <div class="install-text">
+                    <h3>Install PattiBytes</h3>
+                    <p>Get the native app experience</p>
+                </div>
+                <button class="install-btn" id="installAppBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7,10 12,15 17,10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Install
+                </button>
+                <button class="dismiss-btn" id="dismissInstallBtn" aria-label="Dismiss install banner">×</button>
+            </div>
+        </div>
+
+        <!-- Toast Messages Container -->
         <div id="messageContainer" class="message-container" role="alert" aria-live="polite"></div>
     </div>
 
     <!-- Scripts -->
-    <script src="/app/assets/js/firebase-config.js"></script>
     <script src="/app/assets/js/app.js"></script>
-  
-    <!-- Page-specific scripts -->
-    <script type="module" src="/app/assets/js/auth.js"></script>
+    <script type="module" src="/app/assets/js/firebase-config.js"></script>
+    <script type="module" src="/app/assets/js/auth-script.js"></script>
 </body>
 </html>
