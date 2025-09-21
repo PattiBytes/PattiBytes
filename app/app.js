@@ -649,3 +649,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 console.log('App script loaded - app-specific features enabled');
 
+// /app/common.js — App-only bootstrap
+(() => {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }).catch(console.error);
+  }
+
+  // Optional: install UI shown on app pages
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.documentElement.classList.add('pwa-can-install');
+  });
+  window.triggerPWAInstall = async () => {
+    if (!deferredPrompt) return;
+    await deferredPrompt.prompt();
+    deferredPrompt = null;
+    document.documentElement.classList.remove('pwa-can-install');
+  };
+})();
+
