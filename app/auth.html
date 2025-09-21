@@ -2,21 +2,29 @@
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Sign In - PattiBytes</title>
-    <meta name="description" content="Sign in to PattiBytes to stay connected with your local community">
+    <meta name="description" content="Sign in to PattiBytes to unlock all features or continue as guest">
     
-    <!-- PWA -->
+    <!-- PWA Meta Tags -->
     <link rel="manifest" href="/app/manifest.webmanifest">
     <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PattiBytes">
     <link rel="icon" href="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg">
+    
+    <!-- Prevent Zoom -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="format-detection" content="telephone=no">
     
     <!-- Styles -->
     <link rel="stylesheet" href="/app/assets/css/common.css">
     <link rel="stylesheet" href="/app/assets/css/auth.css">
 </head>
 <body class="auth-body">
-
+    <!-- Skip Link -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     
     <main class="auth-container" id="main-content">
         <!-- Auth Header -->
@@ -36,10 +44,31 @@
         <div class="auth-card" id="signInCard">
             <div class="card-header">
                 <h2 class="card-title">Welcome Back</h2>
-                <p class="card-subtitle">Sign in to your account</p>
+                <p class="card-subtitle">Sign in to access all features</p>
             </div>
             
             <div class="card-body">
+                <!-- Guest Mode Notice -->
+                <div class="guest-mode-notice">
+                    <div class="notice-content">
+                        <svg class="notice-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        </svg>
+                        <p class="notice-text">
+                            You can browse news, places, and explore content without signing in. 
+                            Create an account to comment, like posts, and get personalized features!
+                        </p>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" id="skipSignInBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9,18 15,12 9,6"></polyline>
+                        </svg>
+                        Continue as Guest
+                    </button>
+                </div>
+                
                 <!-- Social Login Options -->
                 <div class="social-login">
                     <button class="social-btn google-btn" id="googleSignInBtn">
@@ -54,7 +83,7 @@
                 </div>
                 
                 <div class="divider">
-                    <span class="divider-text">or</span>
+                    <span class="divider-text">or sign in with email</span>
                 </div>
                 
                 <!-- Email/Password Form -->
@@ -133,6 +162,27 @@
             </div>
             
             <div class="card-body">
+                <!-- Guest Mode Notice -->
+                <div class="guest-mode-notice">
+                    <div class="notice-content">
+                        <svg class="notice-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <heart cx="12" cy="12" r="10"></heart>
+                            <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                            <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                            <line x1="15" y1="9" x2="15.01" y2="9"></line>
+                        </svg>
+                        <p class="notice-text">
+                            Create an account to unlock commenting, liking, saving favorites, and personalized features!
+                        </p>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" id="skipSignUpBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9,18 15,12 9,6"></polyline>
+                        </svg>
+                        Continue as Guest
+                    </button>
+                </div>
+                
                 <!-- Social Sign Up -->
                 <div class="social-login">
                     <button class="social-btn google-btn" id="googleSignUpBtn">
@@ -147,7 +197,7 @@
                 </div>
                 
                 <div class="divider">
-                    <span class="divider-text">or</span>
+                    <span class="divider-text">or create account</span>
                 </div>
                 
                 <!-- Registration Form -->
@@ -237,7 +287,7 @@
                         </label>
                     </div>
                     
-                    <button type="submit" class="btn btn-primary btn-full" id="signUpSubmitBtn">
+                    <button type="submit" class="btn btn-primary btn-full" id="signUpSubmitBtn" disabled>
                         <span class="btn-text">Create Account</span>
                         <span class="btn-loader" style="display: none;">
                             <svg width="20" height="20" viewBox="0 0 24 24">
