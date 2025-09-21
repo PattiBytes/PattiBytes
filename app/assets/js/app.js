@@ -1,492 +1,351 @@
-// /app/common.js — App-only bootstrap
-(() => {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }).catch(console.error);
-  }
-
-  // Optional: install UI shown on app pages
-  let deferredPrompt = null;
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    document.documentElement.classList.add('pwa-can-install');
-  });
-  window.triggerPWAInstall = async () => {
-    if (!deferredPrompt) return;
-    await deferredPrompt.prompt();
-    deferredPrompt = null;
-    document.documentElement.classList.remove('pwa-can-install');
-  };
-})();
-
 /**
- * PattiBytes Main Application
- * Handles dashboard functionality, navigation, and user interactions
+ * PattiBytes Common Application Script
+ * This file is included in all pages and provides common functionality
  */
 
-class PattiBytesDashboard {
+class PattiBytes {
     constructor() {
-        this.auth = window.firebaseAuth?.auth;
-        this.currentUser = null;
-        this.currentSection = 'dashboard';
+        this.isAuthPage = window.location.pathname.includes('auth.html');
+        this.isDashboard = !this.isAuthPage;
         this.init();
     }
 
-    /**
-     * Initialize the application
-     */
     init() {
-        this.checkAuthentication();
-        this.bindEvents();
-        this.loadInitialData();
-        this.setupServiceWorker();
+        this.setupCommonFeatures();
+        this.initializeServiceWorker();
+        this.handleInstallPrompt();
+        this.setupGlobalErrorHandling();
     }
 
     /**
-     * Check user authentication status
+     * Setup common features for all pages
      */
-    checkAuthentication() {
-        if (!window.firebaseAuth) {
-            console.error('Firebase not initialized');
-            this.redirectToAuth();
-            return;
-        }
-
-        window.firebaseAuth.onAuthStateChanged(this.auth, (user) => {
-            if (user) {
-                this.currentUser = user;
-                this.loadUserData();
-                this.hideLoading();
-            } else {
-                this.redirectToAuth();
-            }
-        });
-    }
-
-    /**
-     * Load user data into UI
-     */
-    loadUserData() {
-        const userName = document.getElementById('userName');
-        const profileName = document.getElementById('profileName');
-        const profileEmail = document.getElementById('profileEmail');
-
-        if (userName) {
-            userName.textContent = this.currentUser.displayName || 'User';
-        }
-
-        if (profileName) {
-            profileName.value = this.currentUser.displayName || '';
-        }
-
-        if (profileEmail) {
-            profileEmail.value = this.currentUser.email;
-        }
-    }
-
-    /**
-     * Bind event listeners
-     */
-    bindEvents() {
-        // Navigation events
-        const navItems = document.querySelectorAll('.nav-item');
-        navItems.forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                const section = e.currentTarget.dataset.section;
-                this.navigateToSection(section);
-                this.updateActiveNavigation(e.currentTarget);
-            });
-        });
-
-        // Sign out event
-        const signOutBtn = document.getElementById('signOutBtn');
-        if (signOutBtn) {
-            signOutBtn.addEventListener('click', () => {
-                this.handleSignOut();
-            });
-        }
-
-        // Profile update event
-        const profileForm = document.getElementById('profileForm');
-        if (profileForm) {
-            profileForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.updateProfile();
-            });
-        }
-
-        // Handle browser back/forward
-        window.addEventListener('popstate', (e) => {
-            const section = e.state?.section || 'dashboard';
-            this.navigateToSection(section, false);
-        });
-
-        // Handle hash changes
-        window.addEventListener('hashchange', () => {
-            const hash = window.location.hash.slice(1);
-            if (hash && hash !== this.currentSection) {
-                this.navigateToSection(hash);
-            }
-        });
-    }
-
-    /**
-     * Navigate to a specific section
-     * @param {string} sectionName - The section to navigate to
-     * @param {boolean} pushState - Whether to update browser history
-     */
-    navigateToSection(sectionName, pushState = true) {
-        // Hide all sections
-        const sections = document.querySelectorAll('.content-section');
-        sections.forEach(section => {
-            section.classList.remove('active');
-            section.setAttribute('aria-hidden', 'true');
-        });
-
-        // Show target section
-        const targetSection = document.getElementById(`${sectionName}-section`);
-        if (targetSection) {
-            targetSection.classList.add('active');
-            targetSection.setAttribute('aria-hidden', 'false');
-            this.currentSection = sectionName;
-
-            // Update page title
-            this.updatePageTitle(sectionName);
-
-            // Update browser history
-            if (pushState) {
-                const url = `/app/#${sectionName}`;
-                history.pushState({ section: sectionName }, '', url);
-            }
-
-            // Load section-specific data
-            this.loadSectionData(sectionName);
-        }
-    }
-
-    /**
-     * Update active navigation item
-     * @param {Element} activeItem - The active navigation item
-     */
-    updateActiveNavigation(activeItem) {
-        const navItems = document.querySelectorAll('.nav-item');
-        navItems.forEach(item => {
-            item.classList.remove('active');
-            item.removeAttribute('aria-current');
-        });
+    setupCommonFeatures() {
+        // Add loading utility
+        this.createLoadingOverlay();
         
-        activeItem.classList.add('active');
-        activeItem.setAttribute('aria-current', 'page');
+        // Add toast notification system
+        this.setupToastSystem();
+        
+        // Setup theme detection
+        this.setupThemeDetection();
+        
+        // Add common keyboard shortcuts
+        this.setupKeyboardShortcuts();
     }
 
     /**
-     * Update page title based on current section
-     * @param {string} section - The current section
+     * Initialize Service Worker for PWA functionality
      */
-    updatePageTitle(section) {
-        const titles = {
-            dashboard: 'Dashboard - PattiBytes',
-            news: 'News - PattiBytes',
-            places: 'Places - PattiBytes',
-            shop: 'Shop - PattiBytes',
-            profile: 'Profile - PattiBytes'
+    initializeServiceWorker() {
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', async () => {
+                try {
+                    const registration = await navigator.serviceWorker.register('/app/sw.js', { 
+                        scope: '/app/' 
+                    });
+                    console.log('Service Worker registered successfully:', registration);
+                    
+                    // Listen for updates
+                    registration.addEventListener('updatefound', () => {
+                        const newWorker = registration.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                this.showUpdateAvailable();
+                            }
+                        });
+                    });
+                } catch (error) {
+                    console.error('Service Worker registration failed:', error);
+                }
+            });
+
+            // Handle service worker messages
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                this.handleServiceWorkerMessage(event);
+            });
+        }
+    }
+
+    /**
+     * Handle PWA install prompt
+     */
+    handleInstallPrompt() {
+        let deferredPrompt = null;
+
+        // Listen for install prompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            this.showInstallButton();
+        });
+
+        // Global install function
+        window.installPWA = async () => {
+            if (!deferredPrompt) {
+                this.showToast('App is already installed or install is not available', 'info');
+                return;
+            }
+
+            try {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                
+                if (outcome === 'accepted') {
+                    this.showToast('App installed successfully!', 'success');
+                } else {
+                    this.showToast('App installation was cancelled', 'info');
+                }
+                
+                deferredPrompt = null;
+                this.hideInstallButton();
+            } catch (error) {
+                console.error('Error during installation:', error);
+                this.showToast('Installation failed. Please try again.', 'error');
+            }
         };
 
-        document.title = titles[section] || 'PattiBytes';
+        // Listen for app installed
+        window.addEventListener('appinstalled', () => {
+            this.showToast('PattiBytes installed successfully!', 'success');
+            this.hideInstallButton();
+        });
     }
 
     /**
-     * Load section-specific data
-     * @param {string} section - The section to load data for
+     * Show install button
      */
-    async loadSectionData(section) {
-        const contentArea = document.getElementById(`${section}Content`);
-        
-        if (!contentArea) return;
-
-        try {
-            this.showLoading();
+    showInstallButton() {
+        let installBtn = document.getElementById('installBtn');
+        if (!installBtn) {
+            installBtn = document.createElement('button');
+            installBtn.id = 'installBtn';
+            installBtn.className = 'install-btn';
+            installBtn.innerHTML = '📱 Install App';
+            installBtn.onclick = window.installPWA;
             
-            switch (section) {
-                case 'news':
-                    await this.loadNewsData();
-                    break;
-                case 'places':
-                    await this.loadPlacesData();
-                    break;
-                case 'shop':
-                    await this.loadShopData();
-                    break;
-                default:
-                    break;
+            // Add to page (different locations for auth vs dashboard)
+            if (this.isAuthPage) {
+                const authCard = document.querySelector('.auth-card');
+                if (authCard) authCard.appendChild(installBtn);
+            } else {
+                const header = document.querySelector('.header-content');
+                if (header) header.appendChild(installBtn);
             }
-        } catch (error) {
-            console.error(`Error loading ${section} data:`, error);
-            this.showError(`Failed to load ${section} data. Please try again.`);
-        } finally {
-            this.hideLoading();
+        }
+        installBtn.style.display = 'block';
+    }
+
+    /**
+     * Hide install button
+     */
+    hideInstallButton() {
+        const installBtn = document.getElementById('installBtn');
+        if (installBtn) {
+            installBtn.style.display = 'none';
         }
     }
 
     /**
-     * Load news data
+     * Show update available notification
      */
-    async loadNewsData() {
-        const newsContent = document.getElementById('newsContent');
-        if (!newsContent) return;
-
-        try {
-            const response = await fetch('/app/data/news.json');
-            const newsData = await response.json();
-            
-            newsContent.innerHTML = this.renderNewsItems(newsData);
-        } catch (error) {
-            newsContent.innerHTML = '<p>Unable to load news at this time.</p>';
-        }
+    showUpdateAvailable() {
+        const updateBanner = document.createElement('div');
+        updateBanner.className = 'update-banner';
+        updateBanner.innerHTML = `
+            <div class="update-content">
+                <span>🔄 New update available!</span>
+                <button onclick="window.location.reload()" class="update-btn">Update Now</button>
+                <button onclick="this.parentElement.parentElement.remove()" class="dismiss-btn">×</button>
+            </div>
+        `;
+        document.body.insertBefore(updateBanner, document.body.firstChild);
     }
 
     /**
-     * Load places data
+     * Create loading overlay
      */
-    async loadPlacesData() {
-        const placesContent = document.getElementById('placesContent');
-        if (!placesContent) return;
-
-        try {
-            const response = await fetch('/app/data/places.json');
-            const placesData = await response.json();
-            
-            placesContent.innerHTML = this.renderPlacesItems(placesData);
-        } catch (error) {
-            placesContent.innerHTML = '<p>Unable to load places at this time.</p>';
-        }
+    createLoadingOverlay() {
+        const overlay = document.createElement('div');
+        overlay.id = 'globalLoadingOverlay';
+        overlay.className = 'loading-overlay';
+        overlay.innerHTML = `
+            <div class="loading-spinner"></div>
+            <p>Loading...</p>
+        `;
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(overlay);
     }
 
     /**
-     * Load shop data
+     * Setup toast notification system
      */
-    async loadShopData() {
-        const shopContent = document.getElementById('shopContent');
-        if (!shopContent) return;
-
-        try {
-            const response = await fetch('/app/data/shop.json');
-            const shopData = await response.json();
-            
-            shopContent.innerHTML = this.renderShopItems(shopData);
-        } catch (error) {
-            shopContent.innerHTML = '<p>Unable to load shop data at this time.</p>';
-        }
+    setupToastSystem() {
+        const container = document.createElement('div');
+        container.id = 'toastContainer';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
     }
 
     /**
-     * Render news items
-     * @param {Array} newsData - Array of news items
-     * @returns {string} HTML string
+     * Setup theme detection
      */
-    renderNewsItems(newsData) {
-        return newsData.map(item => `
-            <article class="news-item" itemscope itemtype="https://schema.org/NewsArticle">
-                <header class="news-header">
-                    <h3 itemprop="headline">${item.title}</h3>
-                    <time itemprop="datePublished" datetime="${item.date}">${new Date(item.date).toLocaleDateString()}</time>
-                </header>
-                <p itemprop="description">${item.excerpt}</p>
-                <a href="${item.url}" class="read-more" itemprop="url">Read more</a>
-            </article>
-        `).join('');
-    }
-
-    /**
-     * Render places items
-     * @param {Array} placesData - Array of places
-     * @returns {string} HTML string
-     */
-    renderPlacesItems(placesData) {
-        return placesData.map(item => `
-            <article class="place-item" itemscope itemtype="https://schema.org/Place">
-                <header class="place-header">
-                    <h3 itemprop="name">${item.name}</h3>
-                    <address itemprop="address">${item.location}</address>
-                </header>
-                <p itemprop="description">${item.description}</p>
-                ${item.image ? `<img src="${item.image}" alt="${item.name}" itemprop="image">` : ''}
-            </article>
-        `).join('');
-    }
-
-    /**
-     * Render shop items
-     * @param {Array} shopData - Array of shops
-     * @returns {string} HTML string
-     */
-    renderShopItems(shopData) {
-        return shopData.map(item => `
-            <article class="shop-item" itemscope itemtype="https://schema.org/LocalBusiness">
-                <header class="shop-header">
-                    <h3 itemprop="name">${item.name}</h3>
-                    <address itemprop="address">${item.location}</address>
-                </header>
-                <p itemprop="description">${item.description}</p>
-                <div class="shop-contact">
-                    ${item.phone ? `<a href="tel:${item.phone}" itemprop="telephone">${item.phone}</a>` : ''}
-                    ${item.website ? `<a href="${item.website}" itemprop="url">Visit Website</a>` : ''}
-                </div>
-            </article>
-        `).join('');
-    }
-
-    /**
-     * Load initial data
-     */
-    loadInitialData() {
-        // Check for initial hash
-        const hash = window.location.hash.slice(1);
-        if (hash) {
-            this.navigateToSection(hash, false);
-        }
-    }
-
-    /**
-     * Handle user sign out
-     */
-    async handleSignOut() {
-        try {
-            this.showLoading();
-            await window.firebaseAuth.signOut(this.auth);
-            this.redirectToAuth();
-        } catch (error) {
-            console.error('Error signing out:', error);
-            this.showError('Error signing out. Please try again.');
-        } finally {
-            this.hideLoading();
-        }
-    }
-
-    /**
-     * Update user profile
-     */
-    async updateProfile() {
-        const nameInput = document.getElementById('profileName');
-        const newName = nameInput?.value?.trim();
+    setupThemeDetection() {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+        this.updateTheme(prefersDark.matches);
         
-        if (!newName) {
-            this.showError('Please enter a name');
-            return;
-        }
+        prefersDark.addEventListener('change', (e) => {
+            this.updateTheme(e.matches);
+        });
+    }
 
-        try {
-            this.showLoading();
-            
-            await window.firebaseAuth.updateProfile(this.currentUser, {
-                displayName: newName
-            });
-            
-            // Update UI
-            const userName = document.getElementById('userName');
-            if (userName) {
-                userName.textContent = newName;
+    /**
+     * Update theme
+     */
+    updateTheme(isDark) {
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    }
+
+    /**
+     * Setup keyboard shortcuts
+     */
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Ctrl/Cmd + K for search (future feature)
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                this.showSearch();
             }
             
-            this.showSuccess('Profile updated successfully!');
-        } catch (error) {
-            console.error('Error updating profile:', error);
-            this.showError('Error updating profile. Please try again.');
-        } finally {
-            this.hideLoading();
-        }
+            // Alt + I for install
+            if (e.altKey && e.key === 'i') {
+                e.preventDefault();
+                if (typeof window.installPWA === 'function') {
+                    window.installPWA();
+                }
+            }
+        });
     }
 
     /**
-     * Setup service worker
+     * Show search (placeholder for future feature)
      */
-    setupServiceWorker() {
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' })
-                .then(registration => {
-                    console.log('Service Worker registered successfully');
-                })
-                .catch(error => {
-                    console.log('Service Worker registration failed:', error);
-                });
-        }
+    showSearch() {
+        this.showToast('Search feature coming soon!', 'info');
     }
 
     /**
-     * Show loading overlay
+     * Global error handling
      */
-    showLoading() {
-        const overlay = document.getElementById('loadingOverlay');
+    setupGlobalErrorHandling() {
+        window.addEventListener('error', (e) => {
+            console.error('Global error:', e.error);
+            this.showToast('An unexpected error occurred', 'error');
+        });
+
+        window.addEventListener('unhandledrejection', (e) => {
+            console.error('Unhandled promise rejection:', e.reason);
+            this.showToast('Network or processing error occurred', 'error');
+        });
+    }
+
+    /**
+     * Handle service worker messages
+     */
+    handleServiceWorkerMessage(event) {
+        const { type, data } = event.data;
+        
+        switch (type) {
+            case 'CACHE_UPDATED':
+                this.showToast('Content updated and cached', 'success');
+                break;
+            case 'OFFLINE':
+                this.showToast('You are now offline', 'warning');
+                break;
+            case 'ONLINE':
+                this.showToast('Connection restored', 'success');
+                break;
+        }
+    }
+
+    // Utility Methods
+    showLoading(message = 'Loading...') {
+        const overlay = document.getElementById('globalLoadingOverlay');
         if (overlay) {
+            overlay.querySelector('p').textContent = message;
             overlay.classList.add('show');
             overlay.setAttribute('aria-hidden', 'false');
         }
     }
 
-    /**
-     * Hide loading overlay
-     */
     hideLoading() {
-        const overlay = document.getElementById('loadingOverlay');
+        const overlay = document.getElementById('globalLoadingOverlay');
         if (overlay) {
             overlay.classList.remove('show');
             overlay.setAttribute('aria-hidden', 'true');
         }
     }
 
-    /**
-     * Show success message
-     * @param {string} message - Success message to display
-     */
-    showSuccess(message) {
-        this.showMessage(message, 'success');
-    }
-
-    /**
-     * Show error message
-     * @param {string} message - Error message to display
-     */
-    showError(message) {
-        this.showMessage(message, 'error');
-    }
-
-    /**
-     * Show message
-     * @param {string} message - Message to display
-     * @param {string} type - Message type (success, error, warning)
-     */
-    showMessage(message, type = 'info') {
+    showToast(message, type = 'info', duration = 5000) {
+        const container = document.getElementById('toastContainer');
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
         toast.textContent = message;
         toast.setAttribute('role', 'alert');
         toast.setAttribute('aria-live', 'polite');
         
-        document.body.appendChild(toast);
+        container.appendChild(toast);
         
         // Animate in
         setTimeout(() => toast.classList.add('show'), 10);
         
-        // Remove after delay
+        // Remove after duration
         setTimeout(() => {
             toast.classList.remove('show');
             setTimeout(() => toast.remove(), 300);
-        }, 5000);
+        }, duration);
     }
 
-    /**
-     * Redirect to authentication page
-     */
-    redirectToAuth() {
-        window.location.href = '/app/auth.html';
+    // Network status
+    isOnline() {
+        return navigator.onLine;
+    }
+
+    // Storage utilities
+    setStorage(key, value) {
+        try {
+            localStorage.setItem(key, JSON.stringify(value));
+            return true;
+        } catch (error) {
+            console.error('Storage error:', error);
+            return false;
+        }
+    }
+
+    getStorage(key) {
+        try {
+            const item = localStorage.getItem(key);
+            return item ? JSON.parse(item) : null;
+        } catch (error) {
+            console.error('Storage retrieval error:', error);
+            return null;
+        }
+    }
+
+    // Date utilities
+    formatDate(date) {
+        return new Intl.DateTimeFormat('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        }).format(new Date(date));
     }
 }
 
-// Initialize application when DOM is loaded
+// Initialize common app functionality
 document.addEventListener('DOMContentLoaded', () => {
-    new PattiBytesDashboard();
+    window.pattiBytes = new PattiBytes();
 });
 
-// Export for potential use in other modules
-window.PattiBytesDashboard = PattiBytesDashboard;
+// Export for use in other modules
+window.PattiBytes = PattiBytes;
