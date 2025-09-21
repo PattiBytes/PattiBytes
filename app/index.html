@@ -242,8 +242,11 @@
         <p>Loading...</p>
     </div>
 
-    <!-- Scripts -->
-    <script src="/app/assets/js/firebase-config.js"></script>
+    <!-- Common scripts (always include these) -->
     <script src="/app/assets/js/app.js"></script>
+    <script type="module" src="/app/assets/js/firebase-config.js"></script>
+    
+    <!-- Page-specific scripts -->
+    <script type="module" src="/app/assets/js/dashboard-script.js"></script> 
 </body>
 </html>
