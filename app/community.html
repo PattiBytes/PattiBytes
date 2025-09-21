@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ਕਮਿਊਨਿਟੀ - PattiBytes Community</title>
+    <meta name="description" content="Connect with your local Patti community, share experiences and stay engaged">
+    
+    <!-- PWA -->
+    <link rel="manifest" href="/app/manifest.webmanifest">
+    <meta name="theme-color" content="#667eea">
+    <link rel="icon" href="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="/app/assets/css/common.css">
+    <link rel="stylesheet" href="/app/assets/css/community.css">
+</head>
+<body class="app-body">
+    <!-- Skip Link -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    
+    <!-- Header -->
+    <div id="headerContainer"></div>
+    
+    <!-- Main Content -->
+    <main class="main-content" id="main-content">
+        <!-- Community Header -->
+        <section class="community-header">
+            <div class="header-content">
+                <h1 class="section-title">
+                    <span class="title-punjabi">ਕਮਿਊਨਿਟੀ</span>
+                    <span class="title-english">Community</span>
+                </h1>
+                <p class="section-subtitle">Connect with your local Patti community</p>
+            </div>
+            
+            <div class="community-stats">
+                <div class="stat-item">
+                    <span class="stat-number" id="activeUsers">0</span>
+                    <span class="stat-label">Active Users</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="totalPosts">0</span>
+                    <span class="stat-label">Posts</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="onlineNow">0</span>
+                    <span class="stat-label">Online Now</span>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Create Post Section -->
+        <section class="create-post-section" id="createPostSection">
+            <div class="create-post-card">
+                <div class="user-avatar-section">
+                    <img src="" alt="Your avatar" class="user-avatar" id="createPostAvatar" style="display: none;">
+                    <span class="user-initials" id="createPostInitials">U</span>
+                </div>
+                <div class="create-post-input" id="createPostInput" tabindex="0" role="textbox" aria-placeholder="What's on your mind?">
+                    What's on your mind?
+                </div>
+                <div class="create-post-actions">
+                    <button class="media-btn" id="addPhotoBtn" aria-label="Add photo">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21,15 16,10 5,21"></polyline>
+                        </svg>
+                        Photo
+                    </button>
+                    <button class="media-btn" id="addVideoBtn" aria-label="Add video">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                        </svg>
+                        Video
+                    </button>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Feed Filters -->
+        <section class="feed-filters">
+            <div class="filter-tabs" role="tablist" aria-label="Feed filters">
+                <button class="filter-tab active" role="tab" data-filter="recent" aria-selected="true">
+                    Recent
+                </button>
+                <button class="filter-tab" role="tab" data-filter="popular" aria-selected="false">
+                    Popular
+                </button>
+                <button class="filter-tab" role="tab" data-filter="following" aria-selected="false">
+                    Following
+                </button>
+                <button class="filter-tab" role="tab" data-filter="photos" aria-selected="false">
+                    Photos
+                </button>
+                <button class="filter-tab" role="tab" data-filter="videos" aria-selected="false">
+                    Videos
+                </button>
+            </div>
+        </section>
+        
+        <!-- Community Feed -->
+        <section class="community-feed">
+            <div class="feed-container" id="feedContainer">
+                <!-- Posts will be dynamically loaded -->
+                <div class="feed-loading">
+                    <div class="loading-skeleton">
+                        <div class="skeleton-post"></div>
+                        <div class="skeleton-post"></div>
+                        <div class="skeleton-post"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="no-posts-message" id="noPostsMessage" style="display: none;">
+                <h3>No posts yet</h3>
+                <p>Be the first to share something with the community!</p>
+                <button class="btn btn-primary" id="createFirstPost">Create First Post</button>
+            </div>
+            
+            <!-- Load More Button -->
+            <div class="load-more-section">
+                <button class="load-more-btn" id="loadMorePosts">
+                    Load More Posts
+                </button>
+            </div>
+        </section>
+    </main>
+    
+    <!-- Bottom Navigation -->
+    <div id="bottomNavContainer"></div>
+    
+    <!-- Create Post Modal -->
+    <div class="modal-overlay" id="createPostModal" aria-hidden="true" role="dialog" aria-modal="true">
+        <div class="modal-content create-post-modal">
+            <div class="modal-header">
+                <h2 class="modal-title">Create Post</h2>
+                <button class="modal-close" id="createPostModalClose" aria-label="Close modal">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <form class="create-post-form" id="createPostForm">
+                    <div class="post-author">
+                        <img src="" alt="Your avatar" class="author-avatar" id="modalUserAvatar" style="display: none;">
+                        <span class="author-initials" id="modalUserInitials">U</span>
+                        <div class="author-info">
+                            <span class="author-name" id="modalUserName">User</span>
+                            <span class="post-privacy">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <circle cx="12" cy="12" r="4"></circle>
+                                    <path d="m12 6 0-4"></path>
+                                    <path d="m12 22 0-4"></path>
+                                </svg>
+                                Public
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <textarea id="postContent" 
+                                  name="content" 
+                                  placeholder="What's on your mind?"
+                                  rows="4"
+                                  required></textarea>
+                    </div>
+                    
+                    <div class="media-upload-section" id="mediaUploadSection" style="display: none;">
+                        <div class="media-preview" id="mediaPreview"></div>
+                        <button type="button" class="remove-media-btn" id="removeMediaBtn">Remove</button>
+                    </div>
+                    
+                    <input type="file" 
+                           id="mediaInput" 
+                           accept="image/*,video/*" 
+                           style="display: none;">
+                    
+                    <div class="form-actions">
+                        <div class="media-buttons">
+                            <button type="button" class="media-option-btn" id="addPhotoModalBtn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                    <polyline points="21,15 16,10 5,21"></polyline>
+                                </svg>
+                                Add Photo
+                            </button>
+                            <button type="button" class="media-option-btn" id="addVideoModalBtn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                                </svg>
+                                Add Video
+                            </button>
+                        </div>
+                        
+                        <div class="submit-buttons">
+                            <button type="button" class="btn btn-secondary" id="cancelPostBtn">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="submitPostBtn" disabled>
+                                <span class="btn-text">Post</span>
+                                <span class="btn-loader" style="display: none;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24">
+                                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" opacity="0.3"/>
+                                        <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="2" fill="none"/>
+                                    </svg>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Post Detail Modal -->
+    <div class="modal-overlay" id="postDetailModal" aria-hidden="true" role="dialog" aria-modal="true">
+        <div class="modal-content post-detail-modal">
+            <button class="modal-close" id="postDetailModalClose" aria-label="Close modal">&times;</button>
+            
+            <div class="modal-body">
+                <div class="post-detail-content" id="postDetailContent">
+                    <!-- Post content will be loaded here -->
+                </div>
+                
+                <!-- Comments Section -->
+                <div class="post-comments-section" id="postCommentsSection">
+                    <h3 class="comments-title">
+                        Comments (<span id="postCommentsCount">0</span>)
+                    </h3>
+                    
+                    <!-- Add Comment Form -->
+                    <div class="add-comment-form" id="addCommentForm">
+                        <div class="comment-input-wrapper">
+                            <img src="" alt="Your avatar" class="comment-avatar" id="commentUserAvatar" style="display: none;">
+                            <span class="comment-initials" id="commentUserInitials">U</span>
+                            <textarea id="commentInput" 
+                                      placeholder="Write a comment..." 
+                                      rows="2"></textarea>
+                            <button class="submit-comment-btn" id="submitCommentBtn" disabled aria-label="Post comment">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                                    <polygon points="22,2 15,22 11,13 2,9 22,2"></polygon>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Comments List -->
+                    <div class="comments-list" id="postCommentsList">
+                        <!-- Comments will be loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Floating Create Post Button -->
+    <button class="fab create-post-fab" id="createPostFab" aria-label="Create new post">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+    </button>
+    
+    <!-- Scripts -->
+    <script type="module" src="/app/assets/js/firebase-config.js"></script>
+    <script src="/app/assets/js/common.js"></script>
+    <script src="/app/assets/js/community.js"></script>
+</body>
+</html>
