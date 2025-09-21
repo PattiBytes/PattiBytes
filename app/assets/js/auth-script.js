@@ -1,60 +1,67 @@
-// Authentication logic
+/**
+ * PattiBytes Authentication Script
+ * Supports Email/Password, Email Link (passwordless), and Google Sign-in
+ */
+
 class AuthManager {
     constructor() {
-        this.auth = window.firebaseAuth.auth;
+        this.auth = window.firebaseAuth?.auth;
+        this.isEmailLinkMode = new URLSearchParams(window.location.search).get('mode') === 'emailLink';
         this.init();
     }
 
     init() {
+        if (!this.auth) {
+            console.error('Firebase not initialized');
+            return;
+        }
+        
         this.bindEvents();
         this.checkAuthState();
+        this.handleEmailLink();
     }
 
     bindEvents() {
         // Form switching
-        document.getElementById('showSignup').addEventListener('click', (e) => {
+        document.getElementById('showSignup')?.addEventListener('click', (e) => {
             e.preventDefault();
             this.showForm('signup');
         });
 
-        document.getElementById('showLogin').addEventListener('click', (e) => {
+        document.getElementById('showLogin')?.addEventListener('click', (e) => {
             e.preventDefault();
             this.showForm('login');
         });
 
-        document.getElementById('showReset').addEventListener('click', (e) => {
+        document.getElementById('showEmailLink')?.addEventListener('click', (e) => {
             e.preventDefault();
-            this.showForm('reset');
+            this.showForm('emailLink');
         });
 
-        document.getElementById('backToLogin').addEventListener('click', (e) => {
+        document.getElementById('backToLogin')?.addEventListener('click', (e) => {
             e.preventDefault();
             this.showForm('login');
         });
 
         // Form submissions
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
+        document.getElementById('loginForm')?.addEventListener('submit', (e) => {
             e.preventDefault();
             this.handleLogin();
         });
 
-        document.getElementById('signupForm').addEventListener('submit', (e) => {
+        document.getElementById('signupForm')?.addEventListener('submit', (e) => {
             e.preventDefault();
             this.handleSignup();
         });
 
-        document.getElementById('resetForm').addEventListener('submit', (e) => {
+        document.getElementById('emailLinkForm')?.addEventListener('submit', (e) => {
             e.preventDefault();
-            this.handleReset();
+            this.handleEmailLink();
         });
 
-        // Social auth
-        document.getElementById('googleSignIn').addEventListener('click', () => {
-            this.handleSocialAuth('google');
-        });
-
-        document.getElementById('facebookSignIn').addEventListener('click', () => {
-            this.handleSocialAuth('facebook');
+        // Social auth - only Google
+        document.getElementById('googleSignIn')?.addEventListener('click', () => {
+            this.handleGoogleAuth();
         });
     }
 
@@ -62,12 +69,15 @@ class AuthManager {
         const forms = document.querySelectorAll('.auth-form');
         forms.forEach(form => form.classList.remove('active'));
         
-        document.getElementById(`${formType}-form`).classList.add('active');
+        const targetForm = document.getElementById(`${formType}-form`);
+        if (targetForm) {
+            targetForm.classList.add('active');
+        }
     }
 
     async handleLogin() {
-        const email = document.getElementById('loginEmail').value;
-        const password = document.getElementById('loginPassword').value;
+        const email = document.getElementById('loginEmail')?.value;
+        const password = document.getElementById('loginPassword')?.value;
 
         if (!this.validateEmail(email)) {
             this.showMessage('Please enter a valid email address', 'error');
@@ -87,10 +97,10 @@ class AuthManager {
     }
 
     async handleSignup() {
-        const name = document.getElementById('signupName').value;
-        const email = document.getElementById('signupEmail').value;
-        const password = document.getElementById('signupPassword').value;
-        const confirmPassword = document.getElementById('confirmPassword').value;
+        const name = document.getElementById('signupName')?.value;
+        const email = document.getElementById('signupEmail')?.value;
+        const password = document.getElementById('signupPassword')?.value;
+        const confirmPassword = document.getElementById('confirmPassword')?.value;
 
         if (!this.validateSignup(name, email, password, confirmPassword)) {
             return;
@@ -100,7 +110,6 @@ class AuthManager {
             this.showLoading('signupForm');
             const userCredential = await window.firebaseAuth.createUserWithEmailAndPassword(this.auth, email, password);
             
-            // Update profile with display name
             await window.firebaseAuth.updateProfile(userCredential.user, {
                 displayName: name
             });
@@ -114,8 +123,8 @@ class AuthManager {
         }
     }
 
-    async handleReset() {
-        const email = document.getElementById('resetEmail').value;
+    async handleEmailLinkSend() {
+        const email = document.getElementById('emailLinkEmail')?.value;
 
         if (!this.validateEmail(email)) {
             this.showMessage('Please enter a valid email address', 'error');
@@ -123,34 +132,98 @@ class AuthManager {
         }
 
         try {
-            this.showLoading('resetForm');
-            await window.firebaseAuth.sendPasswordResetEmail(this.auth, email);
-            this.showMessage('Password reset email sent! Check your inbox.', 'success');
-            this.showForm('login');
+            this.showLoading('emailLinkForm');
+            
+            // Send sign-in link to email
+            await window.firebaseAuth.sendSignInLinkToEmail(
+                this.auth, 
+                email, 
+                window.firebaseAuth.actionCodeSettings
+            );
+            
+            // Save email locally for completion
+            localStorage.setItem('emailForSignIn', email);
+            
+            this.showMessage('Magic link sent to your email! Check your inbox.', 'success');
+            this.showEmailLinkSentUI();
+            
         } catch (error) {
             this.showMessage(this.getErrorMessage(error), 'error');
         } finally {
-            this.hideLoading('resetForm');
+            this.hideLoading('emailLinkForm');
         }
     }
 
-    async handleSocialAuth(provider) {
-        const providerObj = provider === 'google' 
-            ? window.firebaseAuth.googleProvider 
-            : window.firebaseAuth.facebookProvider;
+    async handleEmailLink() {
+        // Check if this is an email link sign-in
+        if (window.firebaseAuth.isSignInWithEmailLink(this.auth, window.location.href)) {
+            let email = localStorage.getItem('emailForSignIn');
+            
+            if (!email) {
+                // If email not found, prompt user to enter it
+                email = window.prompt('Please provide your email for confirmation');
+            }
 
+            if (email && this.validateEmail(email)) {
+                try {
+                    this.showLoading();
+                    
+                    const result = await window.firebaseAuth.signInWithEmailLink(
+                        this.auth, 
+                        email, 
+                        window.location.href
+                    );
+                    
+                    // Clear saved email
+                    localStorage.removeItem('emailForSignIn');
+                    
+                    this.showMessage('Successfully signed in!', 'success');
+                    this.redirectToDashboard();
+                    
+                } catch (error) {
+                    this.showMessage(this.getErrorMessage(error), 'error');
+                    console.error('Email link sign-in error:', error);
+                }
+            }
+        }
+    }
+
+    async handleGoogleAuth() {
         try {
-            await window.firebaseAuth.signInWithPopup(this.auth, providerObj);
-            this.showMessage(`Welcome! Signed in with ${provider}`, 'success');
+            await window.firebaseAuth.signInWithPopup(this.auth, window.firebaseAuth.googleProvider);
+            this.showMessage('Welcome! Signed in with Google', 'success');
             this.redirectToDashboard();
         } catch (error) {
             this.showMessage(this.getErrorMessage(error), 'error');
         }
     }
 
+    showEmailLinkSentUI() {
+        const form = document.getElementById('emailLink-form');
+        if (form) {
+            form.innerHTML = `
+                <div class="email-link-sent">
+                    <h3>✉️ Check Your Email</h3>
+                    <p>We've sent a magic link to your email address. Click the link to sign in instantly!</p>
+                    <p class="note">Didn't receive it? Check your spam folder.</p>
+                    <button type="button" onclick="location.reload()" class="auth-btn secondary">
+                        Send Another Link
+                    </button>
+                    <a href="#" id="backToLogin" class="auth-switch">Back to Login</a>
+                </div>
+            `;
+            
+            // Re-bind the back button
+            form.querySelector('#backToLogin').addEventListener('click', (e) => {
+                e.preventDefault();
+                location.reload();
+            });
+        }
+    }
+
     checkAuthState() {
         window.firebaseAuth.onAuthStateChanged(this.auth, (user) => {
-            if (user && window.location.pathname.includes('auth.html')) {
+            if (user && !this.isEmailLinkMode) {
                 this.redirectToDashboard();
             }
         });
@@ -186,33 +259,44 @@ class AuthManager {
     }
 
     showMessage(message, type = 'success') {
-        const container = document.getElementById('messageContainer');
-        const messageEl = document.createElement('div');
-        messageEl.className = `message ${type}`;
-        messageEl.textContent = message;
-        
-        container.appendChild(messageEl);
-        
-        setTimeout(() => {
-            messageEl.remove();
-        }, 5000);
+        if (window.pattiBytes) {
+            window.pattiBytes.showToast(message, type);
+        } else {
+            alert(message);
+        }
     }
 
     showLoading(formId) {
-        const form = document.getElementById(formId);
-        const button = form.querySelector('.auth-btn.primary');
-        button.textContent = 'Loading...';
-        button.disabled = true;
+        if (window.pattiBytes) {
+            window.pattiBytes.showLoading('Authenticating...');
+        }
+        
+        if (formId) {
+            const form = document.getElementById(formId);
+            const button = form?.querySelector('.auth-btn.primary');
+            if (button) {
+                button.textContent = 'Loading...';
+                button.disabled = true;
+            }
+        }
     }
 
     hideLoading(formId) {
-        const form = document.getElementById(formId);
-        const button = form.querySelector('.auth-btn.primary');
-        button.disabled = false;
+        if (window.pattiBytes) {
+            window.pattiBytes.hideLoading();
+        }
         
-        if (formId === 'loginForm') button.textContent = 'Sign In';
-        else if (formId === 'signupForm') button.textContent = 'Create Account';
-        else if (formId === 'resetForm') button.textContent = 'Send Reset Link';
+        if (formId) {
+            const form = document.getElementById(formId);
+            const button = form?.querySelector('.auth-btn.primary');
+            if (button) {
+                button.disabled = false;
+                
+                if (formId === 'loginForm') button.textContent = 'Sign In';
+                else if (formId === 'signupForm') button.textContent = 'Create Account';
+                else if (formId === 'emailLinkForm') button.textContent = 'Send Magic Link';
+            }
+        }
     }
 
     getErrorMessage(error) {
@@ -229,6 +313,10 @@ class AuthManager {
                 return 'Invalid email address';
             case 'auth/popup-closed-by-user':
                 return 'Sign-in popup was closed';
+            case 'auth/invalid-action-code':
+                return 'Invalid or expired email link';
+            case 'auth/expired-action-code':
+                return 'Email link has expired. Please request a new one.';
             default:
                 return error.message || 'An error occurred. Please try again.';
         }
@@ -236,7 +324,7 @@ class AuthManager {
 
     redirectToDashboard() {
         setTimeout(() => {
-            window.location.href = '/app/dashboard.html';
+            window.location.href = '/app/';
         }, 1500);
     }
 }
