@@ -569,3 +569,202 @@
         transition-duration: 0.01ms !important;
     }
 }
+/* Guest Mode Notice */
+.guest-mode-notice {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(240, 147, 251, 0.1) 100%);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    margin-bottom: var(--space-6);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.notice-content {
+    display: flex;
+    gap: var(--space-3);
+    flex: 1;
+}
+
+.notice-icon {
+    color: var(--primary);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.notice-text {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
+    margin: 0;
+}
+
+/* Auth Prompt Modal */
+.auth-prompt-modal {
+    z-index: 1100;
+}
+
+.auth-prompt-content {
+    max-width: 480px;
+    width: 90vw;
+    text-align: center;
+}
+
+.auth-prompt-header {
+    margin-bottom: var(--space-6);
+}
+
+.auth-prompt-icon {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--space-4);
+    color: var(--text-inverse);
+}
+
+.auth-prompt-title {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-bold);
+    color: var(--text-primary);
+    margin-bottom: var(--space-3);
+}
+
+.auth-prompt-message {
+    color: var(--text-secondary);
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    margin: 0;
+}
+
+.auth-prompt-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+}
+
+.auth-prompt-features {
+    background: var(--surface-hover);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    text-align: left;
+}
+
+.features-title {
+    font-weight: var(--font-semibold);
+    color: var(--text-primary);
+    margin-bottom: var(--space-3);
+    text-align: center;
+}
+
+.features-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.features-list li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+}
+
+/* Prevent Zoom Styles */
+input[type="email"],
+input[type="password"],
+input[type="text"],
+textarea,
+select {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+}
+
+/* Touch-friendly improvements */
+.btn,
+.social-btn,
+.auth-switch-btn,
+.forgot-password-btn {
+    min-height: 44px; /* Touch target size */
+    touch-action: manipulation;
+}
+
+.password-toggle {
+    min-width: 44px;
+    min-height: 44px;
+    touch-action: manipulation;
+}
+
+.checkbox-wrapper {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    touch-action: manipulation;
+}
+
+/* Mobile Improvements */
+@media (max-width: 768px) {
+    .guest-mode-notice {
+        flex-direction: column;
+        text-align: center;
+        gap: var(--space-3);
+    }
+    
+    .auth-prompt-content {
+        width: 95vw;
+        margin: var(--space-4);
+    }
+    
+    .auth-prompt-actions {
+        padding: 0 var(--space-2);
+    }
+}
+
+/* Prevent text selection on buttons */
+.btn,
+.social-btn,
+.auth-switch-btn,
+.forgot-password-btn,
+.password-toggle {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* Improve focus states for touch devices */
+.form-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    -webkit-appearance: none;
+}
+
+/* Hide autocomplete dropdown arrow */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Safari specific fixes */
+@supports (-webkit-touch-callout: none) {
+    .auth-body {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .form-input {
+        -webkit-appearance: none;
+        border-radius: var(--radius-lg);
+    }
+}
