@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /app/
+Allow: /app/assets/
+Disallow: /app/auth.html
+Disallow: /app/data/
+
+Sitemap: https://pattibytes.com/app/sitemap.xml
