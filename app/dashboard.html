@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PattiBytes Dashboard</title>
+    <link rel="stylesheet" href="dashboard-style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="header">
+            <div class="header-content">
+                <h1 class="logo">ਪੱਟੀ ਬਾਈਟਸ</h1>
+                <div class="user-menu">
+                    <span id="userName">Loading...</span>
+                    <button id="signOutBtn" class="sign-out-btn">Sign Out</button>
+                </div>
+            </div>
+        </header>
+
+        <nav class="sidebar">
+            <div class="nav-items">
+                <a href="#dashboard" class="nav-item active" data-section="dashboard">
+                    <span class="nav-icon">📊</span>
+                    Dashboard
+                </a>
+                <a href="#news" class="nav-item" data-section="news">
+                    <span class="nav-icon">📰</span>
+                    News
+                </a>
+                <a href="#places" class="nav-item" data-section="places">
+                    <span class="nav-icon">📍</span>
+                    Places
+                </a>
+                <a href="#shop" class="nav-item" data-section="shop">
+                    <span class="nav-icon">🛒</span>
+                    Shop
+                </a>
+                <a href="#profile" class="nav-item" data-section="profile">
+                    <span class="nav-icon">👤</span>
+                    Profile
+                </a>
+            </div>
+        </nav>
+
+        <main class="main-content">
+            <div id="dashboard-section" class="content-section active">
+                <h2>Welcome to PattiBytes</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Latest News</h3>
+                        <p>Stay updated with local happenings</p>
+                        <span class="stat-number">24</span>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Famous Places</h3>
+                        <p>Discover Patti's heritage</p>
+                        <span class="stat-number">12</span>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Local Shops</h3>
+                        <p>Support local businesses</p>
+                        <span class="stat-number">56</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="news-section" class="content-section">
+                <h2>Latest News</h2>
+                <p>News content will be loaded here...</p>
+            </div>
+
+            <div id="places-section" class="content-section">
+                <h2>Famous Places</h2>
+                <p>Places content will be loaded here...</p>
+            </div>
+
+            <div id="shop-section" class="content-section">
+                <h2>Local Shop</h2>
+                <p>Shop content will be loaded here...</p>
+            </div>
+
+            <div id="profile-section" class="content-section">
+                <h2>My Profile</h2>
+                <div class="profile-form">
+                    <div class="input-group">
+                        <label>Full Name</label>
+                        <input type="text" id="profileName" placeholder="Your name">
+                    </div>
+                    <div class="input-group">
+                        <label>Email</label>
+                        <input type="email" id="profileEmail" readonly>
+                    </div>
+                    <button id="updateProfileBtn" class="update-btn">Update Profile</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="auth-firebase.js"></script>
+    <script type="module" src="dashboard-script.js"></script>
+</body>
+</html>
