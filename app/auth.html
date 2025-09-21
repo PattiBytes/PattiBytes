@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PattiBytes - Authentication</title>
+    <link rel="stylesheet" href="auth-style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h1 class="logo">ਪੱਟੀ ਬਾਈਟਸ</h1>
+                <p class="subtitle">Your local news companion</p>
+            </div>
+            
+            <!-- Login Form -->
+            <div id="login-form" class="auth-form active">
+                <h2>Welcome Back</h2>
+                <form id="loginForm">
+                    <div class="input-group">
+                        <input type="email" id="loginEmail" placeholder="Email" required>
+                        <span class="input-icon">📧</span>
+                    </div>
+                    <div class="input-group">
+                        <input type="password" id="loginPassword" placeholder="Password" required>
+                        <span class="input-icon">🔒</span>
+                    </div>
+                    <button type="submit" class="auth-btn primary">Sign In</button>
+                </form>
+                <div class="auth-divider">
+                    <span>or continue with</span>
+                </div>
+                <div class="social-auth">
+                    <button id="googleSignIn" class="auth-btn social google">
+                        <span class="social-icon">🔍</span>Google
+                    </button>
+                    <button id="facebookSignIn" class="auth-btn social facebook">
+                        <span class="social-icon">📘</span>Facebook
+                    </button>
+                </div>
+                <p class="auth-switch">
+                    Don't have an account? 
+                    <a href="#" id="showSignup">Sign up</a>
+                </p>
+                <p class="forgot-password">
+                    <a href="#" id="showReset">Forgot password?</a>
+                </p>
+            </div>
+
+            <!-- Signup Form -->
+            <div id="signup-form" class="auth-form">
+                <h2>Create Account</h2>
+                <form id="signupForm">
+                    <div class="input-group">
+                        <input type="text" id="signupName" placeholder="Full Name" required>
+                        <span class="input-icon">👤</span>
+                    </div>
+                    <div class="input-group">
+                        <input type="email" id="signupEmail" placeholder="Email" required>
+                        <span class="input-icon">📧</span>
+                    </div>
+                    <div class="input-group">
+                        <input type="password" id="signupPassword" placeholder="Password" required>
+                        <span class="input-icon">🔒</span>
+                    </div>
+                    <div class="input-group">
+                        <input type="password" id="confirmPassword" placeholder="Confirm Password" required>
+                        <span class="input-icon">🔒</span>
+                    </div>
+                    <button type="submit" class="auth-btn primary">Create Account</button>
+                </form>
+                <p class="auth-switch">
+                    Already have an account? 
+                    <a href="#" id="showLogin">Sign in</a>
+                </p>
+            </div>
+
+            <!-- Reset Password Form -->
+            <div id="reset-form" class="auth-form">
+                <h2>Reset Password</h2>
+                <form id="resetForm">
+                    <div class="input-group">
+                        <input type="email" id="resetEmail" placeholder="Email" required>
+                        <span class="input-icon">📧</span>
+                    </div>
+                    <button type="submit" class="auth-btn primary">Send Reset Link</button>
+                </form>
+                <p class="auth-switch">
+                    <a href="#" id="backToLogin">Back to Login</a>
+                </p>
+            </div>
+        </div>
+        
+        <!-- Messages -->
+        <div id="messageContainer" class="message-container"></div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module" src="auth-firebase.js"></script>
+    <script type="module" src="auth-script.js"></script>
+</body>
+</html>
