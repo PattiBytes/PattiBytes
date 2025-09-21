@@ -11,55 +11,61 @@
     "background_color": "#ffffff",
     "lang": "en",
     "dir": "ltr",
-    "categories": ["news", "lifestyle", "productivity", "social"],
+    "categories": ["news", "lifestyle", "productivity", "social", "local"],
     "icons": [
         {
-            "src": "/icons/pwab-192.jpg",
+            "src": "https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg",
             "sizes": "72x72",
-            "type": "image/jpg",
+            "type": "image/jpeg",
             "purpose": "any"
         },
         {
-            "src": "/icons/pwab-512.jpg",
+            "src": "https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg",
             "sizes": "96x96",
-            "type": "image/jpg",
+            "type": "image/jpeg",
             "purpose": "any"
         },
         {
-            "src": "/icons/pwab-192.jpg",
+            "src": "https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg",
             "sizes": "128x128",
-            "type": "image/jpg"
+            "type": "image/jpeg",
             "purpose": "any"
         },
         {
-            "src": "/icons/pwab-192.jpg",
+            "src": "https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg",
             "sizes": "144x144",
-            "type": "image/jpg"
+            "type": "image/jpeg",
             "purpose": "any"
         },
         {
-            "src": "/icons/pwab-192.jpg",
+            "src": "https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg",
             "sizes": "152x152",
-         "type": "image/jpg"
+            "type": "image/jpeg",
             "purpose": "any"
         },
         {
-            "src": "/icons/pwab-192.jpg",
+            "src": "https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg",
             "sizes": "192x192",
-           "type": "image/jpg"
+            "type": "image/jpeg",
             "purpose": "any maskable"
         },
         {
-            "src": "/icons/pwab-192.jpg",
+            "src": "https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg",
             "sizes": "384x384",
-              "type": "image/jpg"
+            "type": "image/jpeg",
             "purpose": "any"
         },
         {
-            "src": "/icons/pwab-192.jpg",
+            "src": "https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg",
             "sizes": "512x512",
-             "type": "image/jpg"
+            "type": "image/jpeg",
             "purpose": "any maskable"
+        },
+        {
+            "src": "https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg",
+            "sizes": "1024x1024",
+            "type": "image/jpeg",
+            "purpose": "any"
         }
     ],
     "shortcuts": [
@@ -70,9 +76,9 @@
             "url": "/app/#news",
             "icons": [
                 {
-                    "src": "/icons/pwab-192.jpg",
-                    "sizes": "96x96",
-                     "type": "image/jpg"
+                    "src": "https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg",
+                    "sizes": "192x192",
+                    "type": "image/jpeg"
                 }
             ]
         },
@@ -83,9 +89,9 @@
             "url": "/app/#places",
             "icons": [
                 {
-                    "src": "/icons/pwab-512.jpg",
-                    "sizes": "96x96",
-                     "type": "image/jpg"
+                    "src": "https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg",
+                    "sizes": "192x192",
+                    "type": "image/jpeg"
                 }
             ]
         },
@@ -96,9 +102,9 @@
             "url": "/app/#shop",
             "icons": [
                 {
-                    "src": "/icons/pwab-192.jpg",
-                    "sizes": "96x96",
-                    "type": "image/jpg"
+                    "src": "https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg",
+                    "sizes": "192x192",
+                    "type": "image/jpeg"
                 }
             ]
         }
@@ -115,8 +121,15 @@
     },
     "protocol_handlers": [
         {
-            "protocol": "mailto",
-            "url": "/app/#contact?email=%s"
+            "protocol": "web+pattibytes",
+            "url": "/app/?handler=%s"
         }
-    ]
+    ],
+    "launch_handler": {
+        "client_mode": "focus-existing"
+    },
+    "display_override": ["window-controls-overlay", "standalone"],
+    "edge_side_panel": {
+        "preferred_width": 400
+    }
 }
