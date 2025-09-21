@@ -3,642 +3,187 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>PattiBytes - Your Local Digital Hub</title>
+    <meta name="description" content="Stay connected with Patti, Punjab through latest news, places, and community updates">
     
-    <!-- SEO Meta Tags -->
-    <title>PattiBytes - ਪੱਟੀ ਬਾਈਟਸ | Latest News & Local Services</title>
-    <meta name="description" content="PattiBytes - Your digital companion for Patti, Punjab. Latest news, famous places, local shops and community services.">
-    <meta name="keywords" content="patti news, punjab news, local news, patti places, punjabi news, patti bytes">
-    <meta name="author" content="PattiBytes">
-    <meta name="robots" content="index, follow">
-    
-    <!-- Open Graph Meta Tags -->
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="PattiBytes - ਪੱਟੀ ਬਾਈਟਸ">
-    <meta property="og:description" content="Your local digital companion for Patti, Punjab">
-    <meta property="og:image" content="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg">
-    <meta property="og:url" content="https://pattibytes.com/app/">
-    
-    <!-- PWA & Icons -->
-    <link rel="icon" type="image/x-icon" href="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg">
-    <link rel="apple-touch-icon" href="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg">
+    <!-- PWA -->
     <link rel="manifest" href="/app/manifest.webmanifest">
     <meta name="theme-color" content="#667eea">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="icon" href="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg">
     
-    <!-- Preconnect for Performance -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://api.cloudinary.com">
-    
-    <!-- Stylesheets -->
+    <!-- Styles -->
     <link rel="stylesheet" href="/app/assets/css/common.css">
     <link rel="stylesheet" href="/app/assets/css/dashboard.css">
-    <link rel="stylesheet" href="/app/assets/css/news.css">
 </head>
-<body>
-    <div class="app-container" id="app">
-        <!-- Enhanced Header -->
-        <header class="app-header" role="banner">
-            <div class="header-content">
-                <div class="header-left">
-                    <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle menu">
-                        <span class="hamburger-line"></span>
-                        <span class="hamburger-line"></span>
-                        <span class="hamburger-line"></span>
-                    </button>
-                    <div class="logo-container">
-                        <img src="https://i.ibb.co/q3pGgxrZ/Whats-App-Image-2025-05-20-at-18-42-18-c8959cfa.jpg" 
-                             alt="PattiBytes Logo" 
-                             class="logo-image">
-                        <div class="logo-text">
-                            <span class="logo-punjabi">ਪੱਟੀ ਬਾਈਟਸ</span>
-                            <span class="logo-english">PattiBytes</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="header-center">
-                    <div class="search-container">
-                        <input type="search" placeholder="Search news, places..." class="search-input" id="searchInput" autocomplete="off">
-                        <button class="search-btn" aria-label="Search" id="searchBtn">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <path d="m21 21-4.35-4.35"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="header-right">
-                    <!-- Language Toggle -->
-                    <button class="lang-toggle-btn" id="langToggleBtn" aria-label="Switch language">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <path d="M2 12h20"></path>
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                        </svg>
-                        <span class="lang-text" id="currentLang">EN</span>
-                    </button>
-                    
-                    <!-- Notifications -->
-                    <button class="notification-btn" id="notificationBtn" aria-label="Notifications">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
-                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                        </svg>
-                        <span class="notification-badge" id="notificationBadge">0</span>
-                    </button>
-                    
-                    <!-- User Menu -->
-                    <div class="user-menu" id="userMenu">
-                        <div class="user-avatar" id="userAvatar">
-                            <img id="userAvatarImg" src="" alt="User" style="display: none;">
-                            <span id="userAvatarInitials">U</span>
-                        </div>
-                        <div class="user-info">
-                            <span class="user-name" id="userName">Loading...</span>
-                            <span class="user-role">User</span>
-                        </div>
-                        <button class="user-dropdown-btn" id="userDropdownBtn" aria-label="User menu">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6,9 12,15 18,9"></polyline>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+<body class="app-body">
+    <!-- Skip Link -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    
+    <!-- Header -->
+    <div id="headerContainer"></div>
+    
+    <!-- Main Content -->
+    <main class="main-content" id="main-content">
+        <!-- Welcome Section -->
+        <section class="welcome-section">
+            <div class="welcome-content">
+                <h1 class="welcome-title">
+                    <span class="title-punjabi">ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ</span>
+                    <span class="title-english">Welcome to PattiBytes</span>
+                </h1>
+                <p class="welcome-subtitle">Your digital connection to Patti, Punjab</p>
             </div>
             
-            <!-- User Dropdown Menu -->
-            <div class="user-dropdown" id="userDropdown">
-                <a href="/app/profile.html" class="dropdown-item">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                    Profile
-                </a>
-                <a href="#settings" class="dropdown-item" data-section="settings">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M12 1v6m0 6v6"></path>
-                        <path d="m21 12-6 0m-6 0-6 0"></path>
-                    </svg>
-                    Settings
-                </a>
-                <div class="dropdown-divider"></div>
-                <button class="dropdown-item" id="signOutBtn">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                        <polyline points="16,17 21,12 16,7"></polyline>
-                        <line x1="21" y1="12" x2="9" y2="12"></line>
-                    </svg>
-                    Sign Out
-                </button>
+            <div class="weather-widget" id="weatherWidget">
+                <div class="weather-info">
+                    <span class="weather-temp" id="weatherTemp">--°C</span>
+                    <div class="weather-details">
+                        <span class="weather-location">Patti, Punjab</span>
+                        <span class="weather-condition" id="weatherCondition">Loading...</span>
+                    </div>
+                </div>
             </div>
-        </header>
-
-        <!-- Desktop Sidebar -->
-        <aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
-            <nav class="nav-items">
-                <div class="nav-section">
-                    <h3 class="nav-section-title">Main</h3>
-                    <a href="#dashboard" class="nav-item" data-section="dashboard">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="3" width="7" height="7"></rect>
-                            <rect x="14" y="14" width="7" height="7"></rect>
-                            <rect x="3" y="14" width="7" height="7"></rect>
-                        </svg>
-                        <span class="nav-text">Dashboard</span>
-                    </a>
-                    <a href="#news" class="nav-item active" data-section="news" aria-current="page">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
-                        </svg>
-                        <span class="nav-text">News</span>
-                        <span class="nav-count" id="newsCount">0</span>
-                    </a>
-                    <a href="#places" class="nav-item" data-section="places">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                            <circle cx="12" cy="10" r="3"></circle>
-                        </svg>
-                        <span class="nav-text">Places</span>
-                        <span class="nav-count">12</span>
-                    </a>
-                    <a href="#shop" class="nav-item" data-section="shop">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                            <line x1="3" y1="6" x2="21" y2="6"></line>
-                            <path d="M16 10a4 4 0 0 1-8 0"></path>
-                        </svg>
-                        <span class="nav-text">Shop</span>
-                        <span class="nav-count">56</span>
-                    </a>
-                </div>
-            </nav>
-        </aside>
-
-        <!-- Main Content -->
-        <main class="main-content" role="main">
-            <!-- News Section (Default Active) -->
-            <section id="news-section" class="content-section active" aria-labelledby="news-heading">
-                <div class="section-header">
-                    <div class="section-title-container">
-                        <h1 id="news-heading" class="section-title">
-                            <div class="section-icon">
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
-                                </svg>
-                            </div>
-                            <span class="title-main">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ</span>
-                            <span class="title-sub">Latest News</span>
-                        </h1>
-                        <p class="section-description">Stay updated with local Patti news and events</p>
-                    </div>
-                    <div class="section-actions">
-                        <button class="btn btn-secondary" id="refreshNewsBtn">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="23,4 23,10 17,10"></polyline>
-                                <path d="M20.49 9A9 9 0 0 0 5.64 5.64l1.27 1.27"></path>
-                            </svg>
-                            Refresh
-                        </button>
-                        <button class="btn btn-primary" id="createPostBtn">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg>
-                            Create Post
-                        </button>
-                    </div>
-                </div>
-
-                <!-- News Filter Tabs -->
-                <div class="news-filters">
-                    <button class="filter-tab active" data-filter="all">All News</button>
-                    <button class="filter-tab" data-filter="breaking">Breaking</button>
-                    <button class="filter-tab" data-filter="local">Local</button>
-                    <button class="filter-tab" data-filter="sports">Sports</button>
-                    <button class="filter-tab" data-filter="politics">Politics</button>
-                </div>
-
-                <!-- News Content Grid -->
-                <div id="newsContent" class="news-grid">
-                    <!-- Loading skeleton will be replaced by actual content -->
-                    <div class="loading-skeleton">
-                        <div class="news-card-skeleton">
-                            <div class="skeleton-image"></div>
-                            <div class="skeleton-content">
-                                <div class="skeleton-title"></div>
-                                <div class="skeleton-meta"></div>
-                                <div class="skeleton-preview"></div>
-                            </div>
-                        </div>
-                        <div class="news-card-skeleton">
-                            <div class="skeleton-image"></div>
-                            <div class="skeleton-content">
-                                <div class="skeleton-title"></div>
-                                <div class="skeleton-meta"></div>
-                                <div class="skeleton-preview"></div>
-                            </div>
-                        </div>
-                        <div class="news-card-skeleton">
-                            <div class="skeleton-image"></div>
-                            <div class="skeleton-content">
-                                <div class="skeleton-title"></div>
-                                <div class="skeleton-meta"></div>
-                                <div class="skeleton-preview"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Dashboard Section -->
-            <section id="dashboard-section" class="content-section" aria-labelledby="dashboard-heading">
-                <div class="section-header">
-                    <div class="section-title-container">
-                        <h1 id="dashboard-heading" class="section-title">
-                            <div class="section-icon">
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="3" width="7" height="7"></rect>
-                                    <rect x="14" y="3" width="7" height="7"></rect>
-                                    <rect x="14" y="14" width="7" height="7"></rect>
-                                    <rect x="3" y="14" width="7" height="7"></rect>
-                                </svg>
-                            </div>
-                            Welcome to PattiBytes
-                        </h1>
-                        <p class="section-description">Your local digital companion for Patti, Punjab</p>
-                    </div>
-                </div>
-                
-                <div class="stats-grid" role="region" aria-label="Statistics overview">
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-info">
-                                <h3 class="stat-title">Latest News</h3>
-                                <p class="stat-subtitle">Local updates</p>
-                            </div>
-                            <div class="stat-icon news-icon">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="stat-content">
-                            <div class="stat-number" data-target="0" id="totalNewsCount">0</div>
-                            <div class="stat-change positive">
-                                <span class="change-icon">↗</span>
-                                <span class="change-text">Updated today</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-info">
-                                <h3 class="stat-title">Active Users</h3>
-                                <p class="stat-subtitle">Community members</p>
-                            </div>
-                            <div class="stat-icon users-icon">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                    <circle cx="9" cy="7" r="4"></circle>
-                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="stat-content">
-                            <div class="stat-number" data-target="152">0</div>
-                            <div class="stat-change positive">
-                                <span class="change-icon">↗</span>
-                                <span class="change-text">+12 this week</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <div class="stat-info">
-                                <h3 class="stat-title">Local Shops</h3>
-                                <p class="stat-subtitle">Business directory</p>
-                            </div>
-                            <div class="stat-icon shop-icon">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                                    <path d="M16 10a4 4 0 0 1-8 0"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="stat-content">
-                            <div class="stat-number" data-target="56">0</div>
-                            <div class="stat-change positive">
-                                <span class="change-icon">↗</span>
-                                <span class="change-text">+8 new shops</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Quick Actions -->
-                <div class="quick-actions">
-                    <h2 class="quick-actions-title">Quick Actions</h2>
-                    <div class="actions-grid">
-                        <button class="action-card" data-section="news">
-                            <div class="action-icon">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
-                                </svg>
-                            </div>
-                            <div class="action-content">
-                                <span class="action-title">Latest News</span>
-                                <span class="action-subtitle">Read updates</span>
-                            </div>
-                        </button>
-                        <button class="action-card" data-section="places">
-                            <div class="action-icon">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                                    <circle cx="12" cy="10" r="3"></circle>
-                                </svg>
-                            </div>
-                            <div class="action-content">
-                                <span class="action-title">Explore Places</span>
-                                <span class="action-subtitle">Discover heritage</span>
-                            </div>
-                        </button>
-                        <button class="action-card" data-section="shop">
-                            <div class="action-icon">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                                </svg>
-                            </div>
-                            <div class="action-content">
-                                <span class="action-title">Browse Shops</span>
-                                <span class="action-subtitle">Support local</span>
-                            </div>
-                        </button>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Other sections with placeholder content -->
-            <section id="places-section" class="content-section" aria-labelledby="places-heading">
-                <div class="section-header">
-                    <h2 id="places-heading" class="section-title">
-                        <div class="section-icon">
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                                <circle cx="12" cy="10" r="3"></circle>
-                            </svg>
-                        </div>
-                        Famous Places
-                    </h2>
-                    <p class="section-description">Explore historical and famous locations in Patti</p>
-                </div>
-                <div class="coming-soon">
-                    <h3>Coming Soon</h3>
-                    <p>Discover amazing places in Patti, Punjab</p>
-                </div>
-            </section>
-
-            <section id="shop-section" class="content-section" aria-labelledby="shop-heading">
-                <div class="section-header">
-                    <h2 id="shop-heading" class="section-title">
-                        <div class="section-icon">
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                                <line x1="3" y1="6" x2="21" y2="6"></line>
-                                <path d="M16 10a4 4 0 0 1-8 0"></path>
-                            </svg>
-                        </div>
-                        Local Shops
-                    </h2>
-                    <p class="section-description">Discover and support local businesses</p>
-                </div>
-                <div class="coming-soon">
-                    <h3>Coming Soon</h3>
-                    <p>Browse and support local businesses</p>
-                </div>
-            </section>
-
-            <section id="settings-section" class="content-section" aria-labelledby="settings-heading">
-                <div class="section-header">
-                    <h2 id="settings-heading" class="section-title">
-                        <div class="section-icon">
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="3"></circle>
-                                <path d="M12 1v6m0 6v6"></path>
-                                <path d="m21 12-6 0m-6 0-6 0"></path>
-                            </svg>
-                        </div>
-                        Settings
-                    </h2>
-                </div>
-                <div class="coming-soon">
-                    <h3>Settings</h3>
-                    <p>App preferences and configuration</p>
-                </div>
-            </section>
-        </main>
-
-        <!-- Enhanced Bottom Navigation -->
-        <nav class="bottom-nav" role="navigation" aria-label="Bottom navigation">
-            <a href="#dashboard" class="bottom-nav-item" data-section="dashboard" aria-label="Dashboard">
-                <div class="bottom-nav-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="14" width="7" height="7"></rect>
-                        <rect x="3" y="14" width="7" height="7"></rect>
-                    </svg>
-                </div>
-                <span class="bottom-nav-text">Dashboard</span>
-            </a>
-            <a href="#news" class="bottom-nav-item active" data-section="news" aria-label="News">
-                <div class="bottom-nav-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        </section>
+        
+        <!-- Quick Stats -->
+        <section class="stats-grid">
+            <div class="stat-card" data-aos="fade-up" data-aos-delay="100">
+                <div class="stat-icon news-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
                     </svg>
                 </div>
-                <span class="bottom-nav-text">News</span>
-                <span class="bottom-nav-count" id="bottomNewsCount">0</span>
-            </a>
-            <a href="#places" class="bottom-nav-item" data-section="places" aria-label="Places">
-                <div class="bottom-nav-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <div class="stat-content">
+                    <h3 class="stat-title">Latest News</h3>
+                    <p class="stat-number" id="newsCount">0</p>
+                    <span class="stat-label">articles today</span>
+                </div>
+            </div>
+            
+            <div class="stat-card" data-aos="fade-up" data-aos-delay="200">
+                <div class="stat-icon places-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                         <circle cx="12" cy="10" r="3"></circle>
                     </svg>
                 </div>
-                <span class="bottom-nav-text">Places</span>
-            </a>
-            <a href="#shop" class="bottom-nav-item" data-section="shop" aria-label="Shop">
-                <div class="bottom-nav-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                        <line x1="3" y1="6" x2="21" y2="6"></line>
-                        <path d="M16 10a4 4 0 0 1-8 0"></path>
+                <div class="stat-content">
+                    <h3 class="stat-title">Famous Places</h3>
+                    <p class="stat-number">25+</p>
+                    <span class="stat-label">locations</span>
+                </div>
+            </div>
+            
+            <div class="stat-card" data-aos="fade-up" data-aos-delay="300">
+                <div class="stat-icon community-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                     </svg>
                 </div>
-                <span class="bottom-nav-text">Shop</span>
-            </a>
-            <a href="/app/profile.html" class="bottom-nav-item" aria-label="Profile">
-                <div class="bottom-nav-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
+                <div class="stat-content">
+                    <h3 class="stat-title">Community</h3>
+                    <p class="stat-number" id="communityCount">0</p>
+                    <span class="stat-label">active users</span>
                 </div>
-                <span class="bottom-nav-text">Profile</span>
-            </a>
-        </nav>
-    </div>
-
-    <!-- News Article Modal -->
-    <div id="newsModal" class="modal-overlay" aria-hidden="true">
-        <div class="modal-content news-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-            <button id="newsModalClose" class="modal-close" aria-label="Close">&times;</button>
-            <div class="modal-body">
-                <div id="modalImage" class="modal-image"></div>
-                <h3 id="modalTitle" class="modal-title"></h3>
-                <div id="modalMeta" class="modal-meta"></div>
-                <div id="modalContent" class="modal-content-text"></div>
+            </div>
+        </section>
+        
+        <!-- Quick Actions -->
+        <section class="quick-actions" data-aos="fade-up" data-aos-delay="400">
+            <h2 class="section-title">Quick Access</h2>
+            <div class="actions-grid">
+                <a href="/app/news.html" class="action-card news-card">
+                    <div class="action-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
+                        </svg>
+                    </div>
+                    <div class="action-content">
+                        <h3 class="action-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ</h3>
+                        <p class="action-subtitle">Latest News</p>
+                    </div>
+                </a>
                 
-                <!-- Article Actions -->
-                <div class="article-actions">
-                    <button class="action-btn like-btn" id="likeBtn">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+                <a href="/app/places.html" class="action-card places-card">
+                    <div class="action-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                            <circle cx="12" cy="10" r="3"></circle>
                         </svg>
-                        <span class="like-count">0</span>
-                    </button>
-                    <button class="action-btn share-btn" id="shareBtn">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="18" cy="5" r="3"></circle>
-                            <circle cx="6" cy="12" r="3"></circle>
-                            <circle cx="18" cy="19" r="3"></circle>
-                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-                        </svg>
-                        Share
-                    </button>
-                    <button class="action-btn translate-btn" id="translateBtn">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <path d="M2 12h20"></path>
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                        </svg>
-                        Translate
-                    </button>
-                </div>
-
-                <!-- Comments Section -->
-                <div class="comments-section">
-                    <h4 class="comments-title">Comments <span id="commentCount">0</span></h4>
-                    
-                    <!-- Add Comment Form -->
-                    <div class="add-comment">
-                        <div class="comment-avatar">
-                            <img id="commentUserAvatar" src="" alt="User" style="display: none;">
-                            <span id="commentUserInitials">U</span>
-                        </div>
-                        <div class="comment-input-wrapper">
-                            <textarea id="commentInput" placeholder="Add a comment..." class="comment-input" rows="2"></textarea>
-                            <div class="comment-actions">
-                                <button class="btn btn-secondary" id="cancelCommentBtn" style="display: none;">Cancel</button>
-                                <button class="btn btn-primary" id="submitCommentBtn" disabled>Post</button>
-                            </div>
-                        </div>
                     </div>
-
-                    <!-- Comments List -->
-                    <div id="commentsList" class="comments-list">
-                        <!-- Comments will be loaded here -->
+                    <div class="action-content">
+                        <h3 class="action-title">ਮਸ਼ਹੂਰ ਸਥਾਨ</h3>
+                        <p class="action-subtitle">Famous Places</p>
                     </div>
+                </a>
+                
+                <a href="/app/community.html" class="action-card community-card">
+                    <div class="action-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        </svg>
+                    </div>
+                    <div class="action-content">
+                        <h3 class="action-title">ਕਮਿਊਨਿਟੀ</h3>
+                        <p class="action-subtitle">Community</p>
+                    </div>
+                </a>
+                
+                <a href="/app/profile.html" class="action-card profile-card">
+                    <div class="action-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                    </div>
+                    <div class="action-content">
+                        <h3 class="action-title">ਪ੍ਰੋਫਾਈਲ</h3>
+                        <p class="action-subtitle">Your Profile</p>
+                    </div>
+                </a>
+            </div>
+        </section>
+        
+        <!-- Recent Activity -->
+        <section class="recent-activity" data-aos="fade-up" data-aos-delay="500">
+            <div class="section-header">
+                <h2 class="section-title">Recent Activity</h2>
+                <button class="refresh-btn" id="refreshActivity" aria-label="Refresh activity">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23,4 23,10 17,10"></polyline>
+                        <path d="M20.49 9A9 9 0 0 0 5.64 5.64L7.64 7.64"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="activity-feed" id="activityFeed">
+                <div class="activity-loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading recent activity...</p>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Create Post Modal -->
-    <div id="createPostModal" class="modal-overlay" aria-hidden="true">
-        <div class="modal-content create-post-modal" role="dialog" aria-modal="true">
-            <button id="createPostModalClose" class="modal-close" aria-label="Close">&times;</button>
-            <div class="modal-body">
-                <h3 class="modal-title">Create New Post</h3>
-                <form id="createPostForm" class="create-post-form">
-                    <div class="form-group">
-                        <label for="postTitle" class="form-label">Title</label>
-                        <input type="text" id="postTitle" name="title" class="form-input" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="postContent" class="form-label">Content</label>
-                        <textarea id="postContent" name="content" class="form-textarea" rows="6" required></textarea>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="postImage" class="form-label">Featured Image</label>
-                        <div class="file-upload-area" id="imageUploadArea">
-                            <input type="file" id="postImage" name="image" accept="image/*" style="display: none;">
-                            <div class="upload-placeholder">
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                                    <polyline points="21,15 16,10 5,21"></polyline>
-                                </svg>
-                                <p>Click to upload image or drag and drop</p>
-                                <small>PNG, JPG, GIF up to 10MB</small>
-                            </div>
-                            <div class="image-preview" id="imagePreview" style="display: none;">
-                                <img id="previewImg" src="" alt="Preview">
-                                <button type="button" class="remove-image" id="removeImageBtn">&times;</button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="postCategory" class="form-label">Category</label>
-                        <select id="postCategory" name="category" class="form-select">
-                            <option value="local">Local News</option>
-                            <option value="breaking">Breaking News</option>
-                            <option value="sports">Sports</option>
-                            <option value="politics">Politics</option>
-                            <option value="culture">Culture</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" id="cancelPostBtn">Cancel</button>
-                        <button type="submit" class="btn btn-primary" id="submitPostBtn">
-                            <span class="btn-text">Publish Post</span>
-                            <span class="btn-loader" style="display: none;">
-                                <svg width="16" height="16" viewBox="0 0 24 24">
-                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" opacity="0.3"/>
-                                    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="2" fill="none"/>
-                                </svg>
-                            </span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Mobile Overlay -->
-    <div class="mobile-overlay" id="mobileOverlay"></div>
-
+        </section>
+    </main>
+    
+    <!-- Bottom Navigation -->
+    <div id="bottomNavContainer"></div>
+    
+    <!-- Floating Action Button -->
+    <button class="fab" id="createFab" aria-label="Create new content">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+    </button>
+    
     <!-- Scripts -->
-    <script src="/app/assets/js/app.js"></script>
     <script type="module" src="/app/assets/js/firebase-config.js"></script>
-    <script type="module" src="/app/assets/js/dashboard-script.js"></script>
+    <script src="/app/assets/js/common.js"></script>
+    <script src="/app/assets/js/dashboard.js"></script>
 </body>
 </html>
