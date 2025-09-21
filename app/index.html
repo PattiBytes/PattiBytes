@@ -1,252 +1,128 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
-    <!-- Primary Meta Tags -->
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    
-    <!-- SEO Meta Tags -->
-    <title>PattiBytes Dashboard - ਪੱਟੀ ਬਾਈਟਸ | Local News & Services</title>
-    <meta name="description" content="PattiBytes dashboard for latest Punjabi news, famous places, local shops and community services in Patti, Punjab. Your local digital companion.">
-    <meta name="keywords" content="patti news, punjab news, local news, patti places, punjabi news, patti bytes">
-    <meta name="author" content="PattiBytes">
-    <meta name="robots" content="index, follow">
-    <meta name="language" content="English">
-    <meta name="revisit-after" content="1 days">
-    
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://pattibytes.com/app/">
-    <meta property="og:title" content="PattiBytes Dashboard - ਪੱਟੀ ਬਾਈਟਸ">
-    <meta property="og:description" content="Your local digital companion for Patti, Punjab. Latest news, places, and services.">
-    <meta property="og:image" content="/app/assets/images/logos/og-image.jpg">
-    <meta property="og:site_name" content="PattiBytes">
-    <meta property="og:locale" content="en_US">
-    
-    <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://pattibytes.com/app/">
-    <meta property="twitter:title" content="PattiBytes Dashboard - ਪੱਟੀ ਬਾਈਟਸ">
-    <meta property="twitter:description" content="Your local digital companion for Patti, Punjab. Latest news, places, and services.">
-    <meta property="twitter:image" content="/app/assets/images/logos/twitter-image.jpg">
-    
-    <!-- Apple Meta Tags -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="PattiBytes">
-    <link rel="apple-touch-icon" href="/app/assets/images/icons/apple-touch-icon.png">
-    
-    <!-- Theme Colors -->
-    <meta name="theme-color" content="#667eea">
-    <meta name="msapplication-navbutton-color" content="#667eea">
-    <meta name="apple-mobile-web-app-status-bar-style" content="#667eea">
-    
-    <!-- Canonical URL -->
-    <link rel="canonical" href="https://pattibytes.com/app/">
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/app/assets/images/icons/favicon.ico">
-    <link rel="icon" type="image/jpg" sizes="32x32" href="/icons/pwab-192.jpg">
-    <link rel="icon" type="image/jpg" sizes="16x16" href="/icons/pwab-192.jpg">
-    
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="/app/manifest.webmanifest">
-    
-    <!-- Preconnect for Performance -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-    
-    <!-- Stylesheets -->
-   <link rel="stylesheet" href="/app/assets/css/common.css">
-    <link rel="stylesheet" href="/app/assets/css/dashboard.css">
-   
-    
-    <!-- Structured Data -->
-    <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "PattiBytes",
-        "alternateName": "ਪੱਟੀ ਬਾਈਟਸ",
-        "url": "https://pattibytes.com/app/",
-        "description": "Local news and services app for Patti, Punjab",
-        "applicationCategory": "NewsApplication",
-        "operatingSystem": "All",
-        "offers": {
-            "@type": "Offer",
-            "price": "0",
-            "priceCurrency": "USD"
-        },
-        "author": {
-            "@type": "Organization",
-            "name": "PattiBytes",
-            "url": "https://pattibytes.com"
-        },
-        "publisher": {
-            "@type": "Organization",
-            "name": "PattiBytes",
-            "logo": {
-                "@type": "ImageObject",
-                "url": "https://pattibytes.com/app/assets/images/logos/logo.png"
-            }
-        },
-        "inLanguage": ["en", "pa"]
-    }
-    </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PattiBytes Dashboard - ਪੱਟੀ ਬਾਈਟਸ</title>
+  <meta name="description" content="Dashboard of PattiBytes local Punjabi news, places, and shop. Stay updated and connected." />
+  <link rel="icon" href="/app/assets/images/icons/favicon.ico" />
+  <link rel="manifest" href="/app/manifest.webmanifest" />
+  <link rel="stylesheet" href="/app/assets/css/common.css" />
+  <link rel="stylesheet" href="/app/assets/css/dashboard.css" />
 </head>
 <body>
-    <div class="app-container" id="app">
-        <!-- Header Section -->
-        <header class="app-header" role="banner">
-            <div class="header-content">
-                <h1 class="app-logo">
-                    <span class="logo-punjabi">ਪੱਟੀ ਬਾਈਟਸ</span>
-                    <span class="logo-english">PattiBytes</span>
-                </h1>
-                <nav class="user-nav" role="navigation" aria-label="User navigation">
-                    <span id="userName" class="user-name">Loading...</span>
-                    <button id="signOutBtn" class="sign-out-btn" type="button">Sign Out</button>
-                </nav>
+  <div class="app-container" id="app">
+    <!-- Header -->
+    <header class="app-header" role="banner">
+      <div class="header-content">
+        <a href="#dashboard" class="app-logo" aria-label="PattiBytes Home">
+          <img src="/app/assets/images/logos/logo.png" alt="PattiBytes Logo" width="48" height="48" />
+          <span class="logo-punjabi">ਪੱਟੀ ਬਾਈਟਸ</span>
+          <span class="logo-english">PattiBytes</span>
+        </a>
+        <nav class="user-nav" role="navigation" aria-label="User navigation">
+          <span id="userName" class="user-name" aria-live="polite">Loading...</span>
+          <button id="signOutBtn" class="sign-out-btn" type="button">Sign Out</button>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Sidebar Navigation (hidden on mobile) -->
+    <aside class="sidebar" role="navigation" aria-label="Main navigation">
+      <nav class="nav-items" role="menubar">
+        <a href="#dashboard" class="nav-item active" role="menuitem" aria-current="page" data-section="dashboard" tabindex="0">
+          <span class="nav-icon" aria-hidden="true">📊</span><span class="nav-text">Dashboard</span>
+        </a>
+        <a href="#news" class="nav-item" role="menuitem" data-section="news" tabindex="-1">
+          <span class="nav-icon" aria-hidden="true">📰</span><span class="nav-text">News</span>
+        </a>
+        <a href="#places" class="nav-item" role="menuitem" data-section="places" tabindex="-1">
+          <span class="nav-icon" aria-hidden="true">📍</span><span class="nav-text">Places</span>
+        </a>
+        <a href="#shop" class="nav-item" role="menuitem" data-section="shop" tabindex="-1">
+          <span class="nav-icon" aria-hidden="true">🛒</span><span class="nav-text">Shop</span>
+        </a>
+        <a href="#profile" class="nav-item" role="menuitem" data-section="profile" tabindex="-1">
+          <span class="nav-icon" aria-hidden="true">👤</span><span class="nav-text">Profile</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" role="main" tabindex="0">
+      <section id="dashboard-section" class="content-section active" aria-labelledby="dashboard-heading">
+        <h2 id="dashboard-heading" class="section-title">Welcome to PattiBytes</h2>
+        <p class="section-description">Your local digital companion for Patti, Punjab</p>
+        <div class="stats-grid" role="region" aria-label="Dashboard statistics">
+          <article class="stat-card" tabindex="0">
+            <div class="stat-header">
+              <h3>Latest News</h3>
+              <p>Stay updated with local happenings</p>
             </div>
-        </header>
-
-        <div class="app-body">
-            <!-- Sidebar Navigation -->
-            <aside class="sidebar" role="navigation" aria-label="Main navigation">
-                <nav class="nav-items">
-                    <a href="#dashboard" class="nav-item active" data-section="dashboard" aria-current="page">
-                        <span class="nav-icon" aria-hidden="true">📊</span>
-                        <span class="nav-text">Dashboard</span>
-                    </a>
-                    <a href="#news" class="nav-item" data-section="news">
-                        <span class="nav-icon" aria-hidden="true">📰</span>
-                        <span class="nav-text">News</span>
-                    </a>
-                    <a href="#places" class="nav-item" data-section="places">
-                        <span class="nav-icon" aria-hidden="true">📍</span>
-                        <span class="nav-text">Places</span>
-                    </a>
-                    <a href="#shop" class="nav-item" data-section="shop">
-                        <span class="nav-icon" aria-hidden="true">🛒</span>
-                        <span class="nav-text">Shop</span>
-                    </a>
-                    <a href="#profile" class="nav-item" data-section="profile">
-                        <span class="nav-icon" aria-hidden="true">👤</span>
-                        <span class="nav-text">Profile</span>
-                    </a>
-                </nav>
-            </aside>
-
-            <!-- Main Content Area -->
-            <main class="main-content" role="main">
-                <!-- Dashboard Section -->
-                <section id="dashboard-section" class="content-section active" aria-labelledby="dashboard-heading">
-                    <header class="section-header">
-                        <h2 id="dashboard-heading">Welcome to PattiBytes</h2>
-                        <p class="section-description">Your local digital companion for Patti, Punjab</p>
-                    </header>
-                    
-                    <div class="stats-grid" role="region" aria-label="Quick statistics">
-                        <article class="stat-card">
-                            <header class="stat-header">
-                                <h3>Latest News</h3>
-                                <p>Stay updated with local happenings</p>
-                            </header>
-                            <div class="stat-number" aria-label="24 news articles">24</div>
-                        </article>
-                        
-                        <article class="stat-card">
-                            <header class="stat-header">
-                                <h3>Famous Places</h3>
-                                <p>Discover Patti's heritage</p>
-                            </header>
-                            <div class="stat-number" aria-label="12 famous places">12</div>
-                        </article>
-                        
-                        <article class="stat-card">
-                            <header class="stat-header">
-                                <h3>Local Shops</h3>
-                                <p>Support local businesses</p>
-                            </header>
-                            <div class="stat-number" aria-label="56 local shops">56</div>
-                        </article>
-                    </div>
-                </section>
-
-                <!-- News Section -->
-                <section id="news-section" class="content-section" aria-labelledby="news-heading">
-                    <header class="section-header">
-                        <h2 id="news-heading">Latest News</h2>
-                        <p class="section-description">Stay informed with local Patti news and updates</p>
-                    </header>
-                    <div id="newsContent" class="content-area">
-                        <p>Loading news content...</p>
-                    </div>
-                </section>
-
-                <!-- Places Section -->
-                <section id="places-section" class="content-section" aria-labelledby="places-heading">
-                    <header class="section-header">
-                        <h2 id="places-heading">Famous Places</h2>
-                        <p class="section-description">Explore historical and famous locations in Patti</p>
-                    </header>
-                    <div id="placesContent" class="content-area">
-                        <p>Loading places content...</p>
-                    </div>
-                </section>
-
-                <!-- Shop Section -->
-                <section id="shop-section" class="content-section" aria-labelledby="shop-heading">
-                    <header class="section-header">
-                        <h2 id="shop-heading">Local Shop</h2>
-                        <p class="section-description">Discover and support local businesses</p>
-                    </header>
-                    <div id="shopContent" class="content-area">
-                        <p>Loading shop content...</p>
-                    </div>
-                </section>
-
-                <!-- Profile Section -->
-                <section id="profile-section" class="content-section" aria-labelledby="profile-heading">
-                    <header class="section-header">
-                        <h2 id="profile-heading">My Profile</h2>
-                        <p class="section-description">Manage your account settings</p>
-                    </header>
-                    <div class="profile-form-container">
-                        <form class="profile-form" id="profileForm">
-                            <div class="input-group">
-                                <label for="profileName">Full Name</label>
-                                <input type="text" id="profileName" name="name" placeholder="Your name" required>
-                            </div>
-                            <div class="input-group">
-                                <label for="profileEmail">Email</label>
-                                <input type="email" id="profileEmail" name="email" readonly>
-                            </div>
-                            <button type="submit" id="updateProfileBtn" class="update-btn">Update Profile</button>
-                        </form>
-                    </div>
-                </section>
-            </main>
+            <div class="stat-number" aria-label="24 news articles">24</div>
+          </article>
+          <article class="stat-card" tabindex="0">
+            <div class="stat-header">
+              <h3>Famous Places</h3>
+              <p>Discover Patti's heritage</p>
+            </div>
+            <div class="stat-number" aria-label="12 famous places">12</div>
+          </article>
+          <article class="stat-card" tabindex="0">
+            <div class="stat-header">
+              <h3>Local Shops</h3>
+              <p>Support local businesses</p>
+            </div>
+            <div class="stat-number" aria-label="56 local shops">56</div>
+          </article>
         </div>
+      </section>
 
-        <!-- Footer -->
-        <footer class="app-footer" role="contentinfo">
-            <p>&copy; 2025 PattiBytes. Made with ❤️ for Patti, Punjab.</p>
-        </footer>
-    </div>
+      <section id="news-section" class="content-section" aria-labelledby="news-heading">
+        <h2 id="news-heading" class="section-title">Latest News</h2>
+        <div id="newsContent" class="content-area">Loading news content...</div>
+      </section>
 
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="loading-overlay" aria-hidden="true">
-        <div class="loading-spinner"></div>
-        <p>Loading...</p>
-    </div>
+      <section id="places-section" class="content-section" aria-labelledby="places-heading">
+        <h2 id="places-heading" class="section-title">Famous Places</h2>
+        <div id="placesContent" class="content-area">Loading places content...</div>
+      </section>
 
-    <!-- Common scripts (always include these) -->
-    <script src="/app/assets/js/app.js"></script>
-    <script type="module" src="/app/assets/js/firebase-config.js"></script>
-    
-    <!-- Page-specific scripts -->
-    <script type="module" src="/app/assets/js/dashboard-script.js"></script> 
+      <section id="shop-section" class="content-section" aria-labelledby="shop-heading">
+        <h2 id="shop-heading" class="section-title">Local Shop</h2>
+        <div id="shopContent" class="content-area">Loading shop content...</div>
+      </section>
+
+      <section id="profile-section" class="content-section" aria-labelledby="profile-heading">
+        <h2 id="profile-heading" class="section-title">My Profile</h2>
+        <form id="profileForm" class="profile-form" aria-label="Profile Form">
+          <label for="profileName">Full Name</label>
+          <input type="text" id="profileName" name="profileName" placeholder="Your full name" required />
+
+          <label for="profileEmail">Email</label>
+          <input type="email" id="profileEmail" name="profileEmail" readonly />
+
+          <button type="submit" id="updateProfileBtn" class="update-btn">Update Profile</button>
+        </form>
+      </section>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav" role="navigation" aria-label="Bottom Navigation">
+      <button class="bottom-nav-item active" data-section="dashboard" aria-current="page" aria-label="Dashboard">📊<span>Dashboard</span></button>
+      <button class="bottom-nav-item" data-section="news" aria-label="News">📰<span>News</span></button>
+      <button class="bottom-nav-item" data-section="places" aria-label="Places">📍<span>Places</span></button>
+      <button class="bottom-nav-item" data-section="shop" aria-label="Shop">🛒<span>Shop</span></button>
+      <button class="bottom-nav-item" data-section="profile" aria-label="Profile">👤<span>Profile</span></button>
+    </nav>
+
+    <footer class="app-footer" role="contentinfo">
+      <p>&copy; 2025 PattiBytes. Made with ❤️ for Patti, Punjab.</p>
+    </footer>
+  </div>
+
+  <script src="/app/assets/js/firebase-config.js" type="module"></script>
+  <script src="/app/assets/js/app.js"></script>
+  <script src="/app/assets/js/dashboard-script.js"></script>
 </body>
 </html>
