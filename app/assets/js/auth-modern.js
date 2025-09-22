@@ -1,79 +1,110 @@
-// /app/assets/js/auth-modern.js
 (() => {
   const $ = sel => document.querySelector(sel);
-  const toast = (m,t='info') => (window.Toast?.show ? window.Toast.show(m,t) : console.log(t, m));
+  const toast = (m, t = 'info') => (window.Toast?.show ? window.Toast.show(m, t) : console.log(t, m));
 
-  // Toggle password eyes
+  // Toggle password visibility
   document.addEventListener('click', e => {
     if (e.target.matches('.eye')) {
-      const id = e.target.getAttribute('data-toggle');
-      const input = document.querySelector(id);
+      const target = e.target.getAttribute('data-toggle');
+      const input = document.querySelector(target);
       if (input) input.type = input.type === 'password' ? 'text' : 'password';
     }
   });
 
-  // Login
-  const loginForm = $('#loginForm');
-  if (loginForm) {
-    $('#googleLoginBtn')?.addEventListener('click', async () => {
+  // Start UI once Firebase auth is ready
+  const startAuthUI = () => {
+    if (!window.firebaseAuth?.auth) return false;
+
+    // Login flow
+    const loginForm = $('#loginForm');
+    if (loginForm) {
+      $('#googleLoginBtn')?.addEventListener('click', async () => {
+        try {
+          const { auth, googleProvider, signInPopup } = window.firebaseAuth;
+          const result = await signInPopup(auth, googleProvider);
+          handleSuccess(result.user);
+        } catch (err) {
+          toast(err.message || 'Google sign-in failed', 'error');
+        }
+      });
+      loginForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        try {
+          const email = $('#loginEmail').value.trim();
+          const password = $('#loginPassword').value;
+          if (!email || !password) return toast('Enter email and password', 'warning');
+          const { auth, signInEmail } = window.firebaseAuth;
+          const result = await signInEmail(auth, email, password);
+          handleSuccess(result.user);
+        } catch (err) {
+          toast(err.message || 'Email login failed', 'error');
+        }
+      });
+    }
+
+    // Signup flow
+    const signupForm = $('#signupForm');
+    if (signupForm) {
+      $('#googleSignupBtn')?.addEventListener('click', async () => {
+        try {
+          const { auth, googleProvider, signInPopup } = window.firebaseAuth;
+          const result = await signInPopup(auth, googleProvider);
+          handleSuccess(result.user, true);
+        } catch (err) {
+          toast(err.message || 'Google sign-up failed', 'error');
+        }
+      });
+      signupForm.addEventListener('submit', async e => {
+        e.preventDefault();
+        const firstName = $('#firstName').value.trim();
+        const lastName = $('#lastName').value.trim();
+        const email = $('#signupEmail').value.trim();
+        const password = $('#signupPassword').value;
+        const confirmPassword = $('#signupConfirm').value;
+        if (!firstName || !lastName)
+          return toast('Please enter your name', 'warning');
+        if (password !== confirmPassword) return toast('Passwords do not match', 'warning');
+        try {
+          const { auth, createUserEmail, updateProfile } = window.firebaseAuth;
+          const userCredential = await createUserEmail(auth, email, password);
+          await updateProfile(userCredential.user, { displayName: `${firstName} ${lastName}`.trim() });
+          handleSuccess(userCredential.user, true);
+        } catch (err) {
+          toast(err.message || 'Email sign-up failed', 'error');
+        }
+      });
+    }
+
+    // Forgot password (login page)
+    $('#forgotPasswordBtn')?.addEventListener('click', async () => {
+      const email = prompt('Enter your registered email');
+      if (!email) return;
       try {
-        const { auth, googleProvider, signInWithPopup } = window.firebaseAuth;
-        const r = await signInWithPopup(auth, googleProvider);
-        done(r.user);
-      } catch (e){ toast(e.message || 'Google sign-in failed', 'error'); }
+        const { auth, sendResetEmail } = window.firebaseAuth;
+        await sendResetEmail(auth, email);
+        toast('Password reset email sent!', 'success');
+      } catch (err) {
+        toast(err.message || 'Failed to send reset email', 'error');
+      }
     });
-    loginForm.addEventListener('submit', async e => {
-      e.preventDefault();
-      try{
-        const email = $('#loginEmail').value.trim();
-        const pass  = $('#loginPassword').value;
-        const { auth, signInWithEmailAndPassword } = window.firebaseAuth;
-        const r = await signInWithEmailAndPassword(auth, email, pass);
-        done(r.user);
-      }catch(e){ toast(e.message || 'Sign-in failed', 'error'); }
-    });
-  }
 
-  // Signup
-  const signupForm = $('#signupForm');
-  if (signupForm) {
-    $('#googleSignupBtn')?.addEventListener('click', async () => {
-      try{
-        const { auth, googleProvider, signInWithPopup } = window.firebaseAuth;
-        const r = await signInWithPopup(auth, googleProvider);
-        done(r.user, true);
-      }catch(e){ toast(e.message || 'Google sign-up failed', 'error'); }
-    });
-    signupForm.addEventListener('submit', async e => {
-      e.preventDefault();
-      const fn = $('#firstName').value.trim(), ln = $('#lastName').value.trim();
-      const email = $('#signupEmail').value.trim(), pw = $('#signupPassword').value, cf = $('#signupConfirm').value;
-      if (!fn || !ln) return toast('Enter your name', 'warning');
-      if (pw !== cf) return toast('Passwords do not match', 'warning');
-      try{
-        const { auth, createUserWithEmailAndPassword, updateProfile } = window.firebaseAuth;
-        const r = await createUserWithEmailAndPassword(auth, email, pw);
-        await updateProfile(r.user, { displayName: `${fn} ${ln}`.trim() });
-        done(r.user, true);
-      }catch(e){ toast(e.message || 'Sign-up failed', 'error'); }
-    });
-  }
+    // Helpers:
+    function handleSuccess(user, needsProfile = false) {
+      const userData = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName ?? '',
+        photoURL: user.photoURL ?? ''
+      };
+      localStorage.setItem('patti-user', JSON.stringify(userData));
+      if (needsProfile) location.href = '/app/auth/profile-setup.html';
+      else location.href = '/app/';
+    }
 
-  // Forgot password (login page)
-  $('#forgotBtn')?.addEventListener('click', async () => {
-    const em = prompt('Enter your account email');
-    if (!em) return;
-    try {
-      const { auth, sendPasswordResetEmail } = window.firebaseAuth;
-      await sendPasswordResetEmail(auth, em);
-      toast('Reset link sent to email', 'success');
-    } catch (e){ toast(e.message || 'Could not send reset link', 'error'); }
-  });
+    return true;
+  };
 
-  function done(user, needsProfile=false){
-    const data = { uid:user.uid, email:user.email, displayName:user.displayName||'', photoURL:user.photoURL||'' };
-    localStorage.setItem('pattibytes-user', JSON.stringify(data));
-    if (needsProfile) location.href = '/app/auth/profile-setup.html';
-    else location.href = '/app/';
+  if (!startAuthUI()) {
+    document.addEventListener('patti:firebase:ready', () => startAuthUI(), { once: true });
   }
 })();
