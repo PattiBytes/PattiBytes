@@ -1,42 +1,30 @@
-/* PattiBytes News - List + Reader
- * Data: /news/index.json (Jekyll collection JSON), with baseurl support.
- * Features: search + category filter, infinite scroll (IntersectionObserver), native share, copy link, save/like, SEO-ready reader.
+/* /app/assets/js/news.js
+ * Robust loader for Jekyll “news” collection via /news/index.json (with baseurl).
+ * Features: search, tag chips, infinite scroll (IntersectionObserver), native share, copy, save/like, JSON-LD in reader.
  */
 
-/* --------------------------
-   Utilities
--------------------------- */
+/* Utilities */
 const $  = (s, c=document) => c.querySelector(s);
 const $$ = (s, c=document) => Array.from(c.querySelectorAll(s));
 const escapeHtml = (s='') => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-const formatDate = (d) => { try { return new Date(d).toLocaleDateString('pa-IN', { year:'numeric', month:'short', day:'numeric' }); } catch { return d; } };
-const copyToClipboard = async (text) => {
-  try { await navigator.clipboard.writeText(text); }
-  catch {
-    const ta = document.createElement('textarea');
-    ta.value = text; document.body.appendChild(ta); ta.select();
-    document.execCommand('copy'); document.body.removeChild(ta);
-  }
-};
+const fmtDate = (d) => { try { return new Date(d).toLocaleDateString('pa-IN',{year:'numeric',month:'short',day:'numeric'});} catch { return d; } };
+const copy = async (t) => { try{ await navigator.clipboard.writeText(t);}catch{ const a=document.createElement('textarea'); a.value=t; document.body.appendChild(a); a.select(); document.execCommand('copy'); document.body.removeChild(a);} };
 const baseurl = () => document.querySelector('meta[name="jekyll-baseurl"]')?.content || '';
 
-/* --------------------------
-   Data API (index.json first)
--------------------------- */
+/* Data API */
 const NewsAPI = {
   async fetchIndex() {
     const base = baseurl();
-    const paths = [
-      `${base}/news/index.json`,                // primary JSON index from Jekyll collection
-      `${base}/_api/collections/news/entries`  // Jekyll Admin API fallback (if enabled)
+    const urls = [
+      `${base}/news/index.json`,             // primary JSON emitted by Jekyll
+      `${base}/_api/collections/news/entries`// optional Jekyll Admin fallback
     ];
-    for (const url of paths) {
+    for (const u of urls) {
       try {
-        const r = await fetch(url, { credentials: 'same-origin' });
-        if (!r.ok) continue;
+        const r = await fetch(u, { credentials:'same-origin', headers:{ 'Accept':'application/json' }});
+        if (!r.ok) { console.warn('[news] fetch failed', u, r.status); continue; }
         const j = await r.json();
-        if (url.includes('/_api/')) {
-          // Normalize Jekyll Admin entry format to app schema
+        if (u.includes('/_api/')) {
           return j.map(e => ({
             id: e.id || e.slug,
             slug: e.slug || (e.title||'').toLowerCase().replace(/[^a-z0-9]+/g,'-'),
@@ -50,7 +38,6 @@ const NewsAPI = {
             url: e.http_url || `${base}/news/${e.slug || e.id}/`
           }));
         }
-        // Standard index.json shape { items: [...] } or bare array
         const items = Array.isArray(j) ? j : (j.items || []);
         return items.map(a => ({
           id: a.id || a.slug,
@@ -62,46 +49,47 @@ const NewsAPI = {
           author: a.author || 'Staff',
           tags: a.tags || [],
           image: a.image || null,
-          url: a.url || `${base}/news/${a.slug || a.id}/`
+          url: a.url ? `${base}${a.url}`.replace(/\/+$/,'/') : `${base}/news/${a.slug || a.id}/`
         }));
-      } catch {}
+      } catch (err) {
+        console.error('[news] fetch error', u, err);
+      }
     }
     return [];
   }
 };
 
-/* --------------------------
-   LIST PAGE (index)
--------------------------- */
+/* List page */
 if ($('#newsGrid')) {
-  const state = { all: [], filtered: [], page: 0, size: 12, q: '', tag: 'all' };
+  const state = { all:[], filtered:[], page:0, size:12, q:'', tag:'all' };
   const grid = $('#newsGrid');
   const sentinel = $('#infiniteSentinel');
 
-  const cardHTML = (a) => `
-    ${a.image ? `
-      <div class="media">
-        <span class="badge">${(a.tags && a.tags[0]) || 'ਖ਼ਬਰ'}</span>
-        <img src="${a.image}" alt="${escapeHtml(a.title)}" loading="lazy">
-      </div>` : ''
-    }
+  const empty = (msg='ਕੋਈ ਖ਼ਬਰ ਨਹੀਂ ਮਿਲੀ') => {
+    grid.innerHTML = `<div class="empty">
+      <p>${escapeHtml(msg)}</p>
+      <a class="btn" href="${baseurl()}/">ਘਰ ਵਾਪਸ ਜਾਓ</a>
+    </div>`;
+  };
+
+  const card = (a) => `
+    ${a.image ? `<div class="media"><span class="badge">${(a.tags&&a.tags[0])||'ਖ਼ਬਰ'}</span><img src="${a.image}" alt="${escapeHtml(a.title)}" loading="lazy"></div>`:''}
     <div class="card-body">
       <h3 class="card-title">${escapeHtml(a.title)}</h3>
       <div class="card-meta">
-        <time datetime="${a.date}">${formatDate(a.date)}</time>
-        <span>· ${escapeHtml(a.author || 'Staff')}</span>
+        <time datetime="${a.date}">${fmtDate(a.date)}</time>
+        <span>· ${escapeHtml(a.author||'Staff')}</span>
       </div>
-      <p class="card-preview">${escapeHtml(a.preview || '')}</p>
+      <p class="card-preview">${escapeHtml(a.preview||'')}</p>
       <div class="card-actions">
-        <a class="btn" href="/app/news/article.html?id=${encodeURIComponent(a.id || a.slug)}">ਪੂਰਾ ਪੜ੍ਹੋ →</a>
+        <a class="btn" href="${baseurl()}/app/news/article.html?id=${encodeURIComponent(a.id || a.slug)}">ਪੂਰਾ ਪੜ੍ਹੋ →</a>
         <div>
-          <button class="btn ghost share" data-id="${a.id}">📤</button>
-          <button class="btn ghost copy" data-link="${a.url}">🔗</button>
+          <button class="btn ghost share" data-url="${a.url}" data-title="${escapeHtml(a.title)}" data-text="${escapeHtml(a.preview||a.title)}">📤</button>
+          <button class="btn ghost copy" data-url="${a.url}">🔗</button>
           <button class="btn ghost save" data-id="${a.id}">🔖</button>
         </div>
       </div>
-    </div>
-  `;
+    </div>`;
 
   const renderChunk = () => {
     const start = state.page * state.size;
@@ -111,7 +99,7 @@ if ($('#newsGrid')) {
       const el = document.createElement('article');
       el.className = 'news-card';
       el.dataset.id = a.id;
-      el.innerHTML = cardHTML(a);
+      el.innerHTML = card(a);
       frag.appendChild(el);
     });
     grid.appendChild(frag);
@@ -130,14 +118,13 @@ if ($('#newsGrid')) {
     grid.innerHTML = '';
     state.page = 0;
     delete sentinel.dataset.done;
+    if (!state.filtered.length) { empty('ਕੋਈ ਨਤੀਜੇ ਨਹੀਂ'); return; }
     renderChunk();
   };
 
-  const observeInfinite = () => {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(e => {
-        if (e.isIntersecting && !sentinel.dataset.done) renderChunk();
-      });
+  const observe = () => {
+    const io = new IntersectionObserver((obs) => {
+      obs.forEach(e => { if (e.isIntersecting && !sentinel.dataset.done) renderChunk(); });
     }, { rootMargin: '600px 0px 800px 0px' });
     io.observe(sentinel);
   };
@@ -150,24 +137,23 @@ if ($('#newsGrid')) {
       state.tag = ch.dataset.filter || 'all';
       applyFilters();
     }));
-    grid.addEventListener('click', async (e) => {
-      const share = e.target.closest('button.share');
-      const copy  = e.target.closest('button.copy');
-      const save  = e.target.closest('button.save');
-      if (share) {
-        const a = state.all.find(x => (x.id || x.slug) == share.dataset.id);
-        const data = { title: a?.title, text: a?.preview || a?.title, url: a?.url };
+    grid.addEventListener('click', async e => {
+      const s = e.target.closest('button.share');
+      const c = e.target.closest('button.copy');
+      const sv= e.target.closest('button.save');
+      if (s) {
+        const data = { title:s.dataset.title, text:s.dataset.text, url:s.dataset.url };
         try {
           if (navigator.share && (navigator.canShare?.(data) ?? true)) await navigator.share(data);
           else throw new Error('no-share');
-        } catch { await copyToClipboard(data.url); }
+        } catch { await copy(data.url); }
       }
-      if (copy) { await copyToClipboard(copy.dataset.link); }
-      if (save) {
-        const id = save.dataset.id;
+      if (c) await copy(c.dataset.url);
+      if (sv) {
+        const id = sv.dataset.id;
         const saved = new Set(JSON.parse(localStorage.getItem('patti-saved') || '[]'));
-        if (saved.has(id)) { saved.delete(id); save.textContent='🔖'; }
-        else { saved.add(id); save.textContent='✅ Saved'; }
+        if (saved.has(id)) { saved.delete(id); sv.textContent='🔖'; }
+        else { saved.add(id); sv.textContent='✅ Saved'; }
         localStorage.setItem('patti-saved', JSON.stringify([...saved]));
       }
     });
@@ -190,32 +176,29 @@ if ($('#newsGrid')) {
     }
   };
 
-  const initList = async () => {
+  (async function initList(){
     skeleton();
     const items = await NewsAPI.fetchIndex();
+    if (!items.length) { console.warn('[news] index empty or unreachable'); empty('ਖ਼ਬਰਾਂ ਲੋਡ ਨਹੀਂ ਹੋਈਆਂ'); return; }
     state.all = items;
     bindUI();
     applyFilters();
-    observeInfinite();
-  };
-
-  initList();
+    observe();
+  })();
 }
 
-/* --------------------------
-   READER PAGE (article.html)
--------------------------- */
+/* Reader page */
 if ($('#reader')) {
   const qs = new URLSearchParams(location.search);
-  const want = qs.get('id') || qs.get('slug');
+  const want = qs.get('id') || qs.get('slug') || location.pathname.split('/').filter(Boolean).pop();
 
-  const titleEl = $('#articleTitle');
-  const timeEl  = $('#articleTime');
-  const authorNm= $('#articleAuthor [itemprop="name"]');
-  const heroEl  = $('#articleHero');
-  const bodyEl  = $('#articleContent');
-  const likeBtn = $('#likeBtn'); const likeCnt = $('#likeCount');
-  const saveBtn = $('#saveBtn'); const shareBtn = $('#shareBtn'); const copyBtn = $('#copyBtn');
+  const tEl = $('#articleTitle');
+  const dEl = $('#articleTime');
+  const aEl = $('#articleAuthor [itemprop="name"]');
+  const hEl = $('#articleHero');
+  const bEl = $('#articleContent');
+  const likeBtn = $('#likeBtn'), likeCnt = $('#likeCount');
+  const saveBtn = $('#saveBtn'), shareBtn = $('#shareBtn'), copyBtn = $('#copyBtn');
 
   const likeKey = (id) => `patti-like-${id}`;
   const saveKey = (id) => `patti-save-${id}`;
@@ -223,7 +206,7 @@ if ($('#reader')) {
   const setMeta = (a) => {
     document.title = `${a.title} • PattiBytes`;
     $('#docTitle')?.textContent = document.title;
-    $('#metaDesc')?.setAttribute('content', (a.preview || a.title).slice(0,160));
+    $('#metaDesc')?.setAttribute('content', (a.preview || a.title || '').slice(0,160));
     const ld = {
       "@context":"https://schema.org",
       "@type":"NewsArticle",
@@ -236,43 +219,40 @@ if ($('#reader')) {
     $('#articleJsonLd')?.textContent = JSON.stringify(ld);
   };
 
-  const findArticle = (items=[]) => items.find(x => (x.id==want)||(x.slug==want)) || items[0];
-
-  const initReader = async () => {
+  (async function initReader(){
     const items = await NewsAPI.fetchIndex();
-    if (!items.length) { bodyEl.innerHTML = '<p>Article not found.</p>'; return; }
-    const a = findArticle(items);
-
-    titleEl.textContent = a.title;
-    timeEl.dateTime = a.date; timeEl.textContent = new Date(a.date).toLocaleString('pa-IN');
-    authorNm.textContent = a.author || 'Staff';
-    if (a.image) heroEl.innerHTML = `<img src="${a.image}" alt="${escapeHtml(a.title)}" loading="eager">`;
-    bodyEl.innerHTML = a.content || a.preview || '';
+    if (!items.length) { bEl.innerHTML = '<p>ਖ਼ਬਰ ਨਹੀਂ ਮਿਲੀ</p>'; return; }
+    const a = items.find(x => (x.id==want)||(x.slug==want)) || items[0];
+    tEl.textContent = a.title;
+    dEl.dateTime = a.date; dEl.textContent = new Date(a.date).toLocaleString('pa-IN');
+    aEl.textContent = a.author || 'Staff';
+    if (a.image) hEl.innerHTML = `<img src="${a.image}" alt="${escapeHtml(a.title)}" loading="eager">`;
+    bEl.innerHTML = a.content || a.preview || '';
     setMeta(a);
 
-    let likes = parseInt(localStorage.getItem(likeKey(a.id)), 10) || 0;
+    // like/save
+    let likes = parseInt(localStorage.getItem(likeKey(a.id)),10) || 0;
     likeCnt.textContent = likes;
-    likeBtn.addEventListener('click', ()=> {
-      likes += 1; likeCnt.textContent = likes;
-      localStorage.setItem(likeKey(a.id), String(likes));
-    });
-
-    if (localStorage.getItem(saveKey(a.id))) saveBtn.textContent = '✅ Saved';
+    likeBtn.addEventListener('click', ()=> { likes+=1; likeCnt.textContent=likes; localStorage.setItem(likeKey(a.id), String(likes)); });
+    if (localStorage.getItem(saveKey(a.id))) saveBtn.textContent='✅ Saved';
     saveBtn.addEventListener('click', ()=> {
       const k = saveKey(a.id);
       if (localStorage.getItem(k)) { localStorage.removeItem(k); saveBtn.textContent='🔖 Save'; }
-      else { localStorage.setItem(k, '1'); saveBtn.textContent='✅ Saved'; }
+      else { localStorage.setItem(k,'1'); saveBtn.textContent='✅ Saved'; }
     });
 
+    // share/copy
     shareBtn.addEventListener('click', async ()=> {
-      const data = { title:a.title, text:a.preview || a.title, url:a.url || location.href };
+      const data = { title:a.title, text:a.preview||a.title, url:a.url||location.href };
       try {
         if (navigator.share && (navigator.canShare?.(data) ?? true)) await navigator.share(data);
         else throw new Error('no-share');
-      } catch { await copyToClipboard(data.url); }
+      } catch { await copy(data.url); }
     });
-    copyBtn.addEventListener('click', async ()=> { await copyToClipboard(a.url || location.href); });
-  };
+    copyBtn.addEventListener('click', async ()=> { await copy(a.url || location.href); });
 
-  initReader();
+    // optional prev/next if you extend index.json
+    if (a.previous?.url) { const p=$('#prevLink'); p.href=a.previous.url; p.hidden=false; }
+    if (a.next?.url) { const n=$('#nextLink'); n.href=a.next.url; n.hidden=false; }
+  })();
 }
