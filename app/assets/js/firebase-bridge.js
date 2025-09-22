@@ -1,41 +1,42 @@
-/**
- * Firebase Bridge (local ESM imports, no external URLs)
- * Exposes window.firebaseAuth / window.firebaseFirestore / window.firebaseStorage
- */
 (async () => {
   if (!window.FIREBASE_CONFIG) { console.error('FIREBASE_CONFIG missing'); return; }
 
-  // Local ESM builds
-  const [{ initializeApp }, { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail, onAuthStateChanged, signOut },
-         { getFirestore, doc, getDoc, setDoc, updateDoc },
-         { getStorage, ref, uploadBytes, getDownloadURL }] = await Promise.all([
-    import('/app/vendor/firebase/firebase-app.js'),
-    import('/app/vendor/firebase/firebase-auth.js'),
-    import('/app/vendor/firebase/firebase-firestore.js'),
-    import('/app/vendor/firebase/firebase-storage.js')
-  ]);
+  // Prefer local vendor builds; fallback to CDN if vendor missing
+  async function safeImport(path, cdn){
+    try { return await import(path); }
+    catch { return await import(cdn); }
+  }
 
-  const app = initializeApp(window.FIREBASE_CONFIG);
-  // Auth
-  const auth = getAuth(app);
+  const appMod = await safeImport('/app/vendor/firebase/firebase-app.js', 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js');
+  const authMod = await safeImport('/app/vendor/firebase/firebase-auth.js', 'https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js');
+  const fsMod   = await safeImport('/app/vendor/firebase/firebase-firestore.js', 'https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js');
+  const stMod   = await safeImport('/app/vendor/firebase/firebase-storage.js', 'https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js');
+
+  const app = appMod.initializeApp(window.FIREBASE_CONFIG);
+
+  const auth = authMod.getAuth(app);
   window.firebaseAuth = {
     auth,
-    GoogleAuthProvider,
-    signInWithPopup,
-    signInWithRedirect,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    updateProfile,
-    sendPasswordResetEmail,
-    onAuthStateChanged,
-    signOut
+    GoogleAuthProvider: authMod.GoogleAuthProvider,
+    signInWithPopup: authMod.signInWithPopup,
+    signInWithRedirect: authMod.signInWithRedirect,
+    signInWithEmailAndPassword: authMod.signInWithEmailAndPassword,
+    createUserWithEmailAndPassword: authMod.createUserWithEmailAndPassword,
+    updateProfile: authMod.updateProfile,
+    sendPasswordResetEmail: authMod.sendPasswordResetEmail,
+    onAuthStateChanged: authMod.onAuthStateChanged,
+    signOut: authMod.signOut
   };
-  // Firestore
-  const db = getFirestore(app);
-  window.firebaseFirestore = { db, doc, getDoc, setDoc, updateDoc };
-  // Storage
-  const storage = getStorage(app);
-  window.firebaseStorage = { storage, ref, uploadBytes, getDownloadURL };
+
+  const db = fsMod.getFirestore(app);
+  window.firebaseFirestore = {
+    db, doc: fsMod.doc, getDoc: fsMod.getDoc, setDoc: fsMod.setDoc, updateDoc: fsMod.updateDoc
+  };
+
+  const storage = stMod.getStorage(app);
+  window.firebaseStorage = {
+    storage, ref: stMod.ref, uploadBytes: stMod.uploadBytes, getDownloadURL: stMod.getDownloadURL
+  };
 
   console.log('Firebase bridge ready');
 })();
