@@ -60,13 +60,12 @@ import {
 
 // Firebase configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyDSp4mE15rFn1Tdo4YARZ4MD3_vdnsYyog",
-    authDomain: "pattibytes-cf602.firebaseapp.com",
-    projectId: "pattibytes-cf602",
-    storageBucket: "pattibytes-cf602.firebasestorage.app",
-    messagingSenderId: "980629232960",
-    appId: "1:980629232960:web:c169821e1f4bb409c2aea5",
-    measurementId: "G-WGMH00XGJC"
+  apiKey: "YOUR_KEY",
+  authDomain: "YOUR_DOMAIN",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_BUCKET",
+  messagingSenderId: "YOUR_SENDER",
+  appId: "YOUR_APP_ID"
 };
 
 // Initialize Firebase (FREE services only)
