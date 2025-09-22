@@ -6,6 +6,7 @@
   <meta id="metaDesc" name="description" content="PattiBytes News">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="jekyll-baseurl" content="{{ site.baseurl }}">
   <link rel="manifest" href="/app/manifest.webmanifest">
   <link rel="stylesheet" href="/app/assets/css/components.css">
   <link rel="stylesheet" href="/app/assets/css/news.css">
@@ -13,6 +14,7 @@
 </head>
 <body class="reader-body">
   <div id="headerContainer"></div>
+
   <main id="reader" class="reader">
     <article id="article" class="article" itemscope itemtype="https://schema.org/NewsArticle">
       <header class="article-head">
@@ -25,8 +27,10 @@
           </span>
         </div>
       </header>
+
       <div id="articleHero" class="article-hero" aria-hidden="true"></div>
       <div id="articleContent" class="article-content" itemprop="articleBody"></div>
+
       <footer class="article-foot">
         <div class="actions">
           <button id="likeBtn" class="btn action">❤️ <span id="likeCount">0</span></button>
@@ -41,6 +45,7 @@
       </footer>
     </article>
   </main>
+
   <div id="bottomNavContainer"></div>
 
   <script src="/app/assets/js/firebase-config.js"></script>
