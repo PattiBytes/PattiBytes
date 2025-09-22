@@ -12,9 +12,36 @@ tags:
   - news
 send_notification: true
 ---
+
+
+<div style="position:relative; width:100%; padding-bottom:56.25%; height:0; overflow:hidden; max-width:560px; margin:auto;">
+  <iframe 
+    src="https://www.youtube.com/embed/GYNMYV9VjZ4" 
+    title="YouTube video player"
+    style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    allowfullscreen>
+  </iframe>
+</div>
+
+<!-- Buttons: Subscribe & Open in YouTube -->
+
+<div style="text-align:center; margin-top:10px;">
+  <!-- YouTube Subscribe Button -->
+  <div class="g-ytsubscribe" data-channelid="UCmYhSKXWg3JahhNfunGfB5g" data-layout="default" data-count="default" style="display:inline-block; vertical-align: middle;"></div>
+
+  <!-- Open in YouTube Button -->
+
+  <a href="https://www.youtube.com/watch?v=GYNMYV9VjZ4" target="_blank" 
+    style="display:inline-block; margin-left:20px; padding:8px 16px; background-color:#FF0000; color:#fff; font-weight:bold; text-decoration:none; border-radius:4px; font-family:Arial, sans-serif; vertical-align: middle;">
+    Open in YouTube
+  </a>
+
+</div>
+
+<!-- Google Platform JS for Subscribe Button -->
+
 <script src="https://apis.google.com/js/platform.js"></script>﻿
-
-
 
 ਜਿਨ੍ਹਾਂ ਪਿੰਡਾਂ ਦੇ ਲੋਕ, ਵਿਦਿਆਰਥੀ, ਕਿਸਾਨ, ਤੇ ਵਪਾਰੀ ਹਰ ਰੋਜ਼ ਇਹ ਸੜਕ ਵਰਤਦੇ ਹਨ, ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੀ ਪਹੁੰਚ, ਮਾਲ ਨੂੰ ਮੰਡੀ ਲਿਜਾਣ, ਜਾਂ ਵਿਦਿਆਲਿਆਂ ਵਿਚ ਪਹੁੰਚਣ ਵਿਚ ਵੱਡੀਆਂ ਮੁਸ਼ਕਲਾਂ ਦਾ ਸਾਹਮਣਾ ਕਰਨਾ ਪੈਂਦਾ ਹੈ। ਐਂਬੂਲੈਂਸ ਥਨ ਲੇਟ ਹੋ ਜਾਂਦੀਆਂ ਹਨ, ਮੁਰੀਜ਼ਾਂ ਦੀ ਜ਼ਿੰਦਗੀ ਵੀ ਖਤਰੇ 'ਚ ਪੈਂਦੀ ਹੈ।
 
