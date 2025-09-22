@@ -1,18 +1,16 @@
 /**
- * PattiBytes News - List + Reader
- * Data: /news/index.json (Jekyll collection JSON), with baseurl support.
- * Features: search, tag chips, infinite scroll (IntersectionObserver), 
- * native share, copy link, save/like, JSON-LD in reader.
+ * /app/assets/js/news.js
+ * PattiBytes News (List + Reader)
+ * - Data source: /news/index.json (Jekyll collection JSON)
+ * - Base URL aware via <meta name="jekyll-baseurl" content="{{ site.baseurl }}">
+ * - Infinite scroll (IntersectionObserver), native share/copy, save/like, JSON-LD in reader
  */
 
-/* --------------------------
-   Utilities
--------------------------- */
+/* ---------- Utilities ---------- */
 const $ = (s, c=document) => c.querySelector(s);
 const $$ = (s, c=document) => Array.from(c.querySelectorAll(s));
-const baseurl = () => document.querySelector('meta[name="jekyll-baseurl"]')?.content || '';
+const getBase = () => document.querySelector('meta[name="jekyll-baseurl"]')?.content || '';
 
-// Fixed escapeHtml with proper object literal syntax
 const escapeHtml = (s='') => s.replace(/[&<>"']/g, ch => ({
   '&': '&amp;',
   '<': '&lt;',
@@ -21,159 +19,116 @@ const escapeHtml = (s='') => s.replace(/[&<>"']/g, ch => ({
   "'": '&#039;'
 }[ch]));
 
-const fmtDate = (d) => { 
-  try { 
-    return new Date(d).toLocaleDateString('pa-IN', {
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric'
-    });
-  } catch { 
-    return d; 
-  } 
+const fmtDate = (d) => {
+  try {
+    return new Date(d).toLocaleDateString('pa-IN', { year:'numeric', month:'short', day:'numeric' });
+  } catch {
+    return d;
+  }
 };
 
-const copyToClipboard = async (text) => {
+async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    document.body.appendChild(textarea);
-    textarea.select();
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
     document.execCommand('copy');
-    document.body.removeChild(textarea);
+    document.body.removeChild(ta);
   }
-};
+}
 
-/* --------------------------
-   Data API
--------------------------- */
+/* ---------- Data API ---------- */
 const NewsAPI = {
   async fetchIndex() {
-    const base = baseurl();
-    const urls = [
-      `${base}/news/index.json`,               // Primary Jekyll JSON index
-      `${base}/_api/collections/news/entries`  // Jekyll Admin API fallback
+    const base = getBase();                                              // e.g. "" or "/repo" on GH Pages [web:415]
+    const endpoints = [
+      `${base}/news/index.json`,                                         // JSON index generated from Jekyll collection [web:383]
+      `${base}/_api/collections/news/entries`                            // Jekyll Admin fallback (if present) [web:389]
     ];
-    
-    for (const url of urls) {
+    for (const url of endpoints) {
       try {
-        console.log('[news] trying', url);
-        const response = await fetch(url, { 
-          credentials: 'same-origin', 
-          headers: { 'Accept': 'application/json' }
-        });
-        
-        if (!response.ok) { 
-          console.warn('[news] fetch failed', url, response.status);
-          continue;
-        }
-        
-        const json = await response.json();
-        
-        // Jekyll Admin API format
+        const res = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } }); // fetch returns ok=false on 404 [web:439]
+        if (!res.ok) { console.warn('[news] fetch failed', url, res.status); continue; }                         // log bad status for diagnostics [web:441]
+        const j = await res.json();
         if (url.includes('/_api/')) {
-          const normalized = (json || []).map(entry => ({
-            id: entry.id || entry.slug,
-            slug: entry.slug || (entry.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-            title: entry.title,
-            preview: entry.excerpt || entry.preview || '',
-            content: entry.content || entry.raw_content || '',
-            date: entry.date || entry.modified_time || entry.created_at || new Date().toISOString(),
-            author: (entry.author && (entry.author.name || entry.author)) || 'Staff',
-            tags: entry.tags || [],
-            image: entry.image || entry.featured_image || null,
-            url: entry.http_url || `${base}/news/${entry.slug || entry.id}/`
+          const out = (j || []).map(e => ({
+            id: e.id || e.slug,
+            slug: e.slug || (e.title || '').toLowerCase().replace(/[^a-z0-9]+/g,'-'),
+            title: e.title,
+            preview: e.excerpt || e.preview || '',
+            content: e.content || e.raw_content || '',
+            date: e.date || e.modified_time || e.created_at || new Date().toISOString(),
+            author: (e.author && (e.author.name || e.author)) || 'Staff',
+            tags: e.tags || [],
+            image: e.image || e.featured_image || null,
+            url: e.http_url || `${base}/news/${e.slug || e.id}/`
           }));
-          console.info('[news] loaded via Jekyll Admin API:', normalized.length);
-          return normalized;
+          console.info('[news] loaded via Jekyll Admin API:', out.length);
+          return out;                                                     // normalized fallback shape [web:389]
         }
-        
-        // Standard index.json format
-        const items = Array.isArray(json) ? json : (json.items || []);
-        if (!Array.isArray(items)) { 
-          console.error('[news] JSON shape invalid:', json);
-          continue;
-        }
-        
-        const normalized = items.map(article => ({
-          id: article.id || article.slug,
-          slug: article.slug || article.id,
-          title: article.title,
-          preview: article.preview || article.excerpt || '',
-          content: article.content || '',
-          date: article.date,
-          author: article.author || 'Staff',
-          tags: article.tags || [],
-          image: article.image || null,
-          url: article.url ? `${base}${article.url}`.replace(/\/+$/, '/') : `${base}/news/${article.slug || article.id}/`
+        const items = Array.isArray(j) ? j : (j.items || []);             // allow {items:[...]} or bare array [web:398]
+        if (!Array.isArray(items)) { console.error('[news] invalid JSON shape', j); continue; }                  // guard malformed feeds [web:439]
+        const norm = items.map(a => ({
+          id: a.id || a.slug,
+          slug: a.slug || a.id,
+          title: a.title,
+          preview: a.preview || a.excerpt || '',
+          content: a.content || '',
+          date: a.date,
+          author: a.author || 'Staff',
+          tags: a.tags || [],
+          image: a.image || null,
+          url: a.url ? `${base}${a.url}`.replace(/\/+$/,'/') : `${base}/news/${a.slug || a.id}/`
         }));
-        
-        console.info('[news] loaded index.json:', normalized.length);
-        return normalized;
-      } catch (error) {
-        console.error('[news] fetch error', url, error);
+        console.info('[news] loaded index.json:', norm.length);
+        return norm;                                                      // normalized collection items [web:383]
+      } catch (err) {
+        console.error('[news] fetch error', url, err);                    // surface CORS/JSON parse errors in console [web:439]
       }
     }
-    
-    console.warn('[news] all endpoints failed');
-    return [];
+    return [];                                                            // no endpoint worked; UI will show empty state [web:383]
   }
 };
 
-/* --------------------------
-   LIST PAGE (Dashboard)
--------------------------- */
+/* ---------- LIST PAGE ---------- */
 if ($('#newsGrid')) {
-  console.log('[news] initializing list page');
-  
-  const state = { 
-    all: [], 
-    filtered: [], 
-    page: 0, 
-    size: 12, 
-    query: '', 
-    tag: 'all' 
-  };
-  
+  console.log('[news] init list');
+  const state = { all: [], filtered: [], page: 0, size: 12, q: '', tag: 'all' };
   const grid = $('#newsGrid');
   const sentinel = $('#infiniteSentinel');
 
-  const showEmpty = (message = 'ਕੋਈ ਖ਼ਬਰ ਨਹੀਂ ਮਿਲੀ') => {
+  const empty = (msg) => {
     grid.innerHTML = `
       <div class="empty-state">
-        <p>${escapeHtml(message)}</p>
-        <a class="btn" href="${baseurl() || '/'}">ਘਰ ਵਾਪਸ ਜਾਓ</a>
+        <p>${escapeHtml(msg)}</p>
+        <a class="btn" href="${getBase() || '/'}">ਘਰ ਵਾਪਸ ਜਾਓ</a>
       </div>
     `;
   };
 
-  const createCard = (article) => `
-    ${article.image ? `
+  const cardHTML = (a) => `
+    ${a.image ? `
       <div class="media">
-        <span class="badge">${(article.tags && article.tags[0]) || 'ਖ਼ਬਰ'}</span>
-        <img src="${article.image}" alt="${escapeHtml(article.title)}" loading="lazy">
-      </div>
-    ` : ''}
+        <span class="badge">${(a.tags && a.tags[0]) || 'ਖ਼ਬਰ'}</span>
+        <img src="${a.image}" alt="${escapeHtml(a.title)}" loading="lazy">
+      </div>` : ''
+    }
     <div class="card-body">
-      <h3 class="card-title">${escapeHtml(article.title)}</h3>
+      <h3 class="card-title">${escapeHtml(a.title)}</h3>
       <div class="card-meta">
-        <time datetime="${article.date}">${fmtDate(article.date)}</time>
-        <span>· ${escapeHtml(article.author || 'Staff')}</span>
+        <time datetime="${a.date}">${fmtDate(a.date)}</time>
+        <span>· ${escapeHtml(a.author || 'Staff')}</span>
       </div>
-      <p class="card-preview">${escapeHtml(article.preview || '')}</p>
+      <p class="card-preview">${escapeHtml(a.preview || '')}</p>
       <div class="card-actions">
-        <a class="btn" href="${baseurl()}/app/news/article.html?id=${encodeURIComponent(article.id || article.slug)}">
-          ਪੂਰਾ ਪੜ੍ਹੋ →
-        </a>
+        <a class="btn" href="${getBase()}/app/news/article.html?id=${encodeURIComponent(a.id || a.slug)}">ਪੂਰਾ ਪੜ੍ਹੋ →</a>
         <div class="action-buttons">
-          <button class="btn ghost share" 
-                  data-title="${escapeHtml(article.title)}" 
-                  data-text="${escapeHtml(article.preview || article.title)}" 
-                  data-url="${article.url}">📤</button>
-          <button class="btn ghost copy" data-url="${article.url}">🔗</button>
-          <button class="btn ghost save" data-id="${article.id}">🔖</button>
+          <button class="btn ghost share" data-title="${escapeHtml(a.title)}" data-text="${escapeHtml(a.preview || a.title)}" data-url="${a.url}">📤</button>
+          <button class="btn ghost copy"  data-url="${a.url}">🔗</button>
+          <button class="btn ghost save"  data-id="${a.id}">🔖</button>
         </div>
       </div>
     </div>
@@ -182,117 +137,67 @@ if ($('#newsGrid')) {
   const renderChunk = () => {
     const start = state.page * state.size;
     const slice = state.filtered.slice(start, start + state.size);
-    
-    if (!slice.length && state.page === 0) {
-      showEmpty('ਕੋਈ ਨਤੀਜੇ ਨਹੀਂ');
-      return;
-    }
-    
-    const fragment = document.createDocumentFragment();
-    slice.forEach(article => {
-      const element = document.createElement('article');
-      element.className = 'news-card';
-      element.dataset.id = article.id;
-      element.innerHTML = createCard(article);
-      fragment.appendChild(element);
+    if (!slice.length && state.page === 0) { empty('ਕੋਈ ਨਤੀਜੇ ਨਹੀਂ'); return; }            // early empty state [web:383]
+    const frag = document.createDocumentFragment();
+    slice.forEach(a => {
+      const el = document.createElement('article');
+      el.className = 'news-card';
+      el.dataset.id = a.id;
+      el.innerHTML = cardHTML(a);
+      frag.appendChild(el);
     });
-    
-    grid.appendChild(fragment);
-    state.page++;
-    
-    if (state.page * state.size >= state.filtered.length) {
-      sentinel.dataset.done = '1';
-    }
+    grid.appendChild(frag);
+    state.page += 1;
+    if (state.page * state.size >= state.filtered.length) sentinel.dataset.done = '1';        // stop observing when done [web:400]
   };
 
   const applyFilters = () => {
-    const query = state.query.toLowerCase().trim();
+    const q = state.q.toLowerCase().trim();
     const tag = state.tag;
-    
-    state.filtered = state.all.filter(article => {
-      const queryMatch = !query || 
-        article.title.toLowerCase().includes(query) || 
-        (article.preview || '').toLowerCase().includes(query);
-      const tagMatch = tag === 'all' || (article.tags || []).includes(tag);
-      return queryMatch && tagMatch;
+    state.filtered = state.all.filter(a => {
+      const qm = !q || a.title.toLowerCase().includes(q) || (a.preview || '').toLowerCase().includes(q);
+      const tm = tag === 'all' || (a.tags || []).includes(tag);
+      return qm && tm;
     });
-    
     grid.innerHTML = '';
     state.page = 0;
     delete sentinel.dataset.done;
     renderChunk();
   };
 
-  const observeInfiniteScroll = () => {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting && !sentinel.dataset.done) {
-          renderChunk();
-        }
-      });
-    }, { rootMargin: '600px 0px 800px 0px' });
-    
-    observer.observe(sentinel);
+  const observeInfinite = () => {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting && !sentinel.dataset.done) renderChunk(); });
+    }, { rootMargin: '600px 0px 800px 0px' });                                                                // prefetch ahead [web:400]
+    io.observe(sentinel);
   };
 
-  const bindEventListeners = () => {
-    // Search input
-    $('#newsSearch')?.addEventListener('input', (e) => {
-      state.query = e.target.value || '';
+  const bindListUI = () => {
+    $('#newsSearch')?.addEventListener('input', (e) => { state.q = e.target.value || ''; applyFilters(); });  // live search [web:383]
+    $$('.chip').forEach(ch => ch.addEventListener('click', () => {
+      $$('.chip').forEach(c => c.classList.remove('active'));
+      ch.classList.add('active');
+      state.tag = ch.dataset.filter || 'all';
       applyFilters();
-    });
-    
-    // Category chips
-    $$('.chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        $$('.chip').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        state.tag = chip.dataset.filter || 'all';
-        applyFilters();
-      });
-    });
-    
-    // Card actions
+    }));                                                                                                      // category chips [web:383]
     grid.addEventListener('click', async (e) => {
-      const shareBtn = e.target.closest('button.share');
-      const copyBtn = e.target.closest('button.copy');
-      const saveBtn = e.target.closest('button.save');
-      
-      if (shareBtn) {
-        const shareData = {
-          title: shareBtn.dataset.title,
-          text: shareBtn.dataset.text,
-          url: shareBtn.dataset.url
-        };
-        
+      const share = e.target.closest('button.share');
+      const copy  = e.target.closest('button.copy');
+      const save  = e.target.closest('button.save');
+      if (share) {
+        const data = { title: share.dataset.title, text: share.dataset.text, url: share.dataset.url };
         try {
-          if (navigator.share && (navigator.canShare?.(shareData) ?? true)) {
-            await navigator.share(shareData);
-          } else {
-            throw new Error('no-share');
-          }
-        } catch {
-          await copyToClipboard(shareData.url);
-        }
+          if (navigator.share && (navigator.canShare?.(data) ?? true)) { await navigator.share(data); }      // Web Share API [web:390]
+          else throw new Error('no-share');
+        } catch { await copyToClipboard(data.url); }                                                          // fallback to copy [web:390]
       }
-      
-      if (copyBtn) {
-        await copyToClipboard(copyBtn.dataset.url);
-      }
-      
-      if (saveBtn) {
-        const id = saveBtn.dataset.id;
+      if (copy) { await copyToClipboard(copy.dataset.url); }                                                  // copy link [web:439]
+      if (save) {
+        const id = save.dataset.id;
         const saved = new Set(JSON.parse(localStorage.getItem('patti-saved') || '[]'));
-        
-        if (saved.has(id)) {
-          saved.delete(id);
-          saveBtn.textContent = '🔖';
-        } else {
-          saved.add(id);
-          saveBtn.textContent = '✅ Saved';
-        }
-        
-        localStorage.setItem('patti-saved', JSON.stringify([...saved]));
+        if (saved.has(id)) { saved.delete(id); save.textContent = '🔖'; }
+        else { saved.add(id); save.textContent = '✅ Saved'; }
+        localStorage.setItem('patti-saved', JSON.stringify([...saved]));                                      // simple local save [web:439]
       }
     });
   };
@@ -300,9 +205,9 @@ if ($('#newsGrid')) {
   const showSkeleton = () => {
     grid.innerHTML = '';
     for (let i = 0; i < 6; i++) {
-      const skeleton = document.createElement('div');
-      skeleton.className = 'news-card';
-      skeleton.innerHTML = `
+      const sk = document.createElement('div');
+      sk.className = 'news-card';
+      sk.innerHTML = `
         <div class="media skeleton"></div>
         <div class="card-body">
           <div class="skeleton" style="height:18px;width:80%"></div>
@@ -311,149 +216,93 @@ if ($('#newsGrid')) {
           <div class="skeleton" style="height:14px;width:70%;margin-top:6px"></div>
         </div>
       `;
-      grid.appendChild(skeleton);
+      grid.appendChild(sk);
     }
   };
 
-  // Initialize list page
   (async function initList() {
     showSkeleton();
-    
     const items = await NewsAPI.fetchIndex();
-    
-    if (!items.length) {
-      console.warn('[news] empty dataset');
-      showEmpty('ਖ਼ਬਰਾਂ ਲੋਡ ਨਹੀਂ ਹੋਈਆਂ');
-      return;
-    }
-    
+    if (!items.length) { console.warn('[news] no items'); grid.innerHTML = ''; empty('ਖ਼ਬਰਾਂ ਲੋਡ ਨਹੀਂ ਹੋਈਆਂ'); return; } // JSON missing/empty [web:398]
     state.all = items;
-    bindEventListeners();
+    bindListUI();
     applyFilters();
-    observeInfiniteScroll();
-    
-    console.log('[news] list initialized with', items.length, 'articles');
+    observeInfinite();
+    console.log('[news] list ready with', items.length, 'items');
   })();
 }
 
-/* --------------------------
-   READER PAGE (Article)
--------------------------- */
+/* ---------- READER PAGE ---------- */
 if ($('#reader')) {
-  console.log('[news] initializing reader page');
-  
-  const urlParams = new URLSearchParams(location.search);
-  const targetId = urlParams.get('id') || urlParams.get('slug') || 
-    location.pathname.split('/').filter(Boolean).pop();
-  
-  const titleEl = $('#articleTitle');
-  const timeEl = $('#articleTime');
-  const authorEl = $('#articleAuthor [itemprop="name"]');
-  const heroEl = $('#articleHero');
-  const contentEl = $('#articleContent');
-  const likeBtn = $('#likeBtn');
-  const likeCount = $('#likeCount');
-  const saveBtn = $('#saveBtn');
-  const shareBtn = $('#shareBtn');
-  const copyBtn = $('#copyBtn');
+  console.log('[news] init reader');
+  const qs = new URLSearchParams(location.search);
+  const want = qs.get('id') || qs.get('slug') || location.pathname.split('/').filter(Boolean).pop();
+
+  const tEl = $('#articleTitle');
+  const dEl = $('#articleTime');
+  const aEl = $('#articleAuthor [itemprop="name"]');
+  const hEl = $('#articleHero');
+  const bEl = $('#articleContent');
+  const likeBtn = $('#likeBtn'), likeCnt = $('#likeCount'), saveBtn = $('#saveBtn'), shareBtn = $('#shareBtn'), copyBtn = $('#copyBtn');
 
   const likeKey = (id) => `patti-like-${id}`;
   const saveKey = (id) => `patti-save-${id}`;
 
-  const setMetadata = (article) => {
-    document.title = `${article.title} • PattiBytes`;
+  const setMeta = (a) => {
+    document.title = `${a.title} • PattiBytes`;
     $('#docTitle')?.textContent = document.title;
-    $('#metaDesc')?.setAttribute('content', (article.preview || article.title || '').slice(0, 160));
-    
-    const jsonLd = {
-      "@context": "https://schema.org",
-      "@type": "NewsArticle",
-      "headline": article.title,
-      "datePublished": article.date,
-      "author": { 
-        "@type": "Person", 
-        "name": article.author || "Staff" 
-      },
-      "image": article.image ? [article.image] : undefined,
-      "mainEntityOfPage": article.url || location.href
+    $('#metaDesc')?.setAttribute('content', (a.preview || a.title || '').slice(0,160));
+    const ld = {
+      "@context":"https://schema.org",
+      "@type":"NewsArticle",
+      "headline": a.title,
+      "datePublished": a.date,
+      "author": { "@type":"Person", "name": a.author || "Staff" },
+      "image": a.image ? [a.image] : undefined,
+      "mainEntityOfPage": a.url || location.href
     };
-    
-    $('#articleJsonLd')?.textContent = JSON.stringify(jsonLd);
+    $('#articleJsonLd')?.textContent = JSON.stringify(ld);                                                    // JSON‑LD for SEO [web:383]
   };
 
-  // Initialize reader page
   (async function initReader() {
     const items = await NewsAPI.fetchIndex();
-    
-    if (!items.length) {
-      contentEl.innerHTML = '<p>ਖ਼ਬਰ ਨਹੀਂ ਮਿਲੀ</p>';
-      return;
-    }
-    
-    const article = items.find(x => (x.id === targetId) || (x.slug === targetId)) || items[0];
-    
-    titleEl.textContent = article.title;
-    timeEl.dateTime = article.date;
-    timeEl.textContent = new Date(article.date).toLocaleString('pa-IN');
-    authorEl.textContent = article.author || 'Staff';
-    
-    if (article.image) {
-      heroEl.innerHTML = `<img src="${article.image}" alt="${escapeHtml(article.title)}" loading="eager">`;
-    }
-    
-    contentEl.innerHTML = article.content || article.preview || '';
-    setMetadata(article);
+    if (!items.length) { bEl.innerHTML = '<p>ਖ਼ਬਰ ਨਹੀਂ ਮਿਲੀ</p>'; return; }                                   // guard missing feed [web:398]
+    const a = items.find(x => (x.id === want) || (x.slug === want)) || items[0];
 
-    // Like functionality
-    let likes = parseInt(localStorage.getItem(likeKey(article.id)), 10) || 0;
-    likeCount.textContent = likes;
-    
+    tEl.textContent = a.title;
+    dEl.dateTime = a.date; dEl.textContent = new Date(a.date).toLocaleString('pa-IN');
+    aEl.textContent = a.author || 'Staff';
+    if (a.image) hEl.innerHTML = `<img src="${a.image}" alt="${escapeHtml(a.title)}" loading="eager">`;
+    bEl.innerHTML = a.content || a.preview || '';
+    setMeta(a);
+
+    // like
+    let likes = parseInt(localStorage.getItem(likeKey(a.id)), 10) || 0;
+    likeCnt.textContent = likes;
     likeBtn.addEventListener('click', () => {
       likes += 1;
-      likeCount.textContent = likes;
-      localStorage.setItem(likeKey(article.id), String(likes));
+      likeCnt.textContent = likes;
+      localStorage.setItem(likeKey(a.id), String(likes));
     });
 
-    // Save functionality
-    if (localStorage.getItem(saveKey(article.id))) {
-      saveBtn.textContent = '✅ Saved';
-    }
-    
+    // save
+    if (localStorage.getItem(saveKey(a.id))) saveBtn.textContent = '✅ Saved';
     saveBtn.addEventListener('click', () => {
-      const key = saveKey(article.id);
-      if (localStorage.getItem(key)) {
-        localStorage.removeItem(key);
-        saveBtn.textContent = '🔖 Save';
-      } else {
-        localStorage.setItem(key, '1');
-        saveBtn.textContent = '✅ Saved';
-      }
+      const k = saveKey(a.id);
+      if (localStorage.getItem(k)) { localStorage.removeItem(k); saveBtn.textContent='🔖 Save'; }
+      else { localStorage.setItem(k,'1'); saveBtn.textContent='✅ Saved'; }
     });
 
-    // Share functionality
+    // share/copy
     shareBtn.addEventListener('click', async () => {
-      const shareData = {
-        title: article.title,
-        text: article.preview || article.title,
-        url: article.url || location.href
-      };
-      
+      const data = { title:a.title, text:a.preview || a.title, url:a.url || location.href };
       try {
-        if (navigator.share && (navigator.canShare?.(shareData) ?? true)) {
-          await navigator.share(shareData);
-        } else {
-          throw new Error('no-share');
-        }
-      } catch {
-        await copyToClipboard(shareData.url);
-      }
+        if (navigator.share && (navigator.canShare?.(data) ?? true)) { await navigator.share(data); }          // native share [web:390]
+        else throw new Error('no-share');
+      } catch { await copyToClipboard(data.url); }                                                             // copy fallback [web:390]
     });
+    copyBtn.addEventListener('click', async () => { await copyToClipboard(a.url || location.href); });         // quick copy [web:439]
 
-    // Copy functionality
-    copyBtn.addEventListener('click', async () => {
-      await copyToClipboard(article.url || location.href);
-    });
-    
-    console.log('[news] reader initialized for:', article.title);
+    console.log('[news] reader ready:', a.title);
   })();
 }
