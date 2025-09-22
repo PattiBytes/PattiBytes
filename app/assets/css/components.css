@@ -1,0 +1,42 @@
+/* Glass nav */
+.glass-nav{backdrop-filter:blur(14px);background:rgba(15,18,30,.55);border-bottom:1px solid rgba(255,255,255,.08)}
+.pb-header{position:sticky;top:0;z-index:1000;color:#e7ecff}
+.pb-header__inner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;max-width:1200px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;color:#e7ecff;text-decoration:none}
+.brand__logo{width:36px;height:36px;border-radius:10px;object-fit:cover}
+.brand__title{font-weight:700}
+.pb-topnav{display:flex;gap:12px}
+.nav-link{color:#cdd6ff;text-decoration:none;padding:8px 10px;border-radius:10px}
+.nav-link.active,.nav-link:hover{background:rgba(255,255,255,.08);color:#fff}
+.pb-actions{display:flex;align-items:center;gap:8px}
+.icon-btn{min-width:44px;min-height:44px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:transparent;color:#d9e0ff;cursor:pointer}
+.avatar-btn{display:grid;place-items:center;border:none;background:transparent}
+.avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;background:#1a1f35}
+.avatar--initials{display:grid;place-items:center;font-weight:700;color:#111;background:#cbd5ff}
+.badge{margin-left:6px;background:#ef4444;color:#fff;border-radius:999px;padding:0 6px;font-size:12px}
+.hamburger{display:none}
+
+.pb-menu{position:absolute;right:14px;top:58px;background:rgba(10,12,20,.95);border:1px solid rgba(255,255,255,.12);border-radius:12px;min-width:180px;padding:6px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+.pb-menu a,.pb-menu button{display:block;width:100%;text-align:left;border:none;background:transparent;color:#e7ecff;text-decoration:none;padding:10px;border-radius:10px}
+.pb-menu a:hover,.pb-menu button:hover{background:rgba(255,255,255,.08)}
+.pb-menu .danger{color:#fecaca}
+
+.pb-drawer{display:none}
+.pb-drawer[hidden]{display:none!important}
+
+/* Bottom nav */
+.pb-bottomnav{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;padding:6px 4px;border-top:1px solid rgba(255,255,255,.08)}
+.bn-item{display:flex;flex-direction:column;align-items:center;gap:4px;color:#cdd6ff;text-decoration:none;padding:6px 8px;border-radius:10px;min-width:64px}
+.bn-item.active,.bn-item:hover{background:rgba(255,255,255,.08);color:#fff}
+.bn-icon{font-size:18px}
+.bn-label{font-size:11px}
+.bn-badge{position:absolute;transform:translate(10px,-6px);background:#ef4444;color:#fff;border-radius:999px;padding:0 6px;font-size:10px}
+
+/* Responsive */
+@media (max-width:900px){
+  .pb-topnav{display:none}
+  .hamburger{display:block}
+  .pb-drawer{position:fixed;left:8px;right:8px;top:64px;background:rgba(10,12,20,.95);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:8px;display:grid;gap:6px}
+  .drawer-link{padding:10px;border-radius:10px;color:#e7ecff;text-decoration:none}
+  .drawer-link:hover{background:rgba(255,255,255,.08)}
+}
