@@ -59,14 +59,19 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-analytics.js';
 
 // Firebase configuration
-const firebaseConfig = {
-  apiKey: "YOUR_KEY",
-  authDomain: "YOUR_DOMAIN",
-  projectId: "YOUR_PROJECT",
-  storageBucket: "YOUR_BUCKET",
-  messagingSenderId: "YOUR_SENDER",
-  appId: "YOUR_APP_ID"
-};
+- name: Generate firebase-config.js
+  run: |
+    cat > app/assets/js/firebase-config.js <<'EOF'
+    window.FIREBASE_CONFIG = {
+      apiKey: "${{ secrets.YOUR_KEY }}",
+      authDomain: "${{ secrets.YOUR_DOMAIN }}",
+      projectId: "${{ secrets.YOUR_PROJECT }}",
+      storageBucket: "${{ secrets.YOUR_BUCKET }}",
+      messagingSenderId: "${{ secrets.YOUR_SENDER }}",
+      appId: "${{ secrets.YOUR_APP_ID }}"
+    };
+    EOF
+
 
 // Initialize Firebase (FREE services only)
 const app = initializeApp(firebaseConfig);
