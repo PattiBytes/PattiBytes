@@ -1,35 +1,23 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <title>PattiBytes • Sign up</title>
-  <meta name="description" content="Create your PattiBytes account">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <meta name="format-detection" content="telephone=no">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <link rel="manifest" href="/app/manifest.webmanifest">
-  <meta name="theme-color" content="#667eea">
-  <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/app/assets/css/common.css">
   <link rel="stylesheet" href="/app/assets/css/auth-modern.css">
 </head>
 <body class="auth-gradient">
-  <div class="particle-layer" aria-hidden="true"></div>
-
-  <div id="headerContainer" class="no-print"></div>
-
   <main class="auth-shell">
-    <section class="auth-card glass">
+    <section class="auth-card">
       <header class="auth-head">
-        <h1 class="brand text-gradient">Join PattiBytes</h1>
-        <p class="muted">Create an account to post, comment, and personalize</p>
+        <h1 class="brand text-gradient">Create account</h1>
+        <p class="muted">Join PattiBytes to post and comment</p>
       </header>
 
       <div class="social-row">
-        <button class="btn google w-full" id="googleSignupBtn">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285f4" d="M22.56 12.25..."/></svg>
-          Continue with Google
-        </button>
+        <button id="googleSignupBtn" class="btn google w-full">Continue with Google</button>
       </div>
 
       <div class="divider"><span>or</span></div>
@@ -37,46 +25,27 @@
       <form id="signupForm" class="form-grid" novalidate>
         <div class="grid-2">
           <label class="field">
-            <input id="firstName" type="text" placeholder=" " autocomplete="given-name" required class="control">
-            <span class="label">First name</span>
-            <span class="underline"></span>
+            <input id="firstName" class="control" type="text" placeholder=" " required autocomplete="given-name">
+            <span class="label">First name</span><span class="underline"></span>
           </label>
           <label class="field">
-            <input id="lastName" type="text" placeholder=" " autocomplete="family-name" required class="control">
-            <span class="label">Last name</span>
-            <span class="underline"></span>
+            <input id="lastName" class="control" type="text" placeholder=" " required autocomplete="family-name">
+            <span class="label">Last name</span><span class="underline"></span>
           </label>
         </div>
-
         <label class="field">
-          <input id="signupEmail" type="email" placeholder=" " autocomplete="email" required class="control">
-          <span class="label">Email</span>
-          <span class="underline"></span>
+          <input id="signupEmail" class="control" type="email" placeholder=" " required autocomplete="email">
+          <span class="label">Email</span><span class="underline"></span>
         </label>
-
         <label class="field">
-          <input id="signupPassword" type="password" placeholder=" " autocomplete="new-password" required class="control">
-          <span class="label">Password</span>
-          <button type="button" class="eye" data-toggle="#signupPassword" aria-label="Toggle password">👁️</button>
-          <span class="underline"></span>
+          <input id="signupPassword" class="control" type="password" placeholder=" " required autocomplete="new-password">
+          <span class="label">Password</span><button class="eye" type="button" data-toggle="#signupPassword">👁️</button><span class="underline"></span>
         </label>
-
         <label class="field">
-          <input id="signupConfirm" type="password" placeholder=" " autocomplete="new-password" required class="control">
-          <span class="label">Confirm password</span>
-          <button type="button" class="eye" data-toggle="#signupConfirm" aria-label="Toggle password">👁️</button>
-          <span class="underline"></span>
+          <input id="signupConfirm" class="control" type="password" placeholder=" " required autocomplete="new-password">
+          <span class="label">Confirm password</span><button class="eye" type="button" data-toggle="#signupConfirm">👁️</button><span class="underline"></span>
         </label>
-
-        <label class="check">
-          <input type="checkbox" id="agree" required>
-          <span>I agree to the Terms and Privacy Policy</span>
-        </label>
-
-        <button type="submit" class="btn primary w-full" id="signupSubmit">
-          <span class="spinner" aria-hidden="true"></span>
-          <span>Create account</span>
-        </button>
+        <button id="signupSubmit" class="btn primary w-full" type="submit">Create account</button>
       </form>
 
       <footer class="auth-foot">
@@ -85,11 +54,8 @@
     </section>
   </main>
 
-  <div id="bottomNavContainer" class="no-print"></div>
-
- <script src="/app/assets/js/firebase-config.js"></script>
-<script type="module" src="/app/assets/js/pb-backend.js"></script>
-<script src="/app/assets/js/auth-modern.js"></script>
-
+  <script src="/app/assets/js/firebase-config.js"></script>
+  <script type="module" src="/app/assets/js/pb-backend.js"></script>
+  <script src="/app/assets/js/auth-modern.js"></script>
 </body>
 </html>
