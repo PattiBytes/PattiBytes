@@ -1,1 +1,50 @@
+<!doctype html>
+<html lang="pa-IN">
+<head>
+  <meta charset="utf-8">
+  <title>ਪੱਟੀ ਬਾਈਟਸ • ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="description" content="ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ — PattiBytes News">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/app/manifest.webmanifest">
+  <link rel="stylesheet" href="/app/assets/css/components.css">
+  <link rel="stylesheet" href="/app/assets/css/news.css">
+</head>
+<body>
+  <div id="headerContainer"></div>
+
+  <div class="header-spacer"></div>
+  <main id="newsApp" class="news-app" aria-labelledby="latest-news-heading">
+    <section class="topbar">
+      <div class="container">
+        <h1 id="latest-news-heading" class="section-title">ਤਾਜ਼ਾ ਖ਼ਬਰਾਂ ਅਤੇ ਅਪਡੇਟਸ</h1>
+        <div class="filters">
+          <input id="newsSearch" class="search" type="search" placeholder="ਖ਼ਬਰ ਖੋਜੋ…" aria-label="Search news">
+          <div class="chips" role="tablist" aria-label="Categories">
+            <button class="chip active" data-filter="all" role="tab" aria-selected="true">ਸਭ</button>
+            <button class="chip" data-filter="local" role="tab" aria-selected="false">ਸਥਾਨਕ</button>
+            <button class="chip" data-filter="politics" role="tab" aria-selected="false">ਰਾਜਨੀਤੀ</button>
+            <button class="chip" data-filter="sports" role="tab" aria-selected="false">ਖੇਡ</button>
+            <button class="chip" data-filter="culture" role="tab" aria-selected="false">ਸੱਭਿਆਚਾਰ</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="latest-news">
+      <div class="container">
+        <div id="newsGrid" class="news-grid" aria-live="polite"></div>
+        <div id="infiniteSentinel" class="infinite-sentinel" aria-hidden="true"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="bottomNavContainer"></div>
+
+  <script src="/app/assets/js/firebase-config.js"></script>
+  <script type="module" src="/app/assets/js/pb-backend.js"></script>
+  <script src="/app/assets/js/components.js"></script>
+  <script src="/app/assets/js/news.js"></script>
+</body>
+</html>
  
