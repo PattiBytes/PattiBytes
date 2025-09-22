@@ -1,47 +1,18 @@
-<!-- Common Bottom Navigation Component -->
-<nav class="bottom-nav" id="bottomNav" role="navigation" aria-label="Main navigation">
-    <a href="/app/" class="nav-item" data-page="dashboard" aria-label="Dashboard">
-        <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="7" height="7"></rect>
-            <rect x="14" y="3" width="7" height="7"></rect>
-            <rect x="14" y="14" width="7" height="7"></rect>
-            <rect x="3" y="14" width="7" height="7"></rect>
-        </svg>
-        <span class="nav-label">Home</span>
-    </a>
-    
-    <a href="/app/news.html" class="nav-item" data-page="news" aria-label="News">
-        <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path>
-        </svg>
-        <span class="nav-label">News</span>
-        <span class="nav-badge" id="newsBadge">0</span>
-    </a>
-    
-    <a href="/app/places.html" class="nav-item" data-page="places" aria-label="Places">
-        <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-            <circle cx="12" cy="10" r="3"></circle>
-        </svg>
-        <span class="nav-label">Places</span>
-    </a>
-    
-    <a href="/app/community.html" class="nav-item" data-page="community" aria-label="Community">
-        <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-            <circle cx="9" cy="7" r="4"></circle>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-        </svg>
-        <span class="nav-label">Community</span>
-        <span class="nav-badge" id="communityBadge">0</span>
-    </a>
-    
-    <a href="/app/profile.html" class="nav-item" data-page="profile" aria-label="Profile">
-        <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-            <circle cx="12" cy="7" r="4"></circle>
-        </svg>
-        <span class="nav-label">Profile</span>
-    </a>
+<!-- Bottom Nav Component v2 -->
+<nav class="pb-bottomnav glass-nav" role="navigation" aria-label="Bottom">
+  <a href="/app/" data-page="dashboard" class="bn-item">
+    <span class="bn-icon">🏠</span><span class="bn-label">Home</span>
+  </a>
+  <a href="/app/news.html" data-page="news" class="bn-item">
+    <span class="bn-icon">📰</span><span class="bn-label">News</span><span id="newsBadge" class="bn-badge" hidden>0</span>
+  </a>
+  <a href="/app/places.html" data-page="places" class="bn-item">
+    <span class="bn-icon">📍</span><span class="bn-label">Places</span>
+  </a>
+  <a href="/app/community.html" data-page="community" class="bn-item">
+    <span class="bn-icon">👥</span><span class="bn-label">Community</span><span id="communityBadge" class="bn-badge" hidden>0</span>
+  </a>
+  <a href="/app/profile.html" data-page="profile" class="bn-item">
+    <span class="bn-icon">👤</span><span class="bn-label">Profile</span>
+  </a>
 </nav>
