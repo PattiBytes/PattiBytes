@@ -1,106 +1,56 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <title>PattiBytes • Login</title>
-  <meta name="description" content="Login to PattiBytes or continue as guest">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-  <meta name="format-detection" content="telephone=no">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <link rel="manifest" href="/app/manifest.webmanifest">
-  <meta name="theme-color" content="#667eea">
-  <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/app/assets/css/common.css">
   <link rel="stylesheet" href="/app/assets/css/auth-modern.css">
 </head>
 <body class="auth-gradient">
-  <div class="particle-layer" aria-hidden="true"></div>
-
-  <div id="headerContainer" class="no-print"></div>
-
   <main class="auth-shell">
-    <section class="auth-card glass">
+    <section class="auth-card">
       <header class="auth-head">
-        <h1 class="brand text-gradient">PattiBytes</h1>
-        <p class="muted">Sign in to unlock posting, comments, likes, and personalization</p>
+        <h1 class="brand text-gradient">Login</h1>
+        <p class="muted">Browse as guest or sign in to interact</p>
       </header>
 
       <div class="guest-banner">
-        <p>Browsing news, places, and shops works without login</p>
-        <button class="btn ghost" id="continueGuestBtn">Continue as guest</button>
+        <p>Reading news and places works without login</p>
+        <a class="btn ghost" href="/app/">Continue as guest</a>
       </div>
 
       <div class="social-row">
-        <button class="btn google w-full" id="googleLoginBtn">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285f4" d="M22.56 12.25..."/></svg>
-          Continue with Google
-        </button>
+        <button id="googleLoginBtn" class="btn google w-full">Continue with Google</button>
       </div>
 
       <div class="divider"><span>or</span></div>
 
       <form id="loginForm" class="form-grid" novalidate>
         <label class="field">
-          <input id="loginEmail" type="email" placeholder=" " autocomplete="email" required class="control">
-          <span class="label">Email</span>
-          <span class="underline"></span>
+          <input id="loginEmail" class="control" type="email" placeholder=" " autocomplete="email" required>
+          <span class="label">Email</span><span class="underline"></span>
         </label>
-
         <label class="field">
-          <input id="loginPassword" type="password" placeholder=" " autocomplete="current-password" required class="control">
-          <span class="label">Password</span>
-          <button type="button" class="eye" data-toggle="#loginPassword" aria-label="Toggle password">👁️</button>
-          <span class="underline"></span>
+          <input id="loginPassword" class="control" type="password" placeholder=" " autocomplete="current-password" required>
+          <span class="label">Password</span><button class="eye" type="button" data-toggle="#loginPassword">👁️</button><span class="underline"></span>
         </label>
-
         <div class="row between">
-          <label class="check">
-            <input type="checkbox" id="rememberMe">
-            <span>Remember me</span>
-          </label>
-          <button type="button" class="link" id="forgotBtn">Forgot password?</button>
+          <span></span><button id="forgotBtn" type="button" class="link">Forgot password?</button>
         </div>
-
-        <button type="submit" class="btn primary w-full" id="loginSubmit">
-          <span class="spinner" aria-hidden="true"></span>
-          <span>Sign in</span>
-        </button>
+        <button id="loginSubmit" class="btn primary w-full" type="submit">Sign in</button>
       </form>
 
       <footer class="auth-foot">
-        <p>New here? <a class="link" href="/app/auth/signup.html">Create an account</a></p>
+        <p>New here? <a class="link" href="/app/auth/signup.html">Create account</a></p>
       </footer>
     </section>
   </main>
 
-  <div id="bottomNavContainer" class="no-print"></div>
-
-  <template id="forgotDialog">
-    <div class="modal-overlay" role="dialog" aria-modal="true">
-      <div class="modal glass">
-        <header class="modal-head">
-          <h2>Reset password</h2>
-          <button class="icon-btn close" data-close>&times;</button>
-        </header>
-        <div class="modal-body">
-          <label class="field">
-            <input id="resetEmail" type="email" placeholder=" " autocomplete="email" required class="control">
-            <span class="label">Email</span>
-            <span class="underline"></span>
-          </label>
-        </div>
-        <footer class="modal-foot">
-          <button class="btn ghost" data-close>Cancel</button>
-          <button class="btn primary" id="sendResetBtn">Send link</button>
-        </footer>
-      </div>
-    </div>
-  </template>
-
-<script src="/app/assets/js/firebase-config.js"></script>
-<script type="module" src="/app/assets/js/pb-backend.js"></script>
-<script src="/app/assets/js/auth-modern.js"></script>
-
-
+  <!-- scripts: config → backend → ui -->
+  <script src="/app/assets/js/firebase-config.js"></script>
+  <script type="module" src="/app/assets/js/pb-backend.js"></script>
+  <script src="/app/assets/js/auth-modern.js"></script>
 </body>
 </html>
