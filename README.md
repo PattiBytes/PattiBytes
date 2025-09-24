@@ -1,52 +1,64 @@
+<!-- PattiBytes · Profile README -->
 
-<!-- pattibytes · GitHub Profile README -->
+<p align="center">
+  <a href="https://www.pattibytes.com">
+    <img src="https://avatars.githubusercontent.com/u/215803945?v=4" alt="PattiBytes logo" width="120" height="120" style="border-radius:50%;" />
+  </a>
+</p>
 
 <h1 align="center">PattiBytes</h1>
+
 <p align="center">
-  Local Punjabi news, culture, and community updates — building fast, installable web experiences.<br/>
-  <a href="https://www.pattibytes.com">pattibytes.com</a> · Punjabi · PWA · Open Web
+  <a href="https://github.com/DenverCoder1/readme-typing-svg">
+    <img src="https://readme-typing-svg.demolab.com?font=Inter&weight=700&size=26&duration=2400&pause=900&color=1F6FEB&center=true&vCenter=true&multiline=false&repeat=true&width=900&lines=Punjabi+local+news+and+guides;Fast%2C+installable+PWA+experience;Open+tech+for+community+media" alt="Typing SVG">
+  </a>
 </p>
 
 <p align="center">
-  <!-- Badges (replace links as needed) -->
-  <a href="https://github.com/pattibytes"><img alt="GitHub followers" src="https://img.shields.io/github/followers/pattibytes?style=for-the-badge"></a>
-  <a href="https://github.com/pattibytes?tab=repositories"><img alt="Public Repos" src="https://img.shields.io/badge/Public%20Repos-?-blue?style=for-the-badge"></a>
-  <a href="https://www.pattibytes.com"><img alt="Website" src="https://img.shields.io/website?url=https%3A%2F%2Fpattibytes.com&style=for-the-badge"></a>
+  <!-- Big call-to-action badges acting like buttons -->
+  <a href="https://www.pattibytes.com">
+    <img alt="Visit Website" src="https://img.shields.io/badge/Visit%20Website-1F6FEB?style=for-the-badge&logo=firefox&logoColor=white">
+  </a>
+  <a href="https://www.pattibytes.com/news/">
+    <img alt="Latest News" src="https://img.shields.io/badge/Latest%20News-0E8A16?style=for-the-badge&logo=rss&logoColor=white">
+  </a>
+  <a href="https://www.pattibytes.com/app/">
+    <img alt="Install PWA" src="https://img.shields.io/badge/Install%20PWA-FF6A00?style=for-the-badge&logo=pwa&logoColor=white">
+  </a>
+  <a href="https://www.instagram.com/patti_bytes/">
+    <img alt="Instagram" src="https://img.shields.io/badge/Instagram-E4405F?style=for-the-badge&logo=instagram&logoColor=white">
+  </a>
 </p>
 
 ---
 
-### 👋 About
-- Publishing Punjabi news and guides for Patti and nearby regions, with an emphasis on clarity and access.  
-- Experimenting with Progressive Web Apps (manifest, service worker) for offline and installable experiences.  
-- Exploring Next.js (SSG/SSR) options, Firebase-backed features, and free hosting workflows.
+### About
+Local Punjabi news, culture, and community updates — optimized for fast reads with installable PWA support.  
+Building with HTML/CSS/JS, Netlify CMS content, and an optional Next.js path plus Firebase for community features.
 
-### 🧰 Tech & Tools
-- Web: HTML · CSS · JavaScript
-- CMS: Netlify CMS (content in repo)
-- App: PWA (manifest.json, sw.js)
-- Cloud: Firebase (auth/db/storage as needed)
-- Deploy: GitHub Pages / Netlify / Vercel
-- Payments/Support: Razorpay (planned)
+### Tech
+- Web: HTML · CSS · JavaScript  
+- CMS: Netlify CMS (in‑repo admin)  
+- PWA: manifest.json · sw.js · responsive icons  
+- Optional: Next.js · Firebase · Razorpay
 
-### 🗺️ What’s built
-- A fast, static-first site with a PWA shell for quick reads on low connectivity.  
-- Structured content (news, places, guides) designed for mobile-first consumption.  
-- Notification and translation guides for readers.
+<details>
+  <summary><b>Roadmap (expand)</b></summary>
 
-### 🚧 Roadmap
-- Migrate PWA routes to Next.js app directory where helpful (SSG for news, ISR for freshness).  
-- Add comments/likes, media uploads, and user profiles (Firebase-first approach).  
-- Improve Core Web Vitals and add analytics & structured data.
+- Next.js app directory for SSG/ISR on news while keeping lightweight static pages.  
+- Firebase-powered comments/likes, media uploads, and user profiles.  
+- Improve Core Web Vitals, analytics, and structured data for news.
+</details>
 
-### 🤝 Collaborate
-- Open to contributions, feedback, and collaborations around local journalism tech and PWA patterns.  
-- Check issues for “good first issue” and “help wanted” labels.
+<details>
+  <summary><b>Quick Links (expand)</b></summary>
 
-### 📫 Links
-- Website: https://www.pattibytes.com
-- News: https://www.pattibytes.com/news/
+- Website: https://www.pattibytes.com  
+- News: https://www.pattibytes.com/news/  
+- Install PWA: https://www.pattibytes.com/app/  
 - Instagram: https://www.instagram.com/patti_bytes/
+</details>
 
 ---
-<!-- Tip: To show this on your GitHub profile, create a public repo named exactly your username (e.g., pattibytes) and add README.md at the root. -->
+
+<!-- Tip: To show this on the profile, the repository must be public and named exactly your username (e.g., pattibytes) with this README.md at the root. -->
