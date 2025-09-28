@@ -1,0 +1,32 @@
+{
+  "name": "PattiBytes - ਪੱਟੀ ਬਾਈਟਸ",
+  "short_name": "PattiBytes",
+  "description": "Latest Patti news, places, and community services.",
+  "start_url": "/app/",         
+  "scope": "/app/",             
+  "id": "/app/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#667eea",
+  "background_color": "#ffffff",
+  "lang": "pa-IN",
+  "dir": "ltr",
+  "categories": ["news","lifestyle","productivity","social","local"],
+  "icons": [
+    { "src": "/app/icons/pwab-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/app/icons/pwab-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "ਤਾਜ਼ਾ ਨਿਊਜ਼", "short_name": "News", "url": "/app/#news", "icons": [{ "src": "/app/icons/pwab-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "ਮਸ਼ਹੂਰ ਸਥਾਨ", "short_name": "Places", "url": "/app/#places", "icons": [{ "src": "/app/icons/pwab-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "ਸਥਾਨੀ ਦੁਕਾਨ", "short_name": "Shop", "url": "/app/#shop", "icons": [{ "src": "/app/icons/pwab-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ],
+  "share_target": {
+    "action": "/app/share",     
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  },
+  "launch_handler": { "client_mode": "focus-existing" },
+  "display_override": ["window-controls-overlay","standalone"]
+}
