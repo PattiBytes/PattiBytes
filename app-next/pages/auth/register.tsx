@@ -1,21 +1,30 @@
-// /app-next/pages/auth/register.tsx
 import { FormEvent, useState } from 'react';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { getFirebaseClient } from '@/lib/firebase';
 import Link from 'next/link';
 
 export default function Register() {
-  const [email,setEmail] = useState(''); const [pass,setPass] = useState('');
-  const [name,setName] = useState(''); const [err,setErr] = useState<string|null>(null);
+  const [email,setEmail] = useState('');
+  const [pass,setPass] = useState('');
+  const [name,setName] = useState('');
+  const [err,setErr] = useState<string|null>(null);
 
   const onSubmit = async (e:FormEvent) => {
     e.preventDefault(); setErr(null);
     try {
+      // Get guaranteed, non-null services on the client
+      const { auth, db } = getFirebaseClient();
+
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       await updateProfile(cred.user, { displayName: name });
-      await setDoc(doc(db, 'users', cred.user.uid), { uid: cred.user.uid, displayName: name, email }, { merge: true });
+      await setDoc(doc(db, 'users', cred.user.uid), { 
+        uid: cred.user.uid, 
+        displayName: name, 
+        email 
+      }, { merge: true });
+
       location.assign('/dashboard');
     } catch (e) { 
       setErr(e instanceof FirebaseError ? e.message : 'Registration failed'); 
