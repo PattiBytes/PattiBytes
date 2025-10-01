@@ -17,22 +17,20 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Early return if user not available
     if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    // Early return if Firebase not initialized
-    if (!db) {
-      console.warn('Firebase not initialized');
       setLoading(false);
       return;
     }
     
     const fetchRecentPosts = async () => {
+      // Type guard: ensure both user and db exist before using Firestore
+      if (!db) {
+        console.warn('Firestore not initialized');
+        setLoading(false);
+        return;
+      }
+
       try {
-        // TypeScript now knows db is defined here
         const q = query(
           collection(db, 'posts'), 
           where('uid', '==', user.uid), 
@@ -48,7 +46,6 @@ export default function Dashboard() {
         setRecentPosts(posts);
       } catch (error) {
         console.error('Error fetching posts:', error);
-        setRecentPosts([]); // Set empty array on error
       } finally {
         setLoading(false);
       }
@@ -107,7 +104,7 @@ export default function Dashboard() {
             <div className="empty-state">
               <div className="empty-icon">⚠️</div>
               <h3>Service Unavailable</h3>
-              <p>Database connection is not available right now.</p>
+              <p>Database connection is not available. Please try again later.</p>
             </div>
           ) : recentPosts.length === 0 ? (
             <div className="empty-state">
@@ -140,18 +137,23 @@ export default function Dashboard() {
         <section className="quick-actions">
           <h2>Quick Actions</h2>
           <div className="action-buttons">
-            <div className="action-card">
+            <Link href="/dashboard/news" className="action-card">
               <div className="action-icon">📰</div>
               <h3>News</h3>
               <p>Stay updated with latest</p>
-              <Link href="/dashboard/news" className="btn-secondary">View News</Link>
-            </div>
+            </Link>
             
             <Link href="/account" className="action-card">
               <div className="action-icon">👤</div>
               <h3>Profile</h3>
               <p>Manage your account</p>
             </Link>
+            
+            <div className="action-card" style={{ opacity: 0.6 }}>
+              <div className="action-icon">📱</div>
+              <h3>Timeline</h3>
+              <p>Coming soon</p>
+            </div>
           </div>
         </section>
       </div>
