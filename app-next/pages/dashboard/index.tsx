@@ -17,9 +17,22 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    // Early return if user not available
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    // Early return if Firebase not initialized
+    if (!db) {
+      console.warn('Firebase not initialized');
+      setLoading(false);
+      return;
+    }
+    
     const fetchRecentPosts = async () => {
       try {
+        // TypeScript now knows db is defined here
         const q = query(
           collection(db, 'posts'), 
           where('uid', '==', user.uid), 
@@ -35,10 +48,12 @@ export default function Dashboard() {
         setRecentPosts(posts);
       } catch (error) {
         console.error('Error fetching posts:', error);
+        setRecentPosts([]); // Set empty array on error
       } finally {
         setLoading(false);
       }
     };
+    
     fetchRecentPosts();
   }, [user]);
 
@@ -74,7 +89,7 @@ export default function Dashboard() {
             <div className="stat-content">
               <h3>Community</h3>
               <p className="stat-number">Active</p>
-              <Link href="/dashboard/timeline" className="stat-link">Join timeline</Link>
+              <span className="stat-label">Join conversations</span>
             </div>
           </div>
         </div>
@@ -82,19 +97,23 @@ export default function Dashboard() {
         <section className="recent-activity">
           <div className="section-header">
             <h2>Your Recent Posts</h2>
-            <Link href="/dashboard/timeline" className="btn-secondary">Create new post</Link>
           </div>
           
           {loading ? (
             <div className="loading-posts">
               <p>Loading your posts...</p>
             </div>
+          ) : !db ? (
+            <div className="empty-state">
+              <div className="empty-icon">⚠️</div>
+              <h3>Service Unavailable</h3>
+              <p>Database connection is not available right now.</p>
+            </div>
           ) : recentPosts.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">✨</div>
               <h3>No posts yet</h3>
               <p>Start sharing your thoughts with the community!</p>
-              <Link href="/dashboard/timeline" className="btn-primary">Create your first post</Link>
             </div>
           ) : (
             <div className="posts-preview">
@@ -121,17 +140,12 @@ export default function Dashboard() {
         <section className="quick-actions">
           <h2>Quick Actions</h2>
           <div className="action-buttons">
-            <Link href="/dashboard/timeline" className="action-card">
-              <div className="action-icon">📱</div>
-              <h3>Timeline</h3>
-              <p>Share updates and connect</p>
-            </Link>
-            
-            <Link href="/dashboard/news" className="action-card">
+            <div className="action-card">
               <div className="action-icon">📰</div>
               <h3>News</h3>
               <p>Stay updated with latest</p>
-            </Link>
+              <Link href="/dashboard/news" className="btn-secondary">View News</Link>
+            </div>
             
             <Link href="/account" className="action-card">
               <div className="action-icon">👤</div>
