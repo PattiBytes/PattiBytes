@@ -1,3 +1,4 @@
+// /app-next/context/AuthContext.tsx
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -11,10 +12,21 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, u => { setUser(u); setLoading(false); });
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+    
+    const unsub = onAuthStateChanged(auth, u => { 
+      setUser(u); 
+      setLoading(false); 
+    });
     return () => unsub();
   }, []);
 
-  const logout = () => signOut(auth);
+  const logout = async () => {
+    if (auth) await signOut(auth);
+  };
+  
   return <Ctx.Provider value={{ user, loading, logout }}>{children}</Ctx.Provider>;
 }
