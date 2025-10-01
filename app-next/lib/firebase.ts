@@ -3,7 +3,8 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
-const firebaseConfig = {
+// Browser-exposed config via NEXT_PUBLIC_* (required by Firebase Web) 
+const cfg = {
   apiKey: process.env.NEXT_PUBLIC_FB_API_KEY!,
   authDomain: process.env.NEXT_PUBLIC_FB_AUTH_DOMAIN!,
   projectId: process.env.NEXT_PUBLIC_FB_PROJECT_ID!,
@@ -13,30 +14,30 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FB_MEASUREMENT_ID
 };
 
-// Initialize Firebase only when config is valid and in browser/dev environment
-let app: FirebaseApp | undefined;
-let auth: Auth | undefined;
-let db: Firestore | undefined;
-let storage: FirebaseStorage | undefined;
+let appRef: FirebaseApp | null = null;
+let authRef: Auth | null = null;
+let dbRef: Firestore | null = null;
+let storageRef: FirebaseStorage | null = null;
 
-const initFirebase = () => {
-  if (!firebaseConfig.apiKey || !firebaseConfig.projectId) return;
-  
-  try {
-    app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    storage = getStorage(app);
-  } catch (error) {
-    console.warn('Firebase initialization failed:', error);
+function initClient() {
+  if (!appRef) {
+    if (!cfg.apiKey || !cfg.projectId) throw new Error('Missing Firebase env config');
+    const app = getApps().length ? getApp() : initializeApp(cfg);
+    appRef = app;
+    authRef = getAuth(app);
+    dbRef = getFirestore(app);
+    storageRef = getStorage(app);
   }
-};
-
-// Only initialize in browser or development
-if (typeof window !== 'undefined') {
-  initFirebase();
-} else if (process.env.NODE_ENV === 'development') {
-  initFirebase();
 }
 
-export { auth, db, storage };
+export function getFirebaseClient(): { auth: Auth; db: Firestore; storage: FirebaseStorage } {
+  if (typeof window === 'undefined') throw new Error('Firebase client is browser-only');
+  initClient();
+  if (!authRef || !dbRef || !storageRef) throw new Error('Firebase not initialized');
+  return { auth: authRef, db: dbRef, storage: storageRef };
+}
+
+// Optional: named exports remain for callers that already null-check
+export const auth = authRef || undefined;
+export const db = dbRef || undefined;
+export const storage = storageRef || undefined;
