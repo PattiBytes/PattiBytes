@@ -14,7 +14,24 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FB_MEASUREMENT_ID
 };
 
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+// Only initialize Firebase in the browser or when all env vars are available
+let app;
+let auth;
+let db;
+let storage;
+
+if (typeof window !== 'undefined' && firebaseConfig.apiKey) {
+  // Client-side initialization
+  app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  storage = getStorage(app);
+} else if (process.env.NODE_ENV === 'development' && firebaseConfig.apiKey) {
+  // Allow initialization in development
+  app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);  
+  storage = getStorage(app);
+}
+
+export { auth, db, storage };
