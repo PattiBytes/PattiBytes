@@ -1,0 +1,41 @@
+// /app-next/components/AvatarUploader.tsx
+import { useState } from 'react';
+import { storage, db } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { doc, setDoc } from 'firebase/firestore';
+import Image from 'next/image';
+import type { User } from 'firebase/auth';
+
+export default function AvatarUploader({ user }: { user: User }) {
+  const [busy,setBusy]=useState(false);
+  const [url,setUrl]=useState<string|undefined>(user.photoURL||undefined);
+
+  const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setBusy(true);
+    try {
+      const key = `avatars/${user.uid}/${Date.now()}-${file.name}`;
+      const r = ref(storage, key);
+      await uploadBytes(r, file);
+      const durl = await getDownloadURL(r);
+      setUrl(durl);
+      await setDoc(doc(db,'users',user.uid), { photoURL: durl }, { merge:true });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div>
+      <Image 
+        src={url || '/icons/pwab-192.png'} 
+        alt="avatar" 
+        width={96} 
+        height={96} 
+        style={{borderRadius:'50%'}} 
+      />
+      <label>
+        <input type="file" accept="image/*" onChange={onPick} disabled={busy} hidden />
+        <span className="btn">{busy?'Uploading…':'Change photo'}</span>
+      </label>
+    </div>
+  );
+}
