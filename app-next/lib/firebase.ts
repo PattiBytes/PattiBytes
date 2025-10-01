@@ -1,8 +1,7 @@
-// /app-next/lib/firebase.ts
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { getAuth, Auth } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FB_API_KEY!,
@@ -14,24 +13,30 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FB_MEASUREMENT_ID
 };
 
-// Only initialize Firebase in the browser or when all env vars are available
-let app;
-let auth;
-let db;
-let storage;
+// Initialize Firebase only when config is valid and in browser/dev environment
+let app: FirebaseApp | undefined;
+let auth: Auth | undefined;
+let db: Firestore | undefined;
+let storage: FirebaseStorage | undefined;
 
-if (typeof window !== 'undefined' && firebaseConfig.apiKey) {
-  // Client-side initialization
-  app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-  storage = getStorage(app);
-} else if (process.env.NODE_ENV === 'development' && firebaseConfig.apiKey) {
-  // Allow initialization in development
-  app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);  
-  storage = getStorage(app);
+const initFirebase = () => {
+  if (!firebaseConfig.apiKey || !firebaseConfig.projectId) return;
+  
+  try {
+    app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
+  } catch (error) {
+    console.warn('Firebase initialization failed:', error);
+  }
+};
+
+// Only initialize in browser or development
+if (typeof window !== 'undefined') {
+  initFirebase();
+} else if (process.env.NODE_ENV === 'development') {
+  initFirebase();
 }
 
 export { auth, db, storage };
