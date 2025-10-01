@@ -1539,3 +1539,15 @@ if ('serviceWorker' in navigator) {
 }
 
 console.log('Website script loaded - no app interference');
+// /script.js on the website
+(() => {
+  const APP_URL = 'https://pattibytes.vercel.app/?install=1&utm_source=site';
+  const btn = document.getElementById('openAppInstall');
+  if (btn) {
+    btn.addEventListener('click', (e) => {
+      // Prefer same-tab navigation so the app’s beforeinstallprompt can run
+      e.preventDefault();
+      location.assign(APP_URL);
+    });
+  }
+})();
