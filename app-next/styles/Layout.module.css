@@ -1,0 +1,41 @@
+.layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #4facfe 100%);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.main {
+  flex: 1;
+  margin-top: 72px; /* Header height */
+  margin-bottom: 72px; /* Bottom nav height */
+  padding: 1rem;
+  max-width: 1200px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Desktop - no bottom margin */
+@media (min-width: 768px) {
+  .main {
+    margin-bottom: 0;
+    padding: 2rem;
+  }
+}
+
+/* Remove gradient for better performance on some devices */
+@media (prefers-reduced-motion: reduce) {
+  .layout {
+    animation: none;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+}
