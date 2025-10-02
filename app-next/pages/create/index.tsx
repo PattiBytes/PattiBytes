@@ -1,18 +1,22 @@
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/router';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import { incrementPostCount } from '@/lib/username';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 import Layout from '@/components/Layout';
 import { motion } from 'framer-motion';
-import { FaImage, FaMapMarkerAlt } from 'react-icons/fa';
+import { FaImage, FaMapMarkerAlt, FaTimes } from 'react-icons/fa';
+import Image from 'next/image';
 import styles from '@/styles/Create.module.css';
 
 export default function CreatePost() {
   const { user, userProfile } = useAuth();
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
@@ -22,6 +26,37 @@ export default function CreatePost() {
     location: '',
     imageUrl: ''
   });
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image size must be less than 5MB');
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      const imageUrl = await uploadToCloudinary(file);
+      setFormData({ ...formData, imageUrl });
+    } catch (err) {
+      console.error('Error uploading image:', err);
+      setError('Failed to upload image. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setFormData({ ...formData, imageUrl: '' });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -36,6 +71,7 @@ export default function CreatePost() {
       const postData = {
         title: formData.title,
         content: formData.content,
+        preview: formData.content.substring(0, 200),
         type: formData.type,
         authorId: user.uid,
         authorName: userProfile.displayName,
@@ -67,7 +103,6 @@ export default function CreatePost() {
         <h1>Create New Post</h1>
 
         <form onSubmit={handleSubmit} className={styles.form}>
-          {/* Post Type */}
           <div className={styles.typeSelector}>
             <button
               type="button"
@@ -92,7 +127,6 @@ export default function CreatePost() {
             </button>
           </div>
 
-          {/* Title */}
           <div className={styles.formGroup}>
             <label>Title</label>
             <input
@@ -104,7 +138,6 @@ export default function CreatePost() {
             />
           </div>
 
-          {/* Content */}
           <div className={styles.formGroup}>
             <label>Content</label>
             <textarea
@@ -114,9 +147,11 @@ export default function CreatePost() {
               rows={10}
               required
             />
+            <div className={styles.characterCount}>
+              {formData.content.length} characters
+            </div>
           </div>
 
-          {/* Location (for places) */}
           {formData.type === 'place' && (
             <div className={styles.formGroup}>
               <label>
@@ -131,17 +166,49 @@ export default function CreatePost() {
             </div>
           )}
 
-          {/* Image URL */}
           <div className={styles.formGroup}>
             <label>
-              <FaImage /> Image URL (optional)
+              <FaImage /> Image (optional)
             </label>
+            
             <input
-              type="url"
-              value={formData.imageUrl}
-              onChange={e => setFormData({ ...formData, imageUrl: e.target.value })}
-              placeholder="https://example.com/image.jpg"
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className={styles.fileInput}
             />
+
+            {!formData.imageUrl && (
+              <button
+                type="button"
+                className={styles.uploadButton}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                <FaImage />
+                {uploading ? 'Uploading...' : 'Upload Image'}
+              </button>
+            )}
+
+            {formData.imageUrl && (
+              <div className={styles.imagePreview}>
+                <Image
+                  src={formData.imageUrl}
+                  alt="Preview"
+                  width={600}
+                  height={400}
+                  className={styles.previewImage}
+                />
+                <button
+                  type="button"
+                  className={styles.removeImage}
+                  onClick={handleRemoveImage}
+                >
+                  <FaTimes /> Remove Image
+                </button>
+              </div>
+            )}
           </div>
 
           {error && (
@@ -153,13 +220,29 @@ export default function CreatePost() {
           <motion.button
             type="submit"
             className={styles.submitButton}
-            disabled={loading}
+            disabled={loading || uploading}
             whileHover={{ scale: loading ? 1 : 1.02 }}
             whileTap={{ scale: loading ? 1 : 0.98 }}
           >
-            {loading ? 'Publishing...' : 'Publish Post'}
+            {loading ? (
+              <>
+                <div className={styles.spinner} />
+                Publishing...
+              </>
+            ) : (
+              'Publish Post'
+            )}
           </motion.button>
         </form>
+
+        {uploading && (
+          <div className={styles.uploadingOverlay}>
+            <div className={styles.uploadingContent}>
+              <div className={styles.spinner} />
+              <p>Uploading image...</p>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
