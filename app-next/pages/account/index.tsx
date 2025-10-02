@@ -1,76 +1,165 @@
-import AuthGuard from '@/components/AuthGuard';
+import { useState, FormEvent } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useState } from 'react';
-import { db } from '@/lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
-import AvatarUploader from '@/components/AvatarUploader';
-
-export default function Account() {
-  return (
-    <AuthGuard>
-      <AccountInner />
-    </AuthGuard>
-  );
-}
+import { useRouter } from 'next/router';
+import Layout from '@/components/Layout';
+import { motion } from 'framer-motion';
+import { FaUser, FaEnvelope, FaSignOutAlt, FaSave } from 'react-icons/fa';
+import styles from '@/styles/Account.module.css';
 
 function AccountInner() {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth(); // Changed from 'logout' to 'signOut'
+  const router = useRouter();
   const [name, setName] = useState(user?.displayName || '');
   const [ok, setOk] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  if (!user) return null;
-
-  const save = async () => {
-    // Guard: ensure Firestore is initialized
-    if (!db) {
-      setError('Database not available');
-      setOk(null);
-      return;
-    }
-
+  const handleSignOut = async () => {
     try {
-      // Narrowing: assign to a local const so its type is Firestore, not Firestore | undefined
-      const dbc = db;
-      await setDoc(doc(dbc, 'users', user.uid), { displayName: name }, { merge: true });
-      setOk('Saved');
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed');
-      setOk(null);
+      await signOut();
+      router.push('/');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      setError('Failed to sign out');
     }
   };
 
+  const handleUpdateProfile = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setOk(null);
+
+    try {
+      // Update Firebase Auth profile
+      if (user) {
+        const { updateProfile } = await import('firebase/auth');
+        await updateProfile(user, {
+          displayName: name
+        });
+        setOk('Profile updated successfully!');
+      }
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      setError('Failed to update profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <Layout title="Account - PattiBytes">
+        <div className={styles.loading}>
+          <p>Please sign in to access your account.</p>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
-    <main className="account">
-      <div className="account-container">
-        <h1>ਸਤ ਸ੍ਰੀ ਅਕਾਲ, {user.displayName || user.email}</h1>
-
-        <div className="account-section">
-          <h2>Profile Photo</h2>
-          <AvatarUploader user={user} />
+    <Layout title="Account - PattiBytes">
+      <div className={styles.account}>
+        <div className={styles.header}>
+          <h1>Account Settings</h1>
+          <p>Manage your account information</p>
         </div>
 
-        <div className="account-section">
-          <h2>Account Details</h2>
-          <div className="form-group">
-            <label>Display name</label>
-            <input value={name} onChange={e => setName(e.target.value)} />
-            <button onClick={save} className="btn-primary">Save</button>
-          </div>
-          <div className="form-group">
-            <label>Email</label>
-            <input value={user.email || ''} disabled />
-          </div>
-        </div>
+        <div className={styles.content}>
+          {/* Profile Section */}
+          <motion.section 
+            className={styles.section}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <h2>
+              <FaUser /> Profile Information
+            </h2>
 
-        <div className="account-actions">
-          <button onClick={() => logout()} className="btn-secondary">Log out</button>
-        </div>
+            <form onSubmit={handleUpdateProfile} className={styles.form}>
+              <div className={styles.formGroup}>
+                <label htmlFor="email">
+                  <FaEnvelope /> Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={user.email || ''}
+                  disabled
+                  className={styles.disabledInput}
+                />
+                <small>Email cannot be changed</small>
+              </div>
 
-        {ok && <p className="success">{ok}</p>}
-        {error && <p className="error">{error}</p>}
+              <div className={styles.formGroup}>
+                <label htmlFor="displayName">
+                  <FaUser /> Display Name
+                </label>
+                <input
+                  id="displayName"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter your display name"
+                  required
+                />
+              </div>
+
+              {error && (
+                <div className={styles.error}>
+                  {error}
+                </div>
+              )}
+
+              {ok && (
+                <div className={styles.success}>
+                  {ok}
+                </div>
+              )}
+
+              <button 
+                type="submit" 
+                className={styles.saveButton}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <div className={styles.spinner} />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <FaSave /> Save Changes
+                  </>
+                )}
+              </button>
+            </form>
+          </motion.section>
+
+          {/* Account Actions */}
+          <motion.section 
+            className={styles.section}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <h2>Account Actions</h2>
+            
+            <div className={styles.actions}>
+              <button 
+                onClick={handleSignOut}
+                className={styles.signOutButton}
+              >
+                <FaSignOutAlt /> Sign Out
+              </button>
+            </div>
+          </motion.section>
+        </div>
       </div>
-    </main>
+    </Layout>
   );
+}
+
+export default function Account() {
+  return <AccountInner />;
 }
