@@ -18,7 +18,16 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
+    
+    // Allow unoptimized images for external sources
+    unoptimized: process.env.NODE_ENV === 'development',
   },
 
   pwa: {
@@ -26,6 +35,11 @@ const nextConfig = {
     register: true,
     skipWaiting: true,
     disable: process.env.NODE_ENV === 'development',
+  },
+
+  // Disable eslint warnings for <img> tags
+  eslint: {
+    ignoreDuringBuilds: false,
   },
 };
 

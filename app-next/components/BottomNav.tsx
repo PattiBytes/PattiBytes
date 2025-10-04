@@ -1,18 +1,27 @@
-import { useRouter } from 'next/router';
+import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
-import { FaHome, FaMapMarkerAlt, FaNewspaper, FaPen, FaUser } from 'react-icons/fa';
+import { useRouter } from 'next/router';
+import SafeImage from './SafeImage';
+import { FaHome, FaSearch, FaPlus, FaBell, FaUser } from 'react-icons/fa';
 import styles from '@/styles/BottomNav.module.css';
 
 export default function BottomNav() {
+  const { user, userProfile } = useAuth();
   const router = useRouter();
-  
+
+  if (!user) return null;
+
   const navItems = [
     { href: '/dashboard', icon: FaHome, label: 'Home' },
-    { href: '/places', icon: FaMapMarkerAlt, label: 'Places' },
-    { href: '/create', icon: FaPen, label: 'Create' },
-    { href: '/news', icon: FaNewspaper, label: 'News' },
-    { href: '/profile', icon: FaUser, label: 'Profile' },
+    { href: '/search', icon: FaSearch, label: 'Search' },
+    { href: '/create', icon: FaPlus, label: 'Create', highlight: true },
+    { href: '/notifications', icon: FaBell, label: 'Notifications' },
+    { 
+      href: `/user/${userProfile?.username}`, 
+      icon: FaUser, 
+      label: 'Profile',
+      avatar: user.photoURL 
+    },
   ];
 
   return (
@@ -20,25 +29,25 @@ export default function BottomNav() {
       {navItems.map((item) => {
         const isActive = router.pathname === item.href;
         const Icon = item.icon;
-        
+
         return (
-          <Link key={item.href} href={item.href} className={styles.navItem}>
-            <motion.div
-              className={`${styles.iconWrapper} ${isActive ? styles.active : ''}`}
-              whileTap={{ scale: 0.9 }}
-            >
-              {isActive && (
-                <motion.div
-                  className={styles.activeIndicator}
-                  layoutId="activeIndicator"
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                />
-              )}
+          <Link 
+            key={item.href} 
+            href={item.href} 
+            className={`${styles.navItem} ${isActive ? styles.active : ''} ${item.highlight ? styles.highlight : ''}`}
+          >
+            {item.avatar ? (
+              <SafeImage 
+                src={item.avatar} 
+                alt={item.label} 
+                width={24} 
+                height={24} 
+                className={styles.avatar}
+              />
+            ) : (
               <Icon className={styles.icon} />
-            </motion.div>
-            <span className={`${styles.label} ${isActive ? styles.activeLabel : ''}`}>
-              {item.label}
-            </span>
+            )}
+            <span className={styles.label}>{item.label}</span>
           </Link>
         );
       })}

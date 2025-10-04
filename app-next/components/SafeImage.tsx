@@ -1,7 +1,7 @@
 import Image, { ImageProps } from 'next/image';
 import { useState } from 'react';
 
-type SafeImageProps = Omit<ImageProps, 'src' | 'loader'> & {
+type SafeImageProps = Omit<ImageProps, 'src'> & {
   src: string | null | undefined;
   fallbackSrc?: string;
 };
@@ -22,17 +22,13 @@ export default function SafeImage({
     }
   };
 
-  // Always use unoptimized for external URLs to avoid loader issues
-  const isExternal = imgSrc.startsWith('http');
-
   return (
     <Image
       {...rest}
       src={imgSrc}
       alt={alt}
       onError={handleError}
-      unoptimized={isExternal}
-      loader={isExternal ? ({ src }) => src : undefined}
+      unoptimized
     />
   );
 }

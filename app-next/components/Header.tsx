@@ -1,135 +1,94 @@
-import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import Image from 'next/image';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
-import { FaBell, FaSearch, FaCog, FaSignOutAlt, FaUser } from 'react-icons/fa';
+import { useRouter } from 'next/router';
+import SafeImage from './SafeImage';
+import { useState } from 'react';
+import { FaBell, FaSignOutAlt, FaUser, FaCog } from 'react-icons/fa';
 import styles from '@/styles/Header.module.css';
 
 export default function Header() {
-  const { userProfile, signOut } = useAuth();
-  const [showMenu, setShowMenu] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
+  const { user, userProfile, signOut } = useAuth();
+  const router = useRouter();
+  const [showDropdown, setShowDropdown] = useState(false);
 
-  const handleSignOut = async () => {
+  const handleLogout = async () => {
     try {
       await signOut();
-      window.location.href = '/';
+      router.push('/');
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('Logout error:', error);
     }
   };
 
   return (
     <header className={styles.header}>
       <div className={styles.container}>
-        {/* Logo */}
-        <Link href="/dashboard" className={styles.logo}>
-          <Image
-            src="/images/logo.png"
-            alt="PattiBytes"
-            width={40}
-            height={40}
-          />
+        <Link href="/" className={styles.logo}>
+          <SafeImage src="/images/logo.png" alt="PattiBytes" width={40} height={40} />
           <span className={styles.logoText}>PattiBytes</span>
         </Link>
 
-        {/* Search */}
-        <div className={styles.searchWrapper}>
-          <button 
-            className={styles.searchButton}
-            onClick={() => setShowSearch(!showSearch)}
-          >
-            <FaSearch />
-          </button>
-          
-          <AnimatePresence>
-            {showSearch && (
-              <motion.div
-                className={styles.searchBar}
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: 300, opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
-              >
-                <input
-                  type="text"
-                  placeholder="Search PattiBytes..."
-                  className={styles.searchInput}
-                  autoFocus
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Actions */}
         <div className={styles.actions}>
-          {/* Notifications */}
-          <button className={styles.iconButton}>
-            <FaBell />
-            <span className={styles.badge}>3</span>
-          </button>
+          {user ? (
+            <>
+              <button className={styles.iconButton}>
+                <FaBell />
+                <span className={styles.badge}>3</span>
+              </button>
 
-          {/* User Profile */}
-          <div className={styles.profileWrapper}>
-            <button 
-              className={styles.profileButton}
-              onClick={() => setShowMenu(!showMenu)}
-            >
-              {userProfile?.photoURL ? (
-                <Image
-                  src={userProfile.photoURL}
-                  alt={userProfile.displayName || 'User'}
-                  width={36}
-                  height={36}
-                  className={styles.avatar}
-                />
-              ) : (
-                <div className={styles.avatarPlaceholder}>
-                  {userProfile?.displayName?.charAt(0).toUpperCase() || 'U'}
-                </div>
-              )}
-            </button>
-            
-            <AnimatePresence>
-              {showMenu && (
-                <motion.div
-                  className={styles.dropdown}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
+              <div className={styles.userMenu}>
+                <button 
+                  className={styles.userButton}
+                  onClick={() => setShowDropdown(!showDropdown)}
                 >
-                  <div className={styles.dropdownHeader}>
-                    <div className={styles.userInfo}>
-                      <span className={styles.displayName}>
-                        {userProfile?.displayName || 'User'}
-                      </span>
-                      {userProfile?.username && (
-                        <span className={styles.username}>
-                          @{userProfile.username}
-                        </span>
-                      )}
+                  <SafeImage
+                    src={user.photoURL}
+                    alt={userProfile?.displayName || 'User'}
+                    width={36}
+                    height={36}
+                    className={styles.avatar}
+                  />
+                </button>
+
+                {showDropdown && (
+                  <div className={styles.dropdown}>
+                    <div className={styles.dropdownHeader}>
+                      <SafeImage
+                        src={user.photoURL}
+                        alt={userProfile?.displayName || 'User'}
+                        width={48}
+                        height={48}
+                        className={styles.dropdownAvatar}
+                      />
+                      <div>
+                        <h4>{userProfile?.displayName}</h4>
+                        <p>@{userProfile?.username}</p>
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className={styles.menuItems}>
-                    <Link href="/profile" className={styles.menuItem}>
+
+                    <Link href={`/user/${userProfile?.username}`} className={styles.dropdownItem}>
                       <FaUser /> Profile
                     </Link>
-                    <Link href="/settings" className={styles.menuItem}>
+                    <Link href="/settings" className={styles.dropdownItem}>
                       <FaCog /> Settings
                     </Link>
-                    <button 
-                      onClick={handleSignOut}
-                      className={styles.menuItem}
-                    >
-                      <FaSignOutAlt /> Sign Out
+                    <button onClick={handleLogout} className={styles.dropdownItem}>
+                      <FaSignOutAlt /> Logout
                     </button>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <Link href="/auth/login" className={styles.loginBtn}>
+                Login
+              </Link>
+              <Link href="/auth/register" className={styles.signupBtn}>
+                Sign Up
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

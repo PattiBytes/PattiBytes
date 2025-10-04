@@ -3,94 +3,96 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
-  padding: 0.5rem 0;
+  background: white;
+  border-top: 1px solid #e5e7eb;
   display: flex;
   justify-content: space-around;
-  align-items: center;
+  padding: 8px 0;
   z-index: 100;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .navItem {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
+  gap: 4px;
+  padding: 8px 12px;
+  color: #6b7280;
   text-decoration: none;
-  flex: 1;
-  padding: 0.5rem;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
+  border-radius: 8px;
+  min-width: 60px;
 }
 
-.iconWrapper {
-  position: relative;
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.navItem:hover {
+  background: #f3f4f6;
+}
+
+.navItem.active {
+  color: #667eea;
+}
+
+.navItem.highlight .icon {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 8px;
+  border-radius: 50%;
 }
 
 .icon {
-  font-size: 1.25rem;
-  color: #64748b;
-  transition: all 0.3s ease;
-  z-index: 2;
+  font-size: 20px;
+  transition: transform 0.2s;
+}
+
+.navItem:hover .icon {
+  transform: scale(1.1);
 }
 
 .label {
-  font-size: 0.7rem;
-  color: #64748b;
+  font-size: 11px;
   font-weight: 500;
-  transition: all 0.3s ease;
 }
 
-.iconWrapper.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+.avatar {
+  border-radius: 50%;
+  border: 2px solid transparent;
+  transition: border-color 0.2s;
 }
 
-.iconWrapper.active .icon {
-  color: white;
+.navItem.active .avatar {
+  border-color: #667eea;
 }
 
-.activeLabel {
-  color: #667eea;
-  font-weight: 600;
-}
-
-.activeIndicator {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  z-index: 1;
-}
-
-/* Desktop - hide bottom nav */
-@media (min-width: 768px) {
+/* Desktop sidebar */
+@media (min-width: 1024px) {
   .bottomNav {
-    display: none;
-  }
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .bottomNav {
-    background: rgba(17, 24, 39, 0.95);
-    border-top-color: rgba(255, 255, 255, 0.1);
-  }
-
-  .icon, .label {
-    color: #94a3b8;
+    position: fixed;
+    left: 0;
+    top: 60px;
+    bottom: 0;
+    width: 240px;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 20px 12px;
+    border-top: none;
+    border-right: 1px solid #e5e7eb;
   }
 
-  .activeLabel {
-    color: #a78bfa;
+  .navItem {
+    flex-direction: row;
+    justify-content: flex-start;
+    width: 100%;
+    padding: 12px 16px;
+    gap: 12px;
+  }
+
+  .label {
+    font-size: 14px;
+    display: block;
+  }
+
+  .icon {
+    font-size: 22px;
   }
 }
