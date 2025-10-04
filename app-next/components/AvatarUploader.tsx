@@ -1,5 +1,3 @@
-// components/AvatarUploader.tsx
-
 import { useState } from 'react';
 import { getFirebaseClient } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -19,7 +17,6 @@ export default function AvatarUploader({ user }: { user: User }) {
     setBusy(true);
     setError(null);
 
-    // Get storage and db from client
     const { storage, db } = getFirebaseClient();
     if (!storage || !db) {
       setError('Storage service not available');

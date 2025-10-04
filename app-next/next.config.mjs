@@ -18,12 +18,6 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
-      {
-        protocol: 'https',
-        hostname: 'res.cloudinary.com',
-        port: '',
-        pathname: '/**',
-      }
     ],
   },
 
@@ -31,12 +25,8 @@ const nextConfig = {
     dest: 'public',
     register: true,
     skipWaiting: true,
-    disable: process.env.NODE_ENV === 'development'
+    disable: process.env.NODE_ENV === 'development',
   },
-
-  // Optimize for Vercel
-  poweredByHeader: false,
-  compress: true,
 };
 
 export default withPWA(nextConfig);

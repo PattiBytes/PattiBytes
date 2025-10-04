@@ -2,18 +2,16 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/router';
 import { isAdmin } from '@/lib/admin';
-import { collection, getDocs, query, orderBy, limit, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import Layout from '@/components/Layout';
 import { motion } from 'framer-motion';
-import { FaUsers, FaNewspaper, FaChartLine, FaTrash, FaEdit, FaShieldAlt } from 'react-icons/fa';
+import { FaUsers, FaNewspaper, FaTrash, FaShieldAlt } from 'react-icons/fa';
 import styles from '@/styles/Admin.module.css';
 
 interface Stats {
   totalUsers: number;
   totalPosts: number;
-  totalNews: number;
-  totalPlaces: number;
 }
 
 interface RecentPost {
@@ -29,67 +27,47 @@ export default function AdminPanel() {
   const router = useRouter();
   const [isAdminUser, setIsAdminUser] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<Stats>({
-    totalUsers: 0,
-    totalPosts: 0,
-    totalNews: 0,
-    totalPlaces: 0
-  });
+  const [stats, setStats] = useState<Stats>({ totalUsers: 0, totalPosts: 0 });
   const [recentPosts, setRecentPosts] = useState<RecentPost[]>([]);
 
   const loadStats = async () => {
-    try {
-      const { db } = getFirebaseClient();
-      
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-      const postsSnapshot = await getDocs(collection(db, 'posts'));
-      
-      setStats({
-        totalUsers: usersSnapshot.size,
-        totalPosts: postsSnapshot.size,
-        totalNews: 0,
-        totalPlaces: 0
-      });
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
+    const { db } = getFirebaseClient();
+    if (!db) throw new Error('Firestore not initialized');
+
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+    const postsSnapshot = await getDocs(collection(db, 'posts'));
+
+    setStats({ totalUsers: usersSnapshot.size, totalPosts: postsSnapshot.size });
   };
 
   const loadRecentPosts = async () => {
-    try {
-      const { db } = getFirebaseClient();
-      
-      const postsQuery = query(
-        collection(db, 'posts'),
-        orderBy('createdAt', 'desc'),
-        limit(10)
-      );
-      
-      const snapshot = await getDocs(postsQuery);
-      const posts = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date()
-      })) as RecentPost[];
-      
-      setRecentPosts(posts);
-    } catch (error) {
-      console.error('Error loading recent posts:', error);
-    }
+    const { db } = getFirebaseClient();
+    if (!db) throw new Error('Firestore not initialized');
+
+    const postsQuery = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(10));
+    const snapshot = await getDocs(postsQuery);
+    const posts = snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        title: data.title || 'Untitled',
+        authorName: data.authorName || 'Unknown',
+        type: data.type || 'post',
+        createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date()
+      };
+    }) as RecentPost[];
+    setRecentPosts(posts);
   };
 
-  const checkAdmin = useCallback(async () => {
+  const checkAdminStatus = useCallback(async () => {
     if (!user) {
       router.push('/auth/login');
       return;
     }
-
-    const adminStatus = await isAdmin(user.uid);
-    if (!adminStatus) {
+    if (!isAdmin(user.uid)) {
       router.push('/dashboard');
       return;
     }
-
     setIsAdminUser(true);
     await loadStats();
     await loadRecentPosts();
@@ -97,14 +75,15 @@ export default function AdminPanel() {
   }, [user, router]);
 
   useEffect(() => {
-    checkAdmin();
-  }, [checkAdmin]);
+    checkAdminStatus();
+  }, [checkAdminStatus]);
 
   const handleDeletePost = async (postId: string) => {
-    if (!confirm('Are you sure you want to delete this post?')) return;
-
+    const { db } = getFirebaseClient();
+    if (!db) throw new Error('Firestore not initialized');
+    if (!confirm('Are you sure?')) return;
+    
     try {
-      const { db } = getFirebaseClient();
       await deleteDoc(doc(db, 'posts', postId));
       await loadRecentPosts();
       await loadStats();
@@ -116,92 +95,43 @@ export default function AdminPanel() {
 
   if (loading) {
     return (
-      <Layout title="Admin Panel - PattiBytes">
-        <div className={styles.loading}>
-          <div className={styles.spinner} />
-          <p>Loading admin panel...</p>
-        </div>
+      <Layout title="Admin Panel">
+        <div className={styles.loading}>Loading...</div>
       </Layout>
     );
   }
 
-  if (!isAdminUser) {
-    return null;
-  }
+  if (!isAdminUser) return null;
 
   return (
-    <Layout title="Admin Panel - PattiBytes">
+    <Layout title="Admin Panel">
       <div className={styles.adminPanel}>
         <div className={styles.header}>
-          <h1>
-            <FaShieldAlt /> Admin Panel
-          </h1>
-          <p>Manage PattiBytes content and users</p>
+          <h1><FaShieldAlt /> Admin Panel</h1>
+          <p>Manage PattiBytes</p>
         </div>
 
         <div className={styles.statsGrid}>
-          <motion.div 
-            className={styles.statCard}
-            whileHover={{ scale: 1.05 }}
-          >
-            <div className={styles.statIcon}>
-              <FaUsers />
-            </div>
-            <div className={styles.statInfo}>
-              <h3>{stats.totalUsers}</h3>
-              <p>Total Users</p>
-            </div>
+          <motion.div className={styles.statCard} whileHover={{ scale: 1.02 }}>
+            <FaUsers />
+            <h3>{stats.totalUsers}</h3>
+            <p>Users</p>
           </motion.div>
-
-          <motion.div 
-            className={styles.statCard}
-            whileHover={{ scale: 1.05 }}
-          >
-            <div className={styles.statIcon}>
-              <FaNewspaper />
-            </div>
-            <div className={styles.statInfo}>
-              <h3>{stats.totalPosts}</h3>
-              <p>User Posts</p>
-            </div>
-          </motion.div>
-
-          <motion.div 
-            className={styles.statCard}
-            whileHover={{ scale: 1.05 }}
-          >
-            <div className={styles.statIcon}>
-              <FaChartLine />
-            </div>
-            <div className={styles.statInfo}>
-              <h3>{stats.totalNews}</h3>
-              <p>News Articles</p>
-            </div>
-          </motion.div>
-
-          <motion.div 
-            className={styles.statCard}
-            whileHover={{ scale: 1.05 }}
-          >
-            <div className={styles.statIcon}>
-              <FaChartLine />
-            </div>
-            <div className={styles.statInfo}>
-              <h3>{stats.totalPlaces}</h3>
-              <p>Places</p>
-            </div>
+          <motion.div className={styles.statCard} whileHover={{ scale: 1.02 }}>
+            <FaNewspaper />
+            <h3>{stats.totalPosts}</h3>
+            <p>Posts</p>
           </motion.div>
         </div>
 
         <div className={styles.section}>
           <h2>Recent Posts</h2>
-          <div className={styles.postsTable}>
+          <div className={styles.tableWrapper}>
             <table>
               <thead>
                 <tr>
                   <th>Title</th>
                   <th>Author</th>
-                  <th>Type</th>
                   <th>Date</th>
                   <th>Actions</th>
                 </tr>
@@ -211,49 +141,20 @@ export default function AdminPanel() {
                   <tr key={post.id}>
                     <td>{post.title}</td>
                     <td>{post.authorName}</td>
-                    <td>
-                      <span className={styles.typeBadge}>{post.type}</span>
-                    </td>
                     <td>{post.createdAt.toLocaleDateString()}</td>
                     <td>
-                      <div className={styles.actions}>
-                        <button className={styles.editBtn}>
-                          <FaEdit />
-                        </button>
-                        <button 
-                          className={styles.deleteBtn}
-                          onClick={() => handleDeletePost(post.id)}
-                        >
-                          <FaTrash />
-                        </button>
-                      </div>
+                      <button 
+                        onClick={() => handleDeletePost(post.id)}
+                        className={styles.deleteBtn}
+                      >
+                        <FaTrash />
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-
-        <div className={styles.quickActions}>
-          <button 
-            className={styles.actionBtn}
-            onClick={() => window.open('/admin', '_blank')}
-          >
-            Open Netlify CMS
-          </button>
-          <button 
-            className={styles.actionBtn}
-            onClick={() => router.push('/admin/users')}
-          >
-            Manage Users
-          </button>
-          <button 
-            className={styles.actionBtn}
-            onClick={() => router.push('/admin/analytics')}
-          >
-            View Analytics
-          </button>
         </div>
       </div>
     </Layout>
