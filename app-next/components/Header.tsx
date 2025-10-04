@@ -70,8 +70,8 @@ export default function Header() {
             <span className={styles.badge}>3</span>
           </button>
 
-          {/* Profile Menu */}
-          <div className={styles.profileMenu}>
+          {/* User Profile */}
+          <div className={styles.profileWrapper}>
             <button 
               className={styles.profileButton}
               onClick={() => setShowMenu(!showMenu)}
@@ -79,52 +79,53 @@ export default function Header() {
               {userProfile?.photoURL ? (
                 <Image
                   src={userProfile.photoURL}
-                  alt={userProfile.displayName}
+                  alt={userProfile.displayName || 'User'}
                   width={36}
                   height={36}
                   className={styles.avatar}
                 />
               ) : (
                 <div className={styles.avatarPlaceholder}>
-                  {userProfile?.displayName?.charAt(0).toUpperCase()}
+                  {userProfile?.displayName?.charAt(0).toUpperCase() || 'U'}
                 </div>
               )}
             </button>
-
+            
             <AnimatePresence>
               {showMenu && (
                 <motion.div
                   className={styles.dropdown}
-                  initial={{ opacity: 0, y: -10 }}
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
+                  exit={{ opacity: 0, y: 10 }}
                 >
                   <div className={styles.dropdownHeader}>
-                    <p className={styles.userName}>{userProfile?.displayName}</p>
-                    <p className={styles.userHandle}>@{userProfile?.username}</p>
+                    <div className={styles.userInfo}>
+                      <span className={styles.displayName}>
+                        {userProfile?.displayName || 'User'}
+                      </span>
+                      {userProfile?.username && (
+                        <span className={styles.username}>
+                          @{userProfile.username}
+                        </span>
+                      )}
+                    </div>
                   </div>
-
-                  <div className={styles.dropdownDivider} />
-
-                  <Link href="/profile" className={styles.dropdownItem}>
-                    <FaUser />
-                    Profile
-                  </Link>
-
-                  <Link href="/settings" className={styles.dropdownItem}>
-                    <FaCog />
-                    Settings
-                  </Link>
-
-                  <div className={styles.dropdownDivider} />
-
-                  <button 
-                    className={styles.dropdownItem}
-                    onClick={handleSignOut}
-                  >
-                    <FaSignOutAlt />
-                    Sign Out
-                  </button>
+                  
+                  <div className={styles.menuItems}>
+                    <Link href="/profile" className={styles.menuItem}>
+                      <FaUser /> Profile
+                    </Link>
+                    <Link href="/settings" className={styles.menuItem}>
+                      <FaCog /> Settings
+                    </Link>
+                    <button 
+                      onClick={handleSignOut}
+                      className={styles.menuItem}
+                    >
+                      <FaSignOutAlt /> Sign Out
+                    </button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

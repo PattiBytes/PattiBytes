@@ -37,10 +37,13 @@ export default function AvatarUploader({ user }: { user: User }) {
     }
   };
 
+  // Safe image display with local fallback
+  const displayImage = url || '/images/logo.png';
+
   return (
     <div>
       <Image 
-        src={url || '/icons/pwab-192.png'} 
+        src={displayImage}
         alt="avatar" 
         width={96} 
         height={96} 
