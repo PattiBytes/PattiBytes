@@ -1,22 +1,33 @@
-// components/SafeImage.tsx
 import Image, { ImageProps } from 'next/image';
+import { useState } from 'react';
 
-type Props = Omit<ImageProps, 'loader'> & { fallbackSrc?: string };
+type Props = Omit<ImageProps, 'loader'> & { 
+  fallbackSrc?: string;
+};
 
-export default function SafeImage({ src, fallbackSrc = '/images/logo.png', ...rest }: Props) {
-  // Use unoptimized and a passthrough loader to bypass domain checks if necessary
-  // This is a guard for dev/HMR or misconfig; keep it until config is stable everywhere.
+export default function SafeImage({ 
+  src, 
+  fallbackSrc = '/images/logo.png', 
+  alt,
+  ...rest 
+}: Props) {
+  const [imgSrc, setImgSrc] = useState(src);
+  const [hasError, setHasError] = useState(false);
+
+  const handleError = () => {
+    if (!hasError) {
+      setHasError(true);
+      setImgSrc(fallbackSrc);
+    }
+  };
+
   return (
     <Image
       {...rest}
-      src={typeof src === 'string' && src.length > 0 ? src : fallbackSrc}
-      loader={({ src: s }) => s}
-      unoptimized
-      onError={(e) => {
-        // Fallback to local logo on error
-        const img = e.currentTarget as HTMLImageElement;
-        img.src = fallbackSrc;
-      }}
+      src={imgSrc}
+      alt={alt}
+      onError={handleError}
+      unoptimized={typeof imgSrc === 'string' && imgSrc.startsWith('http')}
     />
   );
 }
