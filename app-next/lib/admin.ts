@@ -1,10 +1,7 @@
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getFirebaseClient } from './firebase';
 
-// List of admin user IDs - add your UID here
-const ADMIN_UIDS = [
-  'YOUR_FIREBASE_UID_HERE', // Replace with your actual Firebase Auth UID
-];
+const ADMIN_UIDS = ['YOUR_FIREBASE_UID_HERE'];
 
 export interface AdminSettings {
   canModerate: boolean;
@@ -15,13 +12,15 @@ export interface AdminSettings {
   createdAt: Date;
 }
 
-export async function isAdmin(uid: string): Promise<boolean> {
+export function isAdmin(uid: string): boolean {
   return ADMIN_UIDS.includes(uid);
 }
 
 export async function getAdminSettings(uid: string): Promise<AdminSettings | null> {
   try {
     const { db } = getFirebaseClient();
+    if (!db) return null;
+    
     const adminDoc = await getDoc(doc(db, 'admins', uid));
     
     if (!adminDoc.exists()) {
@@ -37,6 +36,7 @@ export async function getAdminSettings(uid: string): Promise<AdminSettings | nul
 
 export async function grantAdminAccess(uid: string): Promise<void> {
   const { db } = getFirebaseClient();
+  if (!db) throw new Error('Firestore not initialized');
   
   await setDoc(doc(db, 'admins', uid), {
     canModerate: true,
@@ -50,6 +50,8 @@ export async function grantAdminAccess(uid: string): Promise<void> {
 
 export async function revokeAdminAccess(uid: string): Promise<void> {
   const { db } = getFirebaseClient();
+  if (!db) throw new Error('Firestore not initialized');
+  
   await setDoc(doc(db, 'admins', uid), {
     canModerate: false,
     canManageUsers: false,
