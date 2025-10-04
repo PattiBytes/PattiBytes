@@ -1,147 +1,73 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { 
-  getAuth, 
-  Auth, 
-  GoogleAuthProvider,
-  setPersistence,
-  browserLocalPersistence
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  Firestore, 
-  enableNetwork,
-  disableNetwork
-} from 'firebase/firestore';
-import { 
-  getStorage, 
-  FirebaseStorage
-} from 'firebase/storage';
-import { getAnalytics, Analytics, isSupported } from 'firebase/analytics';
+import { getAuth, Auth } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 
-// Firebase configuration
+// Global instances
+let app: FirebaseApp | null = null;
+let auth: Auth | null = null;
+let db: Firestore | null = null;
+let storage: FirebaseStorage | null = null;
+
+// Firebase config
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FB_API_KEY!,
-  authDomain: process.env.NEXT_PUBLIC_FB_AUTH_DOMAIN!,
-  projectId: process.env.NEXT_PUBLIC_FB_PROJECT_ID!,
-  storageBucket: process.env.NEXT_PUBLIC_FB_STORAGE_BUCKET!,
-  messagingSenderId: process.env.NEXT_PUBLIC_FB_MESSAGING_SENDER_ID!,
-  appId: process.env.NEXT_PUBLIC_FB_APP_ID!,
-  measurementId: process.env.NEXT_PUBLIC_FB_MEASUREMENT_ID || ''
+  apiKey: process.env.NEXT_PUBLIC_FB_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FB_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FB_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FB_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FB_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FB_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FB_MEASUREMENT_ID
 };
 
-interface FirebaseClient {
-  app: FirebaseApp;
-  auth: Auth;
-  db: Firestore;
-  storage: FirebaseStorage;
-  googleProvider: GoogleAuthProvider;
-  analytics?: Analytics;
-}
-
-let firebaseClient: FirebaseClient | null = null;
-let isOffline = false;
-
-export function getFirebaseClient(): FirebaseClient {
-  if (firebaseClient) {
-    return firebaseClient;
+// Safe initialization function
+export function getFirebaseClient() {
+  // Only initialize in browser or when all required env vars are present
+  if (typeof window === 'undefined') {
+    // During SSR/build, only initialize if we have all required vars
+    const requiredVars = [
+      'NEXT_PUBLIC_FB_API_KEY',
+      'NEXT_PUBLIC_FB_AUTH_DOMAIN', 
+      'NEXT_PUBLIC_FB_PROJECT_ID'
+    ];
+    
+    const missingVars = requiredVars.filter(varName => !process.env[varName]);
+    
+    if (missingVars.length > 0) {
+      console.warn(`Firebase not initialized during build - missing: ${missingVars.join(', ')}`);
+      // Return null objects that won't crash but won't work either
+      return {
+        app: null,
+        auth: null,
+        db: null,
+        storage: null
+      };
+    }
   }
 
-  // Initialize app
-  const existingApps = getApps();
-  const app: FirebaseApp = existingApps.length === 0 ? initializeApp(firebaseConfig) : existingApps[0];
-  
-  // Initialize services
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const storage = getStorage(app);
-  
-  // Set auth persistence
-  if (typeof window !== 'undefined') {
-    setPersistence(auth, browserLocalPersistence).catch(console.error);
-  }
-  
-  // Create Google provider with enhanced config
-  const googleProvider = new GoogleAuthProvider();
-  googleProvider.addScope('email');
-  googleProvider.addScope('profile');
-  googleProvider.setCustomParameters({
-    prompt: 'select_account'
-  });
-
-  // Initialize Analytics (only in production and client-side)
-  let analytics: Analytics | undefined;
-  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
-    isSupported().then((supported) => {
-      if (supported) {
-        analytics = getAnalytics(app);
-      }
-    }).catch(console.error);
+  // Initialize if not already done
+  if (!app) {
+    try {
+      app = getApps()[0] || initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+      storage = getStorage(app);
+    } catch (error) {
+      console.error('Firebase initialization failed:', error);
+      return {
+        app: null,
+        auth: null,
+        db: null,
+        storage: null
+      };
+    }
   }
 
-  firebaseClient = {
-    app,
-    auth,
-    db,
-    storage,
-    googleProvider,
-    analytics
-  };
-
-  return firebaseClient;
+  return { app, auth, db, storage };
 }
 
-// Network status management
-export function goOffline(): Promise<void> {
-  if (!isOffline) {
-    isOffline = true;
-    const { db } = getFirebaseClient();
-    return disableNetwork(db);
-  }
-  return Promise.resolve();
-}
+// Export individual services for convenience
+export const { auth: firebaseAuth, db: firebaseDb, storage: firebaseStorage } = getFirebaseClient();
 
-export function goOnline(): Promise<void> {
-  if (isOffline) {
-    isOffline = false;
-    const { db } = getFirebaseClient();
-    return enableNetwork(db);
-  }
-  return Promise.resolve();
-}
-
-// Check if Firebase is properly configured
-export function isFirebaseConfigured(): boolean {
-  return !!(
-    process.env.NEXT_PUBLIC_FB_API_KEY &&
-    process.env.NEXT_PUBLIC_FB_AUTH_DOMAIN &&
-    process.env.NEXT_PUBLIC_FB_PROJECT_ID
-  );
-}
-
-// Export individual services for convenience (Named Exports)
-let servicesCache: {
-  app: FirebaseApp;
-  auth: Auth;
-  db: Firestore;
-  storage: FirebaseStorage;
-  googleProvider: GoogleAuthProvider;
-} | null = null;
-
-function getServices() {
-  if (!servicesCache) {
-    const client = getFirebaseClient();
-    servicesCache = {
-      app: client.app,
-      auth: client.auth,
-      db: client.db,
-      storage: client.storage,
-      googleProvider: client.googleProvider
-    };
-  }
-  return servicesCache;
-}
-
-export const { app, auth, db, storage, googleProvider } = getServices();
-
-// Also export as default
-export default getFirebaseClient();
+// Default export
+export default getFirebaseClient;

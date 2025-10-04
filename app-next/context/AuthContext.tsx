@@ -54,6 +54,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   
   const profileUnsubscribeRef = useRef<Unsubscribe | null>(null);
   const onlineStatusUpdateRef = useRef<NodeJS.Timeout | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Clear error handler
   const clearError = useCallback(() => {
@@ -71,8 +72,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Setup auth state listener
   useEffect(() => {
+    // Don't initialize during SSR
+    if (typeof window === 'undefined') return;
+
     const { auth, db } = getFirebaseClient();
     
+    // If Firebase wasn't initialized properly, set loading to false
+    if (!auth || !db) {
+      setLoading(false);
+      setError('Firebase configuration not available');
+      return;
+    }
+
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setError(null);
@@ -108,22 +119,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
               setUserProfile(null);
             }
             setLoading(false);
+            setIsInitialized(true);
           },
           (error) => {
             console.error('Error listening to user profile:', error);
             setError('Failed to load user profile');
             setUserProfile(null);
             setLoading(false);
+            setIsInitialized(true);
           }
         );
       } else {
         setUserProfile(null);
         setLoading(false);
+        setIsInitialized(true);
       }
     }, (error) => {
       console.error('Auth state change error:', error);
       setError('Authentication error occurred');
       setLoading(false);
+      setIsInitialized(true);
     });
 
     // Handle page visibility for online status
@@ -169,6 +184,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Sign out handler
   const signOut = useCallback(async () => {
+    const { auth } = getFirebaseClient();
+    if (!auth) throw new Error('Firebase not initialized');
+
     try {
       setError(null);
       
@@ -177,7 +195,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         await updateOnlineStatus(user.uid, false);
       }
       
-      const { auth } = getFirebaseClient();
       await firebaseSignOut(auth);
       
     } catch (error) {
@@ -189,9 +206,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Send password reset email
   const sendPasswordReset = useCallback(async (email: string) => {
+    const { auth } = getFirebaseClient();
+    if (!auth) throw new Error('Firebase not initialized');
+
     try {
       setError(null);
-      const { auth } = getFirebaseClient();
       await sendPasswordResetEmail(auth, email, {
         url: `${window.location.origin}/auth/login`,
         handleCodeInApp: false
@@ -205,9 +224,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Confirm password reset
   const confirmPasswordResetHandler = useCallback(async (code: string, newPassword: string) => {
+    const { auth } = getFirebaseClient();
+    if (!auth) throw new Error('Firebase not initialized');
+
     try {
       setError(null);
-      const { auth } = getFirebaseClient();
       await confirmPasswordReset(auth, code, newPassword);
     } catch (error) {
       console.error('Error confirming password reset:', error);
@@ -218,9 +239,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Send email verification
   const sendVerificationEmail = useCallback(async () => {
+    const { auth } = getFirebaseClient();
+    if (!auth) throw new Error('Firebase not initialized');
+
     try {
       setError(null);
-      const { auth } = getFirebaseClient();
       if (auth.currentUser) {
         await sendEmailVerification(auth.currentUser, {
           url: `${window.location.origin}/dashboard`,
@@ -240,12 +263,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const refreshUserProfile = useCallback(async () => {
     if (!user) return;
     
+    const { db } = getFirebaseClient();
+    if (!db) throw new Error('Firebase not initialized');
+    
     try {
       setError(null);
-      const { db } = getFirebaseClient();
-      // The onSnapshot listener will automatically refresh the profile
-      // This function exists for manual refresh if needed
-      
       // Trigger a timestamp update to refresh the listener
       await setDoc(doc(db, 'users', user.uid), {
         lastSeen: serverTimestamp()
@@ -259,9 +281,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Reload user from Firebase Auth
   const reloadUser = useCallback(async () => {
+    const { auth } = getFirebaseClient();
+    if (!auth) throw new Error('Firebase not initialized');
+
     try {
       setError(null);
-      const { auth } = getFirebaseClient();
       if (auth.currentUser) {
         await reload(auth.currentUser);
       }
@@ -275,7 +299,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const value: AuthContextType = {
     user,
     userProfile,
-    loading,
+    loading: loading || !isInitialized,
     error,
     signOut,
     sendPasswordReset,
