@@ -10,31 +10,52 @@ export default function BottomNav() {
   const { user, userProfile } = useAuth();
   const router = useRouter();
 
-  if (!user || !userProfile?.username) return null; // Add username check
+  if (!user || !userProfile?.username) return null;
 
   const navItems = [
-    { href: '/dashboard', icon: FaHome, label: 'Home' },
-    { href: '/search', icon: FaSearch, label: 'Search' },
-    { href: '/create', icon: FaPlus, label: 'Create', highlight: true },
-    { href: '/notifications', icon: FaBell, label: 'Notifications' },
     { 
-      href: `/user/${userProfile.username}`, 
+      href: '/dashboard', 
+      icon: FaHome, 
+      label: 'Home'
+    },
+    { 
+      href: '/search', 
+      icon: FaSearch, 
+      label: 'Search'
+    },
+    { 
+      href: '/create', 
+      icon: FaPlus, 
+      label: 'Create', 
+      highlight: true 
+    },
+    { 
+      href: '/notifications', 
+      icon: FaBell, 
+      label: 'Notifications'
+    },
+    { 
+      href: '/profile', 
       icon: FaUser, 
       label: 'Profile',
-      avatar: user.photoURL 
+      avatar: user.photoURL
     },
   ];
+
+  const isActiveRoute = (href: string) => {
+    return router.pathname === href || router.pathname.startsWith(`${href}/`);
+  };
 
   return (
     <nav className={styles.bottomNav}>
       {navItems.map((item) => {
-        const isActive = router.pathname === item.href;
+        const isActive = isActiveRoute(item.href);
         const Icon = item.icon;
 
         return (
           <Link 
             key={item.href} 
-            href={item.href} 
+            href={item.href}
             className={`${styles.navItem} ${isActive ? styles.active : ''} ${item.highlight ? styles.highlight : ''}`}
           >
             {isActive && (

@@ -35,6 +35,7 @@
   justify-content: center;
   cursor: pointer;
   transition: transform 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .uploadButton:hover:not(:disabled) {
@@ -46,25 +47,53 @@
   cursor: not-allowed;
 }
 
-.cancelButton {
+.controls {
   position: absolute;
-  top: 0;
-  right: 0;
-  background: #ef4444;
-  border: 3px solid white;
-  color: white;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  white-space: nowrap;
+}
+
+.confirmButton,
+.cancelButton {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: all 0.2s;
+  border: none;
+}
+
+.confirmButton {
+  background: #10b981;
+  color: white;
+}
+
+.confirmButton:hover:not(:disabled) {
+  background: #059669;
+}
+
+.cancelButton {
+  background: #ef4444;
+  color: white;
 }
 
 .cancelButton:hover:not(:disabled) {
-  transform: scale(1.1);
+  background: #dc2626;
+}
+
+.confirmButton:disabled,
+.cancelButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .fileInput {
@@ -82,12 +111,21 @@
 
 .error {
   color: #ef4444;
-  font-size: 14px;
+  font-size: 13px;
   margin: 0;
+  font-weight: 500;
 }
 
 .uploading {
   color: #667eea;
-  font-size: 14px;
+  font-size: 13px;
   margin: 0;
+  font-weight: 500;
+}
+
+.success {
+  color: #10b981;
+  font-size: 13px;
+  margin: 0;
+  font-weight: 600;
 }

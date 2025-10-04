@@ -4,13 +4,12 @@ import { useRouter } from 'next/router';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import { incrementPostCount } from '@/lib/username';
-import { uploadToCloudinary } from '@/lib/cloudinary';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import SafeImage from '@/components/SafeImage';
 import { motion } from 'framer-motion';
-import { FaImage, FaMapMarkerAlt, FaTimes } from 'react-icons/fa';
-import styles from '@/styles/Create.module.css';
+import { FaImage, FaMapMarkerAlt, FaTimes, FaPen, FaNewspaper } from 'react-icons/fa';
+import styles from '@/styles/CreatePost.module.css';
 
 export default function CreatePost() {
   const { user, userProfile } = useAuth();
@@ -41,12 +40,16 @@ export default function CreatePost() {
     setError(null);
 
     try {
-      const imageUrl = await uploadToCloudinary(file);
-      setFormData({ ...formData, imageUrl });
+      // For now, use a placeholder. Replace with your actual upload logic
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData({ ...formData, imageUrl: reader.result as string });
+        setUploading(false);
+      };
+      reader.readAsDataURL(file);
     } catch (err) {
       console.error('Error uploading image:', err);
       setError('Failed to upload image. Please try again.');
-    } finally {
       setUploading(false);
     }
   };
@@ -102,149 +105,156 @@ export default function CreatePost() {
     <AuthGuard>
       <Layout title="Create Post - PattiBytes">
         <div className={styles.createPost}>
-          <h1>Create New Post</h1>
+          <motion.div 
+            className={styles.container}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <h1>Create New Post</h1>
+            <p className={styles.subtitle}>Share your story with the community</p>
 
-          <form onSubmit={handleSubmit} className={styles.form}>
-            <div className={styles.typeSelector}>
-              <button
-                type="button"
-                className={`${styles.typeButton} ${formData.type === 'writing' ? styles.active : ''}`}
-                onClick={() => setFormData({ ...formData, type: 'writing' })}
-              >
-                Writing
-              </button>
-              <button
-                type="button"
-                className={`${styles.typeButton} ${formData.type === 'news' ? styles.active : ''}`}
-                onClick={() => setFormData({ ...formData, type: 'news' })}
-              >
-                News
-              </button>
-              <button
-                type="button"
-                className={`${styles.typeButton} ${formData.type === 'place' ? styles.active : ''}`}
-                onClick={() => setFormData({ ...formData, type: 'place' })}
-              >
-                Place
-              </button>
-            </div>
-
-            <div className={styles.formGroup}>
-              <label>Title</label>
-              <input
-                type="text"
-                value={formData.title}
-                onChange={e => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Enter a catchy title..."
-                required
-              />
-            </div>
-
-            <div className={styles.formGroup}>
-              <label>Content</label>
-              <textarea
-                value={formData.content}
-                onChange={e => setFormData({ ...formData, content: e.target.value })}
-                placeholder="Write your content here..."
-                rows={10}
-                required
-              />
-              <div className={styles.characterCount}>
-                {formData.content.length} characters
-              </div>
-            </div>
-
-            {formData.type === 'place' && (
-              <div className={styles.formGroup}>
-                <label>
-                  <FaMapMarkerAlt /> Location
-                </label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={e => setFormData({ ...formData, location: e.target.value })}
-                  placeholder="Enter location..."
-                />
-              </div>
-            )}
-
-            <div className={styles.formGroup}>
-              <label>
-                <FaImage /> Image (optional)
-              </label>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className={styles.fileInput}
-              />
-
-              {!formData.imageUrl && (
+            <form onSubmit={handleSubmit} className={styles.form}>
+              <div className={styles.typeSelector}>
                 <button
                   type="button"
-                  className={styles.uploadButton}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
+                  className={`${styles.typeButton} ${formData.type === 'writing' ? styles.active : ''}`}
+                  onClick={() => setFormData({ ...formData, type: 'writing' })}
                 >
-                  <FaImage />
-                  {uploading ? 'Uploading...' : 'Upload Image'}
+                  <FaPen /> Writing
                 </button>
-              )}
+                <button
+                  type="button"
+                  className={`${styles.typeButton} ${formData.type === 'news' ? styles.active : ''}`}
+                  onClick={() => setFormData({ ...formData, type: 'news' })}
+                >
+                  <FaNewspaper /> News
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.typeButton} ${formData.type === 'place' ? styles.active : ''}`}
+                  onClick={() => setFormData({ ...formData, type: 'place' })}
+                >
+                  <FaMapMarkerAlt /> Place
+                </button>
+              </div>
 
-              {formData.imageUrl && (
-                <div className={styles.imagePreview}>
-                  <SafeImage
-                    src={formData.imageUrl}
-                    alt="Preview"
-                    width={600}
-                    height={400}
-                    className={styles.previewImage}
+              <div className={styles.formGroup}>
+                <label>Title</label>
+                <input
+                  type="text"
+                  value={formData.title}
+                  onChange={e => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="Enter a catchy title..."
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Content</label>
+                <textarea
+                  value={formData.content}
+                  onChange={e => setFormData({ ...formData, content: e.target.value })}
+                  placeholder="Write your content here..."
+                  rows={12}
+                  required
+                  disabled={loading}
+                />
+                <div className={styles.characterCount}>
+                  {formData.content.length} characters
+                </div>
+              </div>
+
+              {formData.type === 'place' && (
+                <div className={styles.formGroup}>
+                  <label>
+                    <FaMapMarkerAlt /> Location
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={e => setFormData({ ...formData, location: e.target.value })}
+                    placeholder="Enter location..."
+                    disabled={loading}
                   />
-                  <button
-                    type="button"
-                    className={styles.removeImage}
-                    onClick={handleRemoveImage}
-                  >
-                    <FaTimes /> Remove Image
-                  </button>
                 </div>
               )}
-            </div>
 
-            {error && (
-              <div className={styles.error}>
-                {error}
+              <div className={styles.formGroup}>
+                <label>
+                  <FaImage /> Image (optional)
+                </label>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className={styles.fileInput}
+                  disabled={loading || uploading}
+                />
+
+                {!formData.imageUrl && (
+                  <button
+                    type="button"
+                    className={styles.uploadButton}
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading || loading}
+                  >
+                    <FaImage />
+                    {uploading ? 'Uploading...' : 'Upload Image'}
+                  </button>
+                )}
+
+                {formData.imageUrl && (
+                  <div className={styles.imagePreview}>
+                    <SafeImage
+                      src={formData.imageUrl}
+                      alt="Preview"
+                      width={600}
+                      height={400}
+                      className={styles.previewImage}
+                    />
+                    <button
+                      type="button"
+                      className={styles.removeImage}
+                      onClick={handleRemoveImage}
+                      disabled={loading}
+                    >
+                      <FaTimes /> Remove Image
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
 
-            <motion.button
-              type="submit"
-              className={styles.submitButton}
-              disabled={loading || uploading}
-              whileHover={{ scale: loading ? 1 : 1.02 }}
-              whileTap={{ scale: loading ? 1 : 0.98 }}
-            >
-              {loading ? (
-                <>
-                  <div className={styles.spinner} />
-                  Publishing...
-                </>
-              ) : (
-                'Publish Post'
+              {error && (
+                <motion.div 
+                  className={styles.error}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  {error}
+                </motion.div>
               )}
-            </motion.button>
-          </form>
 
-          {uploading && (
-            <div className={styles.uploadingOverlay}>
-              <div className={styles.uploadingContent}>
-                <div className={styles.spinner} />
-                <p>Uploading image...</p>
-              </div>
-            </div>
-          )}
+              <motion.button
+                type="submit"
+                className={styles.submitButton}
+                disabled={loading || uploading}
+                whileHover={{ scale: loading ? 1 : 1.02 }}
+                whileTap={{ scale: loading ? 1 : 0.98 }}
+              >
+                {loading ? (
+                  <>
+                    <div className={styles.spinner} />
+                    Publishing...
+                  </>
+                ) : (
+                  'Publish Post'
+                )}
+              </motion.button>
+            </form>
+          </motion.div>
         </div>
       </Layout>
     </AuthGuard>

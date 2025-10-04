@@ -12,15 +12,14 @@ export default function Header() {
   const router = useRouter();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showBackButton, setShowBackButton] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Determine if back button should show
   useEffect(() => {
-    const noBackPaths = ['/', '/dashboard', '/search', '/notifications'];
+    const noBackPaths = ['/', '/dashboard', '/search', '/notifications', '/create', '/profile', '/settings'];
     setShowBackButton(!noBackPaths.includes(router.pathname));
   }, [router.pathname]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -33,11 +32,18 @@ export default function Header() {
   }, []);
 
   const handleLogout = async () => {
+    if (loggingOut) return;
+    
+    setLoggingOut(true);
     try {
       await signOut();
+      setShowDropdown(false);
       router.push('/');
     } catch (error) {
       console.error('Logout error:', error);
+      alert('Failed to logout. Please try again.');
+    } finally {
+      setLoggingOut(false);
     }
   };
 
@@ -48,10 +54,9 @@ export default function Header() {
   return (
     <header className={styles.header}>
       <div className={styles.container}>
-        {/* Left side */}
         <div className={styles.left}>
           {showBackButton ? (
-            <button onClick={handleBack} className={styles.backBtn}>
+            <button onClick={handleBack} className={styles.backBtn} aria-label="Go back">
               <FaChevronLeft />
             </button>
           ) : (
@@ -62,11 +67,10 @@ export default function Header() {
           )}
         </div>
 
-        {/* Right side */}
         <div className={styles.actions}>
           {user ? (
             <>
-              <Link href="/notifications" className={styles.iconButton}>
+              <Link href="/notifications" className={styles.iconButton} aria-label="Notifications">
                 <FaBell />
                 <span className={styles.badge}>3</span>
               </Link>
@@ -75,6 +79,7 @@ export default function Header() {
                 <button 
                   className={styles.userButton}
                   onClick={() => setShowDropdown(!showDropdown)}
+                  aria-label="User menu"
                 >
                   <SafeImage
                     src={user.photoURL}
@@ -109,11 +114,11 @@ export default function Header() {
                       </div>
 
                       <Link 
-                        href={`/user/${userProfile?.username}`} 
+                        href="/profile"
                         className={styles.dropdownItem}
                         onClick={() => setShowDropdown(false)}
                       >
-                        <FaUser /> Profile
+                        <FaUser /> My Profile
                       </Link>
                       <Link 
                         href="/settings" 
@@ -122,8 +127,12 @@ export default function Header() {
                       >
                         <FaCog /> Settings
                       </Link>
-                      <button onClick={handleLogout} className={styles.dropdownItem}>
-                        <FaSignOutAlt /> Logout
+                      <button 
+                        onClick={handleLogout} 
+                        className={styles.dropdownItem}
+                        disabled={loggingOut}
+                      >
+                        <FaSignOutAlt /> {loggingOut ? 'Logging out...' : 'Logout'}
                       </button>
                     </motion.div>
                   )}
