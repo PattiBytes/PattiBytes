@@ -53,28 +53,34 @@ export default function UserProfilePage() {
         setProfile(userData);
         setIsOwnProfile(currentUser?.uid === userData.uid);
 
-        // Load user's posts
-        const { db } = getFirebaseClient();
-        if (!db) throw new Error('Firestore not initialized');
+        // Load user's posts (only if index exists, otherwise skip)
+        try {
+          const { db } = getFirebaseClient();
+          if (!db) throw new Error('Firestore not initialized');
 
-        const postsQuery = query(
-          collection(db, 'posts'),
-          where('authorId', '==', userData.uid),
-          orderBy('createdAt', 'desc'),
-          limit(50)
-        );
-        
-        const postsSnapshot = await getDocs(postsQuery);
-        const userPosts = postsSnapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date()
-          };
-        }) as Post[];
+          const postsQuery = query(
+            collection(db, 'posts'),
+            where('authorId', '==', userData.uid),
+            orderBy('createdAt', 'desc'),
+            limit(50)
+          );
+          
+          const postsSnapshot = await getDocs(postsQuery);
+          const userPosts = postsSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date()
+            };
+          }) as Post[];
 
-        setPosts(userPosts);
+          setPosts(userPosts);
+        } catch (error) {
+          console.error('Error loading posts (index may not exist yet):', error);
+          // Continue without posts - don't fail the whole page
+          setPosts([]);
+        }
       } catch (error) {
         console.error('Error loading profile:', error);
       } finally {
@@ -98,6 +104,38 @@ export default function UserProfilePage() {
       setFollowLoading(false);
     }
   };
+
+  const formatJoinDate = (date: unknown): string => {
+  try {
+    if (!date) return 'Recently';
+    
+    let parsedDate: Date;
+    
+    if (date instanceof Timestamp) {
+      parsedDate = date.toDate();
+    } else if (typeof date === 'object' && date !== null && 'toDate' in date && typeof date.toDate === 'function') {
+      parsedDate = date.toDate();
+    } else if (date instanceof Date) {
+      parsedDate = date;
+    } else if (typeof date === 'string' || typeof date === 'number') {
+      parsedDate = new Date(date);
+    } else {
+      return 'Recently';
+    }
+
+    if (isNaN(parsedDate.getTime())) {
+      return 'Recently';
+    }
+
+    return parsedDate.toLocaleDateString('en-US', { 
+      month: 'short', 
+      year: 'numeric' 
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Recently';
+  }
+};
 
   if (loading) {
     return (
@@ -231,7 +269,7 @@ export default function UserProfilePage() {
                   </a>
                 )}
                 <span className={styles.metaItem}>
-                  <FaCalendar /> Joined {new Date(profile.createdAt ? profile.createdAt.toString() : Date.now()).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  <FaCalendar /> Joined {formatJoinDate(profile.createdAt)}
                 </span>
               </div>
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { collection, query as firestoreQuery, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { collection, query as firestoreQuery, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+
 import { getFirebaseClient } from '@/lib/firebase';
 import { searchUsersByUsername } from '@/lib/username';
 import AuthGuard from '@/components/AuthGuard';
@@ -78,39 +79,46 @@ export default function Search() {
         }
       }
 
-      // Search posts
+      // Search posts (simplified - no complex index needed)
       if (activeTab === 'all' || activeTab === 'posts') {
         try {
           const postsRef = collection(db, 'posts');
           const searchLower = searchText.toLowerCase();
 
-          // Search by title
-          const titleQuery = firestoreQuery(
+          // Get recent posts and filter in memory
+          const allPostsQuery = firestoreQuery(
             postsRef,
-            where('title', '>=', searchLower),
-            where('title', '<=', searchLower + '\uf8ff'),
-            orderBy('title'),
             orderBy('createdAt', 'desc'),
-            limit(10)
+            limit(100)
           );
 
-          const titleSnapshot = await getDocs(titleQuery);
-          const postResults = titleSnapshot.docs.map(doc => {
-            const data = doc.data() as PostData;
-            return {
-              id: doc.id,
-              type: 'post' as const,
-              title: data.title,
-              content: data.content,
-              postType: data.type as 'news' | 'place' | 'writing',
-              displayName: data.authorName,
-              username: data.authorUsername,
-              photoURL: data.authorPhoto,
-              imageUrl: data.imageUrl,
-              location: data.location,
-              createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date()
-            };
-          });
+          const allPostsSnapshot = await getDocs(allPostsQuery);
+          const postResults = allPostsSnapshot.docs
+            .filter(doc => {
+              const data = doc.data() as PostData;
+              return (
+                data.title?.toLowerCase().includes(searchLower) ||
+                data.content?.toLowerCase().includes(searchLower) ||
+                data.location?.toLowerCase().includes(searchLower)
+              );
+            })
+            .slice(0, 10)
+            .map(doc => {
+              const data = doc.data() as PostData;
+              return {
+                id: doc.id,
+                type: 'post' as const,
+                title: data.title,
+                content: data.content,
+                postType: data.type as 'news' | 'place' | 'writing',
+                displayName: data.authorName,
+                username: data.authorUsername,
+                photoURL: data.authorPhoto,
+                imageUrl: data.imageUrl,
+                location: data.location,
+                createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date()
+              };
+            });
 
           allResults.push(...postResults);
         } catch (error) {
