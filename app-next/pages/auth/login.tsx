@@ -2,17 +2,17 @@ import { FormEvent, useState, useEffect } from 'react';
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { getFirebaseClient } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import SafeImage from '@/components/SafeImage';
 import { RedirectIfAuthenticated } from '@/components/AuthGuard';
 import { motion } from 'framer-motion';
-import { FaGoogle, FaEye, FaEyeSlash, FaEnvelope, FaLock } from 'react-icons/fa';
+import { FaGoogle, FaEye, FaEyeSlash, FaUser, FaLock } from 'react-icons/fa';
 import styles from '@/styles/Auth.module.css';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState(''); // Can be email or username
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +20,7 @@ export default function Login() {
   const router = useRouter();
 
   useEffect(() => {
-    document.getElementById('email')?.focus();
+    document.getElementById('identifier')?.focus();
   }, []);
 
   const handleEmailLogin = async (e: FormEvent) => {
@@ -28,27 +28,48 @@ export default function Login() {
     setError(null);
     setLoading(true);
 
-    const { auth } = getFirebaseClient();
-    if (!auth) {
+    const { auth, db } = getFirebaseClient();
+    if (!auth || !db) {
       setError('Authentication service unavailable');
       setLoading(false);
       return;
     }
 
     try {
+      let email = identifier;
+
+      // Check if identifier is a username (no @ symbol)
+      if (!identifier.includes('@')) {
+        // Look up email by username
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('username', '==', identifier.toLowerCase()), limit(1));
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+          setError('No account found with this username');
+          setLoading(false);
+          return;
+        }
+
+        email = snapshot.docs[0].data().email;
+      }
+
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
     } catch (e) {
       const fe = e as FirebaseError;
       switch (fe.code) {
         case 'auth/user-not-found':
-          setError('No account found with this email');
+          setError('No account found');
           break;
         case 'auth/wrong-password':
           setError('Incorrect password');
           break;
         case 'auth/invalid-email':
           setError('Invalid email address');
+          break;
+        case 'auth/too-many-requests':
+          setError('Too many failed attempts. Please try again later.');
           break;
         default:
           setError('Login failed. Please try again.');
@@ -86,6 +107,9 @@ export default function Login() {
           break;
         case 'auth/popup-blocked':
           setError('Popup was blocked. Enable popups and try again.');
+          break;
+        case 'auth/account-exists-with-different-credential':
+          setError('Account exists with different sign-in method');
           break;
         default:
           setError('Google sign-in failed. Please try again.');
@@ -136,16 +160,16 @@ export default function Login() {
 
             <form onSubmit={handleEmailLogin} className={styles.authForm}>
               <div className={styles.formGroup}>
-                <label htmlFor="email"><FaEnvelope /> Email</label>
+                <label htmlFor="identifier"><FaUser /> Email or Username</label>
                 <input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  id="identifier"
+                  type="text"
+                  placeholder="username or email@example.com"
+                  value={identifier}
+                  onChange={e => setIdentifier(e.target.value.trim())}
                   required
                   disabled={loading}
-                  autoComplete="email"
+                  autoComplete="username"
                 />
               </div>
 
@@ -167,6 +191,10 @@ export default function Login() {
                   </button>
                 </div>
               </div>
+
+              <Link href="/auth/reset-password" className={styles.forgotPassword}>
+                Forgot password?
+              </Link>
 
               <button type="submit" className={styles.submitBtn} disabled={loading}>
                 {loading ? 'Logging in...' : 'Log In'}

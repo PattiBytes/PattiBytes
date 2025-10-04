@@ -2,20 +2,30 @@ import { useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { getFirebaseClient } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import SafeImage from './SafeImage';
-import { FaCamera, FaSpinner, FaTimes } from 'react-icons/fa';
+import { FaCamera, FaSpinner, FaTimes, FaCheck } from 'react-icons/fa';
+import { motion, AnimatePresence } from 'framer-motion';
 import styles from '@/styles/ProfilePictureUpload.module.css';
 
-export default function ProfilePictureUpload() {
+interface ProfilePictureUploadProps {
+  onUploadComplete?: (url: string) => void;
+  showControls?: boolean;
+}
+
+export default function ProfilePictureUpload({ 
+  onUploadComplete,
+  showControls = true 
+}: ProfilePictureUploadProps) {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -35,17 +45,20 @@ export default function ProfilePictureUpload() {
     const reader = new FileReader();
     reader.onload = (e) => {
       setPreview(e.target?.result as string);
+      setError(null);
     };
     reader.readAsDataURL(file);
-
-    await uploadPhoto(file);
   };
 
-  const uploadPhoto = async (file: File) => {
-    if (!user) return;
+  const uploadPhoto = async () => {
+    if (!user || !preview) return;
+
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) return;
 
     setUploading(true);
     setError(null);
+    setSuccess(false);
 
     const { storage, db, auth } = getFirebaseClient();
     if (!storage || !db || !auth) {
@@ -63,18 +76,24 @@ export default function ProfilePictureUpload() {
       const photoURL = await getDownloadURL(storageRef);
 
       // Update Firestore
-      await setDoc(
-        doc(db, 'users', user.uid),
-        { photoURL, updatedAt: new Date() },
-        { merge: true }
-      );
+      await updateDoc(doc(db, 'users', user.uid), {
+        photoURL,
+        updatedAt: new Date()
+      });
 
       // Update Auth profile
       if (auth.currentUser) {
         await updateProfile(auth.currentUser, { photoURL });
       }
 
+      setSuccess(true);
       setPreview(null);
+      
+      if (onUploadComplete) {
+        onUploadComplete(photoURL);
+      }
+
+      setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       console.error('Upload error:', err);
       setError('Failed to upload photo. Please try again.');
@@ -83,16 +102,16 @@ export default function ProfilePictureUpload() {
     }
   };
 
-  const handleClick = () => {
-    fileInputRef.current?.click();
-  };
-
   const handleCancel = () => {
     setPreview(null);
     setError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handleClick = () => {
+    fileInputRef.current?.click();
   };
 
   return (
@@ -110,6 +129,7 @@ export default function ProfilePictureUpload() {
           className={styles.uploadButton}
           onClick={handleClick}
           disabled={uploading}
+          type="button"
         >
           {uploading ? (
             <FaSpinner className={styles.spinning} />
@@ -118,15 +138,33 @@ export default function ProfilePictureUpload() {
           )}
         </button>
 
-        {preview && (
-          <button 
-            className={styles.cancelButton}
-            onClick={handleCancel}
-            disabled={uploading}
-          >
-            <FaTimes />
-          </button>
-        )}
+        <AnimatePresence>
+          {preview && showControls && (
+            <motion.div 
+              className={styles.controls}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+            >
+              <button 
+                className={styles.confirmButton}
+                onClick={uploadPhoto}
+                disabled={uploading}
+                type="button"
+              >
+                <FaCheck /> Save
+              </button>
+              <button 
+                className={styles.cancelButton}
+                onClick={handleCancel}
+                disabled={uploading}
+                type="button"
+              >
+                <FaTimes /> Cancel
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <input
@@ -137,8 +175,38 @@ export default function ProfilePictureUpload() {
         className={styles.fileInput}
       />
 
-      {error && <p className={styles.error}>{error}</p>}
-      {uploading && <p className={styles.uploading}>Uploading...</p>}
+      <AnimatePresence>
+        {error && (
+          <motion.p 
+            className={styles.error}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            {error}
+          </motion.p>
+        )}
+        {uploading && (
+          <motion.p 
+            className={styles.uploading}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            Uploading...
+          </motion.p>
+        )}
+        {success && (
+          <motion.p 
+            className={styles.success}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+          >
+            Profile picture updated!
+          </motion.p>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
