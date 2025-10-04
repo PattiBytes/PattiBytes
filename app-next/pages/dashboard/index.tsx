@@ -5,7 +5,7 @@ import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import SafeImage from '@/components/SafeImage';
 import { motion } from 'framer-motion';
-import { FaMapMarkerAlt, FaNewspaper, FaHeart, FaComment, FaShare, FaPen } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaNewspaper, FaHeart, FaComment, FaShare, FaPen, FaPlus } from 'react-icons/fa';
 import Link from 'next/link';
 import styles from '@/styles/Dashboard.module.css';
 
@@ -28,30 +28,6 @@ interface Post {
   sharesCount: number;
 }
 
-interface CMSNewsItem {
-  id: string;
-  title: string;
-  date: string;
-  preview: string;
-  body: string;
-  image?: string;
-  author?: string;
-}
-
-interface CMSPlaceItem {
-  id: string;
-  title: string;
-  date: string;
-  preview: string;
-  body: string;
-  image?: string;
-}
-
-interface CMSData {
-  news: CMSNewsItem[];
-  places: CMSPlaceItem[];
-}
-
 export default function Dashboard() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,18 +36,12 @@ export default function Dashboard() {
   const loadPosts = useCallback(async () => {
     try {
       setLoading(true);
-
-      // Load user posts from Firestore
       const { db } = getFirebaseClient();
       if (!db) throw new Error('Firestore not initialized');
       
-      const postsQuery = query(
-        collection(db, 'posts'),
-        orderBy('createdAt', 'desc'),
-        limit(20)
-      );
-
+      const postsQuery = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(20));
       const snapshot = await getDocs(postsQuery);
+      
       const userPosts = snapshot.docs.map(docSnap => {
         const data = docSnap.data();
         return {
@@ -82,51 +52,9 @@ export default function Dashboard() {
         };
       }) as Post[];
 
-      // Load CMS content
-      const cmsResponse = await fetch('/api/cms-content');
-      const cmsData: CMSData = await cmsResponse.json();
-
-      const cmsPosts: Post[] = [
-        ...cmsData.news.map((item: CMSNewsItem) => ({
-          id: item.id,
-          title: item.title,
-          content: item.body,
-          preview: item.preview,
-          type: 'news' as const,
-          source: 'cms' as const,
-          authorName: item.author || 'Patti Bytes Desk',
-          imageUrl: item.image,
-          createdAt: new Date(item.date),
-          likesCount: 0,
-          commentsCount: 0,
-          sharesCount: 0
-        })),
-        ...cmsData.places.map((item: CMSPlaceItem) => ({
-          id: item.id,
-          title: item.title,
-          content: item.body,
-          preview: item.preview,
-          type: 'place' as const,
-          source: 'cms' as const,
-          authorName: 'Patti Bytes Team',
-          imageUrl: item.image,
-          location: item.title,
-          createdAt: new Date(item.date),
-          likesCount: 0,
-          commentsCount: 0,
-          sharesCount: 0
-        }))
-      ];
-
-      // Combine and sort
-      const allPosts = [...userPosts, ...cmsPosts].sort(
-        (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
-      );
-
-      // Filter
-      const filteredPosts = filter === 'all'
-        ? allPosts
-        : allPosts.filter(post => {
+      const filteredPosts = filter === 'all' 
+        ? userPosts 
+        : userPosts.filter(post => {
             if (filter === 'news') return post.type === 'news';
             if (filter === 'places') return post.type === 'place';
             if (filter === 'writings') return post.type === 'writing';
@@ -158,7 +86,13 @@ export default function Dashboard() {
     <AuthGuard>
       <Layout title="Dashboard - PattiBytes">
         <div className={styles.dashboard}>
-          {/* Filter Tabs */}
+          <div className={styles.header}>
+            <h1>Feed</h1>
+            <Link href="/create" className={styles.createBtn}>
+              <FaPlus /> Create Post
+            </Link>
+          </div>
+
           <div className={styles.filterTabs}>
             <button
               className={`${styles.tab} ${filter === 'all' ? styles.activeTab : ''}`}
@@ -186,7 +120,6 @@ export default function Dashboard() {
             </button>
           </div>
 
-          {/* Posts Feed */}
           <div className={styles.feed}>
             {loading ? (
               <div className={styles.loading}>
@@ -195,8 +128,9 @@ export default function Dashboard() {
               </div>
             ) : posts.length === 0 ? (
               <div className={styles.empty}>
+                <FaPen className={styles.emptyIcon} />
                 <p>No posts yet</p>
-                <Link href="/create" className={styles.createButton}>
+                <Link href="/create" className={styles.emptyBtn}>
                   Create First Post
                 </Link>
               </div>
@@ -209,23 +143,16 @@ export default function Dashboard() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                 >
-                  {/* Post Header */}
                   <div className={styles.postHeader}>
                     {post.source === 'user' && post.authorUsername ? (
                       <Link href={`/user/${post.authorUsername}`} className={styles.author}>
-                        {post.authorPhoto ? (
-                          <SafeImage
-                            src={post.authorPhoto}
-                            alt={post.authorName}
-                            width={40}
-                            height={40}
-                            className={styles.authorAvatar}
-                          />
-                        ) : (
-                          <div className={styles.authorAvatarPlaceholder}>
-                            {post.authorName.charAt(0).toUpperCase()}
-                          </div>
-                        )}
+                        <SafeImage
+                          src={post.authorPhoto}
+                          alt={post.authorName}
+                          width={40}
+                          height={40}
+                          className={styles.authorAvatar}
+                        />
                         <div className={styles.authorInfo}>
                           <h4>{post.authorName}</h4>
                           <p>@{post.authorUsername}</p>
@@ -249,7 +176,6 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Post Image */}
                   {post.imageUrl && (
                     <div className={styles.postImage}>
                       <SafeImage
@@ -262,7 +188,6 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  {/* Post Content */}
                   <div className={styles.postContent}>
                     <h2>{post.title}</h2>
                     {post.location && (
@@ -276,7 +201,6 @@ export default function Dashboard() {
                     </Link>
                   </div>
 
-                  {/* Post Actions */}
                   <div className={styles.postActions}>
                     <button className={styles.actionButton}>
                       <FaHeart />
@@ -292,7 +216,6 @@ export default function Dashboard() {
                     </button>
                   </div>
 
-                  {/* Post Footer */}
                   <div className={styles.postFooter}>
                     <span>{post.createdAt.toLocaleDateString()}</span>
                     {post.source === 'cms' && (

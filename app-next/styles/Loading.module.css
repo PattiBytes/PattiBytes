@@ -1,0 +1,84 @@
+.loadingContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #f9fafb;
+}
+
+.loadingSpinner {
+  text-align: center;
+}
+
+.spinner {
+  margin: 0 auto 16px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.spinnerSmall {
+  width: 24px;
+  height: 24px;
+}
+
+.spinnerDefault {
+  width: 40px;
+  height: 40px;
+}
+
+.spinnerLarge {
+  width: 64px;
+  height: 64px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loadingSpinner p {
+  color: #6b7280;
+  font-size: 14px;
+  margin: 0;
+}
+
+.authError {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+  text-align: center;
+}
+
+.authError h2 {
+  color: #ef4444;
+  margin-bottom: 12px;
+}
+
+.authError button {
+  margin-top: 20px;
+  padding: 12px 24px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.accessDenied {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+  text-align: center;
+}
+
+.accessDenied h2 {
+  color: #ef4444;
+  margin-bottom: 12px;
+}

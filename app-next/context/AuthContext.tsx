@@ -14,7 +14,9 @@ import {
   sendPasswordResetEmail,
   confirmPasswordReset,
   sendEmailVerification,
-  reload
+  reload,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
 import { 
   doc, 
@@ -56,12 +58,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const onlineStatusUpdateRef = useRef<NodeJS.Timeout | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Clear error handler
   const clearError = useCallback(() => {
     setError(null);
   }, []);
 
-  // Update online status periodically
   const updateOnlineStatus = useCallback(async (uid: string, isOnline: boolean) => {
     try {
       await updateUserOnlineStatus(uid, isOnline);
@@ -70,50 +70,46 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
-  // Setup auth state listener
   useEffect(() => {
-    // Don't initialize during SSR
     if (typeof window === 'undefined') return;
 
     const { auth, db } = getFirebaseClient();
     
-    // If Firebase wasn't initialized properly, set loading to false
     if (!auth || !db) {
       setLoading(false);
       setError('Firebase configuration not available');
       return;
     }
 
+    // Set persistence for faster login
+    setPersistence(auth, browserLocalPersistence).catch(console.error);
+
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setError(null);
       
-      // Clean up previous profile listener
       if (profileUnsubscribeRef.current) {
         profileUnsubscribeRef.current();
         profileUnsubscribeRef.current = null;
       }
       
-      // Clear online status timer
       if (onlineStatusUpdateRef.current) {
         clearInterval(onlineStatusUpdateRef.current);
         onlineStatusUpdateRef.current = null;
       }
       
       if (currentUser) {
-        // Listen to user profile changes in real-time
         profileUnsubscribeRef.current = onSnapshot(
           doc(db, 'users', currentUser.uid),
-          (doc) => {
-            if (doc.exists()) {
-              const profile = doc.data() as UserProfile;
+          (docSnap) => {
+            if (docSnap.exists()) {
+              const profile = docSnap.data() as UserProfile;
               setUserProfile(profile);
               
-              // Start online status updates
               updateOnlineStatus(currentUser.uid, true);
               onlineStatusUpdateRef.current = setInterval(() => {
                 updateOnlineStatus(currentUser.uid, true);
-              }, 60000); // Update every minute
+              }, 60000);
               
             } else {
               setUserProfile(null);
@@ -141,7 +137,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsInitialized(true);
     });
 
-    // Handle page visibility for online status
     const handleVisibilityChange = () => {
       const currentUser = auth.currentUser;
       if (currentUser) {
@@ -149,7 +144,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
-    // Handle beforeunload for offline status
     const handleBeforeUnload = () => {
       const currentUser = auth.currentUser;
       if (currentUser) {
@@ -174,7 +168,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
       
-      // Set user offline on cleanup
       const currentUser = auth.currentUser;
       if (currentUser) {
         updateOnlineStatus(currentUser.uid, false);
@@ -182,7 +175,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [updateOnlineStatus]);
 
-  // Sign out handler
   const signOut = useCallback(async () => {
     const { auth } = getFirebaseClient();
     if (!auth) throw new Error('Firebase not initialized');
@@ -190,7 +182,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setError(null);
       
-      // Set user offline before signing out
       if (user) {
         await updateOnlineStatus(user.uid, false);
       }
@@ -204,7 +195,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [user, updateOnlineStatus]);
 
-  // Send password reset email
   const sendPasswordReset = useCallback(async (email: string) => {
     const { auth } = getFirebaseClient();
     if (!auth) throw new Error('Firebase not initialized');
@@ -222,7 +212,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
-  // Confirm password reset
   const confirmPasswordResetHandler = useCallback(async (code: string, newPassword: string) => {
     const { auth } = getFirebaseClient();
     if (!auth) throw new Error('Firebase not initialized');
@@ -237,7 +226,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
-  // Send email verification
   const sendVerificationEmail = useCallback(async () => {
     const { auth } = getFirebaseClient();
     if (!auth) throw new Error('Firebase not initialized');
@@ -259,7 +247,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
-  // Refresh user profile
   const refreshUserProfile = useCallback(async () => {
     if (!user) return;
     
@@ -268,7 +255,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     
     try {
       setError(null);
-      // Trigger a timestamp update to refresh the listener
       await setDoc(doc(db, 'users', user.uid), {
         lastSeen: serverTimestamp()
       }, { merge: true });
@@ -279,7 +265,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [user]);
 
-  // Reload user from Firebase Auth
   const reloadUser = useCallback(async () => {
     const { auth } = getFirebaseClient();
     if (!auth) throw new Error('Firebase not initialized');
@@ -325,7 +310,6 @@ export function useAuth() {
   return context;
 }
 
-// Custom hook for auth actions with loading states
 export function useAuthActions() {
   const auth = useAuth();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
