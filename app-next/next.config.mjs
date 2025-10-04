@@ -3,42 +3,26 @@ import withPWA from '@ducanh2912/next-pwa';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-
+  
+  // Fix image configuration for Google avatars
   images: {
     remotePatterns: [
       {
         protocol: 'https',
         hostname: 'lh3.googleusercontent.com',
         port: '',
-        pathname: '/**'
-      },
-      {
-        protocol: 'https',
-        hostname: 'res.cloudinary.com',
-        port: '',
-        pathname: '/**'
+        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'firebasestorage.googleapis.com',
         port: '',
-        pathname: '/**'
-      },
-      {
-        protocol: 'https',
-        hostname: 'avatars.githubusercontent.com',
-        port: '',
-        pathname: '/**'
-      },
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-        port: '',
-        pathname: '/**'
+        pathname: '/**',
       }
-    ]
+    ],
   },
 
+  // PWA Configuration
   pwa: {
     dest: 'public',
     register: true,

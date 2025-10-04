@@ -177,14 +177,23 @@ export default function SetupUsername() {
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.4 }}
               >
-                {user.photoURL && (
+                {/* FIXED: Safe avatar display with fallback */}
+                {user.photoURL ? (
                   <Image 
                     src={user.photoURL} 
                     alt="Profile" 
                     width={40}
                     height={40}
                     className={styles.profilePic}
+                    onError={(e) => {
+                      // Fallback to logo on error
+                      e.currentTarget.src = '/images/logo.png';
+                    }}
                   />
+                ) : (
+                  <div className={styles.avatarPlaceholder}>
+                    {user.displayName?.charAt(0).toUpperCase() || 'U'}
+                  </div>
                 )}
                 <span>Welcome, {user.displayName || 'User'}!</span>
               </motion.div>
