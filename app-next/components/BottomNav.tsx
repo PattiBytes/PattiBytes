@@ -3,13 +3,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import SafeImage from './SafeImage';
 import { FaHome, FaSearch, FaPlus, FaBell, FaUser } from 'react-icons/fa';
+import { motion } from 'framer-motion';
 import styles from '@/styles/BottomNav.module.css';
 
 export default function BottomNav() {
   const { user, userProfile } = useAuth();
   const router = useRouter();
 
-  if (!user) return null;
+  if (!user || !userProfile?.username) return null; // Add username check
 
   const navItems = [
     { href: '/dashboard', icon: FaHome, label: 'Home' },
@@ -17,7 +18,7 @@ export default function BottomNav() {
     { href: '/create', icon: FaPlus, label: 'Create', highlight: true },
     { href: '/notifications', icon: FaBell, label: 'Notifications' },
     { 
-      href: `/user/${userProfile?.username}`, 
+      href: `/user/${userProfile.username}`, 
       icon: FaUser, 
       label: 'Profile',
       avatar: user.photoURL 
@@ -36,6 +37,14 @@ export default function BottomNav() {
             href={item.href} 
             className={`${styles.navItem} ${isActive ? styles.active : ''} ${item.highlight ? styles.highlight : ''}`}
           >
+            {isActive && (
+              <motion.div 
+                className={styles.activeIndicator}
+                layoutId="activeTab"
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              />
+            )}
+            
             {item.avatar ? (
               <SafeImage 
                 src={item.avatar} 

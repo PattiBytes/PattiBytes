@@ -4,7 +4,6 @@ import { useAuth } from '@/context/AuthContext';
 import Header from './Header';
 import BottomNav from './BottomNav';
 import InstallPrompt from './InstallPrompt';
-import Footer from './Footer';
 import styles from '@/styles/Layout.module.css';
 
 interface LayoutProps {
@@ -43,7 +42,6 @@ export default function Layout({
         </main>
         
         {showBottomNav && user && <BottomNav />}
-        <Footer />
       </div>
     </>
   );

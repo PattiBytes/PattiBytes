@@ -1,0 +1,33 @@
+.notifications {
+  min-height: calc(100vh - 116px);
+  padding: 16px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 64px;
+  color: #d1d5db;
+  margin-bottom: 24px;
+}
+
+.empty h2 {
+  margin: 0 0 12px 0;
+  font-size: 24px;
+  color: #111827;
+}
+
+.empty p {
+  color: #6b7280;
+  margin: 0;
+  max-width: 400px;
+}

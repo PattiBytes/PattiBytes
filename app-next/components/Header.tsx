@@ -2,14 +2,35 @@ import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import SafeImage from './SafeImage';
-import { useState } from 'react';
-import { FaBell, FaSignOutAlt, FaUser, FaCog } from 'react-icons/fa';
+import { useState, useEffect, useRef } from 'react';
+import { FaBell, FaSignOutAlt, FaUser, FaCog, FaChevronLeft } from 'react-icons/fa';
+import { motion, AnimatePresence } from 'framer-motion';
 import styles from '@/styles/Header.module.css';
 
 export default function Header() {
   const { user, userProfile, signOut } = useAuth();
   const router = useRouter();
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showBackButton, setShowBackButton] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Determine if back button should show
+  useEffect(() => {
+    const noBackPaths = ['/', '/dashboard', '/search', '/notifications'];
+    setShowBackButton(!noBackPaths.includes(router.pathname));
+  }, [router.pathname]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -20,23 +41,37 @@ export default function Header() {
     }
   };
 
+  const handleBack = () => {
+    router.back();
+  };
+
   return (
     <header className={styles.header}>
       <div className={styles.container}>
-        <Link href="/" className={styles.logo}>
-          <SafeImage src="/images/logo.png" alt="PattiBytes" width={40} height={40} />
-          <span className={styles.logoText}>PattiBytes</span>
-        </Link>
+        {/* Left side */}
+        <div className={styles.left}>
+          {showBackButton ? (
+            <button onClick={handleBack} className={styles.backBtn}>
+              <FaChevronLeft />
+            </button>
+          ) : (
+            <Link href={user ? "/dashboard" : "/"} className={styles.logo}>
+              <SafeImage src="/images/logo.png" alt="PattiBytes" width={32} height={32} />
+              <span className={styles.logoText}>PattiBytes</span>
+            </Link>
+          )}
+        </div>
 
+        {/* Right side */}
         <div className={styles.actions}>
           {user ? (
             <>
-              <button className={styles.iconButton}>
+              <Link href="/notifications" className={styles.iconButton}>
                 <FaBell />
                 <span className={styles.badge}>3</span>
-              </button>
+              </Link>
 
-              <div className={styles.userMenu}>
+              <div className={styles.userMenu} ref={dropdownRef}>
                 <button 
                   className={styles.userButton}
                   onClick={() => setShowDropdown(!showDropdown)}
@@ -44,39 +79,55 @@ export default function Header() {
                   <SafeImage
                     src={user.photoURL}
                     alt={userProfile?.displayName || 'User'}
-                    width={36}
-                    height={36}
+                    width={32}
+                    height={32}
                     className={styles.avatar}
                   />
                 </button>
 
-                {showDropdown && (
-                  <div className={styles.dropdown}>
-                    <div className={styles.dropdownHeader}>
-                      <SafeImage
-                        src={user.photoURL}
-                        alt={userProfile?.displayName || 'User'}
-                        width={48}
-                        height={48}
-                        className={styles.dropdownAvatar}
-                      />
-                      <div>
-                        <h4>{userProfile?.displayName}</h4>
-                        <p>@{userProfile?.username}</p>
+                <AnimatePresence>
+                  {showDropdown && (
+                    <motion.div 
+                      className={styles.dropdown}
+                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                    >
+                      <div className={styles.dropdownHeader}>
+                        <SafeImage
+                          src={user.photoURL}
+                          alt={userProfile?.displayName || 'User'}
+                          width={48}
+                          height={48}
+                          className={styles.dropdownAvatar}
+                        />
+                        <div>
+                          <h4>{userProfile?.displayName}</h4>
+                          <p>@{userProfile?.username}</p>
+                        </div>
                       </div>
-                    </div>
 
-                    <Link href={`/user/${userProfile?.username}`} className={styles.dropdownItem}>
-                      <FaUser /> Profile
-                    </Link>
-                    <Link href="/settings" className={styles.dropdownItem}>
-                      <FaCog /> Settings
-                    </Link>
-                    <button onClick={handleLogout} className={styles.dropdownItem}>
-                      <FaSignOutAlt /> Logout
-                    </button>
-                  </div>
-                )}
+                      <Link 
+                        href={`/user/${userProfile?.username}`} 
+                        className={styles.dropdownItem}
+                        onClick={() => setShowDropdown(false)}
+                      >
+                        <FaUser /> Profile
+                      </Link>
+                      <Link 
+                        href="/settings" 
+                        className={styles.dropdownItem}
+                        onClick={() => setShowDropdown(false)}
+                      >
+                        <FaCog /> Settings
+                      </Link>
+                      <button onClick={handleLogout} className={styles.dropdownItem}>
+                        <FaSignOutAlt /> Logout
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </>
           ) : (
