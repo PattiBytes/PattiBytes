@@ -3,17 +3,16 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 56px;
+  height: 60px;
   background: white;
-  border-bottom: 1px solid #e5e7eb;
-  z-index: 100;
-  backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  z-index: 999;
 }
 
 .container {
-  max-width: 100%;
   height: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
   padding: 0 16px;
   display: flex;
   align-items: center;
@@ -26,76 +25,80 @@
 }
 
 .backBtn {
-  background: none;
-  border: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  border: none;
   cursor: pointer;
-  color: #374151;
-  transition: background 0.2s;
-  font-size: 18px;
+  transition: all 0.2s;
 }
 
 .backBtn:hover {
-  background: #f3f4f6;
+  background: #e5e7eb;
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   text-decoration: none;
-  color: #111827;
-  font-weight: 700;
-  font-size: 18px;
+  color: inherit;
+}
+
+.logoImg {
+  border-radius: 8px;
 }
 
 .logoText {
-  display: none;
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
 }
 
 .actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .iconButton {
   position: relative;
-  background: none;
-  border: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s;
-  color: #374151;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  color: #6b7280;
   text-decoration: none;
+  transition: all 0.2s;
 }
 
 .iconButton:hover {
-  background: #f3f4f6;
+  background: #e5e7eb;
+  color: #111827;
 }
 
 .badge {
   position: absolute;
   top: 6px;
   right: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
   background: #ef4444;
   color: white;
-  font-size: 10px;
-  padding: 2px 5px;
-  border-radius: 10px;
+  border-radius: 9px;
+  font-size: 11px;
   font-weight: 600;
-  min-width: 16px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .userMenu {
@@ -103,33 +106,31 @@
 }
 
 .userButton {
-  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
   border: none;
+  background: transparent;
   cursor: pointer;
   padding: 0;
-  border-radius: 50%;
-  overflow: hidden;
 }
 
 .avatar {
   border-radius: 50%;
-  border: 2px solid #e5e7eb;
-  transition: border-color 0.2s;
-}
-
-.userButton:hover .avatar {
-  border-color: #667eea;
+  object-fit: cover;
+  border: 2px solid #667eea;
 }
 
 .dropdown {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
+  width: 260px;
   background: white;
-  border: 1px solid #e5e7eb;
   border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  min-width: 220px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   overflow: hidden;
   z-index: 1000;
 }
@@ -139,55 +140,74 @@
   align-items: center;
   gap: 12px;
   padding: 16px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
 }
 
 .dropdownAvatar {
   border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid white;
 }
 
-.dropdownHeader h4 {
+.dropdownInfo h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
-  color: #111827;
 }
 
-.dropdownHeader p {
-  margin: 0;
-  font-size: 12px;
-  color: #6b7280;
+.dropdownInfo p {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.dropdownDivider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 8px 0;
 }
 
 .dropdownItem {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   padding: 12px 16px;
-  color: #374151;
-  text-decoration: none;
   background: none;
   border: none;
-  width: 100%;
   text-align: left;
+  text-decoration: none;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
-  font-size: 14px;
 }
 
 .dropdownItem:hover {
   background: #f3f4f6;
 }
 
-.loginBtn {
-  padding: 6px 14px;
-  color: #374151;
+.logoutItem {
+  color: #ef4444;
+}
+
+.logoutItem:hover {
+  background: #fee2e2;
+}
+
+.loginBtn, .signupBtn {
+  padding: 10px 20px;
+  border-radius: 24px;
+  font-weight: 600;
   text-decoration: none;
-  border-radius: 8px;
-  font-weight: 500;
-  font-size: 14px;
-  transition: background 0.2s;
+  transition: all 0.2s;
+}
+
+.loginBtn {
+  color: #667eea;
+  background: transparent;
 }
 
 .loginBtn:hover {
@@ -195,49 +215,21 @@
 }
 
 .signupBtn {
-  padding: 6px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  text-decoration: none;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 14px;
-  transition: transform 0.2s;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 .signupBtn:hover {
-  transform: scale(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
-@media (min-width: 768px) {
+@media (max-width: 768px) {
   .logoText {
-    display: block;
+    display: none;
   }
   
-  .container {
-    padding: 0 24px;
+  .dropdown {
+    width: 240px;
   }
-}
-
-@media (min-width: 1024px) {
-  .header {
-    left: 240px;
-  }
-}
-/* ... existing styles ... */
-
-.logoutItem {
-  color: #dc2626 !important;
-  border-top: 1px solid #e5e7eb;
-  margin-top: 8px;
-  padding-top: 12px !important;
-}
-
-.logoutItem:hover {
-  background: #fef2f2 !important;
-}
-
-.logoutItem:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }

@@ -188,24 +188,18 @@ export async function deletePost(postId: string) {
 }
 
 // ============================================
-// Likes Functions
+// Likes & Comments Functions
 // ============================================
 
 export async function likePost(postId: string, userId: string) {
   const { data, error } = await supabase
     .from('post_likes')
-    .insert({
-      post_id: postId,
-      user_id: userId
-    })
+    .insert({ post_id: postId, user_id: userId })
     .select()
     .single();
 
   if (error) {
-    // Check if already liked
-    if (error.code === '23505') {
-      throw new Error('Already liked');
-    }
+    if (error.code === '23505') throw new Error('Already liked');
     throw error;
   }
   return data as PostLike;
@@ -232,20 +226,6 @@ export async function checkIfLiked(postId: string, userId: string): Promise<bool
   if (error && error.code !== 'PGRST116') throw error;
   return !!data;
 }
-
-export async function getPostLikes(postId: string) {
-  const { data, error } = await supabase
-    .from('post_likes')
-    .select('*')
-    .eq('post_id', postId);
-
-  if (error) throw error;
-  return data as PostLike[];
-}
-
-// ============================================
-// Comments Functions
-// ============================================
 
 export async function addComment(
   postId: string,
@@ -293,28 +273,6 @@ export async function deleteComment(commentId: string) {
 }
 
 // ============================================
-// Storage Functions
-// ============================================
-
-export async function uploadImage(file: File, bucket: string = 'posts'): Promise<string> {
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${Math.random()}.${fileExt}`;
-  const filePath = `${fileName}`;
-
-  const { error } = await supabase.storage
-    .from(bucket)
-    .upload(filePath, file);
-
-  if (error) throw error;
-
-  const { data: { publicUrl } } = supabase.storage
-    .from(bucket)
-    .getPublicUrl(filePath);
-
-  return publicUrl;
-}
-
-// ============================================
 // Realtime Subscriptions
 // ============================================
 
@@ -323,9 +281,7 @@ export function subscribeToCommunityMessages(callback: (message: CommunityMessag
     .channel('community_messages')
     .on('postgres_changes', 
       { event: 'INSERT', schema: 'public', table: 'community_messages' },
-      (payload) => {
-        callback(payload.new as CommunityMessage);
-      }
+      (payload) => callback(payload.new as CommunityMessage)
     )
     .subscribe();
 
@@ -342,18 +298,12 @@ export function subscribeToPostComments(postId: string, callback: (comment: Post
         table: 'post_comments',
         filter: `post_id=eq.${postId}`
       },
-      (payload) => {
-        callback(payload.new as PostComment);
-      }
+      (payload) => callback(payload.new as PostComment)
     )
     .subscribe();
 
   return () => subscription.unsubscribe();
 }
-
-// ============================================
-// Utility Functions
-// ============================================
 
 export function isSupabaseConfigured(): boolean {
   return !!(supabaseUrl && supabaseAnonKey);
