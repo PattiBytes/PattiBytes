@@ -1,18 +1,37 @@
 import { useState, useEffect } from 'react';
-import { FaTimes, FaDownload } from 'react-icons/fa';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FaTimes, FaDownload, FaApple } from 'react-icons/fa';
+import SafeImage from './SafeImage';
+import styles from '@/styles/InstallPrompt.module.css';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+declare global {
+  interface Navigator {
+    standalone?: boolean;
+  }
+
+  interface Window {
+    MSStream?: unknown;
+  }
+}
+
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    // Check if app is already installed
-    const isInstalled = window.matchMedia('(display-mode: standalone)').matches;
+    // Check if iOS
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    setIsIOS(iOS);
+
+    // Check if already installed
+    const isInstalled = window.matchMedia('(display-mode: standalone)').matches || 
+                       navigator.standalone === true;
     const hasPromptDismissed = localStorage.getItem('installPromptDismissed');
 
     if (isInstalled || hasPromptDismissed) return;
@@ -21,16 +40,23 @@ export default function InstallPrompt() {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       
-      // Show prompt after 3 seconds
+      // Show prompt after 5 seconds
       setTimeout(() => {
         setShowPrompt(true);
-      }, 3000);
+      }, 5000);
     };
 
     window.addEventListener('beforeinstallprompt', handler);
 
+    // For iOS, show after 10 seconds
+    if (iOS && !isInstalled && !hasPromptDismissed) {
+      setTimeout(() => {
+        setShowPrompt(true);
+      }, 10000);
+    }
+
     return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
+  }, [isIOS]);
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;
@@ -54,63 +80,47 @@ export default function InstallPrompt() {
   if (!showPrompt) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: '60px',
-      left: 0,
-      right: 0,
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      color: 'white',
-      padding: '12px 16px',
-      boxShadow: '0 2px 12px rgba(0, 0, 0, 0.15)',
-      zIndex: 999,
-      animation: 'slideDown 0.3s ease-out'
-    }}>
-      <div style={{
-        maxWidth: '1200px',
-        margin: '0 auto',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px'
-      }}>
-        <FaDownload style={{ fontSize: '24px', flexShrink: 0 }} />
-        <div style={{ flex: 1 }}>
-          <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>Install PattiBytes</h3>
-          <p style={{ margin: 0, fontSize: '12px', opacity: 0.9 }}>Get quick access from your home screen</p>
+    <AnimatePresence>
+      <motion.div
+        className={styles.installPrompt}
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 100, opacity: 0 }}
+        transition={{ type: 'spring', damping: 20 }}
+      >
+        <div className={styles.content}>
+          <div className={styles.icon}>
+            <SafeImage 
+              src="/icons/pwab-192.jpg" 
+              alt="PattiBytes" 
+              width={56}
+              height={56}
+            />
+          </div>
+          <div className={styles.text}>
+            <h3>ਪੱਟੀਬਾਈਟਸ ਐਪ ਲਗਾਓ</h3>
+            <p>
+              {isIOS ? (
+                <>
+                  <FaApple /> Tap Share, then &ldquo;Add to Home Screen&rdquo;
+                </>
+              ) : (
+                'Get quick access from your home screen'
+              )}
+            </p>
+          </div>
+          <div className={styles.actions}>
+            {!isIOS && deferredPrompt && (
+              <button onClick={handleInstall} className={styles.installBtn}>
+                <FaDownload /> Install
+              </button>
+            )}
+            <button onClick={handleDismiss} className={styles.dismissBtn} aria-label="Dismiss">
+              <FaTimes />
+            </button>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
-          <button 
-            onClick={handleInstall}
-            style={{
-              background: 'white',
-              color: '#667eea',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            Install
-          </button>
-          <button 
-            onClick={handleDismiss}
-            style={{
-              background: 'rgba(255, 255, 255, 0.2)',
-              border: 'none',
-              color: 'white',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center'
-            }}
-          >
-            <FaTimes />
-          </button>
-        </div>
-      </div>
-    </div>
+      </motion.div>
+    </AnimatePresence>
   );
 }

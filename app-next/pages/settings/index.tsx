@@ -1,38 +1,73 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { updatePassword, deleteUser } from 'firebase/auth';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { getFirebaseClient } from '@/lib/firebase';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
-import ProfilePictureUpload from '@/components/ProfilePictureUpload';
-import { updateUserProfile } from '@/lib/username';
-import { FaSave, FaUser, FaBell, FaLock, FaPalette } from 'react-icons/fa';
+import { useRouter } from 'next/router';
+import toast from 'react-hot-toast';
+import { FaLock, FaTrash, FaBell, FaShieldAlt, FaGlobe } from 'react-icons/fa';
 import styles from '@/styles/Settings.module.css';
 
 export default function Settings() {
-  const { user, userProfile } = useAuth();
-  const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [formData, setFormData] = useState({
-    displayName: userProfile?.displayName || '',
-    bio: userProfile?.bio || '',
-    website: userProfile?.website || '',
-    location: userProfile?.location || '',
-  });
+  const { user } = useAuth();
+  const router = useRouter();
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  const handleSave = async () => {
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
     if (!user) return;
 
-    setSaving(true);
-    setSuccess(false);
-
+    setLoading(true);
     try {
-      await updateUserProfile(user.uid, formData);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      await updatePassword(user, newPassword);
+      toast.success('Password updated successfully!');
+      setNewPassword('');
+      setConfirmPassword('');
     } catch (error) {
-      console.error('Save error:', error);
-      alert('Failed to save settings');
+      const err = error as { code?: string; message?: string };
+      if (err.code === 'auth/requires-recent-login') {
+        toast.error('Please log out and log in again before changing password');
+      } else {
+        toast.error('Failed to update password');
+      }
     } finally {
-      setSaving(false);
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const { db } = getFirebaseClient();
+      if (!db) throw new Error('Firestore not initialized');
+      await deleteDoc(doc(db, 'users', user.uid));
+      await deleteUser(user);
+      toast.success('Account deleted successfully');
+      router.push('/');
+    } catch (error) {
+      const err = error as { code?: string; message?: string };
+      if (err.code === 'auth/requires-recent-login') {
+        toast.error('Please log out and log in again to delete account');
+      } else {
+        toast.error('Failed to delete account');
+      }
+    } finally {
+      setLoading(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -40,80 +75,48 @@ export default function Settings() {
     <AuthGuard>
       <Layout title="Settings - PattiBytes">
         <div className={styles.settings}>
-          <div className={styles.container}>
-            <h1>Settings</h1>
-
-            <div className={styles.section}>
-              <h2><FaUser /> Profile</h2>
-              
-              <div className={styles.profileSection}>
-                <ProfilePictureUpload />
-              </div>
-
+          <h1>Settings</h1>
+          <section className={styles.section}>
+            <div className={styles.sectionHeader}><FaLock /><h2>Change Password</h2></div>
+            <form onSubmit={handlePasswordChange} className={styles.form}>
               <div className={styles.formGroup}>
-                <label>Display Name</label>
-                <input
-                  type="text"
-                  value={formData.displayName}
-                  onChange={e => setFormData({ ...formData, displayName: e.target.value })}
-                  placeholder="Your display name"
-                />
+                <label>New Password</label>
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Enter new password" disabled={loading} required />
               </div>
-
               <div className={styles.formGroup}>
-                <label>Bio</label>
-                <textarea
-                  value={formData.bio}
-                  onChange={e => setFormData({ ...formData, bio: e.target.value })}
-                  placeholder="Tell us about yourself..."
-                  rows={4}
-                  maxLength={160}
-                />
-                <small>{formData.bio.length}/160</small>
+                <label>Confirm Password</label>
+                <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm new password" disabled={loading} required />
               </div>
-
-              <div className={styles.formGroup}>
-                <label>Website</label>
-                <input
-                  type="url"
-                  value={formData.website}
-                  onChange={e => setFormData({ ...formData, website: e.target.value })}
-                  placeholder="https://yourwebsite.com"
-                />
+              <button type="submit" className={styles.saveBtn} disabled={loading}>{loading ? 'Updating...' : 'Update Password'}</button>
+            </form>
+          </section>
+          <section className={styles.section}>
+            <div className={styles.sectionHeader}><FaShieldAlt /><h2>Privacy & Security</h2></div>
+            <div className={styles.settingItem}><div><h3>Profile Visibility</h3><p>Control who can see your profile</p></div><select className={styles.select}><option>Public</option><option>Friends Only</option><option>Private</option></select></div>
+          </section>
+          <section className={styles.section}>
+            <div className={styles.sectionHeader}><FaBell /><h2>Notifications</h2></div>
+            <div className={styles.settingItem}><div><h3>Email Notifications</h3><p>Receive email updates</p></div><label className={styles.switch}><input type="checkbox" defaultChecked /><span className={styles.slider}></span></label></div>
+          </section>
+          <section className={styles.section}>
+            <div className={styles.sectionHeader}><FaGlobe /><h2>Language</h2></div>
+            <select className={styles.select}><option>English</option><option>ਪੰਜਾਬੀ (Punjabi)</option><option>हिंदी (Hindi)</option></select>
+          </section>
+          <section className={`${styles.section} ${styles.dangerSection}`}>
+            <div className={styles.sectionHeader}><FaTrash /><h2>Danger Zone</h2></div>
+            <p className={styles.dangerText}>Once you delete your account, there is no going back. Please be certain.</p>
+            {!showDeleteConfirm ? (
+              <button className={styles.dangerBtn} onClick={() => setShowDeleteConfirm(true)}>Delete Account</button>
+            ) : (
+              <div className={styles.deleteConfirm}>
+                <p>Are you absolutely sure?</p>
+                <div className={styles.deleteActions}>
+                  <button onClick={() => setShowDeleteConfirm(false)} className={styles.cancelBtn}>Cancel</button>
+                  <button onClick={handleDeleteAccount} className={styles.confirmDeleteBtn} disabled={loading}>{loading ? 'Deleting...' : 'Yes, Delete My Account'}</button>
+                </div>
               </div>
-
-              <div className={styles.formGroup}>
-                <label>Location</label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={e => setFormData({ ...formData, location: e.target.value })}
-                  placeholder="Your location"
-                />
-              </div>
-
-              <button onClick={handleSave} disabled={saving} className={styles.saveBtn}>
-                <FaSave /> {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-
-              {success && <p className={styles.success}>Settings saved successfully!</p>}
-            </div>
-
-            <div className={styles.section}>
-              <h2><FaBell /> Notifications</h2>
-              <p>Notification settings coming soon...</p>
-            </div>
-
-            <div className={styles.section}>
-              <h2><FaPalette /> Appearance</h2>
-              <p>Theme settings coming soon...</p>
-            </div>
-
-            <div className={styles.section}>
-              <h2><FaLock /> Privacy & Security</h2>
-              <p>Privacy settings coming soon...</p>
-            </div>
-          </div>
+            )}
+          </section>
         </div>
       </Layout>
     </AuthGuard>

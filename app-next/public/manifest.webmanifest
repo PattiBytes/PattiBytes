@@ -1,32 +1,63 @@
 {
   "name": "PattiBytes - ਪੱਟੀ ਬਾਈਟਸ",
   "short_name": "PattiBytes",
-  "description": "Latest Patti news, places, and community services.",
-  "start_url": "/",
+  "description": "Latest Patti news, places, and community services",
+  "start_url": "/dashboard",
   "scope": "/",
-  "id": "/",
+  "id": "com.pattibytes.app",
   "display": "standalone",
-  "display_override": ["window-controls-overlay","standalone"],
+  "display_override": ["window-controls-overlay", "standalone"],
   "orientation": "portrait-primary",
   "theme_color": "#667eea",
   "background_color": "#ffffff",
   "lang": "pa-IN",
   "dir": "ltr",
-  "categories": ["news","lifestyle","productivity","social","local"],
+  "categories": ["news", "lifestyle", "productivity", "social", "local"],
   "icons": [
-    { "src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpg", "purpose": "any maskable" },
-    { "src": "/icons/pwab-512.jpg", "sizes": "512x512", "type": "image/jpg", "purpose": "any maskable" }
+    {
+      "src": "/icons/pwab-192.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/pwab-512.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
   ],
   "shortcuts": [
-    { "name": "ਤਾਜ਼ਾ ਨਿਊਜ਼", "short_name": "News", "url": "/#news", "icons": [{ "src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpg" }] },
-    { "name": "ਮਸ਼ਹੂਰ ਸਥਾਨ", "short_name": "Places", "url": "/#places", "icons": [{ "src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpg" }] },
-    { "name": "ਸਥਾਨੀ ਦੁਕਾਨ", "short_name": "Shop", "url": "/#shop", "icons": [{ "src": "/icons/pwab-192.jpg", "sizes": "192x192", "type": "image/jpg" }] }
+    {
+      "name": "Dashboard",
+      "short_name": "Home",
+      "url": "/dashboard",
+      "icons": [{ "src": "/icons/pwab-192.jpg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Create Post",
+      "short_name": "Create",
+      "url": "/create",
+      "icons": [{ "src": "/icons/pwab-192.jpg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Search",
+      "short_name": "Search",
+      "url": "/search",
+      "icons": [{ "src": "/icons/pwab-192.jpg", "sizes": "192x192" }]
+    }
   ],
   "share_target": {
-    "action": "/share",
+    "action": "/create",
     "method": "POST",
     "enctype": "multipart/form-data",
-    "params": { "title": "title", "text": "text", "url": "url" }
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
   },
-  "launch_handler": { "client_mode": "focus-existing" }
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  }
 }
