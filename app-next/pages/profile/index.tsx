@@ -1,18 +1,35 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { updateUserProfile } from '@/lib/username';
+import { collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore';
+import { getFirebaseClient } from '@/lib/firebase';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
+import SafeImage from '@/components/SafeImage';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaEdit, FaSave, FaTimes, FaMapMarkerAlt, FaLink, FaTwitter, FaInstagram, FaYoutube } from 'react-icons/fa';
+import { FaEdit, FaSave, FaTimes, FaMapMarkerAlt, FaLink, FaTwitter, FaInstagram, FaYoutube, FaNewspaper } from 'react-icons/fa';
+import Link from 'next/link';
 import styles from '@/styles/Profile.module.css';
+
+interface UserPost {
+  id: string;
+  title: string;
+  preview?: string;
+  type: string;
+  imageUrl?: string;
+  createdAt: Date;
+  likesCount: number;
+  commentsCount: number;
+}
 
 export default function Profile() {
   const { userProfile, user } = useAuth();
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [userPosts, setUserPosts] = useState<UserPost[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
   
   const [formData, setFormData] = useState({
     displayName: '',
@@ -38,6 +55,42 @@ export default function Profile() {
     }
   }, [userProfile]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const loadUserPosts = async () => {
+      try {
+        const { db } = getFirebaseClient();
+        if (!db) return;
+
+        const postsQuery = query(
+          collection(db, 'posts'),
+          where('authorId', '==', user.uid),
+          orderBy('createdAt', 'desc'),
+          limit(20)
+        );
+
+        const snapshot = await getDocs(postsQuery);
+        const posts = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date()
+          };
+        }) as UserPost[];
+
+        setUserPosts(posts);
+      } catch (error) {
+        console.error('Error loading posts:', error);
+      } finally {
+        setPostsLoading(false);
+      }
+    };
+
+    loadUserPosts();
+  }, [user]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -58,7 +111,7 @@ export default function Profile() {
         }
       });
 
-      setMessage({ type: 'success', text: '✓ Profile updated successfully! Others can now see your changes.' });
+      setMessage({ type: 'success', text: '✓ Profile updated successfully!' });
       setEditing(false);
       
       setTimeout(() => setMessage(null), 5000);
@@ -83,7 +136,7 @@ export default function Profile() {
               <ProfilePictureUpload 
                 showControls={true}
                 onUploadComplete={() => {
-                  setMessage({ type: 'success', text: '✓ Profile picture updated! Others can now see it.' });
+                  setMessage({ type: 'success', text: '✓ Profile picture updated!' });
                   setTimeout(() => setMessage(null), 3000);
                 }}
               />
@@ -106,17 +159,17 @@ export default function Profile() {
 
           <div className={styles.stats}>
             <div className={styles.statItem}>
-              <span className={styles.statValue}>{userProfile?.stats?.postsCount || 0}</span>
+              <span className={styles.statValue}>{userPosts.length}</span>
               <span className={styles.statLabel}>Posts</span>
             </div>
-            <div className={styles.statItem}>
+            <Link href={`/user/${userProfile?.username}/followers`} className={styles.statItem}>
               <span className={styles.statValue}>{userProfile?.stats?.followersCount || 0}</span>
               <span className={styles.statLabel}>Followers</span>
-            </div>
-            <div className={styles.statItem}>
+            </Link>
+            <Link href={`/user/${userProfile?.username}/following`} className={styles.statItem}>
               <span className={styles.statValue}>{userProfile?.stats?.followingCount || 0}</span>
               <span className={styles.statLabel}>Following</span>
-            </div>
+            </Link>
           </div>
 
           <div className={styles.profileContent}>
@@ -319,14 +372,39 @@ export default function Profile() {
                     </div>
                   )}
 
-                  {!userProfile?.bio && !userProfile?.location && !userProfile?.website && (
-                    <div className={styles.emptyState}>
-                      <p>Complete your profile to let others know more about you!</p>
-                      <button onClick={() => setEditing(true)} className={styles.emptyBtn}>
-                        <FaEdit /> Edit Profile
-                      </button>
-                    </div>
-                  )}
+                  {/* User Posts Section */}
+                  <div className={styles.postsSection}>
+                    <h3><FaNewspaper /> My Posts</h3>
+                    {postsLoading ? (
+                      <div className={styles.postsLoading}>Loading posts...</div>
+                    ) : userPosts.length === 0 ? (
+                      <div className={styles.noPosts}>
+                        <p>You haven&apos;t posted anything yet</p>
+                        <Link href="/create" className={styles.createBtn}>Create Your First Post</Link>
+                      </div>
+                    ) : (
+                      <div className={styles.postsGrid}>
+                        {userPosts.map(post => (
+                          <Link key={post.id} href={`/posts/${post.id}`} className={styles.postCard}>
+                            {post.imageUrl && (
+                              <div className={styles.postImage}>
+                                <SafeImage src={post.imageUrl} alt={post.title} width={200} height={150} className={styles.postImg} />
+                              </div>
+                            )}
+                            <div className={styles.postInfo}>
+                              <span className={styles.postType}>{post.type}</span>
+                              <h4>{post.title}</h4>
+                              {post.preview && <p>{post.preview.substring(0, 80)}...</p>}
+                              <div className={styles.postStats}>
+                                <span>{post.likesCount} likes</span>
+                                <span>{post.commentsCount} comments</span>
+                              </div>
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

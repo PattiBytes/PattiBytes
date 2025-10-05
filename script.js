@@ -1541,40 +1541,78 @@ if ('serviceWorker' in navigator) {
 console.log('Website script loaded - no app interference');
 
 // /script.js on the website
-// website /script.js
+// App Install Link Handler
 (() => {
   const APP_URL = 'https://app.pattibytes.com/?install=1&utm_source=site';
   const btn = document.getElementById('openAppInstall');
+  
   if (btn) {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
-      location.assign(APP_URL);
+      // Track click
+      if (typeof gtag !== 'undefined') {
+        gtag('event', 'app_install_click', {
+          event_category: 'engagement',
+          event_label: 'banner_click'
+        });
+      }
+      window.location.href = APP_URL;
     });
   }
 })();
-let deferredPrompt;
-const installBtn = document.getElementById('pwa-install-btn');
 
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  installBtn.style.display = 'flex';
-});
-
-installBtn.addEventListener('click', async () => {
-  if (!deferredPrompt) return;
+// Back to Top Button
+(() => {
+  const backToTopBtn = document.getElementById('back-to-top');
   
-  deferredPrompt.prompt();
-  const { outcome } = await deferredPrompt.userChoice;
-  
-  if (outcome === 'accepted') {
-    console.log('App installed');
+  if (backToTopBtn) {
+    window.addEventListener('scroll', () => {
+      if (window.pageYOffset > 300) {
+        backToTopBtn.classList.add('show');
+      } else {
+        backToTopBtn.classList.remove('show');
+      }
+    });
+    
+    backToTopBtn.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
   }
-  
-  deferredPrompt = null;
-  installBtn.style.display = 'none';
-});
+})();
 
-window.addEventListener('appinstalled', () => {
-  installBtn.style.display = 'none';
-});
+// Mobile Menu Toggle
+(() => {
+  const hamburger = document.getElementById('hamburger');
+  const mobileMenu = document.getElementById('mobile-menu');
+  
+  if (hamburger && mobileMenu) {
+    hamburger.addEventListener('click', () => {
+      const isExpanded = hamburger.getAttribute('aria-expanded') === 'true';
+      hamburger.setAttribute('aria-expanded', !isExpanded);
+      mobileMenu.setAttribute('aria-hidden', isExpanded);
+      mobileMenu.classList.toggle('active');
+    });
+  }
+})();
+
+// FAQ Accordion
+(() => {
+  const faqQuestions = document.querySelectorAll('.faq-question');
+  
+  faqQuestions.forEach(question => {
+    question.addEventListener('click', () => {
+      const faqItem = question.parentElement;
+      const isActive = faqItem.classList.contains('active');
+      
+      // Close all
+      document.querySelectorAll('.faq-item').forEach(item => {
+        item.classList.remove('active');
+      });
+      
+      // Open clicked
+      if (!isActive) {
+        faqItem.classList.add('active');
+      }
+    });
+  });
+})();
