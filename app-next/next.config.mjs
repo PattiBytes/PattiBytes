@@ -9,38 +9,42 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'lh3.googleusercontent.com',
-        port: '',
-        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'firebasestorage.googleapis.com',
-        port: '',
-        pathname: '/**',
       },
       {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
-        port: '',
-        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.pattibytes.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i.ibb.co',
       },
     ],
-    
-    // Allow unoptimized images for external sources
     unoptimized: process.env.NODE_ENV === 'development',
   },
 
-  pwa: {
-    dest: 'public',
-    register: true,
-    skipWaiting: true,
-    disable: process.env.NODE_ENV === 'development',
-  },
-
-  // Disable eslint warnings for <img> tags
   eslint: {
     ignoreDuringBuilds: false,
   },
+
+  experimental: {
+    turbo: {
+      root: process.cwd(),
+    },
+  },
 };
 
-export default withPWA(nextConfig);
+export default withPWA({
+  ...nextConfig,
+  dest: 'public',
+  register: true,
+  skipWaiting: true,
+  disable: process.env.NODE_ENV === 'development',
+});
