@@ -13,7 +13,6 @@ export default function Header() {
   const router = useRouter();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showBackButton, setShowBackButton] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,44 +32,37 @@ export default function Header() {
   }, []);
 
   const handleLogout = async () => {
-    if (loggingOut) return;
-    
-    setLoggingOut(true);
     setShowDropdown(false);
+    const loadingToast = toast.loading('Logging out...');
     
     try {
-      // Show loading toast
-      const toastId = toast.loading('Logging out...');
-      
-      // Sign out
+      // Immediate UI feedback
       await signOut();
       
-      // Clear all caches and storage
+      // Clear storage - don't wait
       if (typeof window !== 'undefined') {
-        localStorage.clear();
-        sessionStorage.clear();
-        
-        // Clear service worker cache if exists
-        if ('caches' in window) {
-          caches.keys().then(names => {
-            names.forEach(name => caches.delete(name));
-          });
-        }
+        Promise.all([
+          localStorage.clear(),
+          sessionStorage.clear(),
+          'caches' in window ? caches.keys().then(names => 
+            Promise.all(names.map(name => caches.delete(name)))
+          ) : Promise.resolve()
+        ]).catch(() => {}); // Ignore cache clearing errors
       }
       
-      // Success toast
-      toast.success('Logged out successfully!', { id: toastId });
+      toast.success('Logged out!', { id: loadingToast });
       
-      // Redirect to home
-      await router.push('/');
-      
-      // Force reload to clear all state
-      window.location.href = '/';
+      // Fast redirect
+      router.replace('/').then(() => {
+        // Force refresh only if needed
+        if (router.pathname !== '/') {
+          window.location.href = '/';
+        }
+      });
       
     } catch (error) {
       console.error('Logout error:', error);
-      toast.error('Failed to logout. Please try again.');
-      setLoggingOut(false);
+      toast.error('Logout failed', { id: loadingToast });
     }
   };
 
@@ -88,7 +80,7 @@ export default function Header() {
             </button>
           ) : (
             <Link href={user ? "/dashboard" : "/"} className={styles.logo}>
-              <SafeImage src="/images/logo.png" alt="PattiBytes" width={32} height={32} />
+              <SafeImage src="/icons/pwab-192.jpg" alt="PattiBytes" width={36} height={36} className={styles.logoImg} />
               <span className={styles.logoText}>PattiBytes</span>
             </Link>
           )}
@@ -103,7 +95,6 @@ export default function Header() {
               
               <Link href="/notifications" className={styles.iconButton} aria-label="Notifications">
                 <FaBell />
-                <span className={styles.badge}>3</span>
               </Link>
 
               <div className={styles.userMenu} ref={dropdownRef}>
@@ -111,13 +102,13 @@ export default function Header() {
                   className={styles.userButton}
                   onClick={() => setShowDropdown(!showDropdown)}
                   aria-label="User menu"
-                  disabled={loggingOut}
+                  aria-expanded={showDropdown}
                 >
                   <SafeImage
-                    src={user.photoURL}
+                    src={userProfile?.photoURL || user.photoURL || '/images/default-avatar.png'}
                     alt={userProfile?.displayName || 'User'}
-                    width={32}
-                    height={32}
+                    width={36}
+                    height={36}
                     className={styles.avatar}
                   />
                 </button>
@@ -133,17 +124,19 @@ export default function Header() {
                     >
                       <div className={styles.dropdownHeader}>
                         <SafeImage
-                          src={user.photoURL}
+                          src={userProfile?.photoURL || user.photoURL || '/images/default-avatar.png'}
                           alt={userProfile?.displayName || 'User'}
                           width={48}
                           height={48}
                           className={styles.dropdownAvatar}
                         />
-                        <div>
-                          <h4>{userProfile?.displayName}</h4>
-                          <p>@{userProfile?.username}</p>
+                        <div className={styles.dropdownInfo}>
+                          <h4>{userProfile?.displayName || 'User'}</h4>
+                          <p>@{userProfile?.username || 'username'}</p>
                         </div>
                       </div>
+
+                      <div className={styles.dropdownDivider} />
 
                       <Link 
                         href="/profile"
@@ -168,13 +161,14 @@ export default function Header() {
                       >
                         <FaCog /> Settings
                       </Link>
+
+                      <div className={styles.dropdownDivider} />
                       
                       <button 
                         onClick={handleLogout} 
                         className={`${styles.dropdownItem} ${styles.logoutItem}`}
-                        disabled={loggingOut}
                       >
-                        <FaSignOutAlt /> {loggingOut ? 'Logging out...' : 'Logout'}
+                        <FaSignOutAlt /> Logout
                       </button>
                     </motion.div>
                   )}

@@ -38,7 +38,14 @@ export function getFirebaseClient() {
     db = getFirestore(app);
     storage = getStorage(app);
     googleProvider = new GoogleAuthProvider();
+    
+    // Configure Google Provider
+    googleProvider.setCustomParameters({
+      prompt: 'select_account'
+    });
   }
 
   return { app, auth, db, storage, googleProvider };
 }
+
+export { app, auth, db, storage, googleProvider };

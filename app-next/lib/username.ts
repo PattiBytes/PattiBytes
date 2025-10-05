@@ -60,6 +60,7 @@ export interface UserProfile {
     followersCount?: number;
     followingCount?: number;
   };
+  unreadNotifications?: number; // ADD THIS LINE - Fixed TypeScript error
   isVerified?: boolean;
   isOnline?: boolean;
   lastSeen?: Timestamp | FieldValue;
@@ -312,6 +313,7 @@ export async function claimUsername(
           followersCount: 0,
           followingCount: 0
         };
+        profileData.unreadNotifications = 0; // Initialize notification count
 
         if (!profileData.preferences) {
           profileData.preferences = {
@@ -323,6 +325,7 @@ export async function claimUsername(
         }
 
         profileData.isVerified = false;
+        profileData.isOnline = false;
       }
 
       // Update user profile
@@ -550,6 +553,22 @@ export async function decrementPostCount(uid: string): Promise<void> {
     }
   } catch (error) {
     console.error('Error decrementing post count:', error);
+  }
+}
+
+// Update unread notifications count
+export async function updateUnreadNotifications(uid: string, count: number): Promise<void> {
+  try {
+    const { db } = getFirebaseClient();
+    if (!db) return;
+
+    await setDoc(doc(db, 'users', uid), {
+      unreadNotifications: Math.max(0, count),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+  } catch (error) {
+    console.error('Error updating unread notifications:', error);
   }
 }
 

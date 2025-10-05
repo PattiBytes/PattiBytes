@@ -1,6 +1,7 @@
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getFirebaseClient } from './firebase';
 
+// Add your Firebase UID here to grant admin access
 const ADMIN_UIDS = ['YOUR_FIREBASE_UID_HERE'];
 
 export interface AdminSettings {
@@ -59,4 +60,13 @@ export async function revokeAdminAccess(uid: string): Promise<void> {
     canAccessAnalytics: false,
     canManageContent: false
   }, { merge: true });
+}
+
+export async function checkAdminPermission(uid: string, permission: keyof AdminSettings): Promise<boolean> {
+  if (isAdmin(uid)) return true;
+  
+  const settings = await getAdminSettings(uid);
+  if (!settings) return false;
+  
+  return settings[permission] === true;
 }

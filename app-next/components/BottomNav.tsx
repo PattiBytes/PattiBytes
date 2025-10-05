@@ -10,7 +10,8 @@ export default function BottomNav() {
   const { user, userProfile } = useAuth();
   const router = useRouter();
 
-  if (!user || !userProfile?.username) return null;
+  // Don't show if not logged in
+  if (!user) return null;
 
   const navItems = [
     { 
@@ -32,13 +33,13 @@ export default function BottomNav() {
     { 
       href: '/community', 
       icon: FaComments, 
-      label: 'Community'
+      label: 'Chat'
     },
     { 
       href: '/profile', 
       icon: FaUser, 
       label: 'Profile',
-      avatar: user.photoURL
+      avatar: userProfile?.photoURL || user.photoURL
     },
   ];
 
@@ -70,8 +71,8 @@ export default function BottomNav() {
               <SafeImage 
                 src={item.avatar} 
                 alt={item.label} 
-                width={24} 
-                height={24} 
+                width={28} 
+                height={28} 
                 className={styles.avatar}
               />
             ) : (
