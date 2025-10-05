@@ -88,6 +88,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(currentUser);
       setError(null);
       
+      // Clean up previous listeners
       if (profileUnsubscribeRef.current) {
         profileUnsubscribeRef.current();
         profileUnsubscribeRef.current = null;
@@ -99,6 +100,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       
       if (currentUser) {
+        // Listen to user profile changes
         profileUnsubscribeRef.current = onSnapshot(
           doc(db, 'users', currentUser.uid),
           (docSnap) => {
@@ -106,10 +108,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
               const profile = docSnap.data() as UserProfile;
               setUserProfile(profile);
               
+              // Update online status
               updateOnlineStatus(currentUser.uid, true);
+              
+              // Set interval for periodic updates
               onlineStatusUpdateRef.current = setInterval(() => {
                 updateOnlineStatus(currentUser.uid, true);
-              }, 60000);
+              }, 60000); // Every 1 minute
               
             } else {
               setUserProfile(null);
@@ -137,6 +142,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsInitialized(true);
     });
 
+    // Handle visibility change
     const handleVisibilityChange = () => {
       const currentUser = auth.currentUser;
       if (currentUser) {
@@ -144,6 +150,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
+    // Handle before unload
     const handleBeforeUnload = () => {
       const currentUser = auth.currentUser;
       if (currentUser) {
@@ -176,17 +183,55 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [updateOnlineStatus]);
 
   const signOut = useCallback(async () => {
-    const { auth } = getFirebaseClient();
+    const { auth, db } = getFirebaseClient();
     if (!auth) throw new Error('Firebase not initialized');
 
     try {
       setError(null);
       
-      if (user) {
-        await updateOnlineStatus(user.uid, false);
+      // Update online status before logout
+      if (user && db) {
+        try {
+          await updateOnlineStatus(user.uid, false);
+        } catch (err) {
+          console.warn('Failed to update online status:', err);
+        }
       }
       
+      // Clear all intervals and listeners
+      if (onlineStatusUpdateRef.current) {
+        clearInterval(onlineStatusUpdateRef.current);
+        onlineStatusUpdateRef.current = null;
+      }
+      
+      if (profileUnsubscribeRef.current) {
+        profileUnsubscribeRef.current();
+        profileUnsubscribeRef.current = null;
+      }
+      
+      // Sign out from Firebase
       await firebaseSignOut(auth);
+      
+      // Clear all local state
+      setUser(null);
+      setUserProfile(null);
+      
+      // Clear browser storage
+      if (typeof window !== 'undefined') {
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Clear IndexedDB if exists
+        if ('indexedDB' in window) {
+          indexedDB.databases().then((databases) => {
+            databases.forEach((db) => {
+              if (db.name) {
+                indexedDB.deleteDatabase(db.name);
+              }
+            });
+          }).catch(console.error);
+        }
+      }
       
     } catch (error) {
       console.error('Error signing out:', error);

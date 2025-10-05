@@ -2,7 +2,7 @@ import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import SafeImage from './SafeImage';
-import { FaHome, FaSearch, FaPlus, FaBell, FaUser } from 'react-icons/fa';
+import { FaHome, FaSearch, FaPlus, FaComments, FaUser } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import styles from '@/styles/BottomNav.module.css';
 
@@ -30,9 +30,9 @@ export default function BottomNav() {
       highlight: true 
     },
     { 
-      href: '/notifications', 
-      icon: FaBell, 
-      label: 'Notifications'
+      href: '/community', 
+      icon: FaComments, 
+      label: 'Community'
     },
     { 
       href: '/profile', 

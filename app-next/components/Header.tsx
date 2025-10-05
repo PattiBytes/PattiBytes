@@ -3,8 +3,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import SafeImage from './SafeImage';
 import { useState, useEffect, useRef } from 'react';
-import { FaBell, FaSignOutAlt, FaUser, FaCog, FaChevronLeft } from 'react-icons/fa';
+import { FaBell, FaSignOutAlt, FaUser, FaCog, FaChevronLeft, FaComments } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
 import styles from '@/styles/Header.module.css';
 
 export default function Header() {
@@ -16,7 +17,7 @@ export default function Header() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const noBackPaths = ['/', '/dashboard', '/search', '/notifications', '/create', '/profile', '/settings'];
+    const noBackPaths = ['/', '/dashboard', '/search', '/notifications', '/create', '/profile', '/settings', '/community'];
     setShowBackButton(!noBackPaths.includes(router.pathname));
   }, [router.pathname]);
 
@@ -35,14 +36,40 @@ export default function Header() {
     if (loggingOut) return;
     
     setLoggingOut(true);
+    setShowDropdown(false);
+    
     try {
+      // Show loading toast
+      const toastId = toast.loading('Logging out...');
+      
+      // Sign out
       await signOut();
-      setShowDropdown(false);
-      router.push('/');
+      
+      // Clear all caches and storage
+      if (typeof window !== 'undefined') {
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Clear service worker cache if exists
+        if ('caches' in window) {
+          caches.keys().then(names => {
+            names.forEach(name => caches.delete(name));
+          });
+        }
+      }
+      
+      // Success toast
+      toast.success('Logged out successfully!', { id: toastId });
+      
+      // Redirect to home
+      await router.push('/');
+      
+      // Force reload to clear all state
+      window.location.href = '/';
+      
     } catch (error) {
       console.error('Logout error:', error);
-      alert('Failed to logout. Please try again.');
-    } finally {
+      toast.error('Failed to logout. Please try again.');
       setLoggingOut(false);
     }
   };
@@ -70,6 +97,10 @@ export default function Header() {
         <div className={styles.actions}>
           {user ? (
             <>
+              <Link href="/community" className={styles.iconButton} aria-label="Community">
+                <FaComments />
+              </Link>
+              
               <Link href="/notifications" className={styles.iconButton} aria-label="Notifications">
                 <FaBell />
                 <span className={styles.badge}>3</span>
@@ -80,6 +111,7 @@ export default function Header() {
                   className={styles.userButton}
                   onClick={() => setShowDropdown(!showDropdown)}
                   aria-label="User menu"
+                  disabled={loggingOut}
                 >
                   <SafeImage
                     src={user.photoURL}
@@ -120,6 +152,15 @@ export default function Header() {
                       >
                         <FaUser /> My Profile
                       </Link>
+                      
+                      <Link 
+                        href="/community" 
+                        className={styles.dropdownItem}
+                        onClick={() => setShowDropdown(false)}
+                      >
+                        <FaComments /> Community
+                      </Link>
+                      
                       <Link 
                         href="/settings" 
                         className={styles.dropdownItem}
@@ -127,9 +168,10 @@ export default function Header() {
                       >
                         <FaCog /> Settings
                       </Link>
+                      
                       <button 
                         onClick={handleLogout} 
-                        className={styles.dropdownItem}
+                        className={`${styles.dropdownItem} ${styles.logoutItem}`}
                         disabled={loggingOut}
                       >
                         <FaSignOutAlt /> {loggingOut ? 'Logging out...' : 'Logout'}
