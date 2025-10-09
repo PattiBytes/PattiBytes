@@ -1,131 +1,52 @@
-.uploadContainer {
-  display: flex;
+.wrap {
+  display: inline-flex;
   flex-direction: column;
-  align-items: center;
-  gap: 12px;
+  gap: 0.5rem;
 }
 
-.avatarWrapper {
+.avatarBox {
   position: relative;
   width: 120px;
   height: 120px;
+  border-radius: 999px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid var(--border);
 }
 
-.avatar {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
+.avatarBox img {
   object-fit: cover;
-  border: 4px solid white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.uploadButton {
+.overlay {
   position: absolute;
-  bottom: 0;
-  right: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: 3px solid white;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
   color: white;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+  opacity: 0;
   display: flex;
+  gap: 0.4rem;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: transform 0.2s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: opacity 0.2s;
+  font-weight: 700;
 }
 
-.uploadButton:hover:not(:disabled) {
-  transform: scale(1.1);
+.avatarBox:hover .overlay {
+  opacity: 1;
 }
 
-.uploadButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.progress {
+  width: 120px;
+  height: 6px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
 }
 
-.controls {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-  white-space: nowrap;
-}
-
-.confirmButton,
-.cancelButton {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.confirmButton {
-  background: #10b981;
-  color: white;
-}
-
-.confirmButton:hover:not(:disabled) {
-  background: #059669;
-}
-
-.cancelButton {
-  background: #ef4444;
-  color: white;
-}
-
-.cancelButton:hover:not(:disabled) {
-  background: #dc2626;
-}
-
-.confirmButton:disabled,
-.cancelButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.fileInput {
-  display: none;
-}
-
-.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.error {
-  color: #ef4444;
-  font-size: 13px;
-  margin: 0;
-  font-weight: 500;
-}
-
-.uploading {
-  color: #667eea;
-  font-size: 13px;
-  margin: 0;
-  font-weight: 500;
-}
-
-.success {
-  color: #10b981;
-  font-size: 13px;
-  margin: 0;
-  font-weight: 600;
+.fill {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.3s;
 }

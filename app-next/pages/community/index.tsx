@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { useState, useEffect, useMemo } from 'react';
+import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import AuthGuard from '@/components/AuthGuard';
@@ -25,30 +25,48 @@ export default function Community() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
+  const { db } = getFirebaseClient();
+
+  const normalizedSearch = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
+
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid || !db) return;
 
-    const { db } = getFirebaseClient();
-    if (!db) return;
-
-    const chatsQuery = query(
+    const q = query(
       collection(db, 'chats'),
       where('participants', 'array-contains', user.uid),
       orderBy('updatedAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(chatsQuery, (snapshot) => {
-      const loadedChats = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        updatedAt: doc.data().updatedAt?.toDate() || new Date()
-      })) as Chat[];
-
-      setChats(loadedChats);
+    const unsub = onSnapshot(q, (snapshot) => {
+      const loaded = snapshot.docs.map((docSnap) => {
+        const d = docSnap.data() as Partial<Chat> & { updatedAt?: Timestamp | Date };
+        return {
+          id: docSnap.id,
+          type: (d.type === 'group' ? 'group' : 'private') as Chat['type'],
+          name: typeof d.name === 'string' ? d.name : 'Chat',
+          photoURL: typeof d.photoURL === 'string' ? d.photoURL : '/images/group-default.png',
+          participants: Array.isArray(d.participants) ? (d.participants as string[]) : [],
+          lastMessage: typeof d.lastMessage === 'string' ? d.lastMessage : '',
+          updatedAt:
+            d.updatedAt instanceof Timestamp
+              ? d.updatedAt.toDate()
+              : d.updatedAt instanceof Date
+              ? d.updatedAt
+              : new Date(),
+          isOfficial: Boolean(d.isOfficial),
+        } as Chat;
+      });
+      setChats(loaded);
     });
 
-    return () => unsubscribe();
-  }, [user]);
+    return () => unsub();
+  }, [user?.uid, db]);
+
+  const filtered = useMemo(() => {
+    if (!normalizedSearch) return chats;
+    return chats.filter((c) => (c.name || '').toLowerCase().includes(normalizedSearch));
+  }, [chats, normalizedSearch]);
 
   return (
     <AuthGuard>
@@ -63,8 +81,8 @@ export default function Community() {
 
           <div className={styles.searchBox}>
             <FaSearch />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Search chats..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -72,40 +90,28 @@ export default function Community() {
           </div>
 
           <div className={styles.chatsList}>
-            {chats
-              .filter(chat => 
-                chat.name?.toLowerCase().includes(searchQuery.toLowerCase())
-              )
-              .map(chat => (
-                <Link 
-                  key={chat.id} 
-                  href={`/community/${chat.id}`}
-                  className={styles.chatItem}
-                >
-                  {chat.isOfficial && (
-                    <div className={styles.officialBadge}>Official</div>
-                  )}
-                  <SafeImage 
-                    src={chat.photoURL || '/images/group-default.png'} 
-                    alt={chat.name || 'Chat'} 
-                    width={56} 
-                    height={56}
-                    className={styles.chatAvatar}
-                  />
-                  <div className={styles.chatInfo}>
-                    <div className={styles.chatTop}>
-                      <h3>{chat.name}</h3>
-                      <span className={styles.chatTime}>
-                        {new Date(chat.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <p className={styles.lastMessage}>{chat.lastMessage}</p>
+            {filtered.map((chat) => (
+              <Link key={chat.id} href={`/community/${chat.id}`} className={styles.chatItem}>
+                {chat.isOfficial && <div className={styles.officialBadge}>Official</div>}
+                <SafeImage
+                  src={chat.photoURL || '/images/group-default.png'}
+                  alt={chat.name || 'Chat'}
+                  width={56}
+                  height={56}
+                  className={styles.chatAvatar}
+                />
+                <div className={styles.chatInfo}>
+                  <div className={styles.chatTop}>
+                    <h3>{chat.name || 'Chat'}</h3>
+                    <span className={styles.chatTime}>
+                      {new Date(chat.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
-                  {chat.type === 'group' && (
-                    <FaUsers className={styles.groupIcon} />
-                  )}
-                </Link>
-              ))}
+                  <p className={styles.lastMessage}>{chat.lastMessage || ''}</p>
+                </div>
+                {chat.type === 'group' && <FaUsers className={styles.groupIcon} />}
+              </Link>
+            ))}
           </div>
         </div>
       </Layout>

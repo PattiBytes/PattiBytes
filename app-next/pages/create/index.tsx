@@ -1,258 +1,276 @@
-import { useState, FormEvent, useRef } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { getFirebaseClient } from '@/lib/firebase';
-import { incrementPostCount } from '@/lib/username';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import SafeImage from '@/components/SafeImage';
+import { useAuth } from '@/context/AuthContext';
+import { getFirebaseClient } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { uploadToCloudinary, uploadVideoToCloudinary } from '@/lib/cloudinary';
 import { motion } from 'framer-motion';
-import { FaImage, FaMapMarkerAlt, FaTimes, FaPen, FaNewspaper } from 'react-icons/fa';
+import { FaPen, FaNewspaper, FaMapMarkerAlt, FaImage, FaTimes, FaPaperPlane, FaVideo } from 'react-icons/fa';
+import { toast } from 'react-hot-toast';
 import styles from '@/styles/CreatePost.module.css';
+
+type PostType = 'writing' | 'news' | 'place' | 'video' | 'photo';
 
 export default function CreatePost() {
   const { user, userProfile } = useAuth();
   const router = useRouter();
+  const { db } = getFirebaseClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [loading, setLoading] = useState(false);
+
+  const [type, setType] = useState<PostType>((router.query.type as PostType) || 'writing');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [location, setLocation] = useState('');
+  const [media, setMedia] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
 
-  const [formData, setFormData] = useState({
-    title: '',
-    content: '',
-    type: 'writing' as 'writing' | 'news' | 'place',
-    location: '',
-    imageUrl: ''
-  });
+  useEffect(() => {
+    const image = router.query.image as string | undefined;
+    if (image) {
+      setMediaPreview(image);
+      setType('photo');
+    }
+  }, [router.query.image]);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const isVideo = file.type.startsWith('video/');
+    const isImage = file.type.startsWith('image/');
+    if (!isVideo && !isImage) return toast.error('Please select an image or video file');
+    if (file.size > 200 * 1024 * 1024) return toast.error('Max file size is 200MB');
+    setMedia(file);
+    setMediaPreview(URL.createObjectURL(file));
+    if (isVideo) setType('video');
+    else if (isImage) setType('photo');
+  };
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image size must be less than 5MB');
-      return;
-    }
+  const removeMedia = () => {
+    setMedia(null);
+    setMediaPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db || !user || !userProfile) return;
+
+    if (!title.trim()) return toast.error('Please enter a title');
+    if (!content.trim()) return toast.error('Please enter some content');
 
     setUploading(true);
-    setError(null);
+    setProgress(0);
 
     try {
-      // For now, use a placeholder. Replace with your actual upload logic
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, imageUrl: reader.result as string });
-        setUploading(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error('Error uploading image:', err);
-      setError('Failed to upload image. Please try again.');
-      setUploading(false);
-    }
-  };
+      let imageUrl: string | null = null;
+      let videoUrl: string | null = null;
+      let mediaType: 'image' | 'video' | undefined;
 
-  const handleRemoveImage = () => {
-    setFormData({ ...formData, imageUrl: '' });
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+      if (media) {
+        const isVideo = media.type.startsWith('video/');
+        if (isVideo) {
+          setProgress(5);
+          videoUrl = await uploadVideoToCloudinary(media, (pct) => setProgress(pct));
+          mediaType = 'video';
+        } else {
+          setProgress(5);
+          imageUrl = await uploadToCloudinary(media);
+          setProgress(90);
+          mediaType = 'image';
+        }
+      }
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!user || !userProfile) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { db } = getFirebaseClient();
-      if (!db) throw new Error('Firestore not initialized');
-
-      const postData = {
-        title: formData.title,
-        content: formData.content,
-        preview: formData.content.substring(0, 200),
-        type: formData.type,
+      setProgress(95);
+      const docRef = await addDoc(collection(db, 'posts'), {
+        type: type === 'photo' ? 'writing' : type,
+        mediaType: mediaType || (type === 'video' ? 'video' : 'image'),
+        title: title.trim(),
+        content: content.trim(),
+        preview: content.trim().substring(0, 220),
+        location: location.trim() || null,
         authorId: user.uid,
         authorName: userProfile.displayName,
         authorUsername: userProfile.username,
         authorPhoto: userProfile.photoURL || null,
-        imageUrl: formData.imageUrl || null,
-        location: formData.location || null,
-        createdAt: serverTimestamp(),
+        imageUrl: imageUrl,
+        videoUrl: videoUrl,
         likesCount: 0,
         commentsCount: 0,
-        sharesCount: 0
-      };
+        sharesCount: 0,
+        viewsCount: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
 
-      await addDoc(collection(db, 'posts'), postData);
-      await incrementPostCount(user.uid);
-
-      router.push('/dashboard');
+      setProgress(100);
+      toast.success('Post published!');
+      router.push(`/posts/${docRef.id}`);
     } catch (err) {
-      console.error('Error creating post:', err);
-      setError('Failed to create post. Please try again.');
+      console.error('Post creation error:', err);
+      toast.error('Failed to create post. Please try again.');
     } finally {
-      setLoading(false);
+      setUploading(false);
+      setProgress(0);
     }
   };
 
   return (
     <AuthGuard>
       <Layout title="Create Post - PattiBytes">
-        <div className={styles.createPost}>
-          <motion.div 
-            className={styles.container}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <h1>Create New Post</h1>
-            <p className={styles.subtitle}>Share your story with the community</p>
+        <div className={styles.page}>
+          <motion.div className={styles.container} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <h1>Create Post</h1>
 
             <form onSubmit={handleSubmit} className={styles.form}>
               <div className={styles.typeSelector}>
-                <button
-                  type="button"
-                  className={`${styles.typeButton} ${formData.type === 'writing' ? styles.active : ''}`}
-                  onClick={() => setFormData({ ...formData, type: 'writing' })}
-                >
-                  <FaPen /> Writing
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.typeButton} ${formData.type === 'news' ? styles.active : ''}`}
-                  onClick={() => setFormData({ ...formData, type: 'news' })}
-                >
-                  <FaNewspaper /> News
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.typeButton} ${formData.type === 'place' ? styles.active : ''}`}
-                  onClick={() => setFormData({ ...formData, type: 'place' })}
-                >
-                  <FaMapMarkerAlt /> Place
-                </button>
-              </div>
-
-              <div className={styles.formGroup}>
-                <label>Title</label>
-                <input
-                  type="text"
-                  value={formData.title}
-                  onChange={e => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="Enter a catchy title..."
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              <div className={styles.formGroup}>
-                <label>Content</label>
-                <textarea
-                  value={formData.content}
-                  onChange={e => setFormData({ ...formData, content: e.target.value })}
-                  placeholder="Write your content here..."
-                  rows={12}
-                  required
-                  disabled={loading}
-                />
-                <div className={styles.characterCount}>
-                  {formData.content.length} characters
+                <label>Post Type</label>
+                <div className={styles.types}>
+                  <button
+                    type="button"
+                    className={type === 'writing' ? styles.active : ''}
+                    onClick={() => setType('writing')}
+                    disabled={uploading}
+                  >
+                    <FaPen /> Writing
+                  </button>
+                  <button
+                    type="button"
+                    className={type === 'photo' ? styles.active : ''}
+                    onClick={() => setType('photo')}
+                    disabled={uploading}
+                  >
+                    <FaImage /> Photo
+                  </button>
+                  <button
+                    type="button"
+                    className={type === 'video' ? styles.active : ''}
+                    onClick={() => setType('video')}
+                    disabled={uploading}
+                  >
+                    <FaVideo /> Video
+                  </button>
+                  <button
+                    type="button"
+                    className={type === 'news' ? styles.active : ''}
+                    onClick={() => setType('news')}
+                    disabled={uploading}
+                  >
+                    <FaNewspaper /> News
+                  </button>
+                  <button
+                    type="button"
+                    className={type === 'place' ? styles.active : ''}
+                    onClick={() => setType('place')}
+                    disabled={uploading}
+                  >
+                    <FaMapMarkerAlt /> Place
+                  </button>
                 </div>
               </div>
 
-              {formData.type === 'place' && (
+              <div className={styles.formGroup}>
+                <label>Title *</label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Enter a catchy title..."
+                  required
+                  disabled={uploading}
+                  maxLength={120}
+                />
+                <small>{title.length}/120</small>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Content *</label>
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Write your content here..."
+                  rows={10}
+                  required
+                  disabled={uploading}
+                  maxLength={5000}
+                />
+                <small>{content.length}/5000</small>
+              </div>
+
+              {(type === 'place' || type === 'news') && (
                 <div className={styles.formGroup}>
                   <label>
-                    <FaMapMarkerAlt /> Location
+                    <FaMapMarkerAlt /> Location {type === 'place' && '*'}
                   </label>
                   <input
                     type="text"
-                    value={formData.location}
-                    onChange={e => setFormData({ ...formData, location: e.target.value })}
-                    placeholder="Enter location..."
-                    disabled={loading}
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="City, State/Province"
+                    required={type === 'place'}
+                    disabled={uploading}
                   />
                 </div>
               )}
 
               <div className={styles.formGroup}>
-                <label>
-                  <FaImage /> Image (optional)
-                </label>
-
+                <label>Media (image/video)</label>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className={styles.fileInput}
-                  disabled={loading || uploading}
+                  accept="image/*,video/*"
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                  disabled={uploading}
                 />
 
-                {!formData.imageUrl && (
+                {!mediaPreview ? (
                   <button
                     type="button"
-                    className={styles.uploadButton}
+                    className={styles.uploadBtn}
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading || loading}
+                    disabled={uploading}
                   >
-                    <FaImage />
-                    {uploading ? 'Uploading...' : 'Upload Image'}
+                    <FaImage /> Choose Media
                   </button>
-                )}
-
-                {formData.imageUrl && (
+                ) : (
                   <div className={styles.imagePreview}>
-                    <SafeImage
-                      src={formData.imageUrl}
-                      alt="Preview"
-                      width={600}
-                      height={400}
-                      className={styles.previewImage}
-                    />
-                    <button
-                      type="button"
-                      className={styles.removeImage}
-                      onClick={handleRemoveImage}
-                      disabled={loading}
-                    >
-                      <FaTimes /> Remove Image
+                    {type === 'video' ? (
+                      <video src={mediaPreview} controls className={styles.previewVideo} />
+                    ) : (
+                      <SafeImage src={mediaPreview} alt="Preview" width={600} height={400} />
+                    )}
+                    <button type="button" className={styles.removeBtn} onClick={removeMedia} disabled={uploading}>
+                      <FaTimes /> Remove
                     </button>
                   </div>
                 )}
+                <small>Images up to 10MB, videos up to 200MB (Free via Cloudinary)</small>
               </div>
 
-              {error && (
-                <motion.div 
-                  className={styles.error}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                >
-                  {error}
-                </motion.div>
+              {uploading && (
+                <div className={styles.progressBar}>
+                  <div className={styles.progressFill} style={{ width: `${progress}%` }} />
+                  <span>{progress}%</span>
+                </div>
               )}
 
-              <motion.button
-                type="submit"
-                className={styles.submitButton}
-                disabled={loading || uploading}
-                whileHover={{ scale: loading ? 1 : 1.02 }}
-                whileTap={{ scale: loading ? 1 : 0.98 }}
-              >
-                {loading ? (
-                  <>
-                    <div className={styles.spinner} />
-                    Publishing...
-                  </>
-                ) : (
-                  'Publish Post'
-                )}
-              </motion.button>
+              <div className={styles.actions}>
+                <button type="button" className={styles.cancelBtn} onClick={() => router.back()} disabled={uploading}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={styles.submitBtn}
+                  disabled={uploading || !title.trim() || !content.trim()}
+                >
+                  <FaPaperPlane /> {uploading ? 'Publishing...' : 'Publish Post'}
+                </button>
+              </div>
             </form>
           </motion.div>
         </div>

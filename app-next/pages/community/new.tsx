@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
@@ -18,9 +18,21 @@ interface User {
   photoURL?: string;
 }
 
+// Helpers to avoid undefined reaching Firestore
+const str = (v: unknown, fallback = ''): string =>
+  typeof v === 'string' && v.trim().length > 0 ? v : fallback;
+
+const nonEmptyPhoto = (v?: string) => str(v, '/images/group-default.png');
+
+function sanitizeForFirestore<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value, (_k, v) => (v === undefined ? null : v)));
+}
+
 export default function NewChat() {
   const router = useRouter();
-  const { user: currentUser, userProfile } = useAuth();
+  const { user: currentUser } = useAuth();
+  const { db } = getFirebaseClient();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
@@ -28,67 +40,90 @@ export default function NewChat() {
   const [groupName, setGroupName] = useState('');
   const [creating, setCreating] = useState(false);
 
+  const normalizedQuery = useMemo(() => searchQuery.trim(), [searchQuery]);
+
   useEffect(() => {
-    if (searchQuery.length < 2) {
+    if (normalizedQuery.length < 2) {
       setUsers([]);
       return;
     }
 
     const timer = setTimeout(async () => {
       try {
-        const results = await searchUsersByUsername(searchQuery, 10);
-        setUsers(results.filter(u => u.uid !== currentUser?.uid));
+        const results = await searchUsersByUsername(normalizedQuery, 10);
+        setUsers(results.filter((u) => u.uid !== currentUser?.uid));
       } catch (error) {
         console.error('Search error:', error);
       }
-    }, 500);
+    }, 400);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, currentUser]);
+  }, [normalizedQuery, currentUser?.uid]);
+
+  const toggleUser = (user: User) => {
+    setSelectedUsers((prev) =>
+      prev.find((u) => u.uid === user.uid) ? prev.filter((u) => u.uid !== user.uid) : [...prev, user]
+    );
+  };
 
   const handleCreateChat = async () => {
-    if (!currentUser || !userProfile || selectedUsers.length === 0) return;
+    if (!db || !currentUser?.uid) return;
+
+    // Require at least one other user
+    if (selectedUsers.length === 0) return;
+
+    // For private chat, use first selected
+    const target = selectedUsers[0];
 
     setCreating(true);
     try {
-      const { db } = getFirebaseClient();
-      if (!db) throw new Error('Firestore not initialized');
+      const participants = [currentUser.uid, ...selectedUsers.map((u) => u.uid)];
+      const chatType: 'private' | 'group' = isGroup ? 'group' : 'private';
 
-      const participants = [currentUser.uid, ...selectedUsers.map(u => u.uid)];
-      const chatType = isGroup ? 'group' : 'private';
-
-      // Check if private chat already exists
+      // Private chat dedup
       if (chatType === 'private') {
         const existingChatQuery = query(
           collection(db, 'chats'),
           where('type', '==', 'private'),
           where('participants', 'array-contains', currentUser.uid)
         );
-        
         const snapshot = await getDocs(existingChatQuery);
-        const existingChat = snapshot.docs.find(doc => {
-          const data = doc.data();
-          return data.participants.includes(selectedUsers[0].uid);
+        const existing = snapshot.docs.find((d) => {
+          const data = d.data();
+          const parts: string[] = Array.isArray(data.participants) ? data.participants : [];
+          return parts.includes(target.uid);
         });
-
-        if (existingChat) {
-          router.push(`/community/${existingChat.id}`);
+        if (existing) {
+          router.push(`/community/${existing.id}`);
           return;
         }
       }
 
-      // Create new chat
-      const chatDoc = await addDoc(collection(db, 'chats'), {
+      // Compute safe fields
+      const safeName =
+        chatType === 'group'
+          ? str(groupName, `Group (${selectedUsers.length + 1})`)
+          : str(target.displayName || target.username, 'Chat');
+
+      // Key change: force non-empty photo even if target.photoURL is undefined/null/empty
+      const safePhoto =
+        chatType === 'group'
+          ? '/images/group-default.png'
+          : nonEmptyPhoto(target.photoURL);
+
+      // Final payload with no undefined
+      const payload = sanitizeForFirestore({
         type: chatType,
-        name: isGroup ? groupName : selectedUsers[0].displayName,
-        photoURL: isGroup ? '/images/group-default.png' : selectedUsers[0].photoURL,
-        participants,
-        lastMessage: '',
+        name: safeName,
+        photoURL: safePhoto, // guaranteed string
+        participants, // array of strings
+        lastMessage: '', // string
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        isOfficial: false
+        isOfficial: false,
       });
 
+      const chatDoc = await addDoc(collection(db, 'chats'), payload);
       router.push(`/community/${chatDoc.id}`);
     } catch (error) {
       console.error('Error creating chat:', error);
@@ -96,14 +131,6 @@ export default function NewChat() {
     } finally {
       setCreating(false);
     }
-  };
-
-  const toggleUser = (user: User) => {
-    setSelectedUsers(prev => 
-      prev.find(u => u.uid === user.uid)
-        ? prev.filter(u => u.uid !== user.uid)
-        : [...prev, user]
-    );
   };
 
   return (
@@ -118,16 +145,10 @@ export default function NewChat() {
           </div>
 
           <div className={styles.typeToggle}>
-            <button
-              className={!isGroup ? styles.active : ''}
-              onClick={() => setIsGroup(false)}
-            >
+            <button className={!isGroup ? styles.active : ''} onClick={() => setIsGroup(false)}>
               Private Chat
             </button>
-            <button
-              className={isGroup ? styles.active : ''}
-              onClick={() => setIsGroup(true)}
-            >
+            <button className={isGroup ? styles.active : ''} onClick={() => setIsGroup(true)}>
               <FaUsers /> Group Chat
             </button>
           </div>
@@ -156,11 +177,11 @@ export default function NewChat() {
             <div className={styles.selected}>
               <h3>Selected ({selectedUsers.length})</h3>
               <div className={styles.selectedList}>
-                {selectedUsers.map(user => (
-                  <div key={user.uid} className={styles.selectedUser}>
-                    <SafeImage src={user.photoURL} alt={user.displayName} width={32} height={32} />
-                    <span>{user.username}</span>
-                    <button onClick={() => toggleUser(user)}>×</button>
+                {selectedUsers.map((u) => (
+                  <div key={u.uid} className={styles.selectedUser}>
+                    <SafeImage src={nonEmptyPhoto(u.photoURL)} alt={u.displayName} width={32} height={32} />
+                    <span>@{u.username}</span>
+                    <button onClick={() => toggleUser(u)}>×</button>
                   </div>
                 ))}
               </div>
@@ -168,19 +189,22 @@ export default function NewChat() {
           )}
 
           <div className={styles.usersList}>
-            {users.map(user => (
-              <div
-                key={user.uid}
-                className={`${styles.userItem} ${selectedUsers.find(u => u.uid === user.uid) ? styles.selected : ''}`}
-                onClick={() => toggleUser(user)}
-              >
-                <SafeImage src={user.photoURL} alt={user.displayName} width={48} height={48} />
-                <div className={styles.userInfo}>
-                  <h4>{user.displayName}</h4>
-                  <p>@{user.username}</p>
+            {users.map((u) => {
+              const active = selectedUsers.find((x) => x.uid === u.uid);
+              return (
+                <div
+                  key={u.uid}
+                  className={`${styles.userItem} ${active ? styles.selected : ''}`}
+                  onClick={() => toggleUser(u)}
+                >
+                  <SafeImage src={nonEmptyPhoto(u.photoURL)} alt={u.displayName} width={48} height={48} />
+                  <div className={styles.userInfo}>
+                    <h4>{u.displayName}</h4>
+                    <p>@{u.username}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {selectedUsers.length > 0 && (

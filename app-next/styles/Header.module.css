@@ -197,7 +197,8 @@
   background: #fee2e2;
 }
 
-.loginBtn, .signupBtn {
+.loginBtn,
+.signupBtn {
   padding: 10px 20px;
   border-radius: 24px;
   font-weight: 600;
@@ -228,8 +229,67 @@
   .logoText {
     display: none;
   }
-  
   .dropdown {
     width: 240px;
   }
 }
+
+.adminBadge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.25rem;
+}
+
+.dropdownSection {
+  padding: 0.5rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.sectionTitle {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.05em;
+}
+/* ...existing styles from previous answer... */
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  z-index: 1000;
+  max-height: 70vh; /* guard overall height */
+  display: flex;
+  flex-direction: column;
+}
+
+.dropdownHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.dropdownScroll {
+  overflow-y: auto;           /* scrollable body */
+  -webkit-overflow-scrolling: touch;
+  max-height: 56vh;           /* leaves header visible */
+  padding-bottom: 6px;
+}
+
+/* ...rest unchanged ... */

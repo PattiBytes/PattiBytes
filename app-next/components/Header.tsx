@@ -3,20 +3,42 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import SafeImage from './SafeImage';
 import { useState, useEffect, useRef } from 'react';
-import { FaBell, FaSignOutAlt, FaUser, FaCog, FaChevronLeft, FaComments } from 'react-icons/fa';
+import {
+  FaBell,
+  FaSignOutAlt,
+  FaUser,
+  FaCog,
+  FaChevronLeft,
+  FaComments,
+  FaShieldAlt,
+  FaBullhorn,
+  FaUsers,
+  FaUserShield,
+  FaFileAlt,
+} from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import styles from '@/styles/Header.module.css';
 
 export default function Header() {
-  const { user, userProfile, signOut } = useAuth();
+  const { user, userProfile, isAdmin, signOut } = useAuth();
   const router = useRouter();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showBackButton, setShowBackButton] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const noBackPaths = ['/', '/dashboard', '/search', '/notifications', '/create', '/profile', '/settings', '/community'];
+    const noBackPaths = [
+      '/',
+      '/dashboard',
+      '/search',
+      '/notifications',
+      '/create',
+      '/profile',
+      '/settings',
+      '/community',
+      '/admin',
+    ];
     setShowBackButton(!noBackPaths.includes(router.pathname));
   }, [router.pathname]);
 
@@ -26,7 +48,6 @@ export default function Header() {
         setShowDropdown(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -34,41 +55,26 @@ export default function Header() {
   const handleLogout = async () => {
     setShowDropdown(false);
     const loadingToast = toast.loading('Logging out...');
-    
     try {
-      // Immediate UI feedback
       await signOut();
-      
-      // Clear storage - don't wait
       if (typeof window !== 'undefined') {
         Promise.all([
-          localStorage.clear(),
-          sessionStorage.clear(),
-          'caches' in window ? caches.keys().then(names => 
-            Promise.all(names.map(name => caches.delete(name)))
-          ) : Promise.resolve()
-        ]).catch(() => {}); // Ignore cache clearing errors
+          (async () => localStorage.clear())(),
+          (async () => sessionStorage.clear())(),
+          'caches' in window ? caches.keys().then((names) => Promise.all(names.map((n) => caches.delete(n)))) : Promise.resolve(),
+        ]).catch(() => {});
       }
-      
       toast.success('Logged out!', { id: loadingToast });
-      
-      // Fast redirect
       router.replace('/').then(() => {
-        // Force refresh only if needed
-        if (router.pathname !== '/') {
-          window.location.href = '/';
-        }
+        if (router.pathname !== '/') window.location.href = '/';
       });
-      
     } catch (error) {
       console.error('Logout error:', error);
       toast.error('Logout failed', { id: loadingToast });
     }
   };
 
-  const handleBack = () => {
-    router.back();
-  };
+  const handleBack = () => router.back();
 
   return (
     <header className={styles.header}>
@@ -79,7 +85,7 @@ export default function Header() {
               <FaChevronLeft />
             </button>
           ) : (
-            <Link href={user ? "/dashboard" : "/"} className={styles.logo}>
+            <Link href={user ? '/dashboard' : '/'} className={styles.logo}>
               <SafeImage src="/icons/pwab-192.jpg" alt="PattiBytes" width={36} height={36} className={styles.logoImg} />
               <span className={styles.logoText}>PattiBytes</span>
             </Link>
@@ -92,15 +98,14 @@ export default function Header() {
               <Link href="/community" className={styles.iconButton} aria-label="Community">
                 <FaComments />
               </Link>
-              
               <Link href="/notifications" className={styles.iconButton} aria-label="Notifications">
                 <FaBell />
               </Link>
 
               <div className={styles.userMenu} ref={dropdownRef}>
-                <button 
+                <button
                   className={styles.userButton}
-                  onClick={() => setShowDropdown(!showDropdown)}
+                  onClick={() => setShowDropdown((v) => !v)}
                   aria-label="User menu"
                   aria-expanded={showDropdown}
                 >
@@ -115,7 +120,7 @@ export default function Header() {
 
                 <AnimatePresence>
                   {showDropdown && (
-                    <motion.div 
+                    <motion.div
                       className={styles.dropdown}
                       initial={{ opacity: 0, y: -10, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -133,43 +138,62 @@ export default function Header() {
                         <div className={styles.dropdownInfo}>
                           <h4>{userProfile?.displayName || 'User'}</h4>
                           <p>@{userProfile?.username || 'username'}</p>
+                          {isAdmin && <span className={styles.adminBadge}>Admin</span>}
                         </div>
                       </div>
 
-                      <div className={styles.dropdownDivider} />
+                      {/* Scrollable body for many actions */}
+                      <div className={styles.dropdownScroll}>
+                        <div className={styles.dropdownDivider} />
 
-                      <Link 
-                        href="/profile"
-                        className={styles.dropdownItem}
-                        onClick={() => setShowDropdown(false)}
-                      >
-                        <FaUser /> My Profile
-                      </Link>
-                      
-                      <Link 
-                        href="/community" 
-                        className={styles.dropdownItem}
-                        onClick={() => setShowDropdown(false)}
-                      >
-                        <FaComments /> Community
-                      </Link>
-                      
-                      <Link 
-                        href="/settings" 
-                        className={styles.dropdownItem}
-                        onClick={() => setShowDropdown(false)}
-                      >
-                        <FaCog /> Settings
-                      </Link>
+                        <Link href="/profile" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                          <FaUser /> My Profile
+                        </Link>
 
-                      <div className={styles.dropdownDivider} />
-                      
-                      <button 
-                        onClick={handleLogout} 
-                        className={`${styles.dropdownItem} ${styles.logoutItem}`}
-                      >
-                        <FaSignOutAlt /> Logout
-                      </button>
+                        <Link href="/community" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                          <FaComments /> Community
+                        </Link>
+
+                        {isAdmin && (
+                          <>
+                            <div className={styles.dropdownDivider} />
+                            <div className={styles.dropdownSection}>
+                              <span className={styles.sectionTitle}>Admin Tools</span>
+                            </div>
+
+                            <Link href="/admin/broadcast" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                              <FaBullhorn /> Broadcast
+                            </Link>
+                            <Link href="/admin/permissions" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                              <FaUserShield /> Permissions
+                            </Link>
+                            <Link href="/admin/users" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                              <FaUsers /> Users
+                            </Link>
+                            <Link href="/admin/posts" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                              <FaFileAlt /> Posts
+                            </Link>
+                            <Link href="/admin/chats" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                              <FaComments /> Chats
+                            </Link>
+                            <Link href="/admin" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                              <FaShieldAlt /> Admin Home
+                            </Link>
+                          </>
+                        )}
+
+                        <div className={styles.dropdownDivider} />
+
+                        <Link href="/settings" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                          <FaCog /> Settings
+                        </Link>
+
+                        <div className={styles.dropdownDivider} />
+
+                        <button onClick={handleLogout} className={`${styles.dropdownItem} ${styles.logoutItem}`}>
+                          <FaSignOutAlt /> Logout
+                        </button>
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
