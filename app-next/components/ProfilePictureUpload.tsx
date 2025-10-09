@@ -46,7 +46,7 @@ export default function ProfilePictureUpload({ currentUrl, onUploaded, maxSizeMB
     }
 
     const r = new FileReader();
-    r.onload = ev => setPreview(ev.target?.result as string);
+    r.onload = (ev) => setPreview((ev.target?.result as string) || currentUrl);
     r.readAsDataURL(f);
 
     try {
@@ -68,7 +68,7 @@ export default function ProfilePictureUpload({ currentUrl, onUploaded, maxSizeMB
 
   return (
     <div className={styles.wrap}>
-      <div className={styles.avatarBox} onClick={pick} role="button" aria-label="Change profile picture">
+      <div className={styles.avatarBox} onClick={pick} role="button" aria-label="Change profile picture" tabIndex={0}>
         <SafeImage src={preview} alt="Profile" width={120} height={120} />
         <div className={styles.overlay}>
           <FaUpload />
@@ -77,7 +77,7 @@ export default function ProfilePictureUpload({ currentUrl, onUploaded, maxSizeMB
       </div>
       <input ref={fileRef} type="file" accept="image/*" onChange={onChoose} style={{ display: 'none' }} />
       {uploading && (
-        <div className={styles.progress}>
+        <div className={styles.progress} aria-live="polite" aria-label="Uploading">
           <div className={styles.fill} style={{ width: `${progress}%` }} />
         </div>
       )}
