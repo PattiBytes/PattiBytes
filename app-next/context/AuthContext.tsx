@@ -1,4 +1,3 @@
-// context/AuthContext.tsx
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
   User,
@@ -8,6 +7,7 @@ import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail, // add
 } from 'firebase/auth';
 import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
@@ -25,6 +25,7 @@ interface AuthContextType {
   signUpWithEmail: (email: string, password: string, username: string, displayName: string) => Promise<void>;
   signOut: () => Promise<void>;
   reloadUser: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>; // add
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,19 +44,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const userRef = doc(db, 'users', user.uid);
     setDoc(
       userRef,
-      {
-        onlineStatus: 'online',
-        lastSeen: serverTimestamp(),
-      },
+      { onlineStatus: 'online', lastSeen: serverTimestamp() },
       { merge: true }
     );
     return () => {
       setDoc(
         userRef,
-        {
-          onlineStatus: 'offline',
-          lastSeen: serverTimestamp(),
-        },
+        { onlineStatus: 'offline', lastSeen: serverTimestamp() },
         { merge: true }
       );
     };
@@ -67,11 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
-        // Load profile (if missing, user navigations decide next step)
         const profile = await getUserProfile(firebaseUser.uid);
         setUserProfile(profile || null);
 
-        // Resolve admin status after login
         const admin = await checkAdmin(firebaseUser.uid);
         setIsAdmin(admin);
       } else {
@@ -109,7 +102,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithEmail = async (email: string, password: string) => {
     if (!auth) throw new Error('Auth not initialized');
     await signInWithEmailAndPassword(auth, email, password);
-    // Admin resolution handled by onAuthStateChanged
   };
 
   const signUpWithEmail = async (email: string, password: string, username: string, displayName: string) => {
@@ -125,7 +117,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       displayName,
       photoURL: u.photoURL || undefined,
-      // role defaults to 'user' unless you later grant admin explicitly
     });
   };
 
@@ -135,10 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user) {
         await setDoc(
           doc(db, 'users', user.uid),
-          {
-            onlineStatus: 'offline',
-            lastSeen: serverTimestamp(),
-          },
+          { onlineStatus: 'offline', lastSeen: serverTimestamp() },
           { merge: true }
         );
       }
@@ -160,6 +148,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAdmin(await checkAdmin(user.uid));
   };
 
+  // New: password reset
+  const sendPasswordReset = async (email: string) => {
+    if (!auth) throw new Error('Auth not initialized');
+    await sendPasswordResetEmail(auth, email);
+  };
+
   const value: AuthContextType = {
     user,
     userProfile,
@@ -170,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUpWithEmail,
     signOut,
     reloadUser,
+    sendPasswordReset, // expose
   };
 
   return <AuthContext.Provider value={value}>{loading ? null : children}</AuthContext.Provider>;
