@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/context/AuthContext';
-import { collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit,
+  Timestamp,
+  type QueryDocumentSnapshot,
+  type DocumentData,
+} from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import { UserProfile } from '@/lib/username';
 import AuthGuard from '@/components/AuthGuard';
@@ -44,7 +54,7 @@ export default function UserProfilePage() {
 
         // Query users collection by username
         const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('username', '==', username), limit(1));
+        const q = query(usersRef, where('username', '==', String(username)), limit(1));
         const snapshot = await getDocs(q);
 
         if (snapshot.empty) {
@@ -67,14 +77,27 @@ export default function UserProfilePage() {
           limit(20)
         );
         const postsSnapshot = await getDocs(postsQuery);
-        const userPosts = postsSnapshot.docs.map(docSnap => {
-          const data = docSnap.data();
+        const userPosts = postsSnapshot.docs.map((docSnap: QueryDocumentSnapshot<DocumentData>) => {
+          const data = docSnap.data() as {
+            title?: string;
+            preview?: string;
+            type?: string;
+            imageUrl?: string;
+            createdAt?: Timestamp | Date;
+            likesCount?: number;
+            commentsCount?: number;
+          };
           return {
             id: docSnap.id,
-            ...data,
-            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date()
-          };
-        }) as Post[];
+            title: data.title ?? '',
+            preview: data.preview,
+            type: data.type ?? 'post',
+            imageUrl: data.imageUrl,
+            createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+            likesCount: Number(data.likesCount ?? 0),
+            commentsCount: Number(data.commentsCount ?? 0),
+          } as Post;
+        });
 
         setPosts(userPosts);
       } catch (error) {
@@ -129,7 +152,13 @@ export default function UserProfilePage() {
             <div className={styles.profileInfo}>
               <div className={styles.avatarSection}>
                 {isOwnProfile ? (
-                  <ProfilePictureUpload />
+                  <ProfilePictureUpload
+                    currentUrl={profile.photoURL}
+                    onUploaded={(newUrl: string) => {
+                      // Optimistic update
+                      setProfile((prev) => (prev ? { ...prev, photoURL: newUrl } : prev));
+                    }}
+                  />
                 ) : (
                   <SafeImage
                     src={profile.photoURL}
@@ -154,9 +183,7 @@ export default function UserProfilePage() {
                 )}
               </div>
 
-              {profile.bio && (
-                <p className={styles.bio}>{profile.bio}</p>
-              )}
+              {profile.bio && <p className={styles.bio}>{profile.bio}</p>}
 
               <div className={styles.metadata}>
                 {profile.location && (
@@ -165,9 +192,9 @@ export default function UserProfilePage() {
                   </span>
                 )}
                 {profile.website && (
-                  <a 
-                    href={profile.website} 
-                    target="_blank" 
+                  <a
+                    href={profile.website}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className={styles.metaItem}
                   >
@@ -175,7 +202,14 @@ export default function UserProfilePage() {
                   </a>
                 )}
                 <span className={styles.metaItem}>
-                  <FaCalendar /> Joined {new Date(profile.createdAt ? profile.createdAt.toString() : Date.now()).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  <FaCalendar /> Joined{' '}
+                  {(() => {
+                    const d =
+                      profile.createdAt instanceof Timestamp
+                        ? profile.createdAt.toDate()
+                        : new Date();
+                    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                  })()}
                 </span>
               </div>
 
@@ -205,7 +239,7 @@ export default function UserProfilePage() {
             {posts.length === 0 ? (
               <div className={styles.noPosts}>
                 <FaPen className={styles.noPostsIcon} />
-                <p>{isOwnProfile ? "You haven't posted anything yet" : "No posts yet"}</p>
+                <p>{isOwnProfile ? "You haven't posted anything yet" : 'No posts yet'}</p>
                 {isOwnProfile && (
                   <Link href="/create" className={styles.createBtn}>
                     Create Your First Post
