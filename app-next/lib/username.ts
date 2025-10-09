@@ -1,4 +1,3 @@
-// lib/username.ts
 import {
   doc,
   getDoc,
@@ -13,19 +12,29 @@ import {
   Timestamp,
   FieldValue,
   writeBatch,
+  increment,
+  type DocumentData,
 } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { getFirebaseClient } from './firebase';
 
-// Helper: strip undefined/null
-function removeUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
-  const result: Partial<T> = {};
-  for (const key in obj) {
-    if (obj[key] !== undefined && obj[key] !== null) {
-      result[key] = obj[key];
-    }
+// Deeply strip undefined and null
+function deepClean<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj as T;
+  if (Array.isArray(obj)) {
+    return obj
+      .map((v) => deepClean(v))
+      .filter((v) => v !== undefined && v !== null) as unknown as T;
   }
-  return result;
+  if (typeof obj === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      const cleaned = deepClean(v);
+      if (cleaned !== undefined && cleaned !== null) out[k] = cleaned as unknown;
+    }
+    return out as T;
+  }
+  return obj;
 }
 
 // Helper: delay
@@ -94,7 +103,7 @@ export function validateUsername(username: string): { valid: boolean; error?: st
   return { valid: true };
 }
 
-// Cache and duration for availability checks
+// Cache for username availability checks
 const usernameCache = new Map<string, { available: boolean; timestamp: number }>();
 const CACHE_DURATION = 30000; // 30s
 
@@ -155,7 +164,7 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   return userDoc.data() as UserProfile;
 }
 
-// Get user by username
+// Get user by username (mapping -> users)
 export async function getUserByUsername(username: string): Promise<UserProfile | null> {
   const { db } = getFirebaseClient();
   if (!db) throw new Error('Firestore not initialized');
@@ -170,7 +179,7 @@ export async function getUserByUsername(username: string): Promise<UserProfile |
   return userDoc.data() as UserProfile;
 }
 
-// Prefix search in usernames mapping
+// Prefix search in usernames mapping with fallback to displayName prefix
 export async function searchUsersByUsername(
   prefix: string,
   limitCount = 10,
@@ -178,31 +187,56 @@ export async function searchUsersByUsername(
 ): Promise<UserProfile[]> {
   const { db } = getFirebaseClient();
   if (!db) throw new Error('Firestore not initialized');
-  if (prefix.length < 2) return [];
-
   const normalized = prefix.toLowerCase().trim();
+  if (normalized.length < 2) return [];
 
+  // Primary: usernames mapping
   const usernamesQuery = fsQuery(
     collection(db, 'usernames'),
+    orderBy('__name__'),
     where('__name__', '>=', normalized),
     where('__name__', '<', normalized + '\uf8ff'),
-    orderBy('__name__'),
     limit(limitCount + 1),
   );
-
   const usernameSnapshot = await getDocs(usernamesQuery);
-  let userIds = usernameSnapshot.docs.map((d) => d.data().uid as string).filter((id) => id !== excludeUid);
-  if (userIds.length === 0) return [];
+  let userIds = usernameSnapshot.docs
+    .map((d) => (d.data() as UsernameRecord).uid)
+    .filter((id) => id && id !== excludeUid);
   userIds = userIds.slice(0, limitCount);
 
-  const profiles = await Promise.all(
+  // Hydrate
+  const fromUsernames = await Promise.all(
     userIds.map(async (uid) => {
       const userDoc = await getDoc(doc(db, 'users', uid));
       return userDoc.exists() ? (userDoc.data() as UserProfile) : null;
     }),
   );
+  const primary = fromUsernames.filter((p): p is UserProfile => !!p);
 
-  return profiles.filter((p): p is UserProfile => !!p);
+  if (primary.length >= limitCount) return primary.slice(0, limitCount);
+
+  // Fallback: displayName prefix search in users (to catch people whose display names changed)
+  const remaining = limitCount - primary.length;
+  const nameQuery = fsQuery(
+    collection(db, 'users'),
+    orderBy('displayNameLower'),
+    where('displayNameLower', '>=', normalized),
+    where('displayNameLower', '<', normalized + '\uf8ff'),
+    limit(remaining * 2),
+  );
+  const nameSnap = await getDocs(nameQuery);
+  const nameMatches: UserProfile[] = [];
+  for (const d of nameSnap.docs) {
+    const data = d.data() as DocumentData;
+    if (excludeUid && d.id === excludeUid) continue;
+    nameMatches.push({ uid: d.id, ...(data as Omit<UserProfile, 'uid'>) });
+    if (nameMatches.length >= remaining) break;
+  }
+
+  // Deduplicate by uid
+  const seen = new Set(primary.map((p) => p.uid));
+  const merged = [...primary, ...nameMatches.filter((p) => !seen.has(p.uid))];
+  return merged.slice(0, limitCount);
 }
 
 // Create a new user profile and claim username in one go
@@ -255,43 +289,66 @@ export async function claimUsername(
 
       const batch = writeBatch(db);
 
+      // If user is changing username, delete old mapping
       if (current?.username && current.username !== normalized) {
         const oldRef = doc(db, 'usernames', current.username);
         batch.delete(oldRef);
         usernameCache.delete(current.username);
       }
 
+      // Create/update username mapping
       batch.set(usernameRef, { uid, createdAt: serverTimestamp() });
 
       const now = serverTimestamp();
-      const profileData: Record<string, unknown> = { username: normalized, updatedAt: now };
+
+      // Build base profile updates; never include undefined by deepClean later
+      const profileData: Record<string, unknown> = {
+        username: normalized,
+        updatedAt: now,
+      };
 
       if (userProfile) {
-        const cleaned = removeUndefined(userProfile as Record<string, unknown>);
-        Object.assign(profileData, cleaned);
+        const cleanedPartial = deepClean(userProfile as Record<string, unknown>);
+        Object.assign(profileData, cleanedPartial);
+        if (typeof userProfile.displayName === 'string') {
+          profileData.displayNameLower = userProfile.displayName.toLowerCase();
+        }
       }
 
       if (isNewUser) {
         profileData.uid = uid;
         profileData.createdAt = now;
+        // Initialize stats with concrete zeros to avoid undefined inside nested object
         profileData.stats = { postsCount: 0, followersCount: 0, followingCount: 0 };
         profileData.unreadNotifications = 0;
-        profileData.preferences = profileData.preferences || {
-          theme: 'auto',
-          language: 'en',
-          notifications: true,
-          publicProfile: true,
-        };
+        profileData.preferences =
+          profileData.preferences || {
+            theme: 'auto',
+            language: 'en',
+            notifications: true,
+            publicProfile: true,
+          };
         profileData.isVerified = false;
         profileData.isOnline = false;
+        // store a lowercased display name to support displayName search fallback
+        if (typeof (profileData as Record<string, unknown>).displayName === 'string') {
+          (profileData as Record<string, unknown>).displayNameLower = String(
+            (profileData as Record<string, unknown>).displayName
+          ).toLowerCase();
+        }
       }
 
-      batch.set(userRef, profileData, { merge: true });
+      // Final sanitize to remove any undefined properties anywhere
+      const finalProfile = deepClean(profileData);
+
+      batch.set(userRef, finalProfile, { merge: true });
       await batch.commit();
 
+      // Invalidate username cache
       usernameCache.delete(normalized);
 
-      if (userProfile?.displayName && auth?.currentUser) {
+      // Update Firebase Auth profile display name if provided
+      if (userProfile?.displayName && auth?.currentUser && auth.currentUser.uid === uid) {
         try {
           await updateProfile(auth.currentUser, { displayName: userProfile.displayName });
         } catch (e) {
@@ -311,22 +368,31 @@ export async function claimUsername(
   throw new Error('Failed to claim username. Please try again.');
 }
 
-// Update profile
+// Update profile (never write undefined and never overwrite stats here)
 export async function updateUserProfile(uid: string, updates: Partial<UserProfile>): Promise<void> {
   const { db, auth } = getFirebaseClient();
   if (!db) throw new Error('Firestore not initialized');
 
-  const profileUpdates: Partial<UserProfile> = { ...updates, updatedAt: serverTimestamp() as FieldValue };
-  delete profileUpdates.uid;
-  delete profileUpdates.createdAt;
-  delete profileUpdates.username;
-  delete profileUpdates.stats;
+  const toWrite: Record<string, unknown> = {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  };
 
-  if (profileUpdates.bio && profileUpdates.bio.length > 160) {
+  // Do not allow these to be directly updated here
+  delete toWrite.uid;
+  delete toWrite.createdAt;
+  delete toWrite.username;
+  delete toWrite.stats;
+
+  if (typeof toWrite.bio === 'string' && (toWrite.bio as string).length > 160) {
     throw new Error('Bio must be less than 160 characters');
   }
 
-  const cleaned = removeUndefined(profileUpdates as Record<string, unknown>);
+  if (typeof toWrite.displayName === 'string') {
+    toWrite.displayNameLower = (toWrite.displayName as string).toLowerCase();
+  }
+
+  const cleaned = deepClean(toWrite);
   await setDoc(doc(db, 'users', uid), cleaned, { merge: true });
 
   if (updates.displayName && auth?.currentUser?.uid === uid) {
@@ -344,7 +410,7 @@ export async function updateUserOnlineStatus(uid: string, isOnline: boolean): Pr
   if (!db) return;
   await setDoc(
     doc(db, 'users', uid),
-    { isOnline, lastSeen: serverTimestamp(), updatedAt: serverTimestamp() },
+    deepClean({ isOnline, lastSeen: serverTimestamp(), updatedAt: serverTimestamp() }),
     { merge: true },
   );
 }
@@ -356,17 +422,33 @@ export async function updateUserStats(uid: string, statsUpdate: Partial<UserProf
 
   const userRef = doc(db, 'users', uid);
   const userDoc = await getDoc(userRef);
-  if (!userDoc.exists()) throw new Error('User not found');
 
-  const currentStats = userDoc.data().stats || { postsCount: 0, followersCount: 0, followingCount: 0 };
-  const updatedStats = { ...currentStats, ...statsUpdate };
+  // Build a safe stats object with numbers, defaulting to 0
+  const currentStats = (userDoc.exists() && (userDoc.data().stats as UserProfile['stats'])) || {};
+  const safeCurrent = {
+    postsCount: Number(currentStats?.postsCount ?? 0),
+    followersCount: Number(currentStats?.followersCount ?? 0),
+    followingCount: Number(currentStats?.followingCount ?? 0),
+  };
+
+  const merged = {
+    ...safeCurrent,
+    ...(statsUpdate || {}),
+  };
+
+  // Ensure we never write undefined inside stats
+  const safeMerged = {
+    postsCount: Number(merged.postsCount ?? safeCurrent.postsCount),
+    followersCount: Number(merged.followersCount ?? safeCurrent.followersCount),
+    followingCount: Number(merged.followingCount ?? safeCurrent.followingCount),
+  };
 
   await setDoc(
     userRef,
-    {
-      stats: updatedStats,
+    deepClean({
+      stats: safeMerged,
       updatedAt: serverTimestamp(),
-    },
+    }),
     { merge: true },
   );
 }
@@ -375,22 +457,37 @@ export async function incrementPostCount(uid: string): Promise<void> {
   const { db } = getFirebaseClient();
   if (!db) return;
   const userRef = doc(db, 'users', uid);
-  const userDoc = await getDoc(userRef);
-  if (userDoc.exists()) {
-    const current = userDoc.data().stats?.postsCount || 0;
-    await updateUserStats(uid, { postsCount: current + 1 });
-  }
+  // Use atomic increment and also set defaults if missing
+  await setDoc(
+    userRef,
+    deepClean({
+      stats: {
+        postsCount: increment(1),
+        followersCount: 0,
+        followingCount: 0,
+      },
+      updatedAt: serverTimestamp(),
+    }),
+    { merge: true },
+  );
 }
 
 export async function decrementPostCount(uid: string): Promise<void> {
   const { db } = getFirebaseClient();
   if (!db) return;
   const userRef = doc(db, 'users', uid);
-  const userDoc = await getDoc(userRef);
-  if (userDoc.exists()) {
-    const current = userDoc.data().stats?.postsCount || 0;
-    await updateUserStats(uid, { postsCount: Math.max(0, current - 1) });
-  }
+  await setDoc(
+    userRef,
+    deepClean({
+      stats: {
+        postsCount: increment(-1),
+        followersCount: 0,
+        followingCount: 0,
+      },
+      updatedAt: serverTimestamp(),
+    }),
+    { merge: true },
+  );
 }
 
 export async function updateUnreadNotifications(uid: string, count: number): Promise<void> {
@@ -398,7 +495,7 @@ export async function updateUnreadNotifications(uid: string, count: number): Pro
   if (!db) return;
   await setDoc(
     doc(db, 'users', uid),
-    { unreadNotifications: Math.max(0, count), updatedAt: serverTimestamp() },
+    deepClean({ unreadNotifications: Math.max(0, count), updatedAt: serverTimestamp() }),
     { merge: true },
   );
 }
