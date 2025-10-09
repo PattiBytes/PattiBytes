@@ -221,6 +221,7 @@ export default function PublicProfilePage() {
             <div className={styles.avatarSection}>
               {isOwnProfile ? (
                 <ProfilePictureUpload
+                  currentUrl={profile.photoURL}
                   onUploaded={(newUrl: string) => {
                     // Optimistic update
                     setProfile((prev) => (prev ? { ...prev, photoURL: newUrl } : prev));
