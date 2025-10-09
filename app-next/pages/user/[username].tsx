@@ -1,6 +1,18 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState, useMemo } from 'react';
-import { collection, getDocs, limit, orderBy, query, where, Timestamp, doc, getDoc } from 'firebase/firestore';
+import {
+  collection,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  where,
+  Timestamp,
+  doc,
+  getDoc,
+  type QueryDocumentSnapshot,
+  type DocumentData,
+} from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import { getUserByUsername, UserProfile } from '@/lib/username';
 import { isFollowing, followUser, unfollowUser, listFollowers, listFollowing } from '@/lib/follow';
@@ -8,9 +20,19 @@ import { useAuth } from '@/context/AuthContext';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import SafeImage from '@/components/SafeImage';
+import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 import Link from 'next/link';
 import { FaMapMarkerAlt, FaGlobe, FaCalendar, FaUserPlus, FaUserCheck, FaUsers } from 'react-icons/fa';
 import styles from '@/styles/PublicProfile.module.css';
+
+type FirestorePostDoc = {
+  title?: string;
+  content?: string;
+  type?: 'news' | 'place' | 'writing' | string;
+  imageUrl?: string;
+  location?: string;
+  createdAt?: Timestamp | Date;
+};
 
 interface PostCard {
   id: string;
@@ -47,6 +69,8 @@ export default function PublicProfilePage() {
     return `https://${v}`;
   }, [profile?.website]);
 
+  const isOwnProfile = !!(user?.uid && profile?.uid && user.uid === profile.uid);
+
   useEffect(() => {
     const load = async () => {
       if (!router.isReady) return;
@@ -70,7 +94,7 @@ export default function PublicProfilePage() {
           return;
         }
 
-        // Load posts - GUARD authorId defined
+        // Load posts of this user
         if (p.uid) {
           const q = query(
             collection(db, 'posts'),
@@ -79,18 +103,27 @@ export default function PublicProfilePage() {
             limit(12)
           );
           const snap = await getDocs(q);
-          const items = snap.docs.map(d => {
-            const data = d.data();
+
+          const items: PostCard[] = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => {
+            const raw = d.data() as FirestorePostDoc;
+            const created = raw.createdAt instanceof Timestamp ? raw.createdAt.toDate() : new Date();
+
+            // Normalize type to one of the union values
+            const t = (raw.type || 'writing').toString();
+            const normalizedType: 'news' | 'place' | 'writing' =
+              t === 'news' || t === 'place' ? (t as 'news' | 'place') : 'writing';
+
             return {
               id: d.id,
-              title: data.title || '',
-              content: data.content || '',
-              type: (data.type || 'writing') as 'news' | 'place' | 'writing',
-              imageUrl: data.imageUrl,
-              location: data.location,
-              createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date()
+              title: raw.title || '',
+              content: raw.content || '',
+              type: normalizedType,
+              imageUrl: raw.imageUrl,
+              location: raw.location,
+              createdAt: created,
             };
           });
+
           setPosts(items);
         }
 
@@ -132,7 +165,7 @@ export default function PublicProfilePage() {
     const results: UserProfile[] = [];
     for (const uid of uids) {
       const snap = await getDoc(doc(db, 'users', uid));
-      if (snap.exists()) results.push(snap.data() as UserProfile);
+      if (snap.exists()) results.push({ uid, ...(snap.data() as Omit<UserProfile, 'uid'>) });
     }
     return results;
   };
@@ -185,8 +218,19 @@ export default function PublicProfilePage() {
       <Layout title={`${profile.displayName} (@${profile.username}) - PattiBytes`}>
         <div className={styles.container}>
           <div className={styles.header}>
-            <div className={styles.avatarLarge}>
-              <SafeImage src={profile.photoURL} alt={profile.displayName} width={120} height={120} />
+            <div className={styles.avatarSection}>
+              {isOwnProfile ? (
+                <ProfilePictureUpload
+                  onUploaded={(newUrl: string) => {
+                    // Optimistic update
+                    setProfile((prev) => (prev ? { ...prev, photoURL: newUrl } : prev));
+                  }}
+                />
+              ) : (
+                <div className={styles.avatarLarge}>
+                  <SafeImage src={profile.photoURL} alt={profile.displayName} width={120} height={120} />
+                </div>
+              )}
             </div>
             <div className={styles.info}>
               <h1>{profile.displayName}</h1>
@@ -230,7 +274,15 @@ export default function PublicProfilePage() {
                     disabled={busyFollow}
                     aria-pressed={following}
                   >
-                    {following ? <><FaUserCheck /> Following</> : <><FaUserPlus /> Follow</>}
+                    {following ? (
+                      <>
+                        <FaUserCheck /> Following
+                      </>
+                    ) : (
+                      <>
+                        <FaUserPlus /> Follow
+                      </>
+                    )}
                   </button>
                 )}
               </div>
@@ -243,7 +295,7 @@ export default function PublicProfilePage() {
               <div className={styles.noPosts}>No posts yet</div>
             ) : (
               <div className={styles.postsGrid}>
-                {posts.map(p => (
+                {posts.map((p) => (
                   <Link href={`/posts/${p.id}`} key={p.id} className={styles.postCard}>
                     {p.imageUrl && (
                       <div className={styles.postImage}>
@@ -265,23 +317,27 @@ export default function PublicProfilePage() {
         {/* Followers Modal */}
         {showFollowers && (
           <div className={styles.listModal} onClick={() => setShowFollowers(false)}>
-            <div className={styles.listPanel} onClick={e => e.stopPropagation()}>
+            <div className={styles.listPanel} onClick={(e) => e.stopPropagation()}>
               <div className={styles.listHeader}>
                 <h3>Followers</h3>
-                <button className={styles.closeBtn} onClick={() => setShowFollowers(false)}>×</button>
+                <button className={styles.closeBtn} onClick={() => setShowFollowers(false)}>
+                  ×
+                </button>
               </div>
               <div className={styles.listBody}>
                 {followersList.length === 0 ? (
                   <div className={styles.emptyList}>No followers yet</div>
-                ) : followersList.map(u => (
-                  <Link href={`/user/${u.username}`} key={u.uid} className={styles.listItem}>
-                    <SafeImage src={u.photoURL} alt={u.displayName} width={40} height={40} className={styles.listAvatar} />
-                    <div className={styles.listInfo}>
-                      <strong>{u.displayName}</strong>
-                      <span>@{u.username}</span>
-                    </div>
-                  </Link>
-                ))}
+                ) : (
+                  followersList.map((u) => (
+                    <Link href={`/user/${u.username}`} key={u.uid} className={styles.listItem}>
+                      <SafeImage src={u.photoURL} alt={u.displayName} width={40} height={40} className={styles.listAvatar} />
+                      <div className={styles.listInfo}>
+                        <strong>{u.displayName}</strong>
+                        <span>@{u.username}</span>
+                      </div>
+                    </Link>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -290,23 +346,27 @@ export default function PublicProfilePage() {
         {/* Following Modal */}
         {showFollowing && (
           <div className={styles.listModal} onClick={() => setShowFollowing(false)}>
-            <div className={styles.listPanel} onClick={e => e.stopPropagation()}>
+            <div className={styles.listPanel} onClick={(e) => e.stopPropagation()}>
               <div className={styles.listHeader}>
                 <h3>Following</h3>
-                <button className={styles.closeBtn} onClick={() => setShowFollowing(false)}>×</button>
+                <button className={styles.closeBtn} onClick={() => setShowFollowing(false)}>
+                  ×
+                </button>
               </div>
               <div className={styles.listBody}>
                 {followingList.length === 0 ? (
                   <div className={styles.emptyList}>Not following anyone yet</div>
-                ) : followingList.map(u => (
-                  <Link href={`/user/${u.username}`} key={u.uid} className={styles.listItem}>
-                    <SafeImage src={u.photoURL} alt={u.displayName} width={40} height={40} className={styles.listAvatar} />
-                    <div className={styles.listInfo}>
-                      <strong>{u.displayName}</strong>
-                      <span>@{u.username}</span>
-                    </div>
-                  </Link>
-                ))}
+                ) : (
+                  followingList.map((u) => (
+                    <Link href={`/user/${u.username}`} key={u.uid} className={styles.listItem}>
+                      <SafeImage src={u.photoURL} alt={u.displayName} width={40} height={40} className={styles.listAvatar} />
+                      <div className={styles.listInfo}>
+                        <strong>{u.displayName}</strong>
+                        <span>@{u.username}</span>
+                      </div>
+                    </Link>
+                  ))
+                )}
               </div>
             </div>
           </div>
