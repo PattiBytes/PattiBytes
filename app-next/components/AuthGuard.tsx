@@ -12,32 +12,29 @@ interface AuthGuardProps {
 }
 
 // Loading Spinner Component (embedded to fix import issue)
-export function LoadingSpinner({ 
-  message = "Loading...",
-  size = "default" 
-}: { 
+export function LoadingSpinner({
+  message = 'Loading...',
+  size = 'default',
+}: {
   message?: string;
-  size?: "small" | "default" | "large";
+  size?: 'small' | 'default' | 'large';
 }) {
   const sizeClasses = {
-    small: "w-6 h-6",
-    default: "w-10 h-10", 
-    large: "w-16 h-16"
+    small: 'w-6 h-6',
+    default: 'w-10 h-10',
+    large: 'w-16 h-16',
   };
 
   return (
-    <div className="loading-container">
-      <div className="loading-spinner">
+    <div className="loading-container" style={{ display: 'grid', placeItems: 'center', minHeight: '60vh', width: '100%' }}>
+      <div className="loading-spinner" style={{ display: 'grid', gap: 12, justifyItems: 'center' }}>
         <motion.div
           className={`spinner ${sizeClasses[size]}`}
+          style={{ border: '3px solid #e5e7eb', borderTopColor: '#667eea', borderRadius: '9999px' }}
           animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
         />
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-        >
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
           {message}
         </motion.p>
       </div>
@@ -45,51 +42,42 @@ export function LoadingSpinner({
   );
 }
 
-export default function AuthGuard({ 
-  children, 
+export default function AuthGuard({
+  children,
   requireUsername = false,
   requireVerification = false,
   redirectTo = '/auth/login',
-  fallback
+  fallback,
 }: AuthGuardProps) {
-  const { user, userProfile, loading, error } = useAuth();
+  // Removed `error` from destructure; context doesn't expose it
+  const { user, userProfile, loading } = useAuth();
   const router = useRouter();
   const [shouldRender, setShouldRender] = useState(false);
 
   useEffect(() => {
-    if (!loading) {
-      if (!user) {
-        // Not authenticated, redirect to login
-        router.replace(redirectTo);
-      } else if (requireUsername && (!userProfile || !userProfile.username)) {
-        // Authenticated but no username, redirect to setup
-        router.replace('/auth/setup-username');
-      } else if (requireVerification && !user.emailVerified) {
-        // Authenticated but email not verified
-        router.replace('/auth/verify-email');
-      } else {
-        // All checks passed
-        setShouldRender(true);
-      }
+    if (loading) return;
+    if (!user) {
+      // Not authenticated, redirect to login
+      router.replace(redirectTo);
+      return;
     }
+    if (requireUsername && (!userProfile || !userProfile.username)) {
+      // Authenticated but no username, redirect to setup
+      router.replace('/auth/setup-username');
+      return;
+    }
+    if (requireVerification && !user.emailVerified) {
+      // Authenticated but email not verified
+      router.replace('/auth/verify-email');
+      return;
+    }
+    // All checks passed
+    setShouldRender(true);
   }, [user, userProfile, loading, router, requireUsername, requireVerification, redirectTo]);
 
   // Show loading while checking auth
   if (loading) {
     return fallback || <LoadingSpinner />;
-  }
-
-  // Show error if there's an auth error
-  if (error) {
-    return (
-      <div className="auth-error">
-        <h2>Authentication Error</h2>
-        <p>{error}</p>
-        <button onClick={() => router.push('/auth/login')}>
-          Go to Login
-        </button>
-      </div>
-    );
   }
 
   // Don't render children if conditions not met
@@ -99,12 +87,7 @@ export default function AuthGuard({
 
   return (
     <AnimatePresence mode="wait">
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -10 }}
-        transition={{ duration: 0.2 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
         {children}
       </motion.div>
     </AnimatePresence>
@@ -118,64 +101,59 @@ interface RedirectIfAuthenticatedProps {
   checkProfile?: boolean;
 }
 
-export function RedirectIfAuthenticated({ 
-  children, 
+export function RedirectIfAuthenticated({
+  children,
   redirectTo = '/dashboard',
-  checkProfile = false
+  checkProfile = false,
 }: RedirectIfAuthenticatedProps) {
   const { user, userProfile, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && user) {
-      if (checkProfile && userProfile?.username) {
-        router.replace(redirectTo);
-      } else if (!checkProfile) {
-        router.replace(redirectTo);
-      }
+    if (loading || !user) return;
+    if (checkProfile) {
+      if (userProfile?.username) router.replace(redirectTo);
+    } else {
+      router.replace(redirectTo);
     }
   }, [user, userProfile, loading, router, redirectTo, checkProfile]);
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
-
-  if (user && (!checkProfile || userProfile?.username)) {
-    return null;
-  }
+  if (loading) return <LoadingSpinner />;
+  if (user && (!checkProfile || userProfile?.username)) return null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
-    >
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       {children}
     </motion.div>
   );
 }
 
-// Role-based guard for admin features
-interface AdminGuardProps {
-  children: ReactNode;
-  fallback?: ReactNode;
-}
+// Role-based guard for admin features using context.isAdmin
+export function AdminGuard({ children, fallback }: { children: ReactNode; fallback?: ReactNode }) {
+  const { isAdmin, loading } = useAuth();
+  const router = useRouter();
 
-export function AdminGuard({ children, fallback }: AdminGuardProps) {
-  const { userProfile } = useAuth();
-  
-  // Check if user has admin role (implement based on your admin system)
-  const isAdmin = userProfile?.isVerified && userProfile?.username === 'admin'; // Simplified check
-  
+  useEffect(() => {
+    if (!loading && isAdmin === false) {
+      router.replace('/dashboard');
+    }
+  }, [isAdmin, loading, router]);
+
+  if (loading || isAdmin === undefined) {
+    return <LoadingSpinner message="Checking permissions..." size="small" />;
+  }
+
   if (!isAdmin) {
-    return fallback || (
-      <div className="access-denied">
-        <h2>Access Denied</h2>
-        <p>You don&apos;t have permission to access this area.</p>
-      </div>
+    return (
+      fallback || (
+        <div className="access-denied" style={{ display: 'grid', placeItems: 'center', minHeight: '40vh', padding: 16 }}>
+          <h2 style={{ color: '#ef4444', marginBottom: 8 }}>Access Denied</h2>
+          <p>Insufficient permissions to view this area.</p>
+        </div>
+      )
     );
   }
-  
+
   return <>{children}</>;
 }
 
@@ -183,16 +161,16 @@ export function AdminGuard({ children, fallback }: AdminGuardProps) {
 export function VerificationGuard({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const router = useRouter();
-  
+
   useEffect(() => {
     if (user && !user.emailVerified) {
       router.replace('/auth/verify-email');
     }
   }, [user, router]);
-  
+
   if (!user?.emailVerified) {
     return <LoadingSpinner message="Checking email verification..." />;
   }
-  
+
   return <>{children}</>;
 }
