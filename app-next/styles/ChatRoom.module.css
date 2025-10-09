@@ -1,0 +1,162 @@
+.wrapper {
+  max-width: 820px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 120px);
+}
+
+.center {
+  padding: 2rem;
+  text-align: center;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  text-decoration: none;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.user {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.typing {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.loadMore {
+  align-self: center;
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+}
+
+.message {
+  max-width: 70%;
+  display: flex;
+  flex-direction: column;
+}
+
+.mine {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.theirs {
+  align-self: flex-start;
+}
+
+.bubble {
+  background: var(--primary);
+  color: white;
+  padding: 0.5rem 0.7rem;
+  border-radius: 12px;
+}
+
+.mine .bubble {
+  background: var(--primary);
+  color: white;
+}
+
+.theirs .bubble {
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.imageBubble img {
+  border-radius: 12px;
+  display: block;
+  max-width: 320px;
+  height: auto;
+}
+
+.time {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.2rem;
+}
+
+.composer {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-top: 1px solid var(--border);
+  padding: 0.5rem;
+}
+
+.composer input[type="text"], .composer input:not([type]) {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  outline: none;
+}
+
+.attachBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+}
+
+.attachBtn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.sendBtn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  width: 42px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

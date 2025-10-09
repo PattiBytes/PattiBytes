@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { collection, query as firestoreQuery, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
-
 import { getFirebaseClient } from '@/lib/firebase';
 import { searchUsersByUsername } from '@/lib/username';
 import AuthGuard from '@/components/AuthGuard';
@@ -61,7 +60,7 @@ export default function Search() {
 
       const allResults: SearchResult[] = [];
 
-      // Search users by username
+      // Users
       if (activeTab === 'all' || activeTab === 'users') {
         try {
           const users = await searchUsersByUsername(searchText, 10);
@@ -79,13 +78,12 @@ export default function Search() {
         }
       }
 
-      // Search posts (simplified - no complex index needed)
+      // Posts
       if (activeTab === 'all' || activeTab === 'posts') {
         try {
           const postsRef = collection(db, 'posts');
           const searchLower = searchText.toLowerCase();
 
-          // Get recent posts and filter in memory
           const allPostsQuery = firestoreQuery(
             postsRef,
             orderBy('createdAt', 'desc'),
@@ -138,7 +136,6 @@ export default function Search() {
     const timer = setTimeout(() => {
       performSearch(searchQuery);
     }, 500);
-
     return () => clearTimeout(timer);
   }, [searchQuery, activeTab, performSearch]);
 
@@ -177,24 +174,9 @@ export default function Search() {
           </div>
 
           <div className={styles.tabs}>
-            <button
-              className={`${styles.tab} ${activeTab === 'all' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('all')}
-            >
-              All
-            </button>
-            <button
-              className={`${styles.tab} ${activeTab === 'users' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('users')}
-            >
-              <FaUser /> Users
-            </button>
-            <button
-              className={`${styles.tab} ${activeTab === 'posts' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('posts')}
-            >
-              <FaNewspaper /> Posts
-            </button>
+            <button className={`${styles.tab} ${activeTab === 'all' ? styles.activeTab : ''}`} onClick={() => setActiveTab('all')}>All</button>
+            <button className={`${styles.tab} ${activeTab === 'users' ? styles.activeTab : ''}`} onClick={() => setActiveTab('users')}><FaUser /> Users</button>
+            <button className={`${styles.tab} ${activeTab === 'posts' ? styles.activeTab : ''}`} onClick={() => setActiveTab('posts')}><FaNewspaper /> Posts</button>
           </div>
 
           <div className={styles.results}>

@@ -1,196 +1,101 @@
-.bytesContainer {
-  padding: 16px 0;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-  margin-bottom: 24px;
+.stories {
+  margin-bottom: 1.5rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border);
 }
 
-.storiesScroll {
+.addStory {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-right: 1rem;
+  text-decoration: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.addCircle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px dashed var(--border);
   display: flex;
-  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: var(--primary);
+  transition: all 0.2s;
+}
+
+.addStory:hover .addCircle {
+  border-color: var(--primary);
+  background: rgba(0, 123, 255, 0.1);
+  transform: scale(1.05);
+}
+
+.addStory span {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.storiesList {
+  display: flex;
+  gap: 1rem;
   overflow-x: auto;
-  padding: 0 16px;
+  padding: 0.5rem 0;
   scrollbar-width: none;
 }
 
-.storiesScroll::-webkit-scrollbar {
+.storiesList::-webkit-scrollbar {
   display: none;
 }
 
-.storyItem {
+.story {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   cursor: pointer;
-  flex-shrink: 0;
+}
+
+.story a {
+  text-decoration: none;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .storyRing {
   width: 68px;
   height: 68px;
   border-radius: 50%;
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
   padding: 3px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.storyRing.addNew {
-  background: #e5e7eb;
-}
-
-.avatar {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 3px solid white;
-  position: relative;
-  overflow: hidden;
-}
-
-.avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.addIcon {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  background: #667eea;
-  color: white;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid white;
-  font-size: 12px;
+  transition: transform 0.2s;
 }
 
-.storyName {
-  font-size: 12px;
-  color: #6b7280;
+.story:hover .storyRing {
+  transform: scale(1.05);
+}
+
+.storyAvatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 3px solid var(--bg);
+  object-fit: cover;
+}
+
+.story span {
+  font-size: 0.85rem;
   max-width: 70px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: center;
-}
-
-/* Upload Modal */
-.uploadModal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-}
-
-.uploadContent {
-  background: white;
-  padding: 32px;
-  border-radius: 16px;
-  max-width: 400px;
-  width: 90%;
-  position: relative;
-}
-
-.closeBtn {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #6b7280;
-}
-
-.uploadContent h2 {
-  margin: 0 0 24px 0;
-  font-size: 24px;
-  color: #111827;
-}
-
-.uploadOptions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.uploadOption {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 24px;
-  border: 2px dashed #e5e7eb;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.uploadOption:hover {
-  border-color: #667eea;
-  background: #f9fafb;
-}
-
-.uploadOption input {
-  display: none;
-}
-
-.uploadOption svg {
-  font-size: 32px;
-  color: #667eea;
-}
-
-.uploading {
-  text-align: center;
-  margin-top: 16px;
-  color: #667eea;
-  font-weight: 600;
-}
-
-/* Byte Viewer */
-.byteViewer {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.95);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-}
-
-.byteMedia {
-  max-width: 90vw;
-  max-height: 90vh;
-  object-fit: contain;
-}
-
-.byteInfo {
-  position: absolute;
-  top: 24px;
-  left: 24px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: white;
-}
-
-.byteInfo img {
-  border-radius: 50%;
-}
-
-.byteInfo strong {
-  display: block;
-}
-
-.byteInfo span {
-  font-size: 13px;
-  opacity: 0.8;
 }

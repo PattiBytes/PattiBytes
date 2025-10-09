@@ -17,7 +17,7 @@ export default function Layout({
   children,
   title = 'PattiBytes',
   description = 'Your community platform',
-  showBottomNav = true
+  showBottomNav = true,
 }: LayoutProps) {
   const { user } = useAuth();
 
@@ -35,15 +35,11 @@ export default function Layout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="PattiBytes" />
       </Head>
-      
+
       <div className={styles.layout}>
         <Header />
         <InstallPrompt />
-        
-        <main className={styles.main}>
-          {children}
-        </main>
-        
+        <main className={styles.main}>{children}</main>
         {showBottomNav && user && <BottomNav />}
       </div>
     </>

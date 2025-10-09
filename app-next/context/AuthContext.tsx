@@ -1,350 +1,178 @@
-import React, { 
-  createContext, 
-  useContext, 
-  useEffect, 
-  useState, 
-  useCallback,
-  ReactNode,
-  useRef
-} from 'react';
-import { 
-  User, 
-  onAuthStateChanged, 
+// context/AuthContext.tsx
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import {
+  User,
+  onAuthStateChanged,
   signOut as firebaseSignOut,
-  sendPasswordResetEmail,
-  confirmPasswordReset,
-  sendEmailVerification,
-  reload,
-  setPersistence,
-  browserLocalPersistence
+  signInWithPopup,
+  GoogleAuthProvider,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
 } from 'firebase/auth';
-import { 
-  doc, 
-  onSnapshot, 
-  Unsubscribe,
-  serverTimestamp,
-  setDoc
-} from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
-import { UserProfile, updateUserOnlineStatus } from '@/lib/username';
+import { UserProfile, getUserProfile, createUserProfile, isUsernameTaken } from '@/lib/username';
+import { useRouter } from 'next/router';
+import { isAdmin as checkAdmin } from '@/lib/admin';
 
 interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
-  error: string | null;
+  isAdmin: boolean;
+  signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (email: string, password: string, username: string, displayName: string) => Promise<void>;
   signOut: () => Promise<void>;
-  sendPasswordReset: (email: string) => Promise<void>;
-  confirmPasswordReset: (code: string, newPassword: string) => Promise<void>;
-  sendVerificationEmail: () => Promise<void>;
-  refreshUserProfile: () => Promise<void>;
   reloadUser: () => Promise<void>;
-  clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  const profileUnsubscribeRef = useRef<Unsubscribe | null>(null);
-  const onlineStatusUpdateRef = useRef<NodeJS.Timeout | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const router = useRouter();
+  const { auth, db } = getFirebaseClient();
 
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
-
-  const updateOnlineStatus = useCallback(async (uid: string, isOnline: boolean) => {
-    try {
-      await updateUserOnlineStatus(uid, isOnline);
-    } catch (error) {
-      console.warn('Failed to update online status:', error);
-    }
-  }, []);
-
+  // Online status tracking
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!user || !db) return;
+    const userRef = doc(db, 'users', user.uid);
+    setDoc(
+      userRef,
+      {
+        onlineStatus: 'online',
+        lastSeen: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return () => {
+      setDoc(
+        userRef,
+        {
+          onlineStatus: 'offline',
+          lastSeen: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    };
+  }, [user, db]);
 
-    const { auth, db } = getFirebaseClient();
-    
-    if (!auth || !db) {
-      setLoading(false);
-      setError('Firebase configuration not available');
-      return;
-    }
+  // Auth state listener (sets user, profile, admin)
+  useEffect(() => {
+    if (!auth) return;
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      if (firebaseUser) {
+        // Load profile (if missing, user navigations decide next step)
+        const profile = await getUserProfile(firebaseUser.uid);
+        setUserProfile(profile || null);
 
-    // Set persistence for faster login
-    setPersistence(auth, browserLocalPersistence).catch(console.error);
-
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setError(null);
-      
-      // Clean up previous listeners
-      if (profileUnsubscribeRef.current) {
-        profileUnsubscribeRef.current();
-        profileUnsubscribeRef.current = null;
-      }
-      
-      if (onlineStatusUpdateRef.current) {
-        clearInterval(onlineStatusUpdateRef.current);
-        onlineStatusUpdateRef.current = null;
-      }
-      
-      if (currentUser) {
-        // Listen to user profile changes
-        profileUnsubscribeRef.current = onSnapshot(
-          doc(db, 'users', currentUser.uid),
-          (docSnap) => {
-            if (docSnap.exists()) {
-              const profile = docSnap.data() as UserProfile;
-              setUserProfile(profile);
-              
-              // Update online status
-              updateOnlineStatus(currentUser.uid, true);
-              
-              // Set interval for periodic updates
-              onlineStatusUpdateRef.current = setInterval(() => {
-                updateOnlineStatus(currentUser.uid, true);
-              }, 60000); // Every 1 minute
-              
-            } else {
-              setUserProfile(null);
-            }
-            setLoading(false);
-            setIsInitialized(true);
-          },
-          (error) => {
-            console.error('Error listening to user profile:', error);
-            setError('Failed to load user profile');
-            setUserProfile(null);
-            setLoading(false);
-            setIsInitialized(true);
-          }
-        );
+        // Resolve admin status after login
+        const admin = await checkAdmin(firebaseUser.uid);
+        setIsAdmin(admin);
       } else {
         setUserProfile(null);
-        setLoading(false);
-        setIsInitialized(true);
+        setIsAdmin(false);
       }
-    }, (error) => {
-      console.error('Auth state change error:', error);
-      setError('Authentication error occurred');
       setLoading(false);
-      setIsInitialized(true);
     });
+    return () => unsubscribe();
+  }, [auth]);
 
-    // Handle visibility change
-    const handleVisibilityChange = () => {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        updateOnlineStatus(currentUser.uid, !document.hidden);
+  // Real-time profile listener
+  useEffect(() => {
+    if (!user || !db) return;
+    const userRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setUserProfile({ uid: user.uid, ...(snapshot.data() as Omit<UserProfile, 'uid'>) });
       }
-    };
+    });
+    return () => unsubscribe();
+  }, [user, db]);
 
-    // Handle before unload
-    const handleBeforeUnload = () => {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        updateOnlineStatus(currentUser.uid, false);
-      }
-    };
+  const signInWithGoogle = async () => {
+    if (!auth || !db) throw new Error('Auth not initialized');
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    const u = result.user;
+    const existingProfile = await getUserProfile(u.uid);
+    if (!existingProfile) {
+      router.push('/auth/complete-profile');
+    }
+  };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('beforeunload', handleBeforeUnload);
+  const signInWithEmail = async (email: string, password: string) => {
+    if (!auth) throw new Error('Auth not initialized');
+    await signInWithEmailAndPassword(auth, email, password);
+    // Admin resolution handled by onAuthStateChanged
+  };
 
-    return () => {
-      unsubscribeAuth();
-      
-      if (profileUnsubscribeRef.current) {
-        profileUnsubscribeRef.current();
-      }
-      
-      if (onlineStatusUpdateRef.current) {
-        clearInterval(onlineStatusUpdateRef.current);
-      }
-      
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        updateOnlineStatus(currentUser.uid, false);
-      }
-    };
-  }, [updateOnlineStatus]);
+  const signUpWithEmail = async (email: string, password: string, username: string, displayName: string) => {
+    if (!auth || !db) throw new Error('Auth not initialized');
+    if (await isUsernameTaken(username)) {
+      throw new Error('Username already taken');
+    }
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const u = userCredential.user;
+    await createUserProfile({
+      uid: u.uid,
+      username,
+      email,
+      displayName,
+      photoURL: u.photoURL || undefined,
+      // role defaults to 'user' unless you later grant admin explicitly
+    });
+  };
 
-  const signOut = useCallback(async () => {
-    const { auth, db } = getFirebaseClient();
-    if (!auth) throw new Error('Firebase not initialized');
-
+  const signOut = async () => {
+    if (!auth || !db) return;
     try {
-      setError(null);
-      
-      // Update online status before logout
-      if (user && db) {
-        try {
-          await updateOnlineStatus(user.uid, false);
-        } catch (err) {
-          console.warn('Failed to update online status:', err);
-        }
+      if (user) {
+        await setDoc(
+          doc(db, 'users', user.uid),
+          {
+            onlineStatus: 'offline',
+            lastSeen: serverTimestamp(),
+          },
+          { merge: true }
+        );
       }
-      
-      // Clear all intervals and listeners
-      if (onlineStatusUpdateRef.current) {
-        clearInterval(onlineStatusUpdateRef.current);
-        onlineStatusUpdateRef.current = null;
-      }
-      
-      if (profileUnsubscribeRef.current) {
-        profileUnsubscribeRef.current();
-        profileUnsubscribeRef.current = null;
-      }
-      
-      // Sign out from Firebase
       await firebaseSignOut(auth);
-      
-      // Clear all local state
       setUser(null);
       setUserProfile(null);
-      
-      // Clear browser storage
-      if (typeof window !== 'undefined') {
-        localStorage.clear();
-        sessionStorage.clear();
-        
-        // Clear IndexedDB if exists
-        if ('indexedDB' in window) {
-          indexedDB.databases().then((databases) => {
-            databases.forEach((db) => {
-              if (db.name) {
-                indexedDB.deleteDatabase(db.name);
-              }
-            });
-          }).catch(console.error);
-        }
-      }
-      
+      setIsAdmin(false);
+      router.replace('/auth/login');
     } catch (error) {
-      console.error('Error signing out:', error);
-      setError('Failed to sign out');
+      console.error('Sign out error:', error);
       throw error;
     }
-  }, [user, updateOnlineStatus]);
+  };
 
-  const sendPasswordReset = useCallback(async (email: string) => {
-    const { auth } = getFirebaseClient();
-    if (!auth) throw new Error('Firebase not initialized');
-
-    try {
-      setError(null);
-      await sendPasswordResetEmail(auth, email, {
-        url: `${window.location.origin}/auth/login`,
-        handleCodeInApp: false
-      });
-    } catch (error) {
-      console.error('Error sending password reset email:', error);
-      setError('Failed to send password reset email');
-      throw error;
-    }
-  }, []);
-
-  const confirmPasswordResetHandler = useCallback(async (code: string, newPassword: string) => {
-    const { auth } = getFirebaseClient();
-    if (!auth) throw new Error('Firebase not initialized');
-
-    try {
-      setError(null);
-      await confirmPasswordReset(auth, code, newPassword);
-    } catch (error) {
-      console.error('Error confirming password reset:', error);
-      setError('Failed to reset password');
-      throw error;
-    }
-  }, []);
-
-  const sendVerificationEmail = useCallback(async () => {
-    const { auth } = getFirebaseClient();
-    if (!auth) throw new Error('Firebase not initialized');
-
-    try {
-      setError(null);
-      if (auth.currentUser) {
-        await sendEmailVerification(auth.currentUser, {
-          url: `${window.location.origin}/dashboard`,
-          handleCodeInApp: false
-        });
-      } else {
-        throw new Error('No user is currently signed in');
-      }
-    } catch (error) {
-      console.error('Error sending verification email:', error);
-      setError('Failed to send verification email');
-      throw error;
-    }
-  }, []);
-
-  const refreshUserProfile = useCallback(async () => {
+  const reloadUser = async () => {
     if (!user) return;
-    
-    const { db } = getFirebaseClient();
-    if (!db) throw new Error('Firebase not initialized');
-    
-    try {
-      setError(null);
-      await setDoc(doc(db, 'users', user.uid), {
-        lastSeen: serverTimestamp()
-      }, { merge: true });
-      
-    } catch (error) {
-      console.error('Error refreshing user profile:', error);
-      setError('Failed to refresh profile');
-    }
-  }, [user]);
-
-  const reloadUser = useCallback(async () => {
-    const { auth } = getFirebaseClient();
-    if (!auth) throw new Error('Firebase not initialized');
-
-    try {
-      setError(null);
-      if (auth.currentUser) {
-        await reload(auth.currentUser);
-      }
-    } catch (error) {
-      console.error('Error reloading user:', error);
-      setError('Failed to reload user data');
-      throw error;
-    }
-  }, []);
+    const profile = await getUserProfile(user.uid);
+    setUserProfile(profile || null);
+    setIsAdmin(await checkAdmin(user.uid));
+  };
 
   const value: AuthContextType = {
     user,
     userProfile,
-    loading: loading || !isInitialized,
-    error,
+    loading,
+    isAdmin,
+    signInWithGoogle,
+    signInWithEmail,
+    signUpWithEmail,
     signOut,
-    sendPasswordReset,
-    confirmPasswordReset: confirmPasswordResetHandler,
-    sendVerificationEmail,
-    refreshUserProfile,
     reloadUser,
-    clearError
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{loading ? null : children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
@@ -353,32 +181,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
-
-export function useAuthActions() {
-  const auth = useAuth();
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  const withLoading = useCallback(async <T,>(
-    action: () => Promise<T>,
-    actionName: string
-  ): Promise<T> => {
-    setActionLoading(actionName);
-    try {
-      const result = await action();
-      return result;
-    } finally {
-      setActionLoading(null);
-    }
-  }, []);
-
-  return {
-    ...auth,
-    actionLoading,
-    signOutWithLoading: () => withLoading(auth.signOut, 'signOut'),
-    sendPasswordResetWithLoading: (email: string) => 
-      withLoading(() => auth.sendPasswordReset(email), 'passwordReset'),
-    sendVerificationEmailWithLoading: () => 
-      withLoading(auth.sendVerificationEmail, 'verification')
-  };
 }

@@ -1,23 +1,25 @@
 import { FormEvent, useState, useEffect } from 'react';
-import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import { FirebaseError } from 'firebase/app';
-import { getFirebaseClient } from '@/lib/firebase';
-import { doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import SafeImage from '@/components/SafeImage';
 import { RedirectIfAuthenticated } from '@/components/AuthGuard';
+import { useAuth } from '@/context/AuthContext';
 import { motion } from 'framer-motion';
 import { FaGoogle, FaEye, FaEyeSlash, FaUser, FaLock } from 'react-icons/fa';
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { getFirebaseClient } from '@/lib/firebase';
+import { FirebaseError } from 'firebase/app';
 import styles from '@/styles/Auth.module.css';
 
 export default function Login() {
-  const [identifier, setIdentifier] = useState(''); // Can be email or username
+  const router = useRouter();
+  const { signInWithEmail, signInWithGoogle, loading: authLoading } = useAuth();
+
+  const [identifier, setIdentifier] = useState(''); // Email or username
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   useEffect(() => {
     document.getElementById('identifier')?.focus();
@@ -28,8 +30,8 @@ export default function Login() {
     setError(null);
     setLoading(true);
 
-    const { auth, db } = getFirebaseClient();
-    if (!auth || !db) {
+    const { db } = getFirebaseClient();
+    if (!db) {
       setError('Authentication service unavailable');
       setLoading(false);
       return;
@@ -38,9 +40,8 @@ export default function Login() {
     try {
       let email = identifier;
 
-      // Check if identifier is a username (no @ symbol)
+      // Resolve username → email
       if (!identifier.includes('@')) {
-        // Look up email by username
         const usersRef = collection(db, 'users');
         const q = query(usersRef, where('username', '==', identifier.toLowerCase()), limit(1));
         const snapshot = await getDocs(q);
@@ -54,7 +55,10 @@ export default function Login() {
         email = snapshot.docs[0].data().email;
       }
 
-      await signInWithEmailAndPassword(auth, email, password);
+      // Sign in (AuthContext + onAuthStateChanged will detect admin)
+      await signInWithEmail(email, password);
+      
+      // Redirect to dashboard; admin status auto-detected in AuthContext
       router.push('/dashboard');
     } catch (e) {
       const fe = e as FirebaseError;
@@ -67,6 +71,9 @@ export default function Login() {
           break;
         case 'auth/invalid-email':
           setError('Invalid email address');
+          break;
+        case 'auth/invalid-credential':
+          setError('Invalid credentials');
           break;
         case 'auth/too-many-requests':
           setError('Too many failed attempts. Please try again later.');
@@ -83,22 +90,9 @@ export default function Login() {
     setError(null);
     setLoading(true);
 
-    const { auth, db, googleProvider } = getFirebaseClient();
-    if (!auth || !db || !googleProvider) {
-      setError('Authentication service unavailable');
-      setLoading(false);
-      return;
-    }
-
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-      
-      if (!userDoc.exists() || !userDoc.data()?.username) {
-        router.push('/auth/setup-username');
-      } else {
-        router.push('/dashboard');
-      }
+      await signInWithGoogle();
+      // Google flow navigates internally (AuthContext); if profile missing, redirects to complete-profile
     } catch (e) {
       const fe = e as FirebaseError;
       switch (fe.code) {
@@ -119,6 +113,8 @@ export default function Login() {
     }
   };
 
+  const busy = loading || authLoading;
+
   return (
     <RedirectIfAuthenticated>
       <main className={styles.authPage}>
@@ -135,13 +131,7 @@ export default function Login() {
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.1 }}
             >
-              <SafeImage
-                src="/images/logo.png"
-                alt="PattiBytes"
-                width={60}
-                height={60}
-                className={styles.logo}
-              />
+              <SafeImage src="/images/logo.png" alt="PattiBytes" width={60} height={60} className={styles.logo} />
             </motion.div>
             <motion.h1 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
               Welcome Back
@@ -151,42 +141,58 @@ export default function Login() {
             </motion.p>
           </div>
 
-          <motion.div className={styles.authCard} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }}>
-            <button onClick={handleGoogleLogin} className={styles.googleBtn} disabled={loading} type="button">
-              <FaGoogle /> {loading ? 'Signing in...' : 'Continue with Google'}
+          <motion.div
+            className={styles.authCard}
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.4 }}
+          >
+            <button onClick={handleGoogleLogin} className={styles.googleBtn} disabled={busy} type="button">
+              <FaGoogle /> {busy ? 'Signing in...' : 'Continue with Google'}
             </button>
 
-            <div className={styles.divider}><span>OR</span></div>
+            <div className={styles.divider}>
+              <span>OR</span>
+            </div>
 
             <form onSubmit={handleEmailLogin} className={styles.authForm}>
               <div className={styles.formGroup}>
-                <label htmlFor="identifier"><FaUser /> Email or Username</label>
+                <label htmlFor="identifier">
+                  <FaUser /> Email or Username
+                </label>
                 <input
                   id="identifier"
                   type="text"
                   placeholder="username or email@example.com"
                   value={identifier}
-                  onChange={e => setIdentifier(e.target.value.trim())}
+                  onChange={(e) => setIdentifier(e.target.value.trim())}
                   required
-                  disabled={loading}
+                  disabled={busy}
                   autoComplete="username"
                 />
               </div>
 
               <div className={styles.formGroup}>
-                <label htmlFor="password"><FaLock /> Password</label>
+                <label htmlFor="password">
+                  <FaLock /> Password
+                </label>
                 <div className={styles.passwordInput}>
                   <input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Your password"
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
+                    onChange={(e) => setPassword(e.target.value)}
                     required
-                    disabled={loading}
+                    disabled={busy}
                     autoComplete="current-password"
                   />
-                  <button type="button" className={styles.passwordToggle} onClick={() => setShowPassword(!showPassword)} disabled={loading}>
+                  <button
+                    type="button"
+                    className={styles.passwordToggle}
+                    onClick={() => setShowPassword(!showPassword)}
+                    disabled={busy}
+                  >
                     {showPassword ? <FaEyeSlash /> : <FaEye />}
                   </button>
                 </div>
@@ -196,7 +202,7 @@ export default function Login() {
                 Forgot password?
               </Link>
 
-              <button type="submit" className={styles.submitBtn} disabled={loading}>
+              <button type="submit" className={styles.submitBtn} disabled={busy}>
                 {loading ? 'Logging in...' : 'Log In'}
               </button>
 

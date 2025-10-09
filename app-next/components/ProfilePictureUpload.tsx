@@ -1,212 +1,86 @@
-import { useState, useRef } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import { getFirebaseClient } from '@/lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc } from 'firebase/firestore';
-import { updateProfile } from 'firebase/auth';
+import { useRef, useState } from 'react';
+import { uploadImageAuto } from '@/lib/uploads';
+import { isCloudinaryConfigured } from '@/lib/cloudinary';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import SafeImage from './SafeImage';
-import { FaCamera, FaSpinner, FaTimes, FaCheck } from 'react-icons/fa';
-import { motion, AnimatePresence } from 'framer-motion';
+import { FaUpload } from 'react-icons/fa';
 import styles from '@/styles/ProfilePictureUpload.module.css';
+import { useAuth } from '@/context/AuthContext';
 
-interface ProfilePictureUploadProps {
-  onUploadComplete?: (url: string) => void;
-  showControls?: boolean;
+interface Props {
+  currentUrl?: string;
+  onUploaded: (url: string) => void;
+  maxSizeMB?: number;
 }
 
-export default function ProfilePictureUpload({ 
-  onUploadComplete,
-  showControls = true 
-}: ProfilePictureUploadProps) {
+export default function ProfilePictureUpload({ currentUrl, onUploaded, maxSizeMB = 5 }: Props) {
   const { user } = useAuth();
+  const [preview, setPreview] = useState<string | undefined>(currentUrl);
   const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [progress, setProgress] = useState(0);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const pick = () => fileRef.current?.click();
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setError('Please select an image file');
+  const onChoose = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+
+    // Guard: require at least one provider configured
+    if (!isCloudinaryConfigured() && !isSupabaseConfigured()) {
+      alert('Image uploads are not configured. Set Cloudinary or Supabase env variables in .env.local and restart the dev server.');
+      e.target.value = '';
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Image size must be less than 5MB');
+    if (!f.type.startsWith('image/')) {
+      alert('Please select an image file');
+      e.target.value = '';
       return;
     }
 
-    // Show preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setPreview(e.target?.result as string);
-      setError(null);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const uploadPhoto = async () => {
-    if (!user || !preview) return;
-
-    const file = fileInputRef.current?.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    setError(null);
-    setSuccess(false);
-
-    const { storage, db, auth } = getFirebaseClient();
-    if (!storage || !db || !auth) {
-      setError('Service unavailable');
-      setUploading(false);
+    if (f.size > maxSizeMB * 1024 * 1024) {
+      alert(`File too large. Max ${maxSizeMB}MB.`);
+      e.target.value = '';
       return;
     }
+
+    const r = new FileReader();
+    r.onload = ev => setPreview(ev.target?.result as string);
+    r.readAsDataURL(f);
 
     try {
-      // Upload to Firebase Storage
-      const fileName = `avatars/${user.uid}/${Date.now()}-${file.name}`;
-      const storageRef = ref(storage, fileName);
-      
-      await uploadBytes(storageRef, file);
-      const photoURL = await getDownloadURL(storageRef);
-
-      // Update Firestore
-      await updateDoc(doc(db, 'users', user.uid), {
-        photoURL,
-        updatedAt: new Date()
-      });
-
-      // Update Auth profile
-      if (auth.currentUser) {
-        await updateProfile(auth.currentUser, { photoURL });
-      }
-
-      setSuccess(true);
-      setPreview(null);
-      
-      if (onUploadComplete) {
-        onUploadComplete(photoURL);
-      }
-
-      setTimeout(() => setSuccess(false), 3000);
+      setUploading(true);
+      setProgress(30);
+      const url = await uploadImageAuto(f, { uid: user?.uid });
+      setProgress(100);
+      onUploaded(url);
     } catch (err) {
-      console.error('Upload error:', err);
-      setError('Failed to upload photo. Please try again.');
+      console.error('Avatar upload error:', err);
+      alert((err as Error).message || 'Upload failed. Please try again.');
+      setPreview(currentUrl);
     } finally {
       setUploading(false);
+      setTimeout(() => setProgress(0), 600);
+      e.target.value = '';
     }
-  };
-
-  const handleCancel = () => {
-    setPreview(null);
-    setError(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleClick = () => {
-    fileInputRef.current?.click();
   };
 
   return (
-    <div className={styles.uploadContainer}>
-      <div className={styles.avatarWrapper}>
-        <SafeImage
-          src={preview || user?.photoURL}
-          alt="Profile"
-          width={120}
-          height={120}
-          className={styles.avatar}
-        />
-        
-        <button 
-          className={styles.uploadButton}
-          onClick={handleClick}
-          disabled={uploading}
-          type="button"
-        >
-          {uploading ? (
-            <FaSpinner className={styles.spinning} />
-          ) : (
-            <FaCamera />
-          )}
-        </button>
-
-        <AnimatePresence>
-          {preview && showControls && (
-            <motion.div 
-              className={styles.controls}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-            >
-              <button 
-                className={styles.confirmButton}
-                onClick={uploadPhoto}
-                disabled={uploading}
-                type="button"
-              >
-                <FaCheck /> Save
-              </button>
-              <button 
-                className={styles.cancelButton}
-                onClick={handleCancel}
-                disabled={uploading}
-                type="button"
-              >
-                <FaTimes /> Cancel
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+    <div className={styles.wrap}>
+      <div className={styles.avatarBox} onClick={pick} role="button" aria-label="Change profile picture">
+        <SafeImage src={preview} alt="Profile" width={120} height={120} />
+        <div className={styles.overlay}>
+          <FaUpload />
+          <span>Change</span>
+        </div>
       </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFileSelect}
-        className={styles.fileInput}
-      />
-
-      <AnimatePresence>
-        {error && (
-          <motion.p 
-            className={styles.error}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            {error}
-          </motion.p>
-        )}
-        {uploading && (
-          <motion.p 
-            className={styles.uploading}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            Uploading...
-          </motion.p>
-        )}
-        {success && (
-          <motion.p 
-            className={styles.success}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-          >
-            Profile picture updated!
-          </motion.p>
-        )}
-      </AnimatePresence>
+      <input ref={fileRef} type="file" accept="image/*" onChange={onChoose} style={{ display: 'none' }} />
+      {uploading && (
+        <div className={styles.progress}>
+          <div className={styles.fill} style={{ width: `${progress}%` }} />
+        </div>
+      )}
     </div>
   );
 }
