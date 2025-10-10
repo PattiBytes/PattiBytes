@@ -1,5 +1,6 @@
+// components/Comments.tsx
 import { useEffect, useState } from 'react';
-import { collection, addDoc, serverTimestamp, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, orderBy, query, limit } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import SafeImage from '@/components/SafeImage';
@@ -22,7 +23,7 @@ interface Comment {
   createdAt: Date;
 }
 
-export default function Comments({ postId }: { postId: string }) {
+export default function Comments({ postId, onCountChange }: { postId: string; onCountChange?: (n: number) => void }) {
   const { user, userProfile } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [text, setText] = useState('');
@@ -31,7 +32,7 @@ export default function Comments({ postId }: { postId: string }) {
   useEffect(() => {
     const { db } = getFirebaseClient();
     if (!db) return;
-    const q = query(collection(db, 'posts', postId, 'comments'), orderBy('createdAt', 'asc'));
+    const q = query(collection(db, 'posts', postId, 'comments'), orderBy('createdAt', 'asc'), limit(200));
     const unsub = onSnapshot(q, (snap) => {
       const list: Comment[] = snap.docs.map((d) => {
         const data = d.data() as CommentDoc;
@@ -46,9 +47,10 @@ export default function Comments({ postId }: { postId: string }) {
         };
       });
       setComments(list);
+      onCountChange?.(list.length);
     });
     return () => unsub();
-  }, [postId]);
+  }, [postId, onCountChange]);
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,12 +83,7 @@ export default function Comments({ postId }: { postId: string }) {
           height={36}
           className={styles.avatar}
         />
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Write a comment..."
-          disabled={sending}
-        />
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Write a comment..." disabled={sending} />
         <button type="submit" disabled={sending || !text.trim()}>
           Post
         </button>

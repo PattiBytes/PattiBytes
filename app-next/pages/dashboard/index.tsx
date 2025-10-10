@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+// pages/dashboard/index.tsx
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   collection,
   query,
@@ -6,16 +7,12 @@ import {
   limit,
   onSnapshot,
   Timestamp,
-  doc,
-  updateDoc,
-  deleteDoc,
-  arrayUnion,
-  arrayRemove,
   startAfter,
   getDocs,
-  where,
   type QueryDocumentSnapshot,
   type DocumentData,
+  doc,
+  getDoc,
 } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -24,22 +21,21 @@ import Layout from '@/components/Layout';
 import BytesStories from '@/components/BytesStories';
 import SafeImage from '@/components/SafeImage';
 import VideoReel from '@/components/VideoReel';
+import ShareButton from '@/components/ShareButton';
+import LikeButton from '@/components/LikeButton';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaMapMarkerAlt,
   FaNewspaper,
-  FaHeart,
-  FaComment,
-  FaShare,
   FaPen,
+  FaVideo,
   FaTimes,
   FaBell,
-  FaVideo,
-  FaTrash,
   FaChevronDown,
   FaEye,
-  FaCamera,
+  FaComment,
+  FaTrash,
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import styles from '@/styles/Dashboard.module.css';
@@ -65,7 +61,6 @@ interface FirestorePostDoc {
   commentsCount?: number;
   sharesCount?: number;
   viewsCount?: number;
-  likes?: string[];
   isOfficial?: boolean;
 }
 
@@ -89,8 +84,8 @@ interface Post {
   commentsCount: number;
   sharesCount: number;
   viewsCount?: number;
-  likes?: string[];
   url?: string;
+  slug?: string;
   isOfficial?: boolean;
 }
 
@@ -104,7 +99,6 @@ interface CMSNewsItem {
   date: string;
   url: string;
 }
-
 interface CMSPlaceItem {
   id?: string;
   slug?: string;
@@ -115,7 +109,6 @@ interface CMSPlaceItem {
   date: string;
   url: string;
 }
-
 interface CMSNotificationItem {
   id: string;
   title: string;
@@ -124,16 +117,8 @@ interface CMSNotificationItem {
   image?: string;
 }
 
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  target_url?: string;
-  image?: string;
-}
-
 const CMS_CACHE_KEY = 'cms_feed_v1';
-const CMS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CMS_CACHE_TTL = 5 * 60 * 1000;
 
 type CMSCacheShape = {
   ts: number;
@@ -154,7 +139,6 @@ function getCMSCache(): CMSCacheShape | null {
     return null;
   }
 }
-
 function setCMSCache(data: Omit<CMSCacheShape, 'ts'>) {
   try {
     const payload: CMSCacheShape = { ts: Date.now(), ...data };
@@ -173,7 +157,7 @@ export default function Dashboard() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [filter, setFilter] = useState<'all' | 'news' | 'places' | 'writings' | 'user-content' | 'video'>('all');
-  const [urgentNotification, setUrgentNotification] = useState<Notification | null>(null);
+  const [urgentNotification, setUrgentNotification] = useState<CMSNotificationItem | null>(null);
   const [showNotification, setShowNotification] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -183,20 +167,20 @@ export default function Dashboard() {
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const cmsLoaded = useRef(false);
 
-  // Check admin status
+  // Admin gate via single doc read (no listing)
   useEffect(() => {
-    const checkAdmin = async () => {
+    const check = async () => {
       if (!user) return;
       const { db } = getFirebaseClient();
       if (!db) return;
       try {
-        const adminSnap = await getDocs(query(collection(db, 'admins'), where('__name__', '==', user.uid), limit(1)));
-        setIsAdmin(!adminSnap.empty);
+        const snap = await getDoc(doc(db, 'admins', user.uid));
+        setIsAdmin(snap.exists());
       } catch {
         setIsAdmin(false);
       }
     };
-    checkAdmin();
+    check();
   }, [user]);
 
   const buildFeed = useCallback(
@@ -221,9 +205,9 @@ export default function Dashboard() {
     [filter]
   );
 
-  // Load CMS ONCE on mount with cache check
+  // CMS loader with session cache and compact notification
   const loadCMS = useCallback(async () => {
-    if (cmsLoaded.current) return; // prevent duplicate fetches
+    if (cmsLoaded.current) return;
     cmsLoaded.current = true;
 
     const applyNotifsOnce = (notifs: CMSNotificationItem[]) => {
@@ -232,13 +216,7 @@ export default function Dashboard() {
       const seenKey = `notification_seen_${notifId}`;
       const seen = localStorage.getItem(seenKey);
       if (!seen) {
-        setUrgentNotification({
-          id: notifs[0].id,
-          title: notifs[0].title,
-          message: notifs[0].message,
-          target_url: notifs[0].target_url,
-          image: notifs[0].image,
-        });
+        setUrgentNotification(notifs[0]);
         setShowNotification(true);
         localStorage.setItem(seenKey, 'true');
         setTimeout(() => setShowNotification(false), 3000);
@@ -262,6 +240,7 @@ export default function Dashboard() {
         commentsCount: 0,
         sharesCount: 0,
         url: n.url,
+        slug: n.slug || n.id,
         isOfficial: true,
       }));
       const officialPlaces: Post[] = cached.places.map((p) => ({
@@ -280,6 +259,7 @@ export default function Dashboard() {
         commentsCount: 0,
         sharesCount: 0,
         url: p.url,
+        slug: p.slug || p.id,
         isOfficial: true,
       }));
       const cPosts = [...officialNews, ...officialPlaces];
@@ -290,12 +270,7 @@ export default function Dashboard() {
     }
 
     try {
-      const [news, places, notifs] = await Promise.all([
-        fetchCMSNews() as Promise<CMSNewsItem[]>,
-        fetchCMSPlaces() as Promise<CMSPlaceItem[]>,
-        fetchCMSNotifications() as Promise<CMSNotificationItem[]>,
-      ]);
-
+      const [news, places, notifs] = await Promise.all([fetchCMSNews(), fetchCMSPlaces(), fetchCMSNotifications()]);
       setCMSCache({ news, places, notifs });
 
       const officialNews: Post[] = news.map((n) => ({
@@ -313,6 +288,7 @@ export default function Dashboard() {
         commentsCount: 0,
         sharesCount: 0,
         url: n.url,
+        slug: n.slug || n.id,
         isOfficial: true,
       }));
       const officialPlaces: Post[] = places.map((p) => ({
@@ -331,6 +307,7 @@ export default function Dashboard() {
         commentsCount: 0,
         sharesCount: 0,
         url: p.url,
+        slug: p.slug || p.id,
         isOfficial: true,
       }));
       const cPosts = [...officialNews, ...officialPlaces];
@@ -342,7 +319,7 @@ export default function Dashboard() {
     }
   }, [buildFeed, userPosts]);
 
-  // Initial realtime load 20 items
+  // Realtime user posts (orderBy + limit)
   useEffect(() => {
     const { db } = getFirebaseClient();
     if (!db) return;
@@ -374,11 +351,12 @@ export default function Dashboard() {
             commentsCount: data.commentsCount || 0,
             sharesCount: data.sharesCount || 0,
             viewsCount: data.viewsCount || 0,
-            likes: data.likes || [],
             isOfficial: data.isOfficial || false,
           };
         });
-        if (snap.docs.length > 0) lastDoc.current = snap.docs[snap.docs.length - 1] as QueryDocumentSnapshot<DocumentData>;
+        if (snap.docs.length > 0) {
+          lastDoc.current = snap.docs[snap.docs.length - 1] as QueryDocumentSnapshot<DocumentData>;
+        }
         setUserPosts(uPosts);
         buildFeed(uPosts, cmsPosts);
         setLoading(false);
@@ -389,12 +367,12 @@ export default function Dashboard() {
     return () => unsub();
   }, [buildFeed, cmsPosts]);
 
-  // Load CMS ONCE on mount
+  // Load CMS once
   useEffect(() => {
     loadCMS();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadCMS]);
 
+  // Rebuild on filter
   useEffect(() => {
     buildFeed(userPosts, cmsPosts);
   }, [filter, userPosts, cmsPosts, buildFeed]);
@@ -434,7 +412,6 @@ export default function Dashboard() {
           commentsCount: data.commentsCount || 0,
           sharesCount: data.sharesCount || 0,
           viewsCount: data.viewsCount || 0,
-          likes: data.likes || [],
           isOfficial: data.isOfficial || false,
         };
       });
@@ -463,67 +440,6 @@ export default function Dashboard() {
     cmsLoaded.current = false;
     await loadCMS();
     setTimeout(() => setRefreshing(false), 1000);
-  };
-
-  const handleLike = async (postId: string, currentLikes: string[] = []) => {
-    if (!user) return toast.error('Please login to like posts');
-    if (postId.startsWith('cms-')) return toast.error('You can only like user posts');
-    try {
-      const { db } = getFirebaseClient();
-      if (!db) throw new Error('Firestore not initialized');
-      const postRef = doc(db, 'posts', postId);
-      const isLiked = currentLikes.includes(user.uid);
-      if (isLiked) {
-        await updateDoc(postRef, { likes: arrayRemove(user.uid), likesCount: Math.max(0, currentLikes.length - 1) });
-      } else {
-        await updateDoc(postRef, { likes: arrayUnion(user.uid), likesCount: currentLikes.length + 1 });
-      }
-    } catch {
-      toast.error('Failed to update like');
-    }
-  };
-
-  const handleShare = async (post: Post) => {
-    const shareUrl = post.url || `${window.location.origin}/posts/${post.id}`;
-    const nav =
-      typeof window !== 'undefined'
-        ? (window.navigator as Navigator & {
-            share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
-            clipboard?: Clipboard;
-          })
-        : undefined;
-
-    try {
-      if (nav?.share) {
-        await nav.share({
-          title: post.title,
-          text: post.preview || post.content.substring(0, 120),
-          url: shareUrl,
-        });
-      } else if (nav?.clipboard?.writeText) {
-        await nav.clipboard.writeText(shareUrl);
-        toast.success('Link copied!');
-      }
-      if (post.source === 'user' && !post.id.startsWith('cms-')) {
-        const { db } = getFirebaseClient();
-        if (db) await updateDoc(doc(db, 'posts', post.id), { sharesCount: post.sharesCount + 1 });
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  const handleDelete = async (post: Post) => {
-    if (!user || post.source !== 'user' || (post.authorId !== user.uid && !isAdmin)) return;
-    if (!confirm('Delete this post permanently?')) return;
-    try {
-      const { db } = getFirebaseClient();
-      if (!db) throw new Error('Firestore not initialized');
-      await deleteDoc(doc(db, 'posts', post.id));
-      toast.success('Post deleted');
-    } catch {
-      toast.error('Failed to delete post');
-    }
   };
 
   const getPostIcon = (type: string) => {
@@ -575,32 +491,27 @@ export default function Dashboard() {
             <motion.button className={styles.refreshBtn} onClick={handleRefresh} disabled={refreshing} whileTap={{ scale: 0.95 }}>
               <FaChevronDown className={refreshing ? styles.spinning : ''} />
             </motion.button>
-            <h2>Community Feed</h2>
-            <Link href="/bytes/create" className={styles.bytesBtn}>
-              <FaCamera /> Byte
-            </Link>
+            <div aria-hidden="true" />
+            {/* Byte button removed per request */}
           </div>
 
           <div className={styles.filterTabs}>
-            <button className={`${styles.tab} ${filter === 'all' ? styles.activeTab : ''}`} onClick={() => setFilter('all')}>
+            <button className={`${styles.tab} ${styles.activeTab && filter === 'all' ? styles.activeTab : ''}`} onClick={() => setFilter('all')}>
               All
             </button>
-            <button className={`${styles.tab} ${filter === 'news' ? styles.activeTab : ''}`} onClick={() => setFilter('news')}>
+            <button className={`${styles.tab} ${styles.activeTab && filter === 'news' ? styles.activeTab : ''}`} onClick={() => setFilter('news')}>
               <FaNewspaper /> News
             </button>
-            <button className={`${styles.tab} ${filter === 'places' ? styles.activeTab : ''}`} onClick={() => setFilter('places')}>
+            <button className={`${styles.tab} ${styles.activeTab && filter === 'places' ? styles.activeTab : ''}`} onClick={() => setFilter('places')}>
               <FaMapMarkerAlt /> Places
             </button>
-            <button className={`${styles.tab} ${filter === 'writings' ? styles.activeTab : ''}`} onClick={() => setFilter('writings')}>
+            <button className={`${styles.tab} ${styles.activeTab && filter === 'writings' ? styles.activeTab : ''}`} onClick={() => setFilter('writings')}>
               <FaPen /> Writings
             </button>
-            <button
-              className={`${styles.tab} ${filter === 'user-content' ? styles.activeTab : ''}`}
-              onClick={() => setFilter('user-content')}
-            >
+            <button className={`${styles.tab} ${styles.activeTab && filter === 'user-content' ? styles.activeTab : ''}`} onClick={() => setFilter('user-content')}>
               <FaVideo /> User Content
             </button>
-            <button className={`${styles.tab} ${filter === 'video' ? styles.activeTab : ''}`} onClick={() => setFilter('video')}>
+            <button className={`${styles.tab} ${styles.activeTab && filter === 'video' ? styles.activeTab : ''}`} onClick={() => setFilter('video')}>
               <FaVideo /> Videos
             </button>
           </div>
@@ -621,107 +532,129 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
-                {posts.map((post, index) => (
-                  <motion.article
-                    key={post.id}
-                    className={styles.postCard}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.01 }}
-                  >
-                    <div className={styles.postHeader}>
-                      {post.source === 'user' && post.authorUsername ? (
-                        <Link href={`/user/${post.authorUsername}`} className={styles.author}>
-                          <SafeImage
-                            src={post.authorPhoto || '/images/default-avatar.png'}
-                            alt={post.authorName}
-                            width={40}
-                            height={40}
-                            className={styles.authorAvatar}
-                          />
-                          <div className={styles.authorInfo}>
-                            <h4>{post.authorName}</h4>
-                            <p>@{post.authorUsername}</p>
-                          </div>
-                        </Link>
-                      ) : (
-                        <div className={styles.author}>
-                          <div className={styles.authorAvatarPlaceholder}>{post.authorName.charAt(0).toUpperCase()}</div>
-                          <div className={styles.authorInfo}>
-                            <h4>{post.authorName}</h4>
-                            <p className={styles.cmsLabel}>Official</p>
-                          </div>
-                        </div>
-                      )}
-                      <div className={styles.postMeta}>
-                        <div className={styles.postType}>
-                          {getPostIcon(post.type)}
-                          <span>{post.type}</span>
-                        </div>
-                        {isAdmin && post.viewsCount !== undefined && (
-                          <div className={styles.views}>
-                            <FaEye /> {post.viewsCount}
+                {posts.map((post, index) => {
+                  const isUserPost = post.source === 'user' && !post.id.startsWith('cms-');
+                  const shareUrl = post.url || `${typeof window !== 'undefined' ? window.location.origin : ''}/posts/${post.id}`;
+
+                  // Internal read-more routing for CMS content
+                  const readMoreHref =
+                    post.source === 'cms'
+                      ? post.type === 'news'
+                        ? `/news/${post.slug || post.id.replace('cms-news-', '')}`
+                        : post.type === 'place'
+                        ? `/places/${post.slug || post.id.replace('cms-place-', '')}`
+                        : `/posts/${post.id}`
+                      : `/posts/${post.id}`;
+
+                  return (
+                    <motion.article
+                      key={post.id}
+                      className={styles.postCard}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.01 }}
+                    >
+                      <div className={styles.postHeader}>
+                        {post.source === 'user' && post.authorUsername ? (
+                          <Link href={`/user/${post.authorUsername}`} className={styles.author}>
+                            <SafeImage
+                              src={post.authorPhoto || '/images/default-avatar.png'}
+                              alt={post.authorName}
+                              width={40}
+                              height={40}
+                              className={styles.authorAvatar}
+                            />
+                            <div className={styles.authorInfo}>
+                              <h4>{post.authorName}</h4>
+                              <p>@{post.authorUsername}</p>
+                            </div>
+                          </Link>
+                        ) : (
+                          <div className={styles.author}>
+                            <div className={styles.authorAvatarPlaceholder}>{post.authorName.charAt(0).toUpperCase()}</div>
+                            <div className={styles.authorInfo}>
+                              <h4>{post.authorName}</h4>
+                              <p className={styles.cmsLabel}>Official</p>
+                            </div>
                           </div>
                         )}
+                        <div className={styles.postMeta}>
+                          <div className={styles.postType}>
+                            {getPostIcon(post.type)}
+                            <span>{post.type}</span>
+                          </div>
+                          {isAdmin && post.viewsCount !== undefined && (
+                            <div className={styles.views}>
+                              <FaEye /> {post.viewsCount}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
 
-                    {post.mediaType === 'video' && post.videoUrl ? (
-                      <VideoReel src={post.videoUrl} poster={post.imageUrl} onShare={() => handleShare(post)} />
-                    ) : post.imageUrl ? (
-                      <div className={styles.postImage}>
-                        <SafeImage src={post.imageUrl} alt={post.title} width={600} height={400} className={styles.image} />
-                      </div>
-                    ) : null}
-
-                    <div className={styles.postContent}>
-                      {post.title && <h3>{post.title}</h3>}
-                      {post.location && (
-                        <p className={styles.location}>
-                          <FaMapMarkerAlt /> {post.location}
-                        </p>
-                      )}
-                      {(post.preview || post.content) && <p>{(post.preview || post.content).toString().substring(0, 220)}...</p>}
-                      <Link
-                        href={post.url || `/posts/${post.id}`}
-                        className={styles.readMore}
-                        {...(post.source === 'cms' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                      >
-                        Read More →
-                      </Link>
-                    </div>
-
-                    <div className={styles.postActions}>
-                      <button
-                        className={`${styles.actionButton} ${post.likes?.includes(user?.uid || '') ? styles.liked : ''}`}
-                        onClick={() => handleLike(post.id, post.likes)}
-                        disabled={post.source === 'cms'}
-                        aria-label="Like"
-                      >
-                        <FaHeart />
-                        <span>{post.likesCount || 0}</span>
-                      </button>
-                      <Link href={`/posts/${post.id}#comments`} className={styles.actionButton} aria-label="Comments">
-                        <FaComment />
-                        <span>{post.commentsCount || 0}</span>
-                      </Link>
-                      <button className={styles.actionButton} onClick={() => handleShare(post)} aria-label="Share">
-                        <FaShare />
-                        <span>{post.sharesCount || 0}</span>
-                      </button>
-                      {(post.source === 'user' && user?.uid === post.authorId) || isAdmin ? (
-                        <button className={styles.actionButton} onClick={() => handleDelete(post)} aria-label="Delete" title="Delete post">
-                          <FaTrash />
-                        </button>
+                      {post.mediaType === 'video' && post.videoUrl ? (
+                        <VideoReel src={post.videoUrl} poster={post.imageUrl} onShare={() => {}} />
+                      ) : post.imageUrl ? (
+                        <div className={styles.postImage}>
+                          <SafeImage src={post.imageUrl} alt={post.title} width={600} height={400} className={styles.image} />
+                        </div>
                       ) : null}
-                    </div>
 
-                    <div className={styles.postFooter}>
-                      <span>{post.createdAt.toLocaleDateString()}</span>
-                      {(post.isOfficial || post.source === 'cms') && <span className={styles.officialBadge}>Official</span>}
-                    </div>
-                  </motion.article>
-                ))}
+                      <div className={styles.postContent}>
+                        {post.title && <h3>{post.title}</h3>}
+                        {post.location && (
+                          <p className={styles.location}>
+                            <FaMapMarkerAlt /> {post.location}
+                          </p>
+                        )}
+                        {(post.preview || post.content) && <p>{(post.preview || post.content).toString().substring(0, 220)}...</p>}
+                        <Link href={readMoreHref} className={styles.readMore}>
+                          Read More →
+                        </Link>
+                      </div>
+
+                      <div className={styles.postActions}>
+                        {isUserPost ? (
+                          <LikeButton postId={post.id} className={styles.actionButton} />
+                        ) : (
+                          <button className={styles.actionButton} disabled aria-label="Like">
+                            <span>❤</span>
+                            <span>{post.likesCount || 0}</span>
+                          </button>
+                        )}
+                        <Link href={`/posts/${post.id}#comments`} className={styles.actionButton} aria-label="Comments">
+                          <FaComment />
+                          <span>{post.commentsCount || 0}</span>
+                        </Link>
+                        <ShareButton url={shareUrl} title={post.title} className={styles.actionButton} />
+                        {isUserPost && (user?.uid === post.authorId || isAdmin) ? (
+                          <button
+                            className={styles.actionButton}
+                            onClick={async () => {
+                              if (!confirm('Delete this post permanently?')) return;
+                              try {
+                                const { db } = getFirebaseClient();
+                                if (!db) throw new Error('Firestore not initialized');
+                                await (await import('firebase/firestore')).deleteDoc(doc(db, 'posts', post.id));
+                                toast.success('Post deleted');
+                              } catch {
+                                toast.error('Failed to delete post');
+                              }
+                            }}
+                            aria-label="Delete"
+                            title="Delete post"
+                          >
+                            <FaTrash />
+                          </button>
+                        ) : null}
+                      </div>
+
+                      <div className={styles.postFooter}>
+                        <span>{post.createdAt.toLocaleDateString()}</span>
+                        {(post.isOfficial || post.source === 'cms') && <span className={styles.officialBadge}>Official</span>}
+                      </div>
+                    </motion.article>
+                  );
+                })}
 
                 {hasMore && (
                   <div ref={loadMoreRef} className={styles.loadMore}>

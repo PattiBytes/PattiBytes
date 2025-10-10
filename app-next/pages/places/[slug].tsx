@@ -1,0 +1,103 @@
+import { useRouter } from 'next/router';
+import { useEffect, useMemo, useState } from 'react';
+import AuthGuard from '@/components/AuthGuard';
+import Layout from '@/components/Layout';
+import SafeImage from '@/components/SafeImage';
+import LikeButton from '@/components/LikeButton';
+import ShareButton from '@/components/ShareButton';
+import Comments from '@/components/Comments';
+import CMSContent from '@/components/CMSContent';
+import { FaMapMarkerAlt } from 'react-icons/fa';
+import styles from '@/styles/PostDetail.module.css';
+
+type Item = { id?: string; slug?: string; title: string; preview?: string; date: string; image?: string; location?: string; body?: string; };
+
+async function loadItem(slug: string): Promise<Item | null> {
+  try {
+    const res = await fetch('/api/cms/places', { cache: 'no-store' });
+    if (!res.ok) return null;
+    const items = (await res.json()) as Item[];
+    const found = items.find((i) => i.slug === slug || i.id === slug);
+    return found || null;
+  } catch { return null; }
+}
+
+export default function PlaceDetail() {
+  const { query } = useRouter();
+  const slug = typeof query.slug === 'string' ? query.slug : '';
+  const [item, setItem] = useState<Item | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [commentsCount, setCommentsCount] = useState<number | null>(null);
+
+  const postId = useMemo(() => (slug ? `cms-place-${slug}` : ''), [slug]);
+  const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+
+  useEffect(() => {
+    if (!slug) return;
+    (async () => {
+      setLoading(true);
+      const it = await loadItem(slug);
+      setItem(it);
+      setLoading(false);
+    })();
+  }, [slug]);
+
+  if (loading) {
+    return (
+      <AuthGuard>
+        <Layout title="Loading - PattiBytes">
+          <div className={styles.loading}>
+            <div className={styles.spinner} />
+            <p>Loading place...</p>
+          </div>
+        </Layout>
+      </AuthGuard>
+    );
+  }
+
+  if (!item) {
+    return (
+      <AuthGuard>
+        <Layout title="Not Found - PattiBytes">
+          <div className={styles.notFound}>
+            <h2>Content not found</h2>
+          </div>
+        </Layout>
+      </AuthGuard>
+    );
+  }
+
+  return (
+    <AuthGuard>
+      <Layout title={`${item.title} - PattiBytes`}>
+        <article className={styles.post}>
+          {item.image && (
+            <div className={styles.hero}>
+              <SafeImage src={item.image} alt={item.title} width={1200} height={700} />
+            </div>
+          )}
+          <header className={styles.header}>
+            <h1>{item.title}</h1>
+            <div className={styles.actionsRow}>
+              <LikeButton postId={postId} className={styles.actionBtn} />
+              <ShareButton url={shareUrl} title={item.title} className={styles.actionBtn} />
+              {item.location && (
+                <span className={styles.location}>
+                  <FaMapMarkerAlt /> {item.location}
+                </span>
+              )}
+              {commentsCount != null && <span className={styles.countPill}>{commentsCount} comments</span>}
+            </div>
+          </header>
+
+          <div className={styles.content}>
+            <CMSContent body={item.body || item.preview || ''} />
+          </div>
+
+          <div id="comments" />
+          <Comments postId={postId} onCountChange={setCommentsCount} />
+        </article>
+      </Layout>
+    </AuthGuard>
+  );
+}

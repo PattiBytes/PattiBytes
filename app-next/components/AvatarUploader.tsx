@@ -1,9 +1,10 @@
+// components/AvatarUploader.tsx
 import { useState } from 'react';
 import { getFirebaseClient } from '@/lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, setDoc } from 'firebase/firestore';
 import SafeImage from './SafeImage';
 import type { User } from 'firebase/auth';
+import { uploadToCloudinary, isCloudinaryConfigured } from '@/lib/cloudinary';
 
 export default function AvatarUploader({ user }: { user: User }) {
   const [busy, setBusy] = useState(false);
@@ -14,23 +15,35 @@ export default function AvatarUploader({ user }: { user: User }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!isCloudinaryConfigured()) {
+      setError('Image uploads are not configured');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Image too large. Max 10MB');
+      return;
+    }
+
     setBusy(true);
     setError(null);
 
-    const { storage, db } = getFirebaseClient();
-    if (!storage || !db) {
-      setError('Storage service not available');
+    const { db } = getFirebaseClient();
+    if (!db) {
+      setError('Database not available');
       setBusy(false);
       return;
     }
 
     try {
-      const key = `avatars/${user.uid}/${Date.now()}-${file.name}`;
-      const storageRef = ref(storage, key);
-      await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(storageRef);
-      setUrl(downloadUrl);
-      await setDoc(doc(db, 'users', user.uid), { photoURL: downloadUrl }, { merge: true });
+      const secureUrl = await uploadToCloudinary(file, 'avatar');
+      setUrl(secureUrl);
+      await setDoc(doc(db, 'users', user.uid), { photoURL: secureUrl }, { merge: true });
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Upload failed');
@@ -42,23 +55,15 @@ export default function AvatarUploader({ user }: { user: User }) {
   return (
     <div>
       <SafeImage
-        src={url || '/images/logo.png'}
+        src={url || '/images/default-avatar.png'}
         alt="avatar"
         width={96}
         height={96}
         style={{ borderRadius: '50%' }}
       />
       <label>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={onPick}
-          disabled={busy}
-          hidden
-        />
-        <button type="button">
-          {busy ? 'Uploading…' : 'Change photo'}
-        </button>
+        <input type="file" accept="image/*" onChange={onPick} disabled={busy} hidden />
+        <button type="button" disabled={busy}>{busy ? 'Uploading…' : 'Change photo'}</button>
       </label>
       {error && <p style={{ color: 'red' }}>{error}</p>}
     </div>
