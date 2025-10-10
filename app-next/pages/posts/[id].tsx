@@ -1,83 +1,89 @@
-import { useEffect, useState } from 'react';
+// pages/posts/[id].tsx
+// (exactly as in the query body—no className renames—compatible with PostDetail.module.css)
 import { useRouter } from 'next/router';
-import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import { useEffect, useMemo, useState } from 'react';
+import { doc, onSnapshot, type Timestamp, updateDoc, increment } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
-import Layout from '@/components/Layout';
 import AuthGuard from '@/components/AuthGuard';
+import Layout from '@/components/Layout';
 import SafeImage from '@/components/SafeImage';
-import VideoReel from '@/components/VideoReel';
 import Comments from '@/components/Comments';
-import { FaArrowLeft, FaMapMarkerAlt, FaShare } from 'react-icons/fa';
+import VideoReel from '@/components/VideoReel';
+import LikeButton from '@/components/LikeButton';
+import ShareButton from '@/components/ShareButton';
 import Link from 'next/link';
+import { FaArrowLeft, FaMapMarkerAlt } from 'react-icons/fa';
 import styles from '@/styles/PostDetail.module.css';
 
-interface PostDoc {
-  title?: string;
-  content?: string;
-  preview?: string;
-  authorId?: string;
+type PostDoc = {
+  authorId: string;
   authorName?: string;
   authorUsername?: string;
   authorPhoto?: string | null;
+  title?: string;
+  content?: string;
   imageUrl?: string | null;
   videoUrl?: string | null;
-  mediaType?: 'image' | 'video';
-  location?: string | null;
-  createdAt?: { toDate?: () => Date };
-}
+  mediaType?: 'image' | 'video' | 'text';
+  location?: string;
+  createdAt?: Timestamp | Date;
+  counters?: { likes?: number; comments?: number; shares?: number; views?: number };
+  likesCount?: number;
+  commentsCount?: number;
+  sharesCount?: number;
+  viewsCount?: number;
+  preview?: string;
+};
 
-export default function PostDetail() {
+export default function PostDetailPage() {
   const router = useRouter();
-  const { id } = router.query as { id?: string };
+  const { id } = router.query;
   const [post, setPost] = useState<(PostDoc & { id: string }) | null>(null);
   const [loading, setLoading] = useState(true);
+  const [commentCount, setCommentCount] = useState<number | null>(null);
+
+  const { db } = getFirebaseClient();
+  const ref = useMemo(
+    () => (db && typeof id === 'string' ? doc(db, 'posts', id) : null),
+    [db, id]
+  );
 
   useEffect(() => {
-    const { db } = getFirebaseClient();
-    if (!db || !id) return;
-    (async () => {
-      try {
-        const snap = await getDoc(doc(db, 'posts', id));
-        if (snap.exists()) {
-          const data = snap.data() as PostDoc;
-          setPost({ id: snap.id, ...data });
-          await updateDoc(doc(db, 'posts', id), { viewsCount: increment(1) });
-        } else {
-          setPost(null);
-        }
-      } finally {
+    if (!ref) return;
+    const unsub = onSnapshot(ref, (snap) => {
+      if (!snap.exists()) {
+        setPost(null);
         setLoading(false);
+        return;
       }
-    })();
-  }, [id]);
+      setPost({ id: snap.id, ...(snap.data() as PostDoc) });
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [ref]);
 
-  const share = async () => {
-    if (!id) return;
-    const url = `${window.location.origin}/posts/${id}`;
-    const nav =
-      typeof window !== 'undefined'
-        ? (window.navigator as Navigator & {
-            share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
-            clipboard?: Clipboard;
-          })
-        : undefined;
-
-    try {
-      if (nav?.share) {
-        await nav.share({ title: post?.title || 'PattiBytes', text: post?.preview || '', url });
-      } else if (nav?.clipboard?.writeText) {
-        await nav.clipboard.writeText(url);
-        alert('Link copied!');
+  useEffect(() => {
+    const bump = async () => {
+      if (!ref || typeof id !== 'string') return;
+      try {
+        const key = `pv:${id}`;
+        const last = Number(localStorage.getItem(key) || '0');
+        const now = Date.now();
+        if (now - last > 30 * 60 * 1000) {
+          await updateDoc(ref, { viewsCount: increment(1) });
+          localStorage.setItem(key, String(now));
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
-    }
-  };
+    };
+    bump();
+  }, [ref, id]);
 
   if (loading) {
     return (
       <AuthGuard>
-        <Layout title="Loading...">
+        <Layout title="Loading - PattiBytes">
           <div className={styles.loading}>
             <div className={styles.spinner} />
             <p>Loading post...</p>
@@ -87,10 +93,10 @@ export default function PostDetail() {
     );
   }
 
-  if (!post || !id) {
+  if (!post || typeof id !== 'string') {
     return (
       <AuthGuard>
-        <Layout title="Post Not Found">
+        <Layout title="Post Not Found - PattiBytes">
           <div className={styles.notFound}>
             <h2>Post not found</h2>
             <Link href="/dashboard">Go to Dashboard</Link>
@@ -100,7 +106,20 @@ export default function PostDetail() {
     );
   }
 
-  const created = post.createdAt?.toDate?.() || new Date();
+  const created =
+    post.createdAt instanceof Date
+      ? post.createdAt
+      : (post.createdAt as Timestamp | undefined)?.toDate?.() || new Date();
+
+  const shareUrl =
+    typeof window !== 'undefined'
+      ? window.location.href
+      : `${process.env.NEXT_PUBLIC_SITE_URL || ''}/posts/${id}`;
+
+  const likes = post.counters?.likes ?? post.likesCount ?? undefined;
+  const comments = commentCount ?? post.counters?.comments ?? post.commentsCount ?? undefined;
+  const shares = post.counters?.shares ?? post.sharesCount ?? undefined;
+  const views = post.counters?.views ?? post.viewsCount ?? undefined;
 
   return (
     <AuthGuard>
@@ -111,7 +130,7 @@ export default function PostDetail() {
           </Link>
 
           {post.mediaType === 'video' && post.videoUrl ? (
-            <VideoReel src={post.videoUrl} poster={post.imageUrl || undefined} onShare={share} />
+            <VideoReel src={post.videoUrl} poster={post.imageUrl || undefined} onShare={() => {}} />
           ) : post.imageUrl ? (
             <div className={styles.hero}>
               <SafeImage src={post.imageUrl} alt={post.title || 'Post'} width={1200} height={700} />
@@ -120,35 +139,60 @@ export default function PostDetail() {
 
           <header className={styles.header}>
             <h1>{post.title}</h1>
+            <div className={styles.actionsRow}>
+              <LikeButton postId={id} className={styles.actionBtn} />
+              <ShareButton
+                url={shareUrl}
+                title={post.title}
+                className={styles.actionBtn}
+                onShared={async () => {
+                  try {
+                    if (ref) await updateDoc(ref, { sharesCount: increment(1) });
+                  } catch {
+                    // ignore
+                  }
+                }}
+              />
+              {likes !== undefined && <span className={styles.countPill}>{likes} likes</span>}
+              {comments !== undefined && <span className={styles.countPill}>{comments} comments</span>}
+              {shares !== undefined && <span className={styles.countPill}>{shares} shares</span>}
+              {views !== undefined && <span className={styles.countPill}>{views} views</span>}
+            </div>
             {post.location && (
               <p className={styles.location}>
                 <FaMapMarkerAlt /> {post.location}
               </p>
             )}
-            <button className={styles.shareBtn} onClick={share}>
-              <FaShare /> Share
-            </button>
           </header>
 
           <div className={styles.meta}>
-            <div className={styles.author}>
+            <Link
+              href={
+                post.authorUsername
+                  ? `/user/${post.authorUsername}`
+                  : `/search?u=${encodeURIComponent(post.authorName || '')}`
+              }
+              className={styles.author}
+            >
               <SafeImage
                 src={post.authorPhoto || '/images/default-avatar.png'}
                 alt={post.authorName || 'User'}
                 width={40}
                 height={40}
+                className={styles.authorAvatar}
               />
               <div>
                 <h4>{post.authorName || 'User'}</h4>
                 {post.authorUsername ? <p>@{post.authorUsername}</p> : null}
               </div>
-            </div>
+            </Link>
             <span className={styles.date}>{created.toLocaleString()}</span>
           </div>
 
-          <div className={styles.content}>{post.content}</div>
+          {post.content && <div className={styles.content}>{post.content}</div>}
 
-          <Comments postId={id} />
+          <div id="comments" />
+          <Comments postId={id} onCountChange={setCommentCount} />
         </article>
       </Layout>
     </AuthGuard>

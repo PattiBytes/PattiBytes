@@ -6,7 +6,7 @@ import SafeImage from '@/components/SafeImage';
 import { useAuth } from '@/context/AuthContext';
 import { getFirebaseClient } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { uploadToCloudinary, uploadVideoToCloudinary } from '@/lib/cloudinary';
+import { uploadToCloudinary, uploadVideo, isCloudinaryConfigured } from '@/lib/cloudinary';
 import { motion } from 'framer-motion';
 import { FaPen, FaNewspaper, FaMapMarkerAlt, FaImage, FaTimes, FaPaperPlane, FaVideo } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
@@ -14,13 +14,19 @@ import styles from '@/styles/CreatePost.module.css';
 
 type PostType = 'writing' | 'news' | 'place' | 'video' | 'photo';
 
+const MAX_IMAGE_MB = 10;
+const MAX_VIDEO_MB = 200;
+const IMAGE_MIME = /^image\//;
+const VIDEO_MIME = /^video\//;
+
 export default function CreatePost() {
   const { user, userProfile } = useAuth();
   const router = useRouter();
   const { db } = getFirebaseClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [type, setType] = useState<PostType>((router.query.type as PostType) || 'writing');
+  const initialType = (router.query.type as PostType) || 'writing';
+  const [type, setType] = useState<PostType>(initialType);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [location, setLocation] = useState('');
@@ -29,6 +35,7 @@ export default function CreatePost() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
 
+  // If image is provided via query param, prefill preview and set type to photo
   useEffect(() => {
     const image = router.query.image as string | undefined;
     if (image) {
@@ -37,17 +44,36 @@ export default function CreatePost() {
     }
   }, [router.query.image]);
 
+  const openPicker = () => fileInputRef.current?.click();
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const isVideo = file.type.startsWith('video/');
-    const isImage = file.type.startsWith('image/');
-    if (!isVideo && !isImage) return toast.error('Please select an image or video file');
-    if (file.size > 200 * 1024 * 1024) return toast.error('Max file size is 200MB');
+
+    const isVideo = VIDEO_MIME.test(file.type);
+    const isImage = IMAGE_MIME.test(file.type);
+
+    if (!isVideo && !isImage) {
+      toast.error('Please select an image or video file');
+      e.target.value = '';
+      return;
+    }
+
+    // Size checks aligned with Cloudinary unsigned preset limits
+    if (isImage && file.size > MAX_IMAGE_MB * 1024 * 1024) {
+      toast.error(`Image too large. Max ${MAX_IMAGE_MB}MB`);
+      e.target.value = '';
+      return;
+    }
+    if (isVideo && file.size > MAX_VIDEO_MB * 1024 * 1024) {
+      toast.error(`Video too large. Max ${MAX_VIDEO_MB}MB`);
+      e.target.value = '';
+      return;
+    }
+
     setMedia(file);
     setMediaPreview(URL.createObjectURL(file));
-    if (isVideo) setType('video');
-    else if (isImage) setType('photo');
+    setType(isVideo ? 'video' : 'photo');
   };
 
   const removeMedia = () => {
@@ -58,10 +84,20 @@ export default function CreatePost() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!db || !user || !userProfile) return;
+    if (!db) return toast.error('Database not initialized');
+    if (!user || !userProfile) return toast.error('Sign in to create a post');
 
-    if (!title.trim()) return toast.error('Please enter a title');
-    if (!content.trim()) return toast.error('Please enter some content');
+    const titleTrim = title.trim();
+    const contentTrim = content.trim();
+    const locationTrim = location.trim();
+
+    if (!titleTrim) return toast.error('Please enter a title');
+    if (!contentTrim) return toast.error('Please enter some content');
+
+    // Guard Cloudinary configuration for media posts
+    if ((type === 'photo' || type === 'video') && !isCloudinaryConfigured()) {
+      return toast.error('Media uploads are not configured. Check Cloudinary env and presets.');
+    }
 
     setUploading(true);
     setProgress(0);
@@ -72,33 +108,35 @@ export default function CreatePost() {
       let mediaType: 'image' | 'video' | undefined;
 
       if (media) {
-        const isVideo = media.type.startsWith('video/');
-        if (isVideo) {
-          setProgress(5);
-          videoUrl = await uploadVideoToCloudinary(media, (pct) => setProgress(pct));
+        const isVid = VIDEO_MIME.test(media.type);
+        setProgress(5);
+        if (isVid) {
+          // Use uploadVideo for progress UI
+          videoUrl = await uploadVideo(media, (pct) => setProgress(Math.min(90, pct)));
           mediaType = 'video';
         } else {
-          setProgress(5);
-          imageUrl = await uploadToCloudinary(media);
+          imageUrl = await uploadToCloudinary(media, 'image');
           setProgress(90);
           mediaType = 'image';
         }
       }
 
       setProgress(95);
+
+      // Persist post; rules expect authorId and createdAt; keep list constraints on reads
       const docRef = await addDoc(collection(db, 'posts'), {
-        type: type === 'photo' ? 'writing' : type,
+        type: type === 'photo' ? 'writing' : type, // keep legacy mapping if needed by UI
         mediaType: mediaType || (type === 'video' ? 'video' : 'image'),
-        title: title.trim(),
-        content: content.trim(),
-        preview: content.trim().substring(0, 220),
-        location: location.trim() || null,
+        title: titleTrim,
+        content: contentTrim,
+        preview: contentTrim.substring(0, 220),
+        location: locationTrim || null,
         authorId: user.uid,
         authorName: userProfile.displayName,
         authorUsername: userProfile.username,
         authorPhoto: userProfile.photoURL || null,
-        imageUrl: imageUrl,
-        videoUrl: videoUrl,
+        imageUrl,
+        videoUrl,
         likesCount: 0,
         commentsCount: 0,
         sharesCount: 0,
@@ -232,7 +270,7 @@ export default function CreatePost() {
                   <button
                     type="button"
                     className={styles.uploadBtn}
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={openPicker}
                     disabled={uploading}
                   >
                     <FaImage /> Choose Media
@@ -249,7 +287,7 @@ export default function CreatePost() {
                     </button>
                   </div>
                 )}
-                <small>Images up to 10MB, videos up to 200MB (Free via Cloudinary)</small>
+                <small>Images up to {MAX_IMAGE_MB}MB, videos up to {MAX_VIDEO_MB}MB (Cloudinary)</small>
               </div>
 
               {uploading && (
