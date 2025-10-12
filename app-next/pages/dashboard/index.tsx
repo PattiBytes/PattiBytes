@@ -1,8 +1,8 @@
-// pages/dashboard/index.tsx
+// app-next/pages/dashboard/index.tsx
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   collection,
-  query,
+  query as fsQuery,
   orderBy,
   limit,
   onSnapshot,
@@ -143,13 +143,13 @@ function setCMSCache(data: Omit<CMSCacheShape, 'ts'>) {
   try {
     const payload: CMSCacheShape = { ts: Date.now(), ...data };
     sessionStorage.setItem(CMS_CACHE_KEY, JSON.stringify(payload));
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { db } = getFirebaseClient();
+
   const [posts, setPosts] = useState<Post[]>([]);
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [cmsPosts, setCmsPosts] = useState<Post[]>([]);
@@ -161,18 +161,17 @@ export default function Dashboard() {
   const [showNotification, setShowNotification] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const lastDoc = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
   const observer = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const cmsLoaded = useRef(false);
 
-  // Admin gate via single doc read (no listing)
+  // Admin check
   useEffect(() => {
     const check = async () => {
-      if (!user) return;
-      const { db } = getFirebaseClient();
-      if (!db) return;
+      if (!user || !db) return;
       try {
         const snap = await getDoc(doc(db, 'admins', user.uid));
         setIsAdmin(snap.exists());
@@ -181,41 +180,35 @@ export default function Dashboard() {
       }
     };
     check();
-  }, [user]);
+  }, [db, user]);
 
-  const buildFeed = useCallback(
-    (uPosts: Post[], cPosts: Post[]) => {
-      const allPosts = [...uPosts, ...cPosts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      const next =
-        filter === 'all'
-          ? allPosts
-          : filter === 'user-content'
-          ? uPosts
-          : filter === 'news'
-          ? allPosts.filter((p) => p.type === 'news')
-          : filter === 'places'
-          ? allPosts.filter((p) => p.type === 'place')
-          : filter === 'writings'
-          ? allPosts.filter((p) => p.type === 'writing')
-          : filter === 'video'
-          ? allPosts.filter((p) => p.mediaType === 'video' || p.type === 'video')
-          : allPosts;
-      setPosts(next);
-    },
-    [filter]
-  );
+  const filterFn = useCallback((items: Post[]) => {
+    switch (filter) {
+      case 'all': return items;
+      case 'user-content': return items.filter((p) => p.source === 'user');
+      case 'news': return items.filter((p) => p.type === 'news');
+      case 'places': return items.filter((p) => p.type === 'place');
+      case 'writings': return items.filter((p) => p.type === 'writing');
+      case 'video': return items.filter((p) => p.mediaType === 'video' || p.type === 'video');
+      default: return items;
+    }
+  }, [filter]);
 
-  // CMS loader with session cache and compact notification
+  const buildFeed = useCallback((uPosts: Post[], cPosts: Post[]) => {
+    const merged = [...uPosts, ...cPosts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    setPosts(filterFn(merged));
+  }, [filterFn]);
+
+  // CMS loader (with cache) as a stable callback
   const loadCMS = useCallback(async () => {
     if (cmsLoaded.current) return;
     cmsLoaded.current = true;
 
     const applyNotifsOnce = (notifs: CMSNotificationItem[]) => {
       if (!notifs.length) return;
-      const notifId = notifs[0].id;
-      const seenKey = `notification_seen_${notifId}`;
-      const seen = localStorage.getItem(seenKey);
-      if (!seen) {
+      const nid = notifs[0].id;
+      const seenKey = `notification_seen_${nid}`;
+      if (!localStorage.getItem(seenKey)) {
         setUrgentNotification(notifs[0]);
         setShowNotification(true);
         localStorage.setItem(seenKey, 'true');
@@ -319,12 +312,12 @@ export default function Dashboard() {
     }
   }, [buildFeed, userPosts]);
 
-  // Realtime user posts (orderBy + limit)
+  // Realtime user posts
   useEffect(() => {
-    const { db } = getFirebaseClient();
     if (!db) return;
     setLoading(true);
-    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(20));
+    setErr(null);
+    const q = fsQuery(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(20));
     const unsub = onSnapshot(
       q,
       (snap) => {
@@ -362,28 +355,25 @@ export default function Dashboard() {
         setLoading(false);
         setHasMore(snap.docs.length >= 20);
       },
-      () => setLoading(false)
+      () => {
+        setLoading(false);
+        setErr('Unable to load posts. Check permissions.');
+      }
     );
     return () => unsub();
-  }, [buildFeed, cmsPosts]);
+  }, [db, buildFeed, cmsPosts]);
 
   // Load CMS once
-  useEffect(() => {
-    loadCMS();
-  }, [loadCMS]);
+  useEffect(() => { loadCMS(); }, [loadCMS]);
 
   // Rebuild on filter
-  useEffect(() => {
-    buildFeed(userPosts, cmsPosts);
-  }, [filter, userPosts, cmsPosts, buildFeed]);
+  useEffect(() => { buildFeed(userPosts, cmsPosts); }, [filter, userPosts, cmsPosts, buildFeed]);
 
   const loadMore = useCallback(async () => {
-    if (!lastDoc.current || loadingMore || !hasMore) return;
-    const { db } = getFirebaseClient();
-    if (!db) return;
+    if (!db || !lastDoc.current || loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), startAfter(lastDoc.current), limit(20));
+      const q = fsQuery(collection(db, 'posts'), orderBy('createdAt', 'desc'), startAfter(lastDoc.current), limit(20));
       const snap = await getDocs(q);
       if (snap.empty) {
         setHasMore(false);
@@ -421,41 +411,37 @@ export default function Dashboard() {
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, loadingMore]);
+  }, [db, hasMore, loadingMore]);
 
   useEffect(() => {
     if (loading || loadingMore || !hasMore) return;
-    observer.current = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) loadMore();
-      },
-      { threshold: 0.5 }
-    );
-    if (loadMoreRef.current) observer.current.observe(loadMoreRef.current);
-    return () => observer.current?.disconnect();
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) loadMore();
+    }, { threshold: 0.5 });
+    observer.current = io;
+    const el = loadMoreRef.current;
+    if (el) io.observe(el);
+    return () => io.disconnect();
   }, [loading, loadingMore, hasMore, loadMore]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     cmsLoaded.current = false;
     await loadCMS();
-    setTimeout(() => setRefreshing(false), 1000);
+    setTimeout(() => setRefreshing(false), 800);
   };
 
   const getPostIcon = (type: string) => {
     switch (type) {
-      case 'news':
-        return <FaNewspaper />;
-      case 'place':
-        return <FaMapMarkerAlt />;
-      case 'writing':
-        return <FaPen />;
-      case 'video':
-        return <FaVideo />;
-      default:
-        return null;
+      case 'news': return <FaNewspaper />;
+      case 'place': return <FaMapMarkerAlt />;
+      case 'writing': return <FaPen />;
+      case 'video': return <FaVideo />;
+      default: return null;
     }
   };
+
+  const feedEmpty = !loading && posts.length === 0;
 
   return (
     <AuthGuard>
@@ -492,28 +478,15 @@ export default function Dashboard() {
               <FaChevronDown className={refreshing ? styles.spinning : ''} />
             </motion.button>
             <div aria-hidden="true" />
-            {/* Byte button removed per request */}
           </div>
 
           <div className={styles.filterTabs}>
-            <button className={`${styles.tab} ${styles.activeTab && filter === 'all' ? styles.activeTab : ''}`} onClick={() => setFilter('all')}>
-              All
-            </button>
-            <button className={`${styles.tab} ${styles.activeTab && filter === 'news' ? styles.activeTab : ''}`} onClick={() => setFilter('news')}>
-              <FaNewspaper /> News
-            </button>
-            <button className={`${styles.tab} ${styles.activeTab && filter === 'places' ? styles.activeTab : ''}`} onClick={() => setFilter('places')}>
-              <FaMapMarkerAlt /> Places
-            </button>
-            <button className={`${styles.tab} ${styles.activeTab && filter === 'writings' ? styles.activeTab : ''}`} onClick={() => setFilter('writings')}>
-              <FaPen /> Writings
-            </button>
-            <button className={`${styles.tab} ${styles.activeTab && filter === 'user-content' ? styles.activeTab : ''}`} onClick={() => setFilter('user-content')}>
-              <FaVideo /> User Content
-            </button>
-            <button className={`${styles.tab} ${styles.activeTab && filter === 'video' ? styles.activeTab : ''}`} onClick={() => setFilter('video')}>
-              <FaVideo /> Videos
-            </button>
+            <button className={`${styles.tab} ${filter === 'all' ? styles.activeTab : ''}`} onClick={() => setFilter('all')}>All</button>
+            <button className={`${styles.tab} ${filter === 'news' ? styles.activeTab : ''}`} onClick={() => setFilter('news')}><FaNewspaper /> News</button>
+            <button className={`${styles.tab} ${filter === 'places' ? styles.activeTab : ''}`} onClick={() => setFilter('places')}><FaMapMarkerAlt /> Places</button>
+            <button className={`${styles.tab} ${filter === 'writings' ? styles.activeTab : ''}`} onClick={() => setFilter('writings')}><FaPen /> Writings</button>
+            <button className={`${styles.tab} ${filter === 'user-content' ? styles.activeTab : ''}`} onClick={() => setFilter('user-content')}><FaVideo /> User Content</button>
+            <button className={`${styles.tab} ${filter === 'video' ? styles.activeTab : ''}`} onClick={() => setFilter('video')}><FaVideo /> Videos</button>
           </div>
 
           <div className={styles.feed}>
@@ -522,13 +495,11 @@ export default function Dashboard() {
                 <div className={styles.spinner} />
                 <p>Loading posts...</p>
               </div>
-            ) : posts.length === 0 ? (
+            ) : feedEmpty ? (
               <div className={styles.empty}>
                 <FaPen className={styles.emptyIcon} />
                 <p>No posts yet</p>
-                <Link href="/create" className={styles.emptyBtn}>
-                  Create First Post
-                </Link>
+                <Link href="/create" className={styles.emptyBtn}>Create First Post</Link>
               </div>
             ) : (
               <>
@@ -536,7 +507,6 @@ export default function Dashboard() {
                   const isUserPost = post.source === 'user' && !post.id.startsWith('cms-');
                   const shareUrl = post.url || `${typeof window !== 'undefined' ? window.location.origin : ''}/posts/${post.id}`;
 
-                  // Internal read-more routing for CMS content
                   const readMoreHref =
                     post.source === 'cms'
                       ? post.type === 'news'
@@ -583,33 +553,29 @@ export default function Dashboard() {
                             {getPostIcon(post.type)}
                             <span>{post.type}</span>
                           </div>
-                          {isAdmin && post.viewsCount !== undefined && (
-                            <div className={styles.views}>
-                              <FaEye /> {post.viewsCount}
-                            </div>
+                          {post.viewsCount !== undefined && (
+                            <div className={styles.views}><FaEye /> {post.viewsCount}</div>
                           )}
                         </div>
                       </div>
 
                       {post.mediaType === 'video' && post.videoUrl ? (
-                        <VideoReel src={post.videoUrl} poster={post.imageUrl} onShare={() => {}} />
+                        <VideoReel src={post.videoUrl} poster={post.imageUrl} />
                       ) : post.imageUrl ? (
                         <div className={styles.postImage}>
-                          <SafeImage src={post.imageUrl} alt={post.title} width={600} height={400} className={styles.image} />
+                          <SafeImage src={post.imageUrl} alt={post.title} width={600} height={400} className="image" />
                         </div>
                       ) : null}
 
                       <div className={styles.postContent}>
                         {post.title && <h3>{post.title}</h3>}
                         {post.location && (
-                          <p className={styles.location}>
-                            <FaMapMarkerAlt /> {post.location}
-                          </p>
+                          <p className={styles.location}><FaMapMarkerAlt /> {post.location}</p>
                         )}
-                        {(post.preview || post.content) && <p>{(post.preview || post.content).toString().substring(0, 220)}...</p>}
-                        <Link href={readMoreHref} className={styles.readMore}>
-                          Read More →
-                        </Link>
+                        {(post.preview || post.content) && (
+                          <p>{(post.preview || post.content).toString().substring(0, 220)}...</p>
+                        )}
+                        <Link href={readMoreHref} className={styles.readMore}>Read More →</Link>
                       </div>
 
                       <div className={styles.postActions}>
@@ -625,16 +591,16 @@ export default function Dashboard() {
                           <FaComment />
                           <span>{post.commentsCount || 0}</span>
                         </Link>
-                        <ShareButton url={shareUrl} title={post.title} className={styles.actionButton} />
+                        <ShareButton postId={post.id} url={shareUrl} className={styles.actionButton} />
                         {isUserPost && (user?.uid === post.authorId || isAdmin) ? (
                           <button
                             className={styles.actionButton}
                             onClick={async () => {
                               if (!confirm('Delete this post permanently?')) return;
                               try {
-                                const { db } = getFirebaseClient();
                                 if (!db) throw new Error('Firestore not initialized');
-                                await (await import('firebase/firestore')).deleteDoc(doc(db, 'posts', post.id));
+                                const { deleteDoc } = await import('firebase/firestore');
+                                await deleteDoc(doc(db, 'posts', post.id));
                                 toast.success('Post deleted');
                               } catch {
                                 toast.error('Failed to delete post');
@@ -669,6 +635,12 @@ export default function Dashboard() {
               </>
             )}
           </div>
+
+          {err ? (
+            <div className={styles.loading} style={{ paddingTop: 8 }}>
+              <p style={{ color: '#ef4444' }}>{err}</p>
+            </div>
+          ) : null}
         </div>
       </Layout>
     </AuthGuard>

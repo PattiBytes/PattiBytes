@@ -1,34 +1,37 @@
-// app-next/components/LikeButton.tsx
+// app-next/components/CommentLikeButton.tsx
 import { useEffect, useMemo, useState } from 'react';
 import { getFirebaseClient } from '@/lib/firebase';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
-import { togglePostLike } from '@/lib/likes';
+import { toggleCommentLike } from '@/lib/likes';
 import { FaHeart } from 'react-icons/fa';
 
-type Props = { postId: string; className?: string; showCount?: boolean; ariaLabel?: string };
+type Props = { postId: string; commentId: string; className?: string };
 
-export default function LikeButton({ postId, className, showCount = true, ariaLabel = 'Like' }: Props) {
+export default function CommentLikeButton({ postId, commentId, className }: Props) {
   const { user } = useAuth();
   const { db } = getFirebaseClient();
   const [liked, setLiked] = useState(false);
   const [count, setCount] = useState<number | null>(null);
 
   const likeRef = useMemo(
-    () => (db && user ? doc(db, 'posts', postId, 'likes', user.uid) : null),
-    [db, user, postId]
+    () => (db && user ? doc(db, 'posts', postId, 'comments', commentId, 'likes', user.uid) : null),
+    [db, user, postId, commentId]
   );
-  const postRef = useMemo(() => (db ? doc(db, 'posts', postId) : null), [db, postId]);
+  const commentRef = useMemo(
+    () => (db ? doc(db, 'posts', postId, 'comments', commentId) : null),
+    [db, postId, commentId]
+  );
 
   useEffect(() => {
-    if (!postRef) return;
-    const unsub = onSnapshot(postRef, (snap) => {
+    if (!commentRef) return;
+    const unsub = onSnapshot(commentRef, (snap) => {
       if (!snap.exists()) return;
       const data = snap.data() as { likesCount?: number };
       if (typeof data.likesCount === 'number') setCount(data.likesCount);
     });
     return () => unsub();
-  }, [postRef]);
+  }, [commentRef]);
 
   useEffect(() => {
     const run = async () => {
@@ -45,18 +48,18 @@ export default function LikeButton({ postId, className, showCount = true, ariaLa
     setLiked(next);
     setCount((c) => (c == null ? c : c + (next ? 1 : -1)));
     try {
-      await togglePostLike(postId, user.uid, next);
+      await toggleCommentLike(postId, commentId, user.uid, next);
     } catch {
       setLiked(!next);
       setCount((c) => (c == null ? c : c + (next ? -1 : 1)));
-      alert('Unable to update like. Please try again.');
+      alert('Unable to update comment like. Please try again.');
     }
   };
 
   return (
-    <button type="button" onClick={toggle} className={className} aria-label={ariaLabel} title={ariaLabel} disabled={!user}>
+    <button type="button" onClick={toggle} className={className} aria-label="Like comment" title="Like">
       <FaHeart style={{ color: liked ? '#ef4444' : '#6b7280', marginRight: 6 }} />
-      {showCount ? <span>{count ?? ''}</span> : null}
+      <span>{count ?? ''}</span>
     </button>
   );
 }

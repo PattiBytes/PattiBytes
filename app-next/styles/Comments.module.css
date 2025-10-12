@@ -1,131 +1,44 @@
-.comments {
-  background: var(--card-bg);
-  border-radius: 20px;
-  padding: 2rem;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  border: 1px solid var(--border);
-  margin-top: 2rem;
-}
+.comments { background: var(--card-bg); border-radius: 18px; padding: 1.1rem; box-shadow: 0 2px 12px rgba(0,0,0,0.08); border: 1px solid var(--border); margin-top: 1.25rem; position: relative; }
+.comments h3 { font-size: 1.15rem; margin-bottom: 0.85rem; font-weight: 800; color: var(--text); }
 
-.comments h3 {
-  font-size: 1.5rem;
-  margin-bottom: 1.5rem;
-  font-weight: 700;
-  color: var(--text);
-}
+.inputRow { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; padding: 0.6rem; background: var(--bg); border-radius: 12px; border: 2px solid var(--border); }
+.inputRow:focus-within { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(59,130,246,0.15); }
+.avatar { border-radius: 50%; object-fit: cover; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+.inputRow input { flex: 1; padding: 0.55rem 0.7rem; border: none; background: transparent; font-size: 1rem; color: var(--text); outline: none; }
+.inputRow button { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #fff; border: none; padding: 0.55rem 0.9rem; border-radius: 10px; font-weight: 800; cursor: pointer; }
+.inputRow button:disabled { opacity: 0.6; cursor: not-allowed; }
 
-.inputRow {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding: 1rem;
-  background: var(--bg);
-  border-radius: 16px;
-  border: 2px solid var(--border);
-  transition: border-color 0.3s;
-}
-.inputRow:focus-within {
-  border-color: var(--primary);
-}
+.list { display: flex; flex-direction: column; gap: 0.65rem; }
+.item { display: flex; gap: 0.6rem; padding: 0.6rem; background: var(--bg); border-radius: 12px; border: 1px solid transparent; transition: border-color .2s ease; }
+.item:hover { border-color: var(--border); }
+.bubble { flex: 1; }
+.meta { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.2rem; }
+.meta strong { color: var(--text); font-weight: 800; }
+.meta span { color: var(--text-secondary); font-size: 0.82rem; }
+.text { color: var(--text); line-height: 1.6; white-space: pre-wrap; }
 
-.avatar {
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-}
+.actionsSmall { display: flex; gap: 0.4rem; margin: 0.25rem 0; flex-wrap: wrap; }
+.actionSm { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); padding: 0.25rem 0.5rem; border-radius: 9999px; cursor: pointer; font-size: 0.85rem; transition: all .15s ease; }
+.actionSm:hover { background: var(--card-bg); color: var(--text); border-color: var(--primary); }
 
-.inputRow input {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border: none;
-  background: transparent;
-  font-size: 1rem;
-  color: var(--text);
-  outline: none;
-}
-.inputRow input::placeholder {
-  color: var(--text-secondary);
-  opacity: 0.7;
-}
+.editRow { display: flex; gap: 0.5rem; align-items: center; margin: 0.25rem 0; }
+.editRow input { flex: 1; padding: 0.5rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); color: var(--text); }
 
-.inputRow button {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 12px;
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 0.95rem;
-  transition: all 0.3s;
-  white-space: nowrap;
-}
-.inputRow button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-.inputRow button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.replyRow { display: flex; gap: 0.5rem; margin-top: 0.45rem; }
+.replyRow input { flex: 1; padding: 0.48rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); color: var(--text); }
+.replyRow button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.48rem 0.75rem; border-radius: 9999px; font-weight: 700; cursor: pointer; }
 
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
+.replies { margin-left: 2.0rem; display: grid; gap: 0.45rem; margin-top: 0.2rem; }
+.loadReplies { background: transparent; border: none; color: #667eea; font-weight: 800; cursor: pointer; padding: 0.2rem 0.45rem; font-size: 0.88rem; }
 
-.item {
-  display: flex;
-  gap: 1rem;
-  padding: 1rem;
-  background: var(--bg);
-  border-radius: 12px;
-  transition: all 0.3s;
-  border: 1px solid transparent;
-}
-.item:hover {
-  border-color: var(--border);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
+.moreBar { display: flex; justify-content: center; margin-top: 0.6rem; }
+.moreBar button { background: var(--card-bg); color: var(--text); border: 1px solid var(--border); padding: 0.48rem 0.7rem; border-radius: 10px; font-weight: 700; cursor: pointer; }
 
-.bubble {
-  flex: 1;
-}
-
-.meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-  gap: 1rem;
-}
-
-.meta strong {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.meta span {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
-
-.bubble p {
-  line-height: 1.6;
-  color: var(--text);
-  font-size: 0.95rem;
-}
+.toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); padding: 0.6rem 1.2rem; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); font-weight: 800; z-index: 9999; }
+.toastSuccess { background: linear-gradient(135deg, #51cf66 0%, #37b24d 100%); color: white; }
+.toastError { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; }
 
 @media (max-width: 768px) {
-  .comments { padding: 1.5rem 1rem; border-radius: 16px; }
-  .comments h3 { font-size: 1.25rem; }
-  .inputRow { flex-wrap: wrap; padding: 0.75rem; }
-  .inputRow input { width: 100%; min-width: 0; }
-  .inputRow button { width: 100%; margin-top: 0.5rem; }
-  .item { padding: 0.75rem; }
-  .meta { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
+  .comments { padding: 0.9rem; border-radius: 14px; }
+  .replies { margin-left: 1.3rem; }
 }

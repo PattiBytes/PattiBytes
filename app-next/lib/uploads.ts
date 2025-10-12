@@ -1,17 +1,15 @@
 // lib/uploads.ts
-import { isCloudinaryConfigured, uploadToCloudinary } from './cloudinary';
-import { isSupabaseConfigured, uploadToSupabaseAvatar } from './supabase';
+import { uploadToSupabaseAvatar, isSupabaseConfigured } from '@/lib/supabase';
+import { uploadImageOrAvatar, isCloudinaryConfigured } from '@/lib/cloudinary';
 
-export async function uploadImageAuto(
-  file: File,
-  opts: { uid?: string } = {}
-): Promise<string> {
+export async function uploadImageAuto(file: File, opts?: { uid?: string; type?: 'avatar' | 'image' }) {
+  const type = opts?.type || 'image';
   if (isCloudinaryConfigured()) {
-    return await uploadToCloudinary(file);
+    return uploadImageOrAvatar(file, type === 'avatar' ? 'avatar' : 'image');
   }
   if (isSupabaseConfigured()) {
-    const uid = opts.uid || 'anonymous';
-    return await uploadToSupabaseAvatar(file, { uid });
+    if (!opts?.uid) throw new Error('Supabase avatar upload needs a uid');
+    return uploadToSupabaseAvatar(file, { uid: opts.uid });
   }
-  throw new Error('No image provider configured. Configure Cloudinary or Supabase in .env.local');
+  throw new Error('No upload provider configured');
 }

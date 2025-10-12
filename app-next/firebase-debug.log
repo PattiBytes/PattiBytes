@@ -1,13 +1,11 @@
-[debug] [2025-10-05T10:24:11.077Z] ----------------------------------------------------------------------
-[debug] [2025-10-05T10:24:11.088Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Amrit\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init
-[debug] [2025-10-05T10:24:11.090Z] CLI Version:   14.18.0
-[debug] [2025-10-05T10:24:11.090Z] Platform:      win32
-[debug] [2025-10-05T10:24:11.091Z] Node Version:  v22.17.0
-[debug] [2025-10-05T10:24:11.092Z] Time:          Sun Oct 05 2025 15:54:11 GMT+0530 (India Standard Time)
-[debug] [2025-10-05T10:24:11.092Z] ----------------------------------------------------------------------
+[debug] [2025-10-11T07:04:13.620Z] ----------------------------------------------------------------------
+[debug] [2025-10-11T07:04:13.631Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Amrit\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init functions
+[debug] [2025-10-11T07:04:13.632Z] CLI Version:   14.19.1
+[debug] [2025-10-11T07:04:13.632Z] Platform:      win32
+[debug] [2025-10-11T07:04:13.633Z] Node Version:  v22.17.0
+[debug] [2025-10-11T07:04:13.634Z] Time:          Sat Oct 11 2025 12:34:13 GMT+0530 (India Standard Time)
+[debug] [2025-10-11T07:04:13.634Z] ----------------------------------------------------------------------
 [debug] 
-[debug] [2025-10-05T10:24:11.117Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
-[debug] [2025-10-05T10:24:11.118Z] > authorizing via signed-in user (dhaliwalranbir85@gmail.com)
 [info] 
      ######## #### ########  ######## ########     ###     ######  ########
      ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
@@ -24,56 +22,57 @@ You're about to initialize a Firebase project in this directory:
 [info] 
 [info] First, let's associate this project directory with a Firebase project.
 [info] You can create multiple project aliases by running firebase use --add, 
-[info] but for now we'll just set up a default project.
 [info] 
-[debug] [2025-10-05T10:26:17.831Z] Checked if tokens are valid: false, expires at: 1755156867089
-[debug] [2025-10-05T10:26:17.832Z] Checked if tokens are valid: false, expires at: 1755156867089
-[debug] [2025-10-05T10:26:17.832Z] > refreshing access token with scopes: []
-[debug] [2025-10-05T10:26:17.836Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
-[debug] [2025-10-05T10:26:17.837Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
-[debug] [2025-10-05T10:26:18.523Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
-[debug] [2025-10-05T10:26:18.523Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
-[debug] [2025-10-05T10:26:18.557Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=100
-[debug] [2025-10-05T10:26:19.536Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
-[debug] [2025-10-05T10:26:19.536Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
-[info] i  Using project pattibytes-app (PattiBytes) 
+[debug] [2025-10-11T07:04:21.439Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-10-11T07:04:21.440Z] > authorizing via signed-in user (pattibytesltdbusiness@gmail.com)
+[debug] [2025-10-11T07:04:21.443Z] Checked if tokens are valid: true, expires at: 1760169816791
+[debug] [2025-10-11T07:04:21.444Z] Checked if tokens are valid: true, expires at: 1760169816791
+[debug] [2025-10-11T07:04:21.447Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/pattibytes-app [none]
+[debug] [2025-10-11T07:04:22.559Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/pattibytes-app 403
+[debug] [2025-10-11T07:04:22.560Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/pattibytes-app {"error":{"code":403,"message":"The caller does not have permission","status":"PERMISSION_DENIED"}}
+[debug] [2025-10-11T07:04:22.563Z] Request to https://firebase.googleapis.com/v1beta1/projects/pattibytes-app had HTTP Error: 403, The caller does not have permission
+[debug] [2025-10-11T07:04:22.886Z] FirebaseError: Request to https://firebase.googleapis.com/v1beta1/projects/pattibytes-app had HTTP Error: 403, The caller does not have permission
+    at responseToError (C:\Users\Amrit\AppData\Roaming\npm\node_modules\firebase-tools\lib\responseToError.js:52:12)
+    at RetryOperation._fn (C:\Users\Amrit\AppData\Roaming\npm\node_modules\firebase-tools\lib\apiv2.js:312:77)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[error] 
+[error] Error: Failed to get Firebase project pattibytes-app. Please make sure the project exists and your account has permission to access it.
+[debug] [2025-10-11T07:05:20.681Z] ----------------------------------------------------------------------
+[debug] [2025-10-11T07:05:20.694Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Amrit\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init functions
+[debug] [2025-10-11T07:05:20.695Z] CLI Version:   14.19.1
+[debug] [2025-10-11T07:05:20.696Z] Platform:      win32
+[debug] [2025-10-11T07:05:20.697Z] Node Version:  v22.17.0
+[debug] [2025-10-11T07:05:20.698Z] Time:          Sat Oct 11 2025 12:35:20 GMT+0530 (India Standard Time)
+[debug] [2025-10-11T07:05:20.698Z] ----------------------------------------------------------------------
+[debug] 
 [info] 
-=== Dataconnect Setup
-[debug] [2025-10-05T10:26:28.636Z] Checked if tokens are valid: true, expires at: 1759663577524
-[debug] [2025-10-05T10:26:28.636Z] Checked if tokens are valid: true, expires at: 1759663577524
-[debug] [2025-10-05T10:26:28.637Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/pattibytes-app/billingInfo [none]
-[debug] [2025-10-05T10:26:29.264Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/pattibytes-app/billingInfo 200
-[debug] [2025-10-05T10:26:29.264Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/pattibytes-app/billingInfo {"name":"projects/pattibytes-app/billingInfo","projectId":"pattibytes-app","billingAccountName":"","billingEnabled":false}
-[info] i  dataconnect: ensuring required API firebasedataconnect.googleapis.com is enabled... 
-[debug] [2025-10-05T10:26:29.269Z] Checked if tokens are valid: true, expires at: 1759663577524
-[debug] [2025-10-05T10:26:29.269Z] Checked if tokens are valid: true, expires at: 1759663577524
-[info] i  dataconnect: ensuring required API sqladmin.googleapis.com is enabled... 
-[debug] [2025-10-05T10:26:29.272Z] Checked if tokens are valid: true, expires at: 1759663577524
-[debug] [2025-10-05T10:26:29.272Z] Checked if tokens are valid: true, expires at: 1759663577524
-[debug] [2025-10-05T10:26:29.272Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/firebasedataconnect.googleapis.com [none]
-[debug] [2025-10-05T10:26:29.273Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/firebasedataconnect.googleapis.com x-goog-quota-user=projects/pattibytes-app
-[debug] [2025-10-05T10:26:29.276Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/sqladmin.googleapis.com [none]
-[debug] [2025-10-05T10:26:29.277Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/sqladmin.googleapis.com x-goog-quota-user=projects/pattibytes-app
-[debug] [2025-10-05T10:26:31.369Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/sqladmin.googleapis.com 200
-[debug] [2025-10-05T10:26:31.369Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/sqladmin.googleapis.com [omitted]
-[warn] !  dataconnect: missing required API sqladmin.googleapis.com. Enabling now... 
-[debug] [2025-10-05T10:26:31.371Z] Checked if tokens are valid: true, expires at: 1759663577524
-[debug] [2025-10-05T10:26:31.372Z] Checked if tokens are valid: true, expires at: 1759663577524
-[debug] [2025-10-05T10:26:31.373Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/sqladmin.googleapis.com:enable [none]
-[debug] [2025-10-05T10:26:31.373Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/sqladmin.googleapis.com:enable x-goog-quota-user=projects/pattibytes-app
-[debug] [2025-10-05T10:26:31.381Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/firebasedataconnect.googleapis.com 200
-[debug] [2025-10-05T10:26:31.381Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/firebasedataconnect.googleapis.com [omitted]
-[warn] !  dataconnect: missing required API firebasedataconnect.googleapis.com. Enabling now... 
-[debug] [2025-10-05T10:26:31.382Z] Checked if tokens are valid: true, expires at: 1759663577524
-[debug] [2025-10-05T10:26:31.382Z] Checked if tokens are valid: true, expires at: 1759663577524
-[debug] [2025-10-05T10:26:31.383Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/firebasedataconnect.googleapis.com:enable [none]
-[debug] [2025-10-05T10:26:31.383Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/firebasedataconnect.googleapis.com:enable x-goog-quota-user=projects/pattibytes-app
-[debug] [2025-10-05T10:26:33.232Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/sqladmin.googleapis.com:enable 200
-[debug] [2025-10-05T10:26:33.233Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/sqladmin.googleapis.com:enable [omitted]
-[debug] [2025-10-05T10:26:33.334Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/firebasedataconnect.googleapis.com:enable 200
-[debug] [2025-10-05T10:26:33.334Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/pattibytes-app/services/firebasedataconnect.googleapis.com:enable [omitted]
-[debug] [2025-10-05T10:26:43.385Z] Checked if tokens are valid: true, expires at: 1759663577524
-[debug] [2025-10-05T10:26:43.386Z] Checked if tokens are valid: true, expires at: 1759663577524
-[debug] [2025-10-05T10:26:43.386Z] >>> [apiv2][query] GET https://firebasedataconnect.googleapis.com/v1/projects/pattibytes-app/locations/-/services [none]
-[debug] [2025-10-05T10:26:45.613Z] <<< [apiv2][status] GET https://firebasedataconnect.googleapis.com/v1/projects/pattibytes-app/locations/-/services 200
-[debug] [2025-10-05T10:26:45.614Z] <<< [apiv2][body] GET https://firebasedataconnect.googleapis.com/v1/projects/pattibytes-app/locations/-/services {}
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  C:\Users\Amrit\Downloads\patti-work\pattibytes-repo\app-next
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] 
+[debug] [2025-10-11T07:06:18.213Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-10-11T07:06:18.214Z] > authorizing via signed-in user (pattibytesltdbusiness@gmail.com)
+[debug] [2025-10-11T07:06:18.219Z] Checked if tokens are valid: true, expires at: 1760169816791
+[debug] [2025-10-11T07:06:18.219Z] Checked if tokens are valid: true, expires at: 1760169816791
+[debug] [2025-10-11T07:06:18.224Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/pattibytes-app [none]
+[debug] [2025-10-11T07:06:18.857Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/pattibytes-app 403
+[debug] [2025-10-11T07:06:18.857Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/pattibytes-app {"error":{"code":403,"message":"The caller does not have permission","status":"PERMISSION_DENIED"}}
+[debug] [2025-10-11T07:06:18.859Z] Request to https://firebase.googleapis.com/v1beta1/projects/pattibytes-app had HTTP Error: 403, The caller does not have permission
+[debug] [2025-10-11T07:06:19.126Z] FirebaseError: Request to https://firebase.googleapis.com/v1beta1/projects/pattibytes-app had HTTP Error: 403, The caller does not have permission
+    at responseToError (C:\Users\Amrit\AppData\Roaming\npm\node_modules\firebase-tools\lib\responseToError.js:52:12)
+    at RetryOperation._fn (C:\Users\Amrit\AppData\Roaming\npm\node_modules\firebase-tools\lib\apiv2.js:312:77)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[error] 
+[error] Error: Failed to get Firebase project pattibytes-app. Please make sure the project exists and your account has permission to access it.

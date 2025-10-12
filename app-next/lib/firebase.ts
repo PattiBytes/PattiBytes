@@ -1,6 +1,13 @@
+// app-next/lib/firebase.ts
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  getFirestore as compatGetFirestore,
+  Firestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -35,14 +42,17 @@ export function getFirebaseClient() {
   if (!app && isFirebaseConfigured()) {
     app = getApps()[0] || initializeApp(firebaseConfig);
     auth = getAuth(app);
-    db = getFirestore(app);
+    try {
+      db = initializeFirestore(app, {
+        experimentalAutoDetectLongPolling: true,
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      });
+    } catch {
+      db = compatGetFirestore(app);
+    }
     storage = getStorage(app);
     googleProvider = new GoogleAuthProvider();
-    
-    // Configure Google Provider
-    googleProvider.setCustomParameters({
-      prompt: 'select_account'
-    });
+    googleProvider.setCustomParameters({ prompt: 'select_account' });
   }
 
   return { app, auth, db, storage, googleProvider };

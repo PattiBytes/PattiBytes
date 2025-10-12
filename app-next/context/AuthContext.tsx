@@ -1,3 +1,4 @@
+// context/AuthContext.tsx
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
   User,
@@ -7,7 +8,7 @@ import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  sendPasswordResetEmail, // add
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
@@ -25,7 +26,7 @@ interface AuthContextType {
   signUpWithEmail: (email: string, password: string, username: string, displayName: string) => Promise<void>;
   signOut: () => Promise<void>;
   reloadUser: () => Promise<void>;
-  sendPasswordReset: (email: string) => Promise<void>; // add
+  sendPasswordReset: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,25 +39,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { auth, db } = getFirebaseClient();
 
-  // Online status tracking
+  // Presence effect: silent, non-blocking
   useEffect(() => {
     if (!user || !db) return;
     const userRef = doc(db, 'users', user.uid);
-    setDoc(
-      userRef,
-      { onlineStatus: 'online', lastSeen: serverTimestamp() },
-      { merge: true }
-    );
+
+    const setOnline = async () => {
+      try {
+        await setDoc(userRef, { onlineStatus: 'online', lastSeen: serverTimestamp() }, { merge: true });
+      } catch {}
+    };
+    const setOffline = async () => {
+      try {
+        await setDoc(userRef, { onlineStatus: 'offline', lastSeen: serverTimestamp() }, { merge: true });
+      } catch {}
+    };
+
+    setOnline();
+
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') setOffline();
+      else setOnline();
+    };
+    document.addEventListener('visibilitychange', onVis);
+
+    const beforeUnload = () => { setOffline(); };
+    window.addEventListener('beforeunload', beforeUnload);
+
     return () => {
-      setDoc(
-        userRef,
-        { onlineStatus: 'offline', lastSeen: serverTimestamp() },
-        { merge: true }
-      );
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('beforeunload', beforeUnload);
+      setOffline();
     };
   }, [user, db]);
 
-  // Auth state listener (sets user, profile, admin)
+  // Auth state listener
   useEffect(() => {
     if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -64,7 +81,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         const profile = await getUserProfile(firebaseUser.uid);
         setUserProfile(profile || null);
-
         const admin = await checkAdmin(firebaseUser.uid);
         setIsAdmin(admin);
       } else {
@@ -76,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, [auth]);
 
-  // Real-time profile listener
+  // Realtime profile updates
   useEffect(() => {
     if (!user || !db) return;
     const userRef = doc(db, 'users', user.uid);
@@ -124,11 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth || !db) return;
     try {
       if (user) {
-        await setDoc(
-          doc(db, 'users', user.uid),
-          { onlineStatus: 'offline', lastSeen: serverTimestamp() },
-          { merge: true }
-        );
+        await setDoc(doc(db, 'users', user.uid), { onlineStatus: 'offline', lastSeen: serverTimestamp() }, { merge: true });
       }
       await firebaseSignOut(auth);
       setUser(null);
@@ -136,7 +148,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAdmin(false);
       router.replace('/auth/login');
     } catch (error) {
-      console.error('Sign out error:', error);
       throw error;
     }
   };
@@ -148,7 +159,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAdmin(await checkAdmin(user.uid));
   };
 
-  // New: password reset
   const sendPasswordReset = async (email: string) => {
     if (!auth) throw new Error('Auth not initialized');
     await sendPasswordResetEmail(auth, email);
@@ -164,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUpWithEmail,
     signOut,
     reloadUser,
-    sendPasswordReset, // expose
+    sendPasswordReset,
   };
 
   return <AuthContext.Provider value={value}>{loading ? null : children}</AuthContext.Provider>;
