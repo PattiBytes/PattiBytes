@@ -13,6 +13,7 @@ import {
   type DocumentData,
   doc,
   getDoc,
+  deleteDoc,
 } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -23,6 +24,7 @@ import SafeImage from '@/components/SafeImage';
 import VideoReel from '@/components/VideoReel';
 import ShareButton from '@/components/ShareButton';
 import LikeButton from '@/components/LikeButton';
+import ConfirmModal from '@/components/ConfirmModal';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -36,6 +38,8 @@ import {
   FaEye,
   FaComment,
   FaTrash,
+  FaArrowUp,
+  FaPlus,
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import styles from '@/styles/Dashboard.module.css';
@@ -62,6 +66,7 @@ interface FirestorePostDoc {
   sharesCount?: number;
   viewsCount?: number;
   isOfficial?: boolean;
+  isDraft?: boolean;
 }
 
 interface Post {
@@ -99,6 +104,7 @@ interface CMSNewsItem {
   date: string;
   url: string;
 }
+
 interface CMSPlaceItem {
   id?: string;
   slug?: string;
@@ -109,6 +115,7 @@ interface CMSPlaceItem {
   date: string;
   url: string;
 }
+
 interface CMSNotificationItem {
   id: string;
   title: string;
@@ -139,6 +146,7 @@ function getCMSCache(): CMSCacheShape | null {
     return null;
   }
 }
+
 function setCMSCache(data: Omit<CMSCacheShape, 'ts'>) {
   try {
     const payload: CMSCacheShape = { ts: Date.now(), ...data };
@@ -161,7 +169,8 @@ export default function Dashboard() {
   const [showNotification, setShowNotification] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; postId: string; title: string } | null>(null);
 
   const lastDoc = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
   const observer = useRef<IntersectionObserver | null>(null);
@@ -182,24 +191,50 @@ export default function Dashboard() {
     check();
   }, [db, user]);
 
-  const filterFn = useCallback((items: Post[]) => {
-    switch (filter) {
-      case 'all': return items;
-      case 'user-content': return items.filter((p) => p.source === 'user');
-      case 'news': return items.filter((p) => p.type === 'news');
-      case 'places': return items.filter((p) => p.type === 'place');
-      case 'writings': return items.filter((p) => p.type === 'writing');
-      case 'video': return items.filter((p) => p.mediaType === 'video' || p.type === 'video');
-      default: return items;
-    }
-  }, [filter]);
+  // Scroll to top detection
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
-  const buildFeed = useCallback((uPosts: Post[], cPosts: Post[]) => {
-    const merged = [...uPosts, ...cPosts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    setPosts(filterFn(merged));
-  }, [filterFn]);
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-  // CMS loader (with cache) as a stable callback
+  const filterFn = useCallback(
+    (items: Post[]) => {
+      switch (filter) {
+        case 'all':
+          return items;
+        case 'user-content':
+          return items.filter((p) => p.source === 'user');
+        case 'news':
+          return items.filter((p) => p.type === 'news');
+        case 'places':
+          return items.filter((p) => p.type === 'place');
+        case 'writings':
+          return items.filter((p) => p.type === 'writing');
+        case 'video':
+          return items.filter((p) => p.mediaType === 'video' || p.type === 'video');
+        default:
+          return items;
+      }
+    },
+    [filter]
+  );
+
+  const buildFeed = useCallback(
+    (uPosts: Post[], cPosts: Post[]) => {
+      const merged = [...uPosts, ...cPosts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      setPosts(filterFn(merged));
+    },
+    [filterFn]
+  );
+
+  // CMS loader
   const loadCMS = useCallback(async () => {
     if (cmsLoaded.current) return;
     cmsLoaded.current = true;
@@ -212,7 +247,7 @@ export default function Dashboard() {
         setUrgentNotification(notifs[0]);
         setShowNotification(true);
         localStorage.setItem(seenKey, 'true');
-        setTimeout(() => setShowNotification(false), 3000);
+        setTimeout(() => setShowNotification(false), 5000);
       }
     };
 
@@ -223,8 +258,8 @@ export default function Dashboard() {
         title: n.title,
         content: n.preview || '',
         preview: n.preview,
-        type: 'news',
-        source: 'cms',
+        type: 'news' as PostType,
+        source: 'cms' as const,
         authorName: n.author || 'PattiBytes Desk',
         authorPhoto: '/images/default-avatar.png',
         imageUrl: n.image,
@@ -241,8 +276,8 @@ export default function Dashboard() {
         title: p.title,
         content: p.preview || '',
         preview: p.preview,
-        type: 'place',
-        source: 'cms',
+        type: 'place' as PostType,
+        source: 'cms' as const,
         authorName: 'PattiBytes',
         authorPhoto: '/images/default-avatar.png',
         imageUrl: p.image,
@@ -271,8 +306,8 @@ export default function Dashboard() {
         title: n.title,
         content: n.preview || '',
         preview: n.preview,
-        type: 'news',
-        source: 'cms',
+        type: 'news' as PostType,
+        source: 'cms' as const,
         authorName: n.author || 'PattiBytes Desk',
         authorPhoto: '/images/default-avatar.png',
         imageUrl: n.image,
@@ -289,8 +324,8 @@ export default function Dashboard() {
         title: p.title,
         content: p.preview || '',
         preview: p.preview,
-        type: 'place',
-        source: 'cms',
+        type: 'place' as PostType,
+        source: 'cms' as const,
         authorName: 'PattiBytes',
         authorPhoto: '/images/default-avatar.png',
         imageUrl: p.image,
@@ -312,19 +347,22 @@ export default function Dashboard() {
     }
   }, [buildFeed, userPosts]);
 
-  // Realtime user posts
+  // Realtime user posts (CLIENT-SIDE filtering of drafts)
   useEffect(() => {
     if (!db) return;
     setLoading(true);
-    setErr(null);
     const q = fsQuery(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(20));
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const uPosts: Post[] = snap.docs.map((d) => {
+        const uPosts: Post[] = [];
+        snap.docs.forEach((d) => {
           const data = d.data() as FirestorePostDoc;
+          // Skip drafts on the client side
+          if (data.isDraft === true) return;
+
           const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
-          return {
+          uPosts.push({
             id: d.id,
             title: data.title || '',
             content: data.content || '',
@@ -345,8 +383,9 @@ export default function Dashboard() {
             sharesCount: data.sharesCount || 0,
             viewsCount: data.viewsCount || 0,
             isOfficial: data.isOfficial || false,
-          };
+          });
         });
+
         if (snap.docs.length > 0) {
           lastDoc.current = snap.docs[snap.docs.length - 1] as QueryDocumentSnapshot<DocumentData>;
         }
@@ -357,17 +396,19 @@ export default function Dashboard() {
       },
       () => {
         setLoading(false);
-        setErr('Unable to load posts. Check permissions.');
+        toast.error('Unable to load posts. Check permissions.');
       }
     );
     return () => unsub();
   }, [db, buildFeed, cmsPosts]);
 
-  // Load CMS once
-  useEffect(() => { loadCMS(); }, [loadCMS]);
+  useEffect(() => {
+    loadCMS();
+  }, [loadCMS]);
 
-  // Rebuild on filter
-  useEffect(() => { buildFeed(userPosts, cmsPosts); }, [filter, userPosts, cmsPosts, buildFeed]);
+  useEffect(() => {
+    buildFeed(userPosts, cmsPosts);
+  }, [filter, userPosts, cmsPosts, buildFeed]);
 
   const loadMore = useCallback(async () => {
     if (!db || !lastDoc.current || loadingMore || !hasMore) return;
@@ -379,10 +420,14 @@ export default function Dashboard() {
         setHasMore(false);
         return;
       }
-      const morePosts: Post[] = snap.docs.map((d) => {
+      const morePosts: Post[] = [];
+      snap.docs.forEach((d) => {
         const data = d.data() as FirestorePostDoc;
+        // Skip drafts
+        if (data.isDraft === true) return;
+
         const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
-        return {
+        morePosts.push({
           id: d.id,
           title: data.title || '',
           content: data.content || '',
@@ -403,8 +448,9 @@ export default function Dashboard() {
           sharesCount: data.sharesCount || 0,
           viewsCount: data.viewsCount || 0,
           isOfficial: data.isOfficial || false,
-        };
+        });
       });
+
       lastDoc.current = snap.docs[snap.docs.length - 1] as QueryDocumentSnapshot<DocumentData>;
       setUserPosts((prev) => [...prev, ...morePosts]);
       setHasMore(snap.docs.length >= 20);
@@ -415,9 +461,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (loading || loadingMore || !hasMore) return;
-    const io = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) loadMore();
-    }, { threshold: 0.5 });
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadMore();
+      },
+      { threshold: 0.5 }
+    );
     observer.current = io;
     const el = loadMoreRef.current;
     if (el) io.observe(el);
@@ -431,13 +480,33 @@ export default function Dashboard() {
     setTimeout(() => setRefreshing(false), 800);
   };
 
+  const confirmDelete = (postId: string, title: string) => {
+    setDeleteModal({ open: true, postId, title });
+  };
+
+  const performDelete = async () => {
+    if (!deleteModal || !db) return;
+    try {
+      await deleteDoc(doc(db, 'posts', deleteModal.postId));
+      toast.success('Post deleted successfully');
+      setDeleteModal(null);
+    } catch {
+      toast.error('Failed to delete post');
+    }
+  };
+
   const getPostIcon = (type: string) => {
     switch (type) {
-      case 'news': return <FaNewspaper />;
-      case 'place': return <FaMapMarkerAlt />;
-      case 'writing': return <FaPen />;
-      case 'video': return <FaVideo />;
-      default: return null;
+      case 'news':
+        return <FaNewspaper />;
+      case 'place':
+        return <FaMapMarkerAlt />;
+      case 'writing':
+        return <FaPen />;
+      case 'video':
+        return <FaVideo />;
+      default:
+        return null;
     }
   };
 
@@ -448,6 +517,7 @@ export default function Dashboard() {
       <Layout title="Dashboard - PattiBytes">
         <Toaster position="top-center" />
         <div className={styles.dashboard}>
+          {/* Notification Banner */}
           <AnimatePresence>
             {urgentNotification && showNotification && (
               <motion.div
@@ -473,22 +543,32 @@ export default function Dashboard() {
 
           <BytesStories />
 
-          <div className={styles.header}>
-            <motion.button className={styles.refreshBtn} onClick={handleRefresh} disabled={refreshing} whileTap={{ scale: 0.95 }}>
-              <FaChevronDown className={refreshing ? styles.spinning : ''} />
-            </motion.button>
-            <div aria-hidden="true" />
-          </div>
+          {/* Refresh Header */}
+          
 
+          {/* Filter Tabs */}
           <div className={styles.filterTabs}>
-            <button className={`${styles.tab} ${filter === 'all' ? styles.activeTab : ''}`} onClick={() => setFilter('all')}>All</button>
-            <button className={`${styles.tab} ${filter === 'news' ? styles.activeTab : ''}`} onClick={() => setFilter('news')}><FaNewspaper /> News</button>
-            <button className={`${styles.tab} ${filter === 'places' ? styles.activeTab : ''}`} onClick={() => setFilter('places')}><FaMapMarkerAlt /> Places</button>
-            <button className={`${styles.tab} ${filter === 'writings' ? styles.activeTab : ''}`} onClick={() => setFilter('writings')}><FaPen /> Writings</button>
-            <button className={`${styles.tab} ${filter === 'user-content' ? styles.activeTab : ''}`} onClick={() => setFilter('user-content')}><FaVideo /> User Content</button>
-            <button className={`${styles.tab} ${filter === 'video' ? styles.activeTab : ''}`} onClick={() => setFilter('video')}><FaVideo /> Videos</button>
+            <button className={`${styles.tab} ${filter === 'all' ? styles.activeTab : ''}`} onClick={() => setFilter('all')}>
+              All
+            </button>
+            <button className={`${styles.tab} ${filter === 'news' ? styles.activeTab : ''}`} onClick={() => setFilter('news')}>
+              <FaNewspaper /> News
+            </button>
+            <button className={`${styles.tab} ${filter === 'places' ? styles.activeTab : ''}`} onClick={() => setFilter('places')}>
+              <FaMapMarkerAlt /> Places
+            </button>
+            <button className={`${styles.tab} ${filter === 'writings' ? styles.activeTab : ''}`} onClick={() => setFilter('writings')}>
+              <FaPen /> Writings
+            </button>
+            <button className={`${styles.tab} ${filter === 'user-content' ? styles.activeTab : ''}`} onClick={() => setFilter('user-content')}>
+              <FaVideo /> User
+            </button>
+            <button className={`${styles.tab} ${filter === 'video' ? styles.activeTab : ''}`} onClick={() => setFilter('video')}>
+              <FaVideo /> Videos
+            </button>
           </div>
 
+          {/* Feed */}
           <div className={styles.feed}>
             {loading ? (
               <div className={styles.loading}>
@@ -499,7 +579,9 @@ export default function Dashboard() {
               <div className={styles.empty}>
                 <FaPen className={styles.emptyIcon} />
                 <p>No posts yet</p>
-                <Link href="/create" className={styles.emptyBtn}>Create First Post</Link>
+                <Link href="/create" className={styles.emptyBtn}>
+                  Create First Post
+                </Link>
               </div>
             ) : (
               <>
@@ -522,7 +604,7 @@ export default function Dashboard() {
                       className={styles.postCard}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.01 }}
+                      transition={{ delay: Math.min(index * 0.02, 0.3), duration: 0.4 }}
                     >
                       <div className={styles.postHeader}>
                         {post.source === 'user' && post.authorUsername ? (
@@ -530,8 +612,8 @@ export default function Dashboard() {
                             <SafeImage
                               src={post.authorPhoto || '/images/default-avatar.png'}
                               alt={post.authorName}
-                              width={40}
-                              height={40}
+                              width={48}
+                              height={48}
                               className={styles.authorAvatar}
                             />
                             <div className={styles.authorInfo}>
@@ -553,8 +635,10 @@ export default function Dashboard() {
                             {getPostIcon(post.type)}
                             <span>{post.type}</span>
                           </div>
-                          {post.viewsCount !== undefined && (
-                            <div className={styles.views}><FaEye /> {post.viewsCount}</div>
+                          {post.viewsCount !== undefined && post.viewsCount > 0 && (
+                            <div className={styles.views}>
+                              <FaEye /> {post.viewsCount}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -570,12 +654,14 @@ export default function Dashboard() {
                       <div className={styles.postContent}>
                         {post.title && <h3>{post.title}</h3>}
                         {post.location && (
-                          <p className={styles.location}><FaMapMarkerAlt /> {post.location}</p>
+                          <p className={styles.location}>
+                            <FaMapMarkerAlt /> {post.location}
+                          </p>
                         )}
-                        {(post.preview || post.content) && (
-                          <p>{(post.preview || post.content).toString().substring(0, 220)}...</p>
-                        )}
-                        <Link href={readMoreHref} className={styles.readMore}>Read More →</Link>
+                        {(post.preview || post.content) && <p>{(post.preview || post.content).toString().substring(0, 220)}...</p>}
+                        <Link href={readMoreHref} className={styles.readMore}>
+                          Read More →
+                        </Link>
                       </div>
 
                       <div className={styles.postActions}>
@@ -587,29 +673,13 @@ export default function Dashboard() {
                             <span>{post.likesCount || 0}</span>
                           </button>
                         )}
-                      <Link href={`${readMoreHref}#comments`} className={styles.actionButton} aria-label="Comments">
-  <FaComment />
-  <span>{post.commentsCount || 0}</span>
-</Link>
-
+                        <Link href={`${readMoreHref}#comments`} className={styles.actionButton} aria-label="Comments">
+                          <FaComment />
+                          <span>{post.commentsCount || 0}</span>
+                        </Link>
                         <ShareButton postId={post.id} url={shareUrl} className={styles.actionButton} />
                         {isUserPost && (user?.uid === post.authorId || isAdmin) ? (
-                          <button
-                            className={styles.actionButton}
-                            onClick={async () => {
-                              if (!confirm('Delete this post permanently?')) return;
-                              try {
-                                if (!db) throw new Error('Firestore not initialized');
-                                const { deleteDoc } = await import('firebase/firestore');
-                                await deleteDoc(doc(db, 'posts', post.id));
-                                toast.success('Post deleted');
-                              } catch {
-                                toast.error('Failed to delete post');
-                              }
-                            }}
-                            aria-label="Delete"
-                            title="Delete post"
-                          >
+                          <button className={styles.actionButton} onClick={() => confirmDelete(post.id, post.title)} aria-label="Delete" title="Delete post">
                             <FaTrash />
                           </button>
                         ) : null}
@@ -637,12 +707,42 @@ export default function Dashboard() {
             )}
           </div>
 
-          {err ? (
-            <div className={styles.loading} style={{ paddingTop: 8 }}>
-              <p style={{ color: '#ef4444' }}>{err}</p>
-            </div>
-          ) : null}
+          {/* Scroll to Top Button */}
+          <AnimatePresence>
+            {showScrollTop && (
+              <motion.button
+                className={styles.scrollTopBtn}
+                onClick={scrollToTop}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                whileTap={{ scale: 0.9 }}
+                aria-label="Scroll to top"
+              >
+                <FaArrowUp />
+              </motion.button>
+            )}
+          </AnimatePresence>
+
+          {/* Floating Action Button */}
+          <Link href="/create" className={styles.fab} aria-label="Create new post">
+            <FaPlus />
+          </Link>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {deleteModal && (
+          <ConfirmModal
+            open={deleteModal.open}
+            title="Delete this post permanently?"
+            message={`This action cannot be undone. The post "${deleteModal.title}" will be permanently removed.`}
+            confirmText="Delete Post"
+            cancelText="Cancel"
+            variant="danger"
+            onConfirm={performDelete}
+            onCancel={() => setDeleteModal(null)}
+          />
+        )}
       </Layout>
     </AuthGuard>
   );
