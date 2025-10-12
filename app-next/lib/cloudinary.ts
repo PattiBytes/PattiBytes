@@ -1,3 +1,4 @@
+// app-next/lib/cloudinary.ts
 export interface CloudinaryResponse {
   secure_url: string;
   public_id: string;
@@ -12,8 +13,14 @@ export interface CloudinaryResponse {
 export type UploadType = 'image' | 'video' | 'avatar';
 
 const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || '';
-const presetImages = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET_IMAGES || process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '';
-const presetVideos = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET_VIDEOS || process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '';
+const presetImages =
+  process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET_IMAGES ||
+  process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET ||
+  '';
+const presetVideos =
+  process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET_VIDEOS ||
+  process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET ||
+  '';
 const presetAvatars = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET_AVATARS || presetImages;
 
 export function isCloudinaryConfigured(): boolean {
@@ -26,7 +33,10 @@ function presetFor(type: UploadType): string {
   return presetImages;
 }
 
-export async function uploadImageOrAvatar(file: File, type: Extract<UploadType, 'image' | 'avatar'> = 'image'): Promise<string> {
+export async function uploadImageOrAvatar(
+  file: File,
+  type: Extract<UploadType, 'image' | 'avatar'> = 'image'
+): Promise<string> {
   if (!isCloudinaryConfigured()) {
     throw new Error('Cloudinary not configured. Set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and upload presets.');
   }
@@ -34,16 +44,17 @@ export async function uploadImageOrAvatar(file: File, type: Extract<UploadType, 
   const form = new FormData();
   form.append('file', file);
   form.append('upload_preset', presetFor(type));
+  // IMPORTANT: do NOT send OCR/detection parameters; they require paid add-ons and cause 400 errors
 
   const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
   const res = await fetch(endpoint, { method: 'POST', body: form });
 
+  const raw = await res.text().catch(() => '');
   if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    throw new Error(`Cloudinary upload failed: ${res.status} ${err}`);
+    throw new Error(`Cloudinary upload failed: ${res.status} ${raw}`);
   }
 
-  const data = (await res.json()) as CloudinaryResponse;
+  const data = JSON.parse(raw) as CloudinaryResponse;
   if (!data.secure_url) throw new Error('No secure_url returned from Cloudinary');
   return data.secure_url;
 }
@@ -59,6 +70,7 @@ export async function uploadVideo(
   const form = new FormData();
   form.append('file', file);
   form.append('upload_preset', presetFor('video'));
+  // Do not send OCR/detection for video either
 
   return new Promise<string>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
