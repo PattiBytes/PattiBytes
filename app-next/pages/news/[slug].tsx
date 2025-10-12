@@ -1,3 +1,4 @@
+// pages/news/[slug].tsx
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
@@ -5,20 +6,21 @@ import Layout from '@/components/Layout';
 import SafeImage from '@/components/SafeImage';
 import LikeButton from '@/components/LikeButton';
 import ShareButton from '@/components/ShareButton';
-import Comments from '@/components/Comments';
+import PostComments from '@/components/PostComments';
 import CMSContent from '@/components/CMSContent';
 import styles from '@/styles/PostDetail.module.css';
 
-type Item = { id?: string; slug?: string; title: string; preview?: string; date: string; author?: string; image?: string; body?: string; };
+type Item = { id?: string; slug?: string; title: string; preview?: string; date: string; author?: string; image?: string; body?: string };
 
 async function loadItem(slug: string): Promise<Item | null> {
   try {
     const res = await fetch('/api/cms/news', { cache: 'no-store' });
     if (!res.ok) return null;
     const items = (await res.json()) as Item[];
-    const found = items.find((i) => i.slug === slug || i.id === slug);
-    return found || null;
-  } catch { return null; }
+    return items.find((i) => i.slug === slug || i.id === slug) || null;
+  } catch {
+    return null;
+  }
 }
 
 export default function NewsDetail() {
@@ -79,7 +81,7 @@ export default function NewsDetail() {
             <h1>{item.title}</h1>
             <div className={styles.actionsRow}>
               <LikeButton postId={postId} className={styles.actionBtn} />
-              <ShareButton url={shareUrl} title={item.title} className={styles.actionBtn} />
+              <ShareButton postId={postId} url={shareUrl} className={styles.actionBtn} />
               {commentsCount != null && <span className={styles.countPill}>{commentsCount} comments</span>}
             </div>
           </header>
@@ -89,7 +91,7 @@ export default function NewsDetail() {
           </div>
 
           <div id="comments" />
-          <Comments postId={postId} onCountChange={setCommentsCount} />
+          <PostComments postId={postId} onCountChange={setCommentsCount} />
         </article>
       </Layout>
     </AuthGuard>

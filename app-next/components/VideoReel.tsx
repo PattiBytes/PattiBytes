@@ -1,3 +1,4 @@
+// components/VideoReel.tsx
 import { useEffect, useRef, useState } from 'react';
 import { FaVolumeMute, FaVolumeUp, FaPlay, FaPause, FaShareAlt } from 'react-icons/fa';
 import styles from '@/styles/Reel.module.css';

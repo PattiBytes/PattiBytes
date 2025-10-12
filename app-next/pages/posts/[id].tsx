@@ -1,18 +1,18 @@
 // pages/posts/[id].tsx
-// (exactly as in the query body—no className renames—compatible with PostDetail.module.css)
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { doc, onSnapshot, type Timestamp, updateDoc, increment } from 'firebase/firestore';
+import { doc, onSnapshot, type Timestamp } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import SafeImage from '@/components/SafeImage';
-import Comments from '@/components/Comments';
+import PostComments from '@/components/PostComments';
 import VideoReel from '@/components/VideoReel';
 import LikeButton from '@/components/LikeButton';
 import ShareButton from '@/components/ShareButton';
 import Link from 'next/link';
 import { FaArrowLeft, FaMapMarkerAlt } from 'react-icons/fa';
+import { incrementViewOnce } from '@/lib/analytics';
 import styles from '@/styles/PostDetail.module.css';
 
 type PostDoc = {
@@ -27,7 +27,6 @@ type PostDoc = {
   mediaType?: 'image' | 'video' | 'text';
   location?: string;
   createdAt?: Timestamp | Date;
-  counters?: { likes?: number; comments?: number; shares?: number; views?: number };
   likesCount?: number;
   commentsCount?: number;
   sharesCount?: number;
@@ -41,6 +40,7 @@ export default function PostDetailPage() {
   const [post, setPost] = useState<(PostDoc & { id: string }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [commentCount, setCommentCount] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const { db } = getFirebaseClient();
   const ref = useMemo(
@@ -48,37 +48,33 @@ export default function PostDetailPage() {
     [db, id]
   );
 
+  // Subscribe to Firestore post
   useEffect(() => {
     if (!ref) return;
-    const unsub = onSnapshot(ref, (snap) => {
-      if (!snap.exists()) {
-        setPost(null);
+    setError(null);
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (!snap.exists()) {
+          setPost(null);
+          setLoading(false);
+          return;
+        }
+        setPost({ id: snap.id, ...(snap.data() as PostDoc) });
         setLoading(false);
-        return;
+      },
+      () => {
+        setError('Missing or insufficient permissions.');
+        setLoading(false);
       }
-      setPost({ id: snap.id, ...(snap.data() as PostDoc) });
-      setLoading(false);
-    });
+    );
     return () => unsub();
   }, [ref]);
 
+  // Views analytics (session throttled)
   useEffect(() => {
-    const bump = async () => {
-      if (!ref || typeof id !== 'string') return;
-      try {
-        const key = `pv:${id}`;
-        const last = Number(localStorage.getItem(key) || '0');
-        const now = Date.now();
-        if (now - last > 30 * 60 * 1000) {
-          await updateDoc(ref, { viewsCount: increment(1) });
-          localStorage.setItem(key, String(now));
-        }
-      } catch {
-        // ignore
-      }
-    };
-    bump();
-  }, [ref, id]);
+    if (typeof id === 'string' && id) incrementViewOnce(id);
+  }, [id]);
 
   if (loading) {
     return (
@@ -116,10 +112,10 @@ export default function PostDetailPage() {
       ? window.location.href
       : `${process.env.NEXT_PUBLIC_SITE_URL || ''}/posts/${id}`;
 
-  const likes = post.counters?.likes ?? post.likesCount ?? undefined;
-  const comments = commentCount ?? post.counters?.comments ?? post.commentsCount ?? undefined;
-  const shares = post.counters?.shares ?? post.sharesCount ?? undefined;
-  const views = post.counters?.views ?? post.viewsCount ?? undefined;
+  const likes = post.likesCount ?? undefined;
+  const comments = commentCount ?? post.commentsCount ?? undefined;
+  const shares = post.sharesCount ?? undefined;
+  const views = post.viewsCount ?? undefined;
 
   return (
     <AuthGuard>
@@ -129,8 +125,14 @@ export default function PostDetailPage() {
             <FaArrowLeft /> Back
           </Link>
 
+          {error ? (
+            <div className={styles.notFound} style={{ marginBottom: 16 }}>
+              <p>{error}</p>
+            </div>
+          ) : null}
+
           {post.mediaType === 'video' && post.videoUrl ? (
-            <VideoReel src={post.videoUrl} poster={post.imageUrl || undefined} onShare={() => {}} />
+            <VideoReel src={post.videoUrl} poster={post.imageUrl || undefined} />
           ) : post.imageUrl ? (
             <div className={styles.hero}>
               <SafeImage src={post.imageUrl} alt={post.title || 'Post'} width={1200} height={700} />
@@ -141,18 +143,7 @@ export default function PostDetailPage() {
             <h1>{post.title}</h1>
             <div className={styles.actionsRow}>
               <LikeButton postId={id} className={styles.actionBtn} />
-              <ShareButton
-                url={shareUrl}
-                title={post.title}
-                className={styles.actionBtn}
-                onShared={async () => {
-                  try {
-                    if (ref) await updateDoc(ref, { sharesCount: increment(1) });
-                  } catch {
-                    // ignore
-                  }
-                }}
-              />
+              <ShareButton postId={id} url={shareUrl} className={styles.actionBtn} />
               {likes !== undefined && <span className={styles.countPill}>{likes} likes</span>}
               {comments !== undefined && <span className={styles.countPill}>{comments} comments</span>}
               {shares !== undefined && <span className={styles.countPill}>{shares} shares</span>}
@@ -192,7 +183,7 @@ export default function PostDetailPage() {
           {post.content && <div className={styles.content}>{post.content}</div>}
 
           <div id="comments" />
-          <Comments postId={id} onCountChange={setCommentCount} />
+          <PostComments postId={id} onCountChange={setCommentCount} />
         </article>
       </Layout>
     </AuthGuard>

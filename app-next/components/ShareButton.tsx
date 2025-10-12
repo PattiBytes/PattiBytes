@@ -1,35 +1,27 @@
-// components/ShareButton.tsx
-import { FaShareAlt } from 'react-icons/fa';
+// app-next/components/ShareButton.tsx
+import { incrementShare } from '@/lib/shares';
 
-export default function ShareButton({
-  url,
-  title,
-  className,
-  onShared,
-}: {
-  url: string;
-  title?: string;
-  className?: string;
-  onShared?: () => void;
-}) {
-  const share = async () => {
+type Props = { postId: string; url: string; className?: string; ariaLabel?: string };
+
+export default function ShareButton({ postId, url, className, ariaLabel = 'Share' }: Props) {
+  const onShare = async () => {
     try {
       if (navigator.share) {
-        await navigator.share({ url, title });
-        onShared?.();
+        await navigator.share({ url });
       } else {
         await navigator.clipboard.writeText(url);
-        onShared?.();
+        alert('Link copied to clipboard');
       }
     } catch {
-      // user canceled or unsupported
+      // ignore user cancel
+    } finally {
+      try { await incrementShare(postId); } catch {}
     }
   };
 
   return (
-    <button type="button" onClick={share} className={className} aria-label="Share">
-      <FaShareAlt style={{ marginRight: 6 }} />
-      <span>Share</span>
+    <button type="button" onClick={onShare} className={className} aria-label={ariaLabel} title={ariaLabel}>
+      Share
     </button>
   );
 }

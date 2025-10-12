@@ -1,27 +1,29 @@
+// pages/user/[username].tsx
 import { useRouter } from 'next/router';
-import { useEffect, useState, useMemo } from 'react';
-import {
-  collection,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  where,
-  Timestamp,
-  doc,
-  getDoc,
-  type QueryDocumentSnapshot,
-  type DocumentData,
-} from 'firebase/firestore';
-import { getFirebaseClient } from '@/lib/firebase';
-import { getUserByUsername, UserProfile } from '@/lib/username';
-import { isFollowing, followUser, unfollowUser, listFollowers, listFollowing } from '@/lib/follow';
-import { useAuth } from '@/context/AuthContext';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import SafeImage from '@/components/SafeImage';
-import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 import Link from 'next/link';
+import {
+  collection,
+  query as fsQuery,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+  startAfter,
+  type QueryDocumentSnapshot,
+  type DocumentData,
+  doc,
+  getDoc,
+  Timestamp,
+} from 'firebase/firestore';
+import { getFirebaseClient } from '@/lib/firebase';
+import { getUserByUsername, type UserProfile } from '@/lib/username';
+import { isFollowing, followUser, unfollowUser, listFollowers, listFollowing } from '@/lib/follow';
+import ProfilePictureUpload from '@/components/ProfilePictureUpload';
+import { useAuth } from '@/context/AuthContext';
 import { FaMapMarkerAlt, FaGlobe, FaCalendar, FaUserPlus, FaUserCheck, FaUsers } from 'react-icons/fa';
 import styles from '@/styles/PublicProfile.module.css';
 
@@ -29,28 +31,30 @@ type FirestorePostDoc = {
   title?: string;
   content?: string;
   type?: 'news' | 'place' | 'writing' | string;
-  imageUrl?: string;
-  location?: string;
+  imageUrl?: string | null;
+  location?: string | null;
   createdAt?: Timestamp | Date;
 };
 
-interface PostCard {
+type PostCard = {
   id: string;
   title: string;
   content: string;
   type: 'news' | 'place' | 'writing';
-  imageUrl?: string;
-  location?: string;
+  imageUrl?: string | null;
+  location?: string | null;
   createdAt: Date;
-}
+};
 
 export default function PublicProfilePage() {
   const router = useRouter();
-  const { user } = useAuth();
   const { username } = router.query;
+  const { user } = useAuth();
+  const { db } = getFirebaseClient();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<PostCard[]>([]);
+  const [cursor, setCursor] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [following, setFollowing] = useState(false);
@@ -61,85 +65,99 @@ export default function PublicProfilePage() {
   const [followersList, setFollowersList] = useState<UserProfile[]>([]);
   const [followingList, setFollowingList] = useState<UserProfile[]>([]);
 
-  const externalWebsite = useMemo(() => {
-    if (!profile?.website) return undefined;
-    const v = profile.website.trim();
-    if (!v) return undefined;
-    if (v.startsWith('http://') || v.startsWith('https://')) return v;
-    return `https://${v}`;
-  }, [profile?.website]);
-
   const isOwnProfile = !!(user?.uid && profile?.uid && user.uid === profile.uid);
 
+  const externalWebsite = useMemo(() => {
+    const v = profile?.website?.trim();
+    if (!v) return undefined;
+    return v.startsWith('http://') || v.startsWith('https://') ? v : `https://${v}`;
+  }, [profile?.website]);
+
+  // load profile + initial posts
   useEffect(() => {
-    const load = async () => {
+    const run = async () => {
       if (!router.isReady) return;
-      if (!username || typeof username !== 'string') {
+      if (typeof username !== 'string' || !username) {
         setLoading(false);
         return;
       }
-
       try {
-        const p = await getUserByUsername(username);
-        setProfile(p);
-
-        if (!p) {
+        const up = await getUserByUsername(username);
+        setProfile(up);
+        if (!up || !db) {
           setLoading(false);
           return;
         }
+        const q = fsQuery(
+          collection(db, 'posts'),
+          where('authorId', '==', up.uid),
+          orderBy('createdAt', 'desc'),
+          limit(12)
+        );
+        const snap = await getDocs(q);
+        const items: PostCard[] = snap.docs.map((d) => {
+          const raw = d.data() as FirestorePostDoc;
+          const created = raw.createdAt instanceof Timestamp ? raw.createdAt.toDate() : new Date();
+          const t = (raw.type || 'writing').toString();
+          const normalizedType: 'news' | 'place' | 'writing' = t === 'news' || t === 'place' ? (t as 'news' | 'place') : 'writing';
+          return {
+            id: d.id,
+            title: raw.title || '',
+            content: raw.content || '',
+            type: normalizedType,
+            imageUrl: raw.imageUrl || null,
+            location: raw.location || null,
+            createdAt: created,
+          };
+        });
+        setPosts(items);
+        setCursor(snap.docs[snap.docs.length - 1] || null);
 
-        const { db } = getFirebaseClient();
-        if (!db) {
-          setLoading(false);
-          return;
+        if (user?.uid && up.uid && user.uid !== up.uid) {
+          try {
+            const f = await isFollowing(user.uid, up.uid);
+            setFollowing(f);
+          } catch {
+            setFollowing(false);
+          }
         }
-
-        // Load posts of this user
-        if (p.uid) {
-          const q = query(
-            collection(db, 'posts'),
-            where('authorId', '==', p.uid),
-            orderBy('createdAt', 'desc'),
-            limit(12)
-          );
-          const snap = await getDocs(q);
-
-          const items: PostCard[] = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => {
-            const raw = d.data() as FirestorePostDoc;
-            const created = raw.createdAt instanceof Timestamp ? raw.createdAt.toDate() : new Date();
-
-            // Normalize type to one of the union values
-            const t = (raw.type || 'writing').toString();
-            const normalizedType: 'news' | 'place' | 'writing' =
-              t === 'news' || t === 'place' ? (t as 'news' | 'place') : 'writing';
-
-            return {
-              id: d.id,
-              title: raw.title || '',
-              content: raw.content || '',
-              type: normalizedType,
-              imageUrl: raw.imageUrl,
-              location: raw.location,
-              createdAt: created,
-            };
-          });
-
-          setPosts(items);
-        }
-
-        // Is current user following this profile?
-        if (user?.uid && p.uid && user.uid !== p.uid) {
-          const f = await isFollowing(user.uid, p.uid);
-          setFollowing(f);
-        }
-      } catch (e) {
-        console.error('Public profile load error:', e);
+      } catch {
+        // errors are displayed in UI if needed
       } finally {
         setLoading(false);
       }
     };
-    load();
-  }, [username, router.isReady, user?.uid]);
+    run();
+  }, [db, router.isReady, username, user?.uid]);
+
+  const loadMore = useCallback(async () => {
+    if (!db || !profile || !cursor) return;
+    const q = fsQuery(
+      collection(db, 'posts'),
+      where('authorId', '==', profile.uid),
+      orderBy('createdAt', 'desc'),
+      startAfter(cursor),
+      limit(12)
+    );
+    const snap = await getDocs(q);
+    const more: PostCard[] = snap.docs.map((d) => {
+      const raw = d.data() as FirestorePostDoc;
+      const created = raw.createdAt instanceof Timestamp ? raw.createdAt.toDate() : new Date();
+      const t = (raw.type || 'writing').toString();
+      const normalizedType: 'news' | 'place' | 'writing' = t === 'news' || t === 'place' ? (t as 'news' | 'place') : 'writing';
+      return {
+        id: d.id,
+        title: raw.title || '',
+        content: raw.content || '',
+        type: normalizedType,
+        imageUrl: raw.imageUrl || null,
+        location: raw.location || null,
+        createdAt: created,
+      };
+    });
+    setPosts((prev) => [...prev, ...more]);
+    setCursor(snap.docs[snap.docs.length - 1] || null);
+  }, [cursor, db, profile]);
 
   const handleFollowToggle = async () => {
     if (!user?.uid || !profile?.uid || user.uid === profile.uid) return;
@@ -152,15 +170,12 @@ export default function PublicProfilePage() {
         await followUser(user.uid, profile.uid);
         setFollowing(true);
       }
-    } catch (e) {
-      console.error('Follow toggle error:', e);
     } finally {
       setBusyFollow(false);
     }
   };
 
   const hydrateProfiles = async (uids: string[]): Promise<UserProfile[]> => {
-    const { db } = getFirebaseClient();
     if (!db || uids.length === 0) return [];
     const results: UserProfile[] = [];
     for (const uid of uids) {
@@ -223,7 +238,7 @@ export default function PublicProfilePage() {
                 <ProfilePictureUpload
                   currentUrl={profile.photoURL}
                   onUploaded={(newUrl: string) => {
-                    // Optimistic update
+                    // Optimistic update; Auth listener keeps it in sync
                     setProfile((prev) => (prev ? { ...prev, photoURL: newUrl } : prev));
                   }}
                 />
@@ -233,31 +248,32 @@ export default function PublicProfilePage() {
                 </div>
               )}
             </div>
+
             <div className={styles.info}>
               <h1>{profile.displayName}</h1>
               <div className={styles.username}>@{profile.username}</div>
 
-              {profile.bio && <div className={styles.bio}>{profile.bio}</div>}
+              {profile.bio ? <div className={styles.bio}>{profile.bio}</div> : null}
 
               <div className={styles.meta}>
-                {profile.location && (
+                {profile.location ? (
                   <span className={styles.metaItem}>
                     <FaMapMarkerAlt /> {profile.location}
                   </span>
-                )}
-                {externalWebsite && (
+                ) : null}
+                {externalWebsite ? (
                   <a href={externalWebsite} target="_blank" rel="noopener noreferrer" className={styles.metaItem}>
                     <FaGlobe /> {profile.website?.replace(/^https?:\/\//, '')}
                   </a>
-                )}
-                {profile.createdAt && (
+                ) : null}
+                {profile.createdAt ? (
                   <span className={styles.metaItem}>
                     <FaCalendar /> Joined{' '}
                     {profile.createdAt instanceof Timestamp
                       ? (profile.createdAt as Timestamp).toDate().toLocaleDateString()
                       : new Date().toLocaleDateString()}
                   </span>
-                )}
+                ) : null}
               </div>
 
               <div className={styles.followBar}>
@@ -268,7 +284,7 @@ export default function PublicProfilePage() {
                   <FaUsers /> <strong>{profile.stats?.followingCount ?? 0}</strong> Following
                 </button>
 
-                {user?.uid && user.uid !== profile.uid && (
+                {user?.uid && user.uid !== profile.uid ? (
                   <button
                     className={following ? styles.unfollowBtn : styles.followBtn}
                     onClick={handleFollowToggle}
@@ -285,7 +301,7 @@ export default function PublicProfilePage() {
                       </>
                     )}
                   </button>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
@@ -298,11 +314,11 @@ export default function PublicProfilePage() {
               <div className={styles.postsGrid}>
                 {posts.map((p) => (
                   <Link href={`/posts/${p.id}`} key={p.id} className={styles.postCard}>
-                    {p.imageUrl && (
+                    {p.imageUrl ? (
                       <div className={styles.postImage}>
                         <SafeImage src={p.imageUrl} alt={p.title} width={600} height={400} />
                       </div>
-                    )}
+                    ) : null}
                     <div className={styles.postContent}>
                       <span className={styles.postType}>{p.type}</span>
                       <h3>{p.title}</h3>
@@ -312,6 +328,11 @@ export default function PublicProfilePage() {
                 ))}
               </div>
             )}
+            {cursor ? (
+              <div className={styles.loadMore}>
+                <button onClick={loadMore}>Load more</button>
+              </div>
+            ) : null}
           </section>
         </div>
 

@@ -1,3 +1,4 @@
+// pages/places/[slug].tsx
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
@@ -5,21 +6,22 @@ import Layout from '@/components/Layout';
 import SafeImage from '@/components/SafeImage';
 import LikeButton from '@/components/LikeButton';
 import ShareButton from '@/components/ShareButton';
-import Comments from '@/components/Comments';
+import PostComments from '@/components/PostComments';
 import CMSContent from '@/components/CMSContent';
 import { FaMapMarkerAlt } from 'react-icons/fa';
 import styles from '@/styles/PostDetail.module.css';
 
-type Item = { id?: string; slug?: string; title: string; preview?: string; date: string; image?: string; location?: string; body?: string; };
+type Item = { id?: string; slug?: string; title: string; preview?: string; date: string; image?: string; location?: string; body?: string };
 
 async function loadItem(slug: string): Promise<Item | null> {
   try {
     const res = await fetch('/api/cms/places', { cache: 'no-store' });
     if (!res.ok) return null;
     const items = (await res.json()) as Item[];
-    const found = items.find((i) => i.slug === slug || i.id === slug);
-    return found || null;
-  } catch { return null; }
+    return items.find((i) => i.slug === slug || i.id === slug) || null;
+  } catch {
+    return null;
+  }
 }
 
 export default function PlaceDetail() {
@@ -80,7 +82,7 @@ export default function PlaceDetail() {
             <h1>{item.title}</h1>
             <div className={styles.actionsRow}>
               <LikeButton postId={postId} className={styles.actionBtn} />
-              <ShareButton url={shareUrl} title={item.title} className={styles.actionBtn} />
+              <ShareButton postId={postId} url={shareUrl} className={styles.actionBtn} />
               {item.location && (
                 <span className={styles.location}>
                   <FaMapMarkerAlt /> {item.location}
@@ -95,7 +97,7 @@ export default function PlaceDetail() {
           </div>
 
           <div id="comments" />
-          <Comments postId={postId} onCountChange={setCommentsCount} />
+          <PostComments postId={postId} onCountChange={setCommentsCount} />
         </article>
       </Layout>
     </AuthGuard>

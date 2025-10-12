@@ -1,0 +1,181 @@
+// firestore.rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isAdmin() {
+      return isSignedIn() &&
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+    function hasBoundedList() { return request.query.limit != null && request.query.limit <= 200; }
+    function hasOrder() { return request.query.orderBy != null && request.query.orderBy.size() > 0; }
+
+    // Users
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && hasBoundedList();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update, delete: if isOwner(userId) || isAdmin();
+
+      match /followers/{followerId} {
+        allow get: if isSignedIn();
+        allow list: if isSignedIn() && hasBoundedList();
+        allow write: if isSignedIn() && (request.auth.uid == followerId || request.auth.uid == userId);
+      }
+      match /following/{followedId} {
+        allow get: if isSignedIn();
+        allow list: if isSignedIn() && hasBoundedList();
+        allow write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // Username mapping
+    match /usernames/{username} {
+      allow get: if true;
+      allow list: if hasBoundedList();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Posts
+    match /posts/{postId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && hasBoundedList() && hasOrder();
+
+      // Create post by owner; allow server-managed counters as numbers
+      allow create: if isSignedIn() &&
+        request.resource.data.authorId == request.auth.uid &&
+        request.resource.data.createdAt == request.time &&
+        (request.resource.data.title is string) &&
+        (request.resource.data.content is string) &&
+        (
+          request.resource.data.likesCount == null || request.resource.data.likesCount is number
+        ) &&
+        (
+          request.resource.data.commentsCount == null || request.resource.data.commentsCount is number
+        ) &&
+        (
+          request.resource.data.sharesCount == null || request.resource.data.sharesCount is number
+        ) &&
+        (
+          request.resource.data.viewsCount == null || request.resource.data.viewsCount is number
+        );
+
+      // Update by owner/admin; keep authorId immutable; counters may be incremented by privileged env (e.g., Admin SDK)
+      allow update: if isSignedIn() &&
+        (request.auth.uid == resource.data.authorId || isAdmin()) &&
+        request.resource.data.authorId == resource.data.authorId;
+
+      allow delete: if isSignedIn() &&
+        (request.auth.uid == resource.data.authorId || isAdmin());
+
+      // Comments on a post
+      match /comments/{commentId} {
+        allow get: if isSignedIn();
+        allow list: if isSignedIn() && hasBoundedList() && hasOrder();
+
+        // Create parent or reply; allow parentId (null|string). Allow counters optional numeric.
+        allow create: if isSignedIn() &&
+          request.resource.data.authorId == request.auth.uid &&
+          (request.resource.data.text is string) &&
+          request.resource.data.createdAt == request.time &&
+          (request.resource.data.parentId == null || request.resource.data.parentId is string) &&
+          (
+            request.resource.data.likesCount == null || request.resource.data.likesCount is number
+          ) &&
+          (
+            request.resource.data.repliesCount == null || request.resource.data.repliesCount is number
+          );
+
+        // Update/delete by author or admin; authorId immutable
+        allow update: if isSignedIn() &&
+          (request.auth.uid == resource.data.authorId || isAdmin()) &&
+          request.resource.data.authorId == resource.data.authorId;
+
+        allow delete: if isSignedIn() &&
+          (request.auth.uid == resource.data.authorId || isAdmin());
+
+        // Likes on a comment
+        match /likes/{uid} {
+          allow get: if isSignedIn();
+          allow list: if isSignedIn() && hasBoundedList();
+          allow create, update, delete: if isSignedIn() && request.auth.uid == uid;
+        }
+      }
+
+      // Likes on a post
+      match /likes/{uid} {
+        allow get: if isSignedIn();
+        allow list: if isSignedIn() && hasBoundedList();
+        allow create, update, delete: if isSignedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // Bytes
+    match /bytes/{byteId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && hasBoundedList() && hasOrder();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() &&
+        (request.auth.uid == resource.data.userId || isAdmin());
+    }
+
+    // Stories
+    match /stories/{storyId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && hasBoundedList() && hasOrder();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() &&
+        (request.auth.uid == resource.data.userId || isAdmin());
+    }
+
+    // Chats
+    match /chats/{chatId} {
+      allow get: if isSignedIn() &&
+        (request.auth.uid in resource.data.participants || isAdmin());
+      allow list: if isSignedIn() && hasBoundedList();
+      allow update: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() &&
+        (request.resource.data.participants is list) &&
+        (request.auth.uid in request.resource.data.participants);
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() &&
+          (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants || isAdmin());
+        allow list: if isSignedIn() &&
+          (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants || isAdmin()) &&
+          hasBoundedList() && hasOrder();
+        allow create: if isSignedIn() &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow update, delete: if isSignedIn() &&
+          (request.auth.uid == resource.data.senderId || isAdmin());
+      }
+
+      match /typing/{userId} {
+        allow read, write: if isSignedIn() &&
+          (request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants || isAdmin());
+      }
+    }
+
+    // Admins and notifications
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && request.auth.uid == adminId;
+      allow write: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && hasBoundedList() && hasOrder();
+      allow write: if isAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
