@@ -2,11 +2,14 @@
 import {
   collection,
   doc,
-  runTransaction,
+  addDoc,
   serverTimestamp,
-  increment,
   getDocs,
   deleteDoc,
+  updateDoc,
+  increment,
+  runTransaction,
+  getDoc,
 } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 
@@ -25,6 +28,10 @@ function codedError(message: string, code: string): CodedError {
   return e;
 }
 
+function isCMSPost(postId: string): boolean {
+  return postId.startsWith('cms-');
+}
+
 export async function addParentComment(postId: string, author: AuthorInfo, text: string) {
   const { db } = getFirebaseClient();
   if (!db) throw codedError('Firestore not initialized', 'client/not-initialized');
@@ -32,30 +39,32 @@ export async function addParentComment(postId: string, author: AuthorInfo, text:
   const content = text.trim();
   if (!content) throw codedError('Empty comment', 'client/invalid-argument');
 
-  const postRef = doc(db, 'posts', postId);
-  const commentsCol = collection(db, 'posts', postId, 'comments');
+  const payload: Record<string, unknown> = {
+    authorId: author.authorId,
+    authorName: author.authorName,
+    text: content,
+    parentId: null,
+    createdAt: serverTimestamp(),
+    likesCount: 0,
+    repliesCount: 0,
+  };
+  if (author.authorUsername != null) payload.authorUsername = author.authorUsername;
+  if (author.authorPhoto != null) payload.authorPhoto = author.authorPhoto;
 
-  await runTransaction(db, async (tx) => {
-    const postSnap = await tx.get(postRef);
-    if (!postSnap.exists()) throw codedError('Post not found', 'client/not-found');
-
-    const payload: Record<string, unknown> = {
-      authorId: author.authorId,
-      authorName: author.authorName,
-      text: content,
-      parentId: null,
-      createdAt: serverTimestamp(),
-      likesCount: 0,
-      repliesCount: 0,
-    };
-    if (author.authorUsername != null) payload.authorUsername = author.authorUsername;
-    if (author.authorPhoto != null) payload.authorPhoto = author.authorPhoto;
-
-    const newRef = doc(commentsCol);
-    // All reads are done; writes follow
-    tx.set(newRef, payload);
-    tx.update(postRef, { commentsCount: increment(1) });
-  });
+  if (isCMSPost(postId)) {
+    payload.postId = postId;
+    await addDoc(collection(db, 'globalComments'), payload);
+  } else {
+    const postRef = doc(db, 'posts', postId);
+    const commentsCol = collection(db, 'posts', postId, 'comments');
+    await runTransaction(db, async (tx) => {
+      const postSnap = await tx.get(postRef);
+      if (!postSnap.exists()) throw codedError('Post not found', 'client/not-found');
+      const newCommentRef = doc(commentsCol);
+      tx.set(newCommentRef, payload);
+      tx.update(postRef, { commentsCount: increment(1) });
+    });
+  }
 }
 
 export async function addReply(postId: string, parentId: string, author: AuthorInfo, text: string) {
@@ -65,81 +74,121 @@ export async function addReply(postId: string, parentId: string, author: AuthorI
   const content = text.trim();
   if (!content) throw codedError('Empty reply', 'client/invalid-argument');
 
-  const parentRef = doc(db, 'posts', postId, 'comments', parentId);
-  const commentsCol = collection(db, 'posts', postId, 'comments');
+  const payload: Record<string, unknown> = {
+    authorId: author.authorId,
+    authorName: author.authorName,
+    text: content,
+    parentId,
+    createdAt: serverTimestamp(),
+    likesCount: 0,
+    repliesCount: 0,
+  };
+  if (author.authorUsername != null) payload.authorUsername = author.authorUsername;
+  if (author.authorPhoto != null) payload.authorPhoto = author.authorPhoto;
 
-  await runTransaction(db, async (tx) => {
-    const parentSnap = await tx.get(parentRef);
-    if (!parentSnap.exists()) throw codedError('Parent comment not found', 'client/not-found');
-
-    const payload: Record<string, unknown> = {
-      authorId: author.authorId,
-      authorName: author.authorName,
-      text: content,
-      parentId,
-      createdAt: serverTimestamp(),
-      likesCount: 0,
-      repliesCount: 0,
-    };
-    if (author.authorUsername != null) payload.authorUsername = author.authorUsername;
-    if (author.authorPhoto != null) payload.authorPhoto = author.authorPhoto;
-
-    // All reads are done; writes follow
-    const newRef = doc(commentsCol);
-    tx.set(newRef, payload);
-    tx.update(parentRef, { repliesCount: increment(1) });
-  });
+  if (isCMSPost(postId)) {
+    payload.postId = postId;
+    await addDoc(collection(db, 'globalComments'), payload);
+    const parentRef = doc(db, 'globalComments', parentId);
+    await updateDoc(parentRef, { repliesCount: increment(1) });
+  } else {
+    const parentRef = doc(db, 'posts', postId, 'comments', parentId);
+    const commentsCol = collection(db, 'posts', postId, 'comments');
+    await runTransaction(db, async (tx) => {
+      const parentSnap = await tx.get(parentRef);
+      if (!parentSnap.exists()) throw codedError('Parent comment not found', 'client/not-found');
+      const newReplyRef = doc(commentsCol);
+      tx.set(newReplyRef, payload);
+      tx.update(parentRef, { repliesCount: increment(1) });
+    });
+  }
 }
 
 export async function deleteCommentTx(postId: string, commentId: string) {
   const { db } = getFirebaseClient();
   if (!db) throw codedError('Firestore not initialized', 'client/not-initialized');
 
-  const cRef = doc(db, 'posts', postId, 'comments', commentId);
-  const postRef = doc(db, 'posts', postId);
+  if (isCMSPost(postId)) {
+    // CMS: use globalComments
+    const commentRef = doc(db, 'globalComments', commentId);
+    const commentSnap = await getDoc(commentRef);
+    
+    if (!commentSnap.exists()) {
+      throw codedError('Comment not found', 'client/not-found');
+    }
 
-  await runTransaction(db, async (tx) => {
-    // 1) Read the comment
-    const cSnap = await tx.get(cRef);
-    if (!cSnap.exists()) return;
-
-    const data = cSnap.data() as { parentId?: string | null };
+    const data = commentSnap.data() as { parentId?: string | null };
     const parentId = data?.parentId ?? null;
 
-    // 2) Read whichever aggregate doc is needed (still before any write)
-    let currentTopLevelCount = 0;
-    let currentRepliesCount = 0;
-
-    if (!parentId) {
-      const postSnap = await tx.get(postRef);
-      if (postSnap.exists()) {
-        currentTopLevelCount = (postSnap.data().commentsCount as number) ?? 0;
-      }
-    } else {
-      const parentRef = doc(db, 'posts', postId, 'comments', parentId);
-      const parentSnap = await tx.get(parentRef);
-      if (parentSnap.exists()) {
-        currentRepliesCount = (parentSnap.data().repliesCount as number) ?? 0;
+    // Delete the comment
+    await deleteDoc(commentRef);
+    
+    // Update parent replies count if this is a reply
+    if (parentId) {
+      try {
+        const parentRef = doc(db, 'globalComments', parentId);
+        const parentSnap = await getDoc(parentRef);
+        if (parentSnap.exists()) {
+          const currentCount = (parentSnap.data().repliesCount as number) ?? 0;
+          await updateDoc(parentRef, { repliesCount: Math.max(0, currentCount - 1) });
+        }
+      } catch (err) {
+        console.warn('Failed to update parent replies count:', err);
       }
     }
-
-    // 3) All reads completed; perform writes
-    tx.delete(cRef);
-
-    if (!parentId) {
-      tx.update(postRef, { commentsCount: Math.max(0, currentTopLevelCount - 1) });
-    } else {
-      const parentRef = doc(db, 'posts', postId, 'comments', parentId);
-      tx.update(parentRef, { repliesCount: Math.max(0, currentRepliesCount - 1) });
+    
+    // Cleanup likes
+    try {
+      const likesCol = collection(db, 'globalComments', commentId, 'likes');
+      const likesSnap = await getDocs(likesCol);
+      await Promise.allSettled(likesSnap.docs.map((d) => deleteDoc(d.ref)));
+    } catch (err) {
+      console.warn('Failed to cleanup likes:', err);
     }
-  });
+  } else {
+    // User post: use nested collection
+    const cRef = doc(db, 'posts', postId, 'comments', commentId);
+    const postRef = doc(db, 'posts', postId);
 
-  // Best-effort cleanup of per-user like docs (outside the transaction)
-  try {
-    const likesCol = collection(db, 'posts', postId, 'comments', commentId, 'likes');
-    const snap = await getDocs(likesCol);
-    await Promise.allSettled(snap.docs.map((d) => deleteDoc(d.ref)));
-  } catch {
-    // ignore cleanup errors
+    await runTransaction(db, async (tx) => {
+      const cSnap = await tx.get(cRef);
+      if (!cSnap.exists()) return;
+
+      const data = cSnap.data() as { parentId?: string | null };
+      const parentId = data?.parentId ?? null;
+
+      let currentTopLevelCount = 0;
+      let currentRepliesCount = 0;
+
+      if (!parentId) {
+        const postSnap = await tx.get(postRef);
+        if (postSnap.exists()) {
+          currentTopLevelCount = (postSnap.data().commentsCount as number) ?? 0;
+        }
+      } else {
+        const parentRef = doc(db, 'posts', postId, 'comments', parentId);
+        const parentSnap = await tx.get(parentRef);
+        if (parentSnap.exists()) {
+          currentRepliesCount = (parentSnap.data().repliesCount as number) ?? 0;
+        }
+      }
+
+      tx.delete(cRef);
+
+      if (!parentId) {
+        tx.update(postRef, { commentsCount: Math.max(0, currentTopLevelCount - 1) });
+      } else {
+        const parentRef = doc(db, 'posts', postId, 'comments', parentId);
+        tx.update(parentRef, { repliesCount: Math.max(0, currentRepliesCount - 1) });
+      }
+    });
+
+    try {
+      const likesCol = collection(db, 'posts', postId, 'comments', commentId, 'likes');
+      const snap = await getDocs(likesCol);
+      await Promise.allSettled(snap.docs.map((d) => deleteDoc(d.ref)));
+    } catch (err) {
+      console.warn('Failed to cleanup likes:', err);
+    }
   }
 }

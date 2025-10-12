@@ -587,10 +587,11 @@ export default function Dashboard() {
                             <span>{post.likesCount || 0}</span>
                           </button>
                         )}
-                        <Link href={`/posts/${post.id}#comments`} className={styles.actionButton} aria-label="Comments">
-                          <FaComment />
-                          <span>{post.commentsCount || 0}</span>
-                        </Link>
+                      <Link href={`${readMoreHref}#comments`} className={styles.actionButton} aria-label="Comments">
+  <FaComment />
+  <span>{post.commentsCount || 0}</span>
+</Link>
+
                         <ShareButton postId={post.id} url={shareUrl} className={styles.actionButton} />
                         {isUserPost && (user?.uid === post.authorId || isAdmin) ? (
                           <button

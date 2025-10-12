@@ -1,4 +1,4 @@
-// pages/places/[slug].tsx
+// app-next/pages/places/[slug].tsx
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
@@ -8,7 +8,7 @@ import LikeButton from '@/components/LikeButton';
 import ShareButton from '@/components/ShareButton';
 import PostComments from '@/components/PostComments';
 import CMSContent from '@/components/CMSContent';
-import { FaMapMarkerAlt } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaComment } from 'react-icons/fa';
 import styles from '@/styles/PostDetail.module.css';
 
 type Item = { id?: string; slug?: string; title: string; preview?: string; date: string; image?: string; location?: string; body?: string };
@@ -25,7 +25,7 @@ async function loadItem(slug: string): Promise<Item | null> {
 }
 
 export default function PlaceDetail() {
-  const { query } = useRouter();
+  const { query, asPath } = useRouter();
   const slug = typeof query.slug === 'string' ? query.slug : '';
   const [item, setItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,6 +43,12 @@ export default function PlaceDetail() {
       setLoading(false);
     })();
   }, [slug]);
+
+  useEffect(() => {
+    if (asPath.includes('#comments')) {
+      setTimeout(() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' }), 300);
+    }
+  }, [asPath]);
 
   if (loading) {
     return (
@@ -81,14 +87,20 @@ export default function PlaceDetail() {
           <header className={styles.header}>
             <h1>{item.title}</h1>
             <div className={styles.actionsRow}>
-              <LikeButton postId={postId} className={styles.actionBtn} />
-              <ShareButton postId={postId} url={shareUrl} className={styles.actionBtn} />
+              <LikeButton postId={postId} className={styles.actionBtn} showCount />
+              <ShareButton postId={postId} url={shareUrl} className={styles.actionBtn} ariaLabel="Share" />
               {item.location && (
                 <span className={styles.location}>
                   <FaMapMarkerAlt /> {item.location}
                 </span>
               )}
-              {commentsCount != null && <span className={styles.countPill}>{commentsCount} comments</span>}
+              <button
+                className={styles.actionBtn}
+                onClick={() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' })}
+                aria-label="Comments"
+              >
+                <FaComment /> {commentsCount ?? 0}
+              </button>
             </div>
           </header>
 
@@ -97,7 +109,7 @@ export default function PlaceDetail() {
           </div>
 
           <div id="comments" />
-          <PostComments postId={postId} onCountChange={setCommentsCount} />
+          <PostComments postId={postId} postTitle={item.title} onCountChange={setCommentsCount} />
         </article>
       </Layout>
     </AuthGuard>

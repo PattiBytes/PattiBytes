@@ -1,10 +1,43 @@
 // app-next/lib/likes.ts
-import { doc, runTransaction, serverTimestamp, increment } from 'firebase/firestore';
+import { doc, runTransaction, serverTimestamp, increment, getDoc, type Firestore } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
+
+// Helper to ensure CMS post exists before liking
+async function ensureCMSPost(db: Firestore, postId: string) {
+  if (!postId.startsWith('cms-')) return; // Only for CMS posts
+  
+  const postRef = doc(db, 'posts', postId);
+  const existing = await getDoc(postRef);
+  if (existing.exists()) return;
+
+  // Create minimal virtual post
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(postRef);
+    if (snap.exists()) return;
+
+    tx.set(postRef, {
+      authorId: 'system',
+      authorName: 'PattiBytes',
+      title: 'CMS Content',
+      content: '',
+      createdAt: serverTimestamp(),
+      likesCount: 0,
+      commentsCount: 0,
+      sharesCount: 0,
+      viewsCount: 0,
+      isOfficial: true,
+      isCMS: true,
+    });
+  });
+}
 
 export async function togglePostLike(postId: string, uid: string, wantLike: boolean) {
   const { db } = getFirebaseClient();
   if (!db) throw new Error('Firestore not initialized');
+
+  // Ensure CMS post exists
+  await ensureCMSPost(db, postId);
+
   const postRef = doc(db, 'posts', postId);
   const likeRef = doc(db, 'posts', postId, 'likes', uid);
 
@@ -47,12 +80,3 @@ export async function toggleCommentLike(postId: string, commentId: string, uid: 
     }
   });
 }
-
-  // const likesCol = collection(db, 'posts', postId, 'comments', commentId, 'likes');
-  // const likesQuery = query(likesCol, where('uid', '==', uid));
-  // const likesSnap = await getDocs(likesQuery);
-  // const batch = writeBatch(db);
-  // likesSnap.forEach((likeDoc) => {
-  //   batch.delete(likeDoc.ref);
-  // });
-  // await batch.commit();
