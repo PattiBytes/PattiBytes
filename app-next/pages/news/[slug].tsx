@@ -1,4 +1,4 @@
-// pages/news/[slug].tsx
+// app-next/pages/news/[slug].tsx
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
@@ -8,6 +8,7 @@ import LikeButton from '@/components/LikeButton';
 import ShareButton from '@/components/ShareButton';
 import PostComments from '@/components/PostComments';
 import CMSContent from '@/components/CMSContent';
+import { FaComment } from 'react-icons/fa';
 import styles from '@/styles/PostDetail.module.css';
 
 type Item = { id?: string; slug?: string; title: string; preview?: string; date: string; author?: string; image?: string; body?: string };
@@ -24,7 +25,7 @@ async function loadItem(slug: string): Promise<Item | null> {
 }
 
 export default function NewsDetail() {
-  const { query } = useRouter();
+  const { query, asPath } = useRouter();
   const slug = typeof query.slug === 'string' ? query.slug : '';
   const [item, setItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,6 +43,12 @@ export default function NewsDetail() {
       setLoading(false);
     })();
   }, [slug]);
+
+  useEffect(() => {
+    if (asPath.includes('#comments')) {
+      setTimeout(() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' }), 300);
+    }
+  }, [asPath]);
 
   if (loading) {
     return (
@@ -80,9 +87,15 @@ export default function NewsDetail() {
           <header className={styles.header}>
             <h1>{item.title}</h1>
             <div className={styles.actionsRow}>
-              <LikeButton postId={postId} className={styles.actionBtn} />
-              <ShareButton postId={postId} url={shareUrl} className={styles.actionBtn} />
-              {commentsCount != null && <span className={styles.countPill}>{commentsCount} comments</span>}
+              <LikeButton postId={postId} className={styles.actionBtn} showCount />
+              <ShareButton postId={postId} url={shareUrl} className={styles.actionBtn} ariaLabel="Share" />
+              <button
+                className={styles.actionBtn}
+                onClick={() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' })}
+                aria-label="Comments"
+              >
+                <FaComment /> {commentsCount ?? 0}
+              </button>
             </div>
           </header>
 
@@ -91,7 +104,7 @@ export default function NewsDetail() {
           </div>
 
           <div id="comments" />
-          <PostComments postId={postId} onCountChange={setCommentsCount} />
+          <PostComments postId={postId} postTitle={item.title} onCountChange={setCommentsCount} />
         </article>
       </Layout>
     </AuthGuard>

@@ -1,0 +1,341 @@
+/* app-next/styles/ShareButton.module.css */
+.shareContainer {
+  position: relative;
+  display: inline-block;
+}
+
+.shareBtn {
+  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 16px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+
+.shareBtn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.shareBtn:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+.shareBtn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.45);
+}
+
+.shareBtn:active {
+  transform: translateY(-1px);
+}
+
+.shareBtnCompact {
+  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  color: white;
+  border: none;
+  padding: 0.625rem;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 12px rgba(59, 130, 246, 0.3);
+  width: 40px;
+  height: 40px;
+}
+
+.shareBtnCompact:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+.shareMenu {
+  position: absolute;
+  top: calc(100% + 0.75rem);
+  right: 0;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.24);
+  min-width: 280px;
+  z-index: 10000;
+  animation: slideIn 0.25s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.menuHeader {
+  padding: 1.25rem 1.5rem;
+  font-weight: 900;
+  color: #1a202c;
+  border-bottom: 2px solid #e2e8f0;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  font-size: 1.25rem;
+}
+
+.closeBtn:hover {
+  background: #f1f5f9;
+  color: #1a202c;
+}
+
+.menuBody {
+  padding: 0.5rem;
+}
+
+.menuItem {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: all 0.2s ease;
+  color: #475569;
+  font-weight: 700;
+  font-size: 1rem;
+  border-radius: 12px;
+  margin-bottom: 0.25rem;
+}
+
+.menuItem:hover {
+  background: #f8fafc;
+  color: #1a202c;
+  transform: translateX(4px);
+}
+
+.menuItemSuccess {
+  background: #ecfdf5;
+  color: #10b981;
+}
+
+.menuItemSuccess:hover {
+  background: #d1fae5;
+}
+
+.iconDefault {
+  font-size: 1.5rem;
+  color: #64748b;
+  transition: all 0.2s ease;
+}
+
+.menuItem:hover .iconDefault {
+  color: #3b82f6;
+}
+
+.iconFacebook {
+  font-size: 1.5rem;
+  color: #1877f2;
+}
+
+.iconTwitter {
+  font-size: 1.5rem;
+  color: #1da1f2;
+}
+
+.iconWhatsapp {
+  font-size: 1.5rem;
+  color: #25d366;
+}
+
+.iconLinkedin {
+  font-size: 1.5rem;
+  color: #0a66c2;
+}
+
+.iconSuccess {
+  font-size: 1.5rem;
+  color: #10b981;
+  animation: checkmark 0.3s ease;
+}
+
+@keyframes checkmark {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(2px);
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .shareBtn {
+    padding: 0.65rem 1.25rem;
+    font-size: 0.95rem;
+  }
+
+  .shareBtnCompact {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  .shareMenu {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-radius: 20px 20px 0 0;
+    animation: slideUp 0.3s ease;
+    min-width: 100%;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .menuHeader {
+    padding: 1rem 1.25rem;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  .menuBody {
+    padding: 0.5rem 1rem 1rem;
+  }
+
+  .menuItem {
+    padding: 0.875rem 1rem;
+    font-size: 0.95rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .shareBtn span {
+    display: none;
+  }
+
+  .shareBtn {
+    padding: 0.65rem;
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+  }
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .shareMenu {
+    background: #1e293b;
+    border-color: #334155;
+  }
+
+  .menuHeader {
+    color: #f8fafc;
+    border-color: #334155;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  }
+
+  .closeBtn {
+    color: #94a3b8;
+  }
+
+  .closeBtn:hover {
+    background: #334155;
+    color: #f8fafc;
+  }
+
+  .menuItem {
+    color: #cbd5e1;
+  }
+
+  .menuItem:hover {
+    background: #334155;
+    color: #f8fafc;
+  }
+
+  .menuItemSuccess {
+    background: #064e3b;
+    color: #34d399;
+  }
+
+  .menuItemSuccess:hover {
+    background: #065f46;
+  }
+
+  .overlay {
+    background: rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Accessibility */
+.shareBtn:focus-visible,
+.shareBtnCompact:focus-visible,
+.menuItem:focus-visible,
+.closeBtn:focus-visible {
+  outline: 3px solid #3b82f6;
+  outline-offset: 2px;
+}
