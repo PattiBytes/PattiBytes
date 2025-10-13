@@ -1,26 +1,117 @@
 /* app-next/styles/CompleteProfile.module.css */
-.page { display: grid; place-items: start center; min-height: 70vh; padding: 2rem 1rem; }
+
+/* Page */
+.page {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+  min-height: 100vh;
+  background: linear-gradient(to bottom, #f8fafc 0%, #ffffff 100%);
+}
+
+/* Card */
 .card {
-  width: 100%; max-width: 720px; background: var(--card-bg,#fff); border: 1px solid var(--border,#e5e7eb);
-  border-radius: 16px; padding: clamp(1rem,4vw,2rem); box-shadow: 0 4px 20px rgba(0,0,0,.05);
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: clamp(1rem, 4vw, 2rem);
+  box-shadow: 0 4px 20px rgba(0,0,0,.05);
 }
-h1 { margin: 0; font-size: clamp(1.4rem,4vw,1.8rem); font-weight: 900; color: var(--text,#111827); }
-.sub { margin: .25rem 0 1rem; color: #6b7280; }
-.form { display: grid; gap: 1rem; }
-.row { display: grid; gap: .4rem; }
-.label { font-weight: 800; color: #374151; }
-.input {
-  border: 2px solid #e5e7eb; border-radius: 12px; padding: .75rem 1rem; font-size: 1rem; outline: none;
-  transition: border-color .2s ease, box-shadow .2s ease;
+
+/* Replace global tag selectors with local classes */
+.title {
+  margin: 0;
+  font-size: clamp(1.4rem, 4vw, 1.8rem);
+  font-weight: 900;
+  color: #111827;
 }
-.input:focus { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37,99,235,.1); }
-.submit {
-  background: linear-gradient(135deg,#3b82f6 0%,#2563eb 100%); color: white; font-weight: 900; border: none;
-  border-radius: 12px; padding: .9rem 1.25rem; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease;
+.sub {
+  margin: .25rem 0 1rem;
+  color: #6b7280;
+  font-weight: 600;
 }
-.submit:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(37,99,235,.35); }
+
+/* Form */
+.form {
+  display: grid;
+  gap: 1rem;
+}
+.label {
+  font-weight: 800;
+  color: #374151;
+  font-size: 0.95rem;
+}
+.input,
+.textarea,
+.select {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.9rem;
+  font-size: 1rem;
+  font-weight: 500;
+  background: white;
+  color: #111827;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .1s ease;
+}
+.input:focus,
+.textarea:focus,
+.select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59,130,246,.12);
+  transform: translateY(-1px);
+}
+.textarea {
+  resize: vertical;
+  min-height: 110px;
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+.primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  border: none;
+  padding: 0.9rem 1.25rem;
+  border-radius: 0.9rem;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(59,130,246,.35);
+  transition: transform .15s ease, box-shadow .2s ease;
+}
+.primary:hover { transform: translateY(-1px); box-shadow: 0 12px 26px rgba(59,130,246,.45); }
+.secondary {
+  background: white;
+  color: #111827;
+  border: 2px solid #e5e7eb;
+  padding: 0.9rem 1.1rem;
+  border-radius: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .2s ease, border-color .2s ease, transform .15s ease;
+}
+.secondary:hover { background: #f9fafb; border-color: #d1d5db; transform: translateY(-1px); }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .actions { justify-content: stretch; }
+  .primary, .secondary { flex: 1; text-align: center; }
+}
+
+/* Dark mode */
 @media (prefers-color-scheme: dark) {
-  .card { background:#111827; border-color:#374151; }
-  h1 { color:#f9fafb; } .sub { color:#9ca3af; }
-  .input { background:#0b1220; border-color:#334155; color:#e5e7eb; }
+  .page { background: linear-gradient(to bottom, #111827 0%, #1f2937 100%); }
+  .card { background: #1f2937; border-color: #374151; }
+  .title { color: #f9fafb; }
+  .sub { color: #9ca3af; }
+  .input, .textarea, .select { background: #374151; border-color: #4b5563; color: #f9fafb; }
+  .secondary { background: #1f2937; color: #f9fafb; border-color: #374151; }
+  .secondary:hover { background: #111827; border-color: #4b5563; }
 }

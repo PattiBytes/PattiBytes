@@ -231,3 +231,85 @@
   .toggleText strong { color: #f9fafb; }
   .toggleText small { color: #9ca3af; }
 }
+/* app-next/styles/Settings.module.css */
+
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+  min-height: 100vh;
+  background: linear-gradient(to bottom, #f8fafc 0%, #ffffff 100%);
+}
+.header { margin-bottom: 2rem; text-align: center; }
+.title {
+  margin: 0 0 .5rem 0;
+  font-size: 2.5rem; font-weight: 900; letter-spacing: -0.025em;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.subtitle { margin: 0; color: #6b7280; font-size: 1.1rem; font-weight: 500; }
+
+.card {
+  background: white; border-radius: 1.25rem; padding: 1.75rem; margin-bottom: 1.5rem;
+  border: 1px solid #e5e7eb; box-shadow: 0 4px 18px rgba(0,0,0,0.06);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.card:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(0,0,0,0.08); }
+
+.cardHeader { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 2px solid #f3f4f6; }
+.cardIcon { font-size: 1.25rem; color: #3b82f6; }
+.cardTitle { margin: 0; font-size: 1.2rem; font-weight: 900; letter-spacing: -0.02em; }
+
+.form { display: grid; gap: 1rem; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 768px) { .row { grid-template-columns: 1fr; } }
+
+.label { font-weight: 800; color: #374151; font-size: 0.95rem; }
+.input, .textarea, .select {
+  width: 100%; padding: 0.85rem 1rem; border: 2px solid #e5e7eb; border-radius: 0.9rem;
+  font-size: 1rem; font-weight: 500; background: white; color: #111827;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .1s ease;
+}
+.input:focus, .textarea:focus, .select:focus {
+  outline: none; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59,130,246,0.12); transform: translateY(-1px);
+}
+.textarea { resize: vertical; min-height: 110px; }
+.hint { color: #9ca3af; font-size: 0.85rem; font-weight: 600; margin-top: 0.25rem; }
+
+/* Toggle */
+.toggle { display: flex; align-items: center; gap: 1rem; padding: 1rem; border: 2px solid #e5e7eb; border-radius: 1rem; background: #f9fafb; transition: background .2s ease, border-color .2s ease; }
+.toggle:hover { background: white; border-color: #d1d5db; }
+.checkbox {
+  width: 48px; height: 28px; appearance: none; background: #d1d5db; border-radius: 14px; position: relative; cursor: pointer; transition: background .2s ease; flex-shrink: 0;
+}
+.checkbox::before {
+  content: ''; position: absolute; width: 20px; height: 20px; top: 4px; left: 4px; background: white; border-radius: 50%; transition: transform .2s ease, box-shadow .2s ease; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+.checkbox:checked { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.checkbox:checked::before { transform: translateX(20px); box-shadow: 0 2px 8px rgba(59,130,246,0.35); }
+.toggleText { display: flex; flex-direction: column; gap: 0.25rem; }
+.toggleText strong { color: #111827; font-weight: 800; }
+.toggleText small { color: #6b7280; font-weight: 600; }
+
+/* Actions */
+.actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; }
+.primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; padding: 0.9rem 1.5rem; border-radius: 0.9rem; font-weight: 900; cursor: pointer; box-shadow: 0 8px 22px rgba(59,130,246,0.35); transition: transform .15s ease, box-shadow .2s ease;
+}
+.primary:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(59,130,246,0.45); }
+.secondary {
+  background: white; color: #111827; border: 2px solid #e5e7eb; padding: 0.9rem 1.25rem; border-radius: 0.9rem; font-weight: 800; cursor: pointer; transition: border-color .2s ease, background .2s ease, transform .15s ease;
+}
+.secondary:hover { background: #f9fafb; border-color: #d1d5db; transform: translateY(-1px); }
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .page { background: linear-gradient(to bottom, #111827 0%, #1f2937 100%); }
+  .card { background: #1f2937; border-color: #374151; }
+  .label { color: #e5e7eb; }
+  .input, .textarea, .select { background: #374151; border-color: #4b5563; color: #f9fafb; }
+  .toggle { background: #1f2937; border-color: #374151; }
+  .toggle:hover { background: #111827; border-color: #4b5563; }
+  .toggleText strong { color: #f9fafb; }
+  .toggleText small { color: #9ca3af; }
+}
