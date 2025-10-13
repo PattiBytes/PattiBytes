@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import styles from '@/styles/CompleteProfile.module.css';
 
 export default function CompleteProfilePage() {
-  const { user } = useAuth();
+  useAuth();
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
 
