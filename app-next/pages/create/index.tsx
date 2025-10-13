@@ -242,25 +242,41 @@ export default function CreatePost() {
     setUploading(true);
     setProgress(0);
 
+    // In submitCore function, replace the upload section with:
+
+try {
+  let imageUrl: string | null = null;
+  let videoUrl: string | null = null;
+  let mediaType: MediaType | undefined;
+
+  if (media) {
+    const isVid = VIDEO_MIME.test(media.type);
+    setProgress(5);
+    
     try {
-      let imageUrl: string | null = null;
-      let videoUrl: string | null = null;
-      let mediaType: MediaType | undefined;
-
-      if (media) {
-        const isVid = VIDEO_MIME.test(media.type);
-        setProgress(5);
-        if (isVid) {
-          videoUrl = await uploadVideo(media, (pct) => setProgress(Math.min(90, pct)));
-          mediaType = 'video';
-        } else {
-          imageUrl = await uploadToCloudinary(media, 'image');
-          setProgress(90);
-          mediaType = 'image';
-        }
+      if (isVid) {
+        toast.loading('Uploading video...', { id: 'upload' });
+        videoUrl = await uploadVideo(media, (pct) => setProgress(Math.min(90, pct)));
+        mediaType = 'video';
+        toast.success('Video uploaded!', { id: 'upload' });
+      } else {
+        toast.loading('Uploading image...', { id: 'upload' });
+        imageUrl = await uploadToCloudinary(media, 'image');
+        setProgress(90);
+        mediaType = 'image';
+        toast.success('Image uploaded!', { id: 'upload' });
       }
+    } catch (uploadErr) {
+      console.error('Upload error:', uploadErr);
+      const uploadMsg = uploadErr instanceof Error ? uploadErr.message : 'Upload failed';
+      toast.error(`Media upload failed: ${uploadMsg}`, { id: 'upload' });
+      throw uploadErr;
+    }
+  }
 
-      setProgress(95);
+  setProgress(95);
+  // ... rest of submit logic
+
 
       const tagsArray = tagsTrim ? tagsTrim.split(',').map((t) => t.trim()).filter(Boolean) : [];
 

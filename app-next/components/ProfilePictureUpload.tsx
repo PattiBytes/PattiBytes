@@ -1,11 +1,14 @@
+// app-next/components/ProfilePictureUpload.tsx
 import { useRef, useState } from 'react';
 import { uploadImageAuto } from '@/lib/uploads';
 import { isCloudinaryConfigured } from '@/lib/cloudinary';
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { updateUserProfile } from '@/lib/username';
 import SafeImage from './SafeImage';
 import { FaUpload } from 'react-icons/fa';
 import styles from '@/styles/ProfilePictureUpload.module.css';
 import { useAuth } from '@/context/AuthContext';
+import { toast } from 'react-hot-toast';
 
 interface Props {
   currentUrl?: string;
@@ -28,19 +31,19 @@ export default function ProfilePictureUpload({ currentUrl, onUploaded, maxSizeMB
 
     // Guard: require at least one provider configured
     if (!isCloudinaryConfigured() && !isSupabaseConfigured()) {
-      alert('Image uploads are not configured. Set Cloudinary or Supabase env variables in .env.local and restart the dev server.');
+      toast.error('Image uploads are not configured');
       e.target.value = '';
       return;
     }
 
     if (!f.type.startsWith('image/')) {
-      alert('Please select an image file');
+      toast.error('Please select an image file');
       e.target.value = '';
       return;
     }
 
     if (f.size > maxSizeMB * 1024 * 1024) {
-      alert(`File too large. Max ${maxSizeMB}MB.`);
+      toast.error(`File too large. Max ${maxSizeMB}MB`);
       e.target.value = '';
       return;
     }
@@ -52,12 +55,22 @@ export default function ProfilePictureUpload({ currentUrl, onUploaded, maxSizeMB
     try {
       setUploading(true);
       setProgress(30);
-      const url = await uploadImageAuto(f, { uid: user?.uid });
+      toast.loading('Uploading profile picture...', { id: 'avatar-upload' });
+      
+      const url = await uploadImageAuto(f, { uid: user?.uid, type: 'avatar' });
+      setProgress(80);
+
+      // Update user profile in Firestore
+      if (user?.uid) {
+        await updateUserProfile(user.uid, { photoURL: url });
+      }
+
       setProgress(100);
+      toast.success('Profile picture updated!', { id: 'avatar-upload' });
       onUploaded(url);
     } catch (err) {
       console.error('Avatar upload error:', err);
-      alert((err as Error).message || 'Upload failed. Please try again.');
+      toast.error((err as Error).message || 'Upload failed', { id: 'avatar-upload' });
       setPreview(currentUrl);
     } finally {
       setUploading(false);
@@ -68,14 +81,41 @@ export default function ProfilePictureUpload({ currentUrl, onUploaded, maxSizeMB
 
   return (
     <div className={styles.wrap}>
-      <div className={styles.avatarBox} onClick={pick} role="button" aria-label="Change profile picture" tabIndex={0}>
-        <SafeImage src={preview} alt="Profile" width={120} height={120} />
-        <div className={styles.overlay}>
-          <FaUpload />
-          <span>Change</span>
-        </div>
+      <div 
+        className={styles.avatarBox} 
+        onClick={uploading ? undefined : pick} 
+        role="button" 
+        aria-label="Change profile picture" 
+        tabIndex={uploading ? -1 : 0}
+        style={{ cursor: uploading ? 'not-allowed' : 'pointer' }}
+      >
+        <SafeImage 
+          src={preview || '/images/default-avatar.png'} 
+          alt="Profile" 
+          width={120} 
+          height={120} 
+        />
+        {!uploading && (
+          <div className={styles.overlay}>
+            <FaUpload />
+            <span>Change</span>
+          </div>
+        )}
+        {uploading && (
+          <div className={styles.uploadingOverlay}>
+            <div className={styles.uploadSpinner} />
+            <span>{progress}%</span>
+          </div>
+        )}
       </div>
-      <input ref={fileRef} type="file" accept="image/*" onChange={onChoose} style={{ display: 'none' }} />
+      <input 
+        ref={fileRef} 
+        type="file" 
+        accept="image/*" 
+        onChange={onChoose} 
+        disabled={uploading}
+        style={{ display: 'none' }} 
+      />
       {uploading && (
         <div className={styles.progress} aria-live="polite" aria-label="Uploading">
           <div className={styles.fill} style={{ width: `${progress}%` }} />
