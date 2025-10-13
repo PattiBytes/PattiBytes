@@ -1,126 +1,99 @@
-import { useState } from 'react';
-import { useRouter } from 'next/router';
+// app-next/pages/settings/index.tsx
+import { useEffect, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/context/AuthContext';
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, deleteUser } from 'firebase/auth';
-import { collection, deleteDoc, doc, getDocs, limit, query, where, writeBatch } from 'firebase/firestore';
-import { getFirebaseClient } from '@/lib/firebase';
+import UsernameField from '@/components/UsernameField';
+import ProfilePictureUpload from '@/components/ProfilePictureUpload';
+import { updateUserProfile, claimUsername } from '@/lib/username';
 import { motion } from 'framer-motion';
-import { FaLock, FaTrash, FaExclamationTriangle } from 'react-icons/fa';
+import { FaSave, FaUser, FaAt, FaBell } from 'react-icons/fa';
 import styles from '@/styles/Settings.module.css';
+import { toast } from 'react-hot-toast';
 
-export default function Settings() {
-  const { user } = useAuth();
-  const router = useRouter();
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const { db } = getFirebaseClient();
+type ThemePref = 'light' | 'dark' | 'auto';
+type LanguagePref = 'en' | 'pa';
 
-  const showMessage = (type: 'success' | 'error', text: string) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 4000);
-  };
+export default function SettingsPage() {
+  const { user, userProfile, reloadUser } = useAuth();
+  const [displayName, setDisplayName] = useState('');
+  const [bio, setBio] = useState('');
+  const [website, setWebsite] = useState('');
+  const [location, setLocation] = useState('');
+  const [username, setUsername] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingUsername, setSavingUsername] = useState(false);
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
+  // Preferences (align with lib/username types)
+  const [publicProfile, setPublicProfile] = useState(true);
+  const [notifications, setNotifications] = useState(true);
+  const [theme, setTheme] = useState<ThemePref>('auto');
+  const [language, setLanguage] = useState<LanguagePref>('en');
+
+  useEffect(() => {
+    if (!userProfile) return;
+    setDisplayName(userProfile.displayName || '');
+    setBio(userProfile.bio || '');
+    setWebsite(userProfile.website || '');
+    setLocation(userProfile.location || '');
+    setUsername(userProfile.username || '');
+
+    // Load preferences safely
+    const prefs = userProfile.preferences || {};
+    setPublicProfile(prefs.publicProfile ?? true);
+    setNotifications(prefs.notifications ?? true);
+    setTheme((prefs.theme as ThemePref) || 'auto');
+    setLanguage((prefs.language as LanguagePref) || 'en');
+  }, [userProfile]);
+
+  const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-
-    if (newPassword !== confirmPassword) {
-      showMessage('error', 'Passwords do not match');
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      showMessage('error', 'Password must be at least 8 characters');
-      return;
-    }
-
-    setBusy(true);
     try {
-      const cred = EmailAuthProvider.credential(user.email || '', currentPassword);
-      await reauthenticateWithCredential(user, cred);
-      await updatePassword(user, newPassword);
-      showMessage('success', 'Password updated successfully');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (err) {
-      console.error('Password update error:', err);
-      showMessage('error', 'Failed to update password');
+      setSavingProfile(true);
+      await updateUserProfile(user.uid, {
+        displayName: displayName.trim(),
+        bio: bio.trim(),
+        website: website.trim(),
+        location: location.trim(),
+        preferences: {
+          publicProfile,
+          notifications,
+          theme,
+          language,
+        },
+      });
+      if (reloadUser) await reloadUser();
+      toast.success('Profile updated!');
+    } catch (e) {
+      console.error('Profile update error:', e);
+      toast.error(e instanceof Error ? e.message : 'Failed to update profile');
     } finally {
-      setBusy(false);
+      setSavingProfile(false);
     }
   };
 
-  const deleteUserData = async (uid: string) => {
-    if (!db || !uid) return;
-
-    try {
-      const postsQ = query(collection(db, 'posts'), where('authorId', '==', uid), limit(500));
-      const postsSnap = await getDocs(postsQ);
-      if (!postsSnap.empty) {
-        const batch = writeBatch(db);
-        postsSnap.docs.forEach(d => batch.delete(doc(db, 'posts', d.id)));
-        await batch.commit();
-      }
-
-      const chatsQ = query(collection(db, 'chats'), where('participants', 'array-contains', uid), limit(500));
-      const chatsSnap = await getDocs(chatsQ);
-      if (!chatsSnap.empty) {
-        const batch = writeBatch(db);
-        chatsSnap.docs.forEach(d => {
-          const participants = (d.data().participants || []).filter((id: string) => id !== uid);
-          batch.set(doc(db, 'chats', d.id), { participants }, { merge: true });
-        });
-        await batch.commit();
-      }
-
-      const userDoc = await getDocs(query(collection(db, 'users'), where('uid', '==', uid), limit(1)));
-      if (!userDoc.empty) {
-        const userData = userDoc.docs[0].data();
-        if (userData?.username) {
-          await deleteDoc(doc(db, 'usernames', userData.username.toLowerCase()));
-        }
-      }
-
-      await deleteDoc(doc(db, 'users', uid));
-      try {
-        await deleteDoc(doc(db, 'admins', uid));
-      } catch {}
-    } catch (error) {
-      console.error('Error deleting user data:', error);
-      throw error;
+  const saveUsername = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    const newUser = username.trim().toLowerCase();
+    if (!newUser) return toast.error('Username required');
+    if (newUser === userProfile?.username) {
+      return toast('No changes to username');
     }
-  };
-
-  const handleAccountDeletion = async () => {
-    if (!user?.uid) return;
-
-    const confirmed = window.confirm(
-      'Are you absolutely sure? This will permanently delete your account and all your data. This action cannot be undone.'
-    );
-    if (!confirmed) return;
-
-    const password = window.prompt('Please enter your current password to confirm deletion:');
-    if (!password) return;
-
-    setBusy(true);
     try {
-      const cred = EmailAuthProvider.credential(user.email || '', password);
-      await reauthenticateWithCredential(user, cred);
-      await deleteUserData(user.uid);
-      await deleteUser(user);
-      alert('Your account has been deleted successfully');
-      router.replace('/auth/register');
+      setSavingUsername(true);
+      await claimUsername(newUser, user.uid, {
+        displayName: displayName.trim() || userProfile?.displayName,
+        photoURL: userProfile?.photoURL,
+      });
+      if (reloadUser) await reloadUser();
+      toast.success('Username updated!');
     } catch (err) {
-      console.error('Account deletion error:', err);
-      showMessage('error', 'Failed to delete account. Please try again');
+      console.error('Username update error:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to update username');
     } finally {
-      setBusy(false);
+      setSavingUsername(false);
     }
   };
 
@@ -128,92 +101,197 @@ export default function Settings() {
     <AuthGuard>
       <Layout title="Settings - PattiBytes">
         <div className={styles.page}>
-          <h1>Account Settings</h1>
-
-          {message && (
-            <motion.div
-              className={`${styles.message} ${styles[message.type]}`}
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-            >
-              {message.text}
-            </motion.div>
-          )}
-
-          <form onSubmit={handlePasswordChange} className={styles.card}>
-            <div className={styles.cardHeader}>
-              <FaLock />
-              <h2>Change Password</h2>
-            </div>
-            
-            <div className={styles.formGroup}>
-              <label>Current Password</label>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={e => setCurrentPassword(e.target.value)}
-                required
-                disabled={busy}
-                placeholder="Enter current password"
-              />
-            </div>
-
-            <div className={styles.formGroup}>
-              <label>New Password</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                required
-                disabled={busy}
-                placeholder="Enter new password (min. 8 characters)"
-                minLength={8}
-              />
-            </div>
-
-            <div className={styles.formGroup}>
-              <label>Confirm New Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                required
-                disabled={busy}
-                placeholder="Confirm new password"
-                minLength={8}
-              />
-            </div>
-
-            <button type="submit" className={styles.primaryBtn} disabled={busy}>
-              {busy ? 'Updating...' : 'Update Password'}
-            </button>
-          </form>
-
-          <div className={styles.cardDanger}>
-            <div className={styles.cardHeader}>
-              <FaTrash />
-              <h2>Delete Account</h2>
-            </div>
-            
-            <div className={styles.warningBox}>
-              <FaExclamationTriangle />
-              <div>
-                <strong>Warning: This action is irreversible</strong>
-                <p>Deleting your account will permanently remove:</p>
-                <ul>
-                  <li>Your profile and username</li>
-                  <li>All your posts and content</li>
-                  <li>Your participation in chats</li>
-                  <li>All your data from our systems</li>
-                </ul>
-              </div>
-            </div>
-
-            <button onClick={handleAccountDeletion} className={styles.dangerBtn} disabled={busy}>
-              {busy ? 'Deleting...' : 'Delete My Account'}
-            </button>
+          <div className={styles.header}>
+            <h1>Settings</h1>
+            <p>Manage your account settings and preferences</p>
           </div>
+
+          {/* Profile Settings */}
+          <motion.div 
+            className={styles.card}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className={styles.cardHeader}>
+              <FaUser className={styles.cardIcon} />
+              <h2>Profile Information</h2>
+            </div>
+            
+            <form onSubmit={saveProfile} className={styles.form}>
+              <div className={styles.avatarRow}>
+                <ProfilePictureUpload
+                  currentUrl={userProfile?.photoURL}
+                  onUploaded={async (url) => {
+                    if (!user) return;
+                    try {
+                      await updateUserProfile(user.uid, { photoURL: url });
+                      if (reloadUser) await reloadUser();
+                      toast.success('Photo updated!');
+                    } catch {
+                      toast.error('Failed to update photo');
+                    }
+                  }}
+                  maxSizeMB={5}
+                />
+                <div className={styles.nameBlock}>
+                  <label className={styles.label}>Display name</label>
+                  <input
+                    className={styles.input}
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    maxLength={50}
+                    placeholder="Your name"
+                  />
+                </div>
+              </div>
+
+              <div className={styles.row}>
+                <label className={styles.label}>Bio</label>
+                <textarea
+                  className={styles.textarea}
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  maxLength={160}
+                  rows={3}
+                  placeholder="Tell us about yourself…"
+                />
+                <small className={styles.hint}>{bio.length}/160</small>
+              </div>
+
+              <div className={styles.grid2}>
+                <div className={styles.row}>
+                  <label className={styles.label}>Website</label>
+                  <input
+                    className={styles.input}
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    placeholder="https://example.com"
+                  />
+                </div>
+                <div className={styles.row}>
+                  <label className={styles.label}>Location</label>
+                  <input
+                    className={styles.input}
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="City, Country"
+                  />
+                </div>
+              </div>
+
+              <div className={styles.grid2}>
+                <div className={styles.row}>
+                  <label className={styles.label}>Theme</label>
+                  <select
+                    className={styles.select}
+                    value={theme}
+                    onChange={(e) => setTheme(e.target.value as ThemePref)}
+                  >
+                    <option value="auto">Auto (System)</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </div>
+                <div className={styles.row}>
+                  <label className={styles.label}>Language</label>
+                  <select
+                    className={styles.select}
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value as LanguagePref)}
+                  >
+                    <option value="en">English</option>
+                    <option value="pa">Punjabi</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className={styles.toggleRow}>
+                <label className={styles.toggleLabel}>
+                  <input
+                    type="checkbox"
+                    checked={publicProfile}
+                    onChange={(e) => setPublicProfile(e.target.checked)}
+                    className={styles.checkbox}
+                  />
+                  <span className={styles.toggleText}>
+                    <strong>Public Profile</strong>
+                    <small>Make your profile visible to everyone</small>
+                  </span>
+                </label>
+              </div>
+
+              <div className={styles.toggleRow}>
+                <label className={styles.toggleLabel}>
+                  <input
+                    type="checkbox"
+                    checked={notifications}
+                    onChange={(e) => setNotifications(e.target.checked)}
+                    className={styles.checkbox}
+                  />
+                  <span className={styles.toggleText}>
+                    <strong>Notifications</strong>
+                    <small>Receive updates</small>
+                  </span>
+                </label>
+              </div>
+
+              <motion.button 
+                className={styles.primary} 
+                type="submit" 
+                disabled={savingProfile}
+                whileTap={{ scale: 0.98 }}
+              >
+                <FaSave /> {savingProfile ? 'Saving…' : 'Save Profile'}
+              </motion.button>
+            </form>
+          </motion.div>
+
+          {/* Username Settings */}
+          <motion.div 
+            className={styles.card}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            <div className={styles.cardHeader}>
+              <FaAt className={styles.cardIcon} />
+              <h2>Username</h2>
+            </div>
+            
+            <form onSubmit={saveUsername} className={styles.form}>
+              <UsernameField
+                value={username}
+                onChange={setUsername}
+                excludeCurrent={userProfile?.username}
+                showSuggestions
+              />
+              <motion.button 
+                className={styles.primary} 
+                type="submit" 
+                disabled={savingUsername}
+                whileTap={{ scale: 0.98 }}
+              >
+                <FaSave /> {savingUsername ? 'Updating…' : 'Update Username'}
+              </motion.button>
+            </form>
+          </motion.div>
+
+          {/* Info */}
+          <motion.div 
+            className={styles.card}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+          >
+            <div className={styles.cardHeader}>
+              <FaBell className={styles.cardIcon} />
+              <h2>Tips</h2>
+            </div>
+            <div className={styles.form}>
+              <p>Set preferences and notifications as per profile needs. These settings are used across the app.</p>
+            </div>
+          </motion.div>
         </div>
       </Layout>
     </AuthGuard>

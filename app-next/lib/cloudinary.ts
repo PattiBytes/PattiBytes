@@ -33,6 +33,32 @@ function presetFor(type: UploadType): string {
   return presetImages;
 }
 
+/**
+ * Upload via signed API route (fallback method - more reliable)
+ */
+async function uploadViaAPI(file: File, type: UploadType): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('type', type);
+
+  const res = await fetch('/api/cloudinary/upload', {
+    method: 'POST',
+    body: form,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`API upload failed: ${res.status} ${text}`);
+  }
+
+  const data = (await res.json()) as CloudinaryResponse;
+  if (!data.secure_url) throw new Error('No secure_url returned from API');
+  return data.secure_url;
+}
+
+/**
+ * Direct unsigned upload to Cloudinary (requires unsigned preset enabled)
+ */
 export async function uploadImageOrAvatar(
   file: File,
   type: Extract<UploadType, 'image' | 'avatar'> = 'image'
@@ -41,38 +67,65 @@ export async function uploadImageOrAvatar(
     throw new Error('Cloudinary not configured. Set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and upload presets.');
   }
 
-  const form = new FormData();
-  form.append('file', file);
-  form.append('upload_preset', presetFor(type));
-  // IMPORTANT: do NOT send OCR/detection parameters; they require paid add-ons and cause 400 errors
-
-  const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
-  const res = await fetch(endpoint, { method: 'POST', body: form });
-
-  const raw = await res.text().catch(() => '');
-  if (!res.ok) {
-    throw new Error(`Cloudinary upload failed: ${res.status} ${raw}`);
+  const preset = presetFor(type);
+  if (!preset) {
+    throw new Error(`No upload preset configured for ${type}`);
   }
 
-  const data = JSON.parse(raw) as CloudinaryResponse;
-  if (!data.secure_url) throw new Error('No secure_url returned from Cloudinary');
-  return data.secure_url;
+  const form = new FormData();
+  form.append('file', file);
+  form.append('upload_preset', preset);
+
+  const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      body: form,
+    });
+
+    if (!res.ok) {
+      const raw = await res.text().catch(() => '');
+      // If unsigned upload fails (401/403), fallback to signed API upload
+      if (res.status === 401 || res.status === 403 || res.status === 400) {
+        console.warn('Unsigned upload failed, trying signed API route...');
+        return await uploadViaAPI(file, type);
+      }
+      throw new Error(`Cloudinary upload failed: ${res.status} ${raw}`);
+    }
+
+    const data = (await res.json()) as CloudinaryResponse;
+    if (!data.secure_url) throw new Error('No secure_url returned from Cloudinary');
+    return data.secure_url;
+  } catch (error) {
+    // Network error or CORS issue - fallback to API route
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.warn('Network/CORS error, trying signed API route...');
+      return await uploadViaAPI(file, type);
+    }
+    throw error;
+  }
 }
 
-export async function uploadVideo(
-  file: File,
-  onProgress?: (percent: number) => void
-): Promise<string> {
+/**
+ * Upload video with progress tracking
+ */
+export async function uploadVideo(file: File, onProgress?: (percent: number) => void): Promise<string> {
   if (!isCloudinaryConfigured()) {
     throw new Error('Cloudinary not configured. Set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and upload presets.');
   }
 
-  const form = new FormData();
-  form.append('file', file);
-  form.append('upload_preset', presetFor('video'));
-  // Do not send OCR/detection for video either
+  const preset = presetFor('video');
+  if (!preset) {
+    throw new Error('No video upload preset configured');
+  }
 
+  // Try unsigned upload first
   return new Promise<string>((resolve, reject) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('upload_preset', preset);
+
     const xhr = new XMLHttpRequest();
 
     xhr.upload.addEventListener('progress', (e) => {
@@ -91,12 +144,24 @@ export async function uploadVideo(
         } catch {
           reject(new Error('Invalid Cloudinary response'));
         }
+      } else if (xhr.status === 401 || xhr.status === 403 || xhr.status === 400) {
+        // Fallback to signed API upload
+        console.warn('Unsigned video upload failed, trying signed API route...');
+        uploadViaAPI(file, 'video')
+          .then(resolve)
+          .catch(reject);
       } else {
         reject(new Error(`Cloudinary upload failed: ${xhr.status} ${xhr.responseText || ''}`));
       }
     });
 
-    xhr.addEventListener('error', () => reject(new Error('Upload network error')));
+    xhr.addEventListener('error', () => {
+      // Network error - try API fallback
+      console.warn('XHR network error, trying signed API route...');
+      uploadViaAPI(file, 'video')
+        .then(resolve)
+        .catch(reject);
+    });
 
     xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`);
     xhr.send(form);

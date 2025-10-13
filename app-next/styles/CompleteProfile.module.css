@@ -1,0 +1,26 @@
+/* app-next/styles/CompleteProfile.module.css */
+.page { display: grid; place-items: start center; min-height: 70vh; padding: 2rem 1rem; }
+.card {
+  width: 100%; max-width: 720px; background: var(--card-bg,#fff); border: 1px solid var(--border,#e5e7eb);
+  border-radius: 16px; padding: clamp(1rem,4vw,2rem); box-shadow: 0 4px 20px rgba(0,0,0,.05);
+}
+h1 { margin: 0; font-size: clamp(1.4rem,4vw,1.8rem); font-weight: 900; color: var(--text,#111827); }
+.sub { margin: .25rem 0 1rem; color: #6b7280; }
+.form { display: grid; gap: 1rem; }
+.row { display: grid; gap: .4rem; }
+.label { font-weight: 800; color: #374151; }
+.input {
+  border: 2px solid #e5e7eb; border-radius: 12px; padding: .75rem 1rem; font-size: 1rem; outline: none;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.input:focus { border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37,99,235,.1); }
+.submit {
+  background: linear-gradient(135deg,#3b82f6 0%,#2563eb 100%); color: white; font-weight: 900; border: none;
+  border-radius: 12px; padding: .9rem 1.25rem; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease;
+}
+.submit:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(37,99,235,.35); }
+@media (prefers-color-scheme: dark) {
+  .card { background:#111827; border-color:#374151; }
+  h1 { color:#f9fafb; } .sub { color:#9ca3af; }
+  .input { background:#0b1220; border-color:#334155; color:#e5e7eb; }
+}

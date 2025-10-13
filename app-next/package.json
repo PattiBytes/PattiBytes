@@ -11,7 +11,9 @@
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
     "@supabase/supabase-js": "^2.74.0",
+    "cloudinary": "^2.7.0",
     "firebase": "^12.3.0",
+    "formidable": "^3.5.4",
     "framer-motion": "^12.23.22",
     "gray-matter": "^4.0.3",
     "marked": "^16.3.0",
@@ -24,6 +26,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/formidable": "^3.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
