@@ -1,5 +1,9 @@
+/* app-next/styles/BottomNav.module.css */
+
 /* Shell manages both layouts */
 .shell {
+  position: fixed;
+  z-index: 29;
   pointer-events: none; /* allow inner bars to handle hit-tests */
 }
 
@@ -12,13 +16,13 @@
   width: 78px;
   background: #ffffff;
   border-right: 1px solid #e5e7eb;
-  display: flex;
+  display: none; /* hidden by default */
   flex-direction: column;
   align-items: center;
   gap: 8px;
   padding: 12px 8px;
   z-index: 900;
-  box-shadow: 2px 0 10px rgba(0,0,0,0.04);
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.04);
   pointer-events: auto;
 }
 
@@ -58,15 +62,6 @@
   border-radius: 0 4px 4px 0;
 }
 
-.active {
-  color: #667eea;
-}
-
-.highlight .icon {
-  color: #667eea;
-  filter: drop-shadow(0 2px 6px rgba(102, 126, 234, 0.5));
-}
-
 /* Hide rail on small & medium screens */
 @media (max-width: 1023px) {
   .rail {
@@ -74,7 +69,17 @@
   }
 }
 
-/* Mobile bottom bar (visible < 768px) and tablets */
+/* Show rail on large screens >= 1024px */
+@media (min-width: 1024px) {
+  .rail {
+    display: flex;
+  }
+  .bottomNav {
+    display: none;
+  }
+}
+
+/* Mobile bottom bar (visible < 1024px) */
 .bottomNav {
   position: fixed;
   bottom: 0;
@@ -90,13 +95,6 @@
   z-index: 1000;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
   pointer-events: auto;
-}
-
-/* Hide bottom bar on large screens >= 1024px */
-@media (min-width: 1024px) {
-  .bottomNav {
-    display: none;
-  }
 }
 
 .navItem {
@@ -115,7 +113,15 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.navItem:active { transform: scale(0.95); }
+.navItem:active {
+  transform: scale(0.95);
+}
+
+.iconWrap {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
 
 .icon {
   font-size: 22px;
@@ -135,8 +141,17 @@
   text-align: center;
 }
 
-.active .avatar { border-color: #667eea; }
-.active .icon { transform: scale(1.1); }
+.active {
+  color: #667eea;
+}
+
+.active .avatar {
+  border-color: #667eea;
+}
+
+.active .icon {
+  transform: scale(1.1);
+}
 
 .activeIndicator {
   position: absolute;
@@ -149,5 +164,72 @@
   border-radius: 0 0 8px 8px;
 }
 
-.highlight { color: #667eea; }
-.highlight .icon { font-size: 26px; }
+.highlight {
+  color: #667eea;
+}
+
+.highlight .icon {
+  font-size: 26px;
+  filter: drop-shadow(0 2px 6px rgba(102, 126, 234, 0.5));
+}
+
+/* Unread badge (for notifications and messages) */
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid #fff;
+  z-index: 1;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .rail {
+    background: #1b1b1f;
+    border-right-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .railItem {
+    color: #f3f4f6;
+  }
+
+  .railItem:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+  }
+
+  .bottomNav {
+    background: rgba(15, 15, 17, 0.95);
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .navItem {
+    color: #f3f4f6;
+  }
+
+  .active {
+    color: #818cf8;
+  }
+
+  .active .avatar {
+    border-color: #818cf8;
+  }
+
+  .highlight {
+    color: #818cf8;
+  }
+
+  .badge {
+    border-color: rgba(0, 0, 0, 0.4);
+  }
+}

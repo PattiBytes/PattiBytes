@@ -9,11 +9,11 @@ import {
   Timestamp,
   startAfter,
   getDocs,
-  type QueryDocumentSnapshot,
-  type DocumentData,
   doc,
   getDoc,
   deleteDoc,
+  type QueryDocumentSnapshot,
+  type DocumentData,
 } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -34,12 +34,10 @@ import {
   FaVideo,
   FaTimes,
   FaBell,
-  FaChevronDown,
   FaEye,
   FaComment,
   FaTrash,
   FaArrowUp,
-  FaPlus,
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import styles from '@/styles/Dashboard.module.css';
@@ -124,7 +122,7 @@ interface CMSNotificationItem {
   image?: string;
 }
 
-const CMS_CACHE_KEY = 'cms_feed_v1';
+const CMS_CACHE_KEY = 'cms_feed_v2';
 const CMS_CACHE_TTL = 5 * 60 * 1000;
 
 type CMSCacheShape = {
@@ -154,6 +152,19 @@ function setCMSCache(data: Omit<CMSCacheShape, 'ts'>) {
   } catch {}
 }
 
+// Helper: resolve CMS images that start with /assets/uploads
+function resolveCMSImage(path?: string): string | undefined {
+  if (!path) return undefined;
+  // If absolute http/https, return as-is
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  // If relative /assets/uploads, prefix with your main site domain
+  if (path.startsWith('/assets/uploads/')) {
+    // Adjust to your marketing site base, e.g., https://pattibytes.com
+    return `https://pattibytes.com${path}`;
+  }
+  return path;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const { db } = getFirebaseClient();
@@ -168,7 +179,6 @@ export default function Dashboard() {
   const [urgentNotification, setUrgentNotification] = useState<CMSNotificationItem | null>(null);
   const [showNotification, setShowNotification] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; postId: string; title: string } | null>(null);
 
@@ -196,7 +206,7 @@ export default function Dashboard() {
     const handleScroll = () => {
       setShowScrollTop(window.scrollY > 400);
     };
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -253,8 +263,8 @@ export default function Dashboard() {
 
     const cached = getCMSCache();
     if (cached) {
-      const officialNews: Post[] = cached.news.map((n) => ({
-        id: `cms-news-${n.id || n.slug}`,
+      const officialNews: Post[] = cached.news.map((n, idx) => ({
+        id: `cms-news-${n.id || n.slug || idx}`,
         title: n.title,
         content: n.preview || '',
         preview: n.preview,
@@ -262,7 +272,7 @@ export default function Dashboard() {
         source: 'cms' as const,
         authorName: n.author || 'PattiBytes Desk',
         authorPhoto: '/images/default-avatar.png',
-        imageUrl: n.image,
+        imageUrl: resolveCMSImage(n.image),
         createdAt: new Date(n.date),
         likesCount: 0,
         commentsCount: 0,
@@ -271,8 +281,8 @@ export default function Dashboard() {
         slug: n.slug || n.id,
         isOfficial: true,
       }));
-      const officialPlaces: Post[] = cached.places.map((p) => ({
-        id: `cms-place-${p.id || p.slug}`,
+      const officialPlaces: Post[] = cached.places.map((p, idx) => ({
+        id: `cms-place-${p.id || p.slug || idx}`,
         title: p.title,
         content: p.preview || '',
         preview: p.preview,
@@ -280,7 +290,7 @@ export default function Dashboard() {
         source: 'cms' as const,
         authorName: 'PattiBytes',
         authorPhoto: '/images/default-avatar.png',
-        imageUrl: p.image,
+        imageUrl: resolveCMSImage(p.image),
         location: p.location || 'Punjab',
         createdAt: new Date(p.date),
         likesCount: 0,
@@ -301,8 +311,8 @@ export default function Dashboard() {
       const [news, places, notifs] = await Promise.all([fetchCMSNews(), fetchCMSPlaces(), fetchCMSNotifications()]);
       setCMSCache({ news, places, notifs });
 
-      const officialNews: Post[] = news.map((n) => ({
-        id: `cms-news-${n.id || n.slug}`,
+      const officialNews: Post[] = news.map((n, idx) => ({
+        id: `cms-news-${n.id || n.slug || idx}`,
         title: n.title,
         content: n.preview || '',
         preview: n.preview,
@@ -310,7 +320,7 @@ export default function Dashboard() {
         source: 'cms' as const,
         authorName: n.author || 'PattiBytes Desk',
         authorPhoto: '/images/default-avatar.png',
-        imageUrl: n.image,
+        imageUrl: resolveCMSImage(n.image),
         createdAt: new Date(n.date),
         likesCount: 0,
         commentsCount: 0,
@@ -319,8 +329,8 @@ export default function Dashboard() {
         slug: n.slug || n.id,
         isOfficial: true,
       }));
-      const officialPlaces: Post[] = places.map((p) => ({
-        id: `cms-place-${p.id || p.slug}`,
+      const officialPlaces: Post[] = places.map((p, idx) => ({
+        id: `cms-place-${p.id || p.slug || idx}`,
         title: p.title,
         content: p.preview || '',
         preview: p.preview,
@@ -328,7 +338,7 @@ export default function Dashboard() {
         source: 'cms' as const,
         authorName: 'PattiBytes',
         authorPhoto: '/images/default-avatar.png',
-        imageUrl: p.image,
+        imageUrl: resolveCMSImage(p.image),
         location: p.location || 'Punjab',
         createdAt: new Date(p.date),
         likesCount: 0,
@@ -473,13 +483,6 @@ export default function Dashboard() {
     return () => io.disconnect();
   }, [loading, loadingMore, hasMore, loadMore]);
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    cmsLoaded.current = false;
-    await loadCMS();
-    setTimeout(() => setRefreshing(false), 800);
-  };
-
   const confirmDelete = (postId: string, title: string) => {
     setDeleteModal({ open: true, postId, title });
   };
@@ -542,9 +545,6 @@ export default function Dashboard() {
           </AnimatePresence>
 
           <BytesStories />
-
-          {/* Refresh Header */}
-          
 
           {/* Filter Tabs */}
           <div className={styles.filterTabs}>
@@ -723,11 +723,6 @@ export default function Dashboard() {
               </motion.button>
             )}
           </AnimatePresence>
-
-          {/* Floating Action Button */}
-          <Link href="/create" className={styles.fab} aria-label="Create new post">
-            <FaPlus />
-          </Link>
         </div>
 
         {/* Delete Confirmation Modal */}

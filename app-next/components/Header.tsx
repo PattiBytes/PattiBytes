@@ -1,8 +1,9 @@
+// app-next/components/Header.tsx
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import SafeImage from './SafeImage';
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   FaBell,
   FaSignOutAlt,
@@ -18,6 +19,7 @@ import {
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { useUnreadCounts } from '@/lib/unread';
 import styles from '@/styles/Header.module.css';
 
 export default function Header() {
@@ -25,23 +27,47 @@ export default function Header() {
   const router = useRouter();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showBackButton, setShowBackButton] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const hideBackOn = [
+    '/',
+    '/dashboard',
+    '/search',
+    '/notifications',
+    '/create',
+    '/profile',
+    '/settings',
+    '/community',
+    '/admin',
+  ];
   useEffect(() => {
-    const noBackPaths = [
-      '/',
-      '/dashboard',
-      '/search',
-      '/notifications',
-      '/create',
-      '/profile',
-      '/settings',
-      '/community',
-      '/admin',
-    ];
-    setShowBackButton(!noBackPaths.includes(router.pathname));
-  }, [router.pathname]);
+    setShowBackButton(!hideBackOn.includes(router.pathname));
+  }, [hideBackOn, router.pathname]);
 
+  // Connectivity chip
+  useEffect(() => {
+    const update = () => setOffline(!navigator.onLine);
+    update();
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+    };
+  }, []);
+
+  // Collapse on scroll
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Close menu on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -61,7 +87,9 @@ export default function Header() {
         Promise.all([
           (async () => localStorage.clear())(),
           (async () => sessionStorage.clear())(),
-          'caches' in window ? caches.keys().then((names) => Promise.all(names.map((n) => caches.delete(n)))) : Promise.resolve(),
+          'caches' in window
+            ? caches.keys().then((names) => Promise.all(names.map((n) => caches.delete(n))))
+            : Promise.resolve(),
         ]).catch(() => {});
       }
       toast.success('Logged out!', { id: loadingToast });
@@ -74,10 +102,20 @@ export default function Header() {
     }
   };
 
-  const handleBack = () => router.back();
+  const handleBack = () => {
+    if (navigator.vibrate) navigator.vibrate(10);
+    router.back();
+  };
+
+  // Live unread badges
+  const { notifications, messages } = useUnreadCounts(user?.uid || null);
+
+  // Hide header on auth screens for a cleaner flow
+  const hideOnAuth = router.pathname.startsWith('/auth/');
+  if (hideOnAuth) return null;
 
   return (
-    <header className={styles.header}>
+    <header className={`${styles.header} ${scrolled ? styles.scrolled : ''}`}>
       <div className={styles.container}>
         <div className={styles.left}>
           {showBackButton ? (
@@ -86,20 +124,33 @@ export default function Header() {
             </button>
           ) : (
             <Link href={user ? '/dashboard' : '/'} className={styles.logo}>
-              <SafeImage src="/icons/pwab-192.jpg" alt="PattiBytes" width={36} height={36} className={styles.logoImg} />
+              <SafeImage
+                src="/icons/pwab-192.jpg"
+                alt="PattiBytes"
+                width={36}
+                height={36}
+                className={styles.logoImg}
+              />
               <span className={styles.logoText}>PattiBytes</span>
             </Link>
           )}
         </div>
 
         <div className={styles.actions}>
+          {offline && <span className={styles.offline}>Offline</span>}
+
           {user ? (
             <>
               <Link href="/community" className={styles.iconButton} aria-label="Community">
                 <FaComments />
+                {messages > 0 && <span className={styles.badge}>{messages > 9 ? '9+' : messages}</span>}
               </Link>
+
               <Link href="/notifications" className={styles.iconButton} aria-label="Notifications">
                 <FaBell />
+                {notifications > 0 && (
+                  <span className={styles.badge}>{notifications > 9 ? '9+' : notifications}</span>
+                )}
               </Link>
 
               <div className={styles.userMenu} ref={dropdownRef}>
@@ -142,7 +193,6 @@ export default function Header() {
                         </div>
                       </div>
 
-                      {/* Scrollable body for many actions */}
                       <div className={styles.dropdownScroll}>
                         <div className={styles.dropdownDivider} />
 
@@ -160,21 +210,33 @@ export default function Header() {
                             <div className={styles.dropdownSection}>
                               <span className={styles.sectionTitle}>Admin Tools</span>
                             </div>
-
-                            <Link href="/admin/broadcast" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                            <Link
+                              href="/admin/broadcast"
+                              className={styles.dropdownItem}
+                              onClick={() => setShowDropdown(false)}
+                            >
                               <FaBullhorn /> Broadcast
                             </Link>
-                            <Link href="/admin/permissions" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                            <Link
+                              href="/admin/permissions"
+                              className={styles.dropdownItem}
+                              onClick={() => setShowDropdown(false)}
+                            >
                               <FaUserShield /> Permissions
                             </Link>
-                            <Link href="/admin/users" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                            <Link
+                              href="/admin/users"
+                              className={styles.dropdownItem}
+                              onClick={() => setShowDropdown(false)}
+                            >
                               <FaUsers /> Users
                             </Link>
-                            <Link href="/admin/posts" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
+                            <Link
+                              href="/admin/posts"
+                              className={styles.dropdownItem}
+                              onClick={() => setShowDropdown(false)}
+                            >
                               <FaFileAlt /> Posts
-                            </Link>
-                            <Link href="/admin/chats" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
-                              <FaComments /> Chats
                             </Link>
                             <Link href="/admin" className={styles.dropdownItem} onClick={() => setShowDropdown(false)}>
                               <FaShieldAlt /> Admin Home
