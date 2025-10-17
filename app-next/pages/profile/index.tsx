@@ -1,233 +1,295 @@
-import { useEffect, useState } from 'react';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { updateProfile as updateAuthProfile } from 'firebase/auth';
+// app-next/pages/profile/index.tsx
+import { useAuth } from '@/context/AuthContext';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  collection,
+  doc,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+  type DocumentData,
+  type Timestamp,
+} from 'firebase/firestore';
+import { getFirebaseClient } from '@/lib/firebase';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
+import SafeImage from '@/components/SafeImage';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
-import { useAuth } from '@/context/AuthContext';
-import { getFirebaseClient } from '@/lib/firebase';
-import { motion, AnimatePresence } from 'framer-motion';
-import { FaSave } from 'react-icons/fa';
-import styles from '@/styles/UserProfileEdit.module.css';
+import FollowersModal from '@/components/FollowersModal';
+import FollowingModal from '@/components/FollowingModal';
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+import {
+  FaEdit,
+  FaCog,
+  FaMapMarkerAlt,
+  FaGlobe,
+  FaCalendar,
+  FaNewspaper,
+  FaMapPin,
+  FaPen,
+  FaCheckCircle,
+  FaShieldAlt,
+} from 'react-icons/fa';
+import toast from 'react-hot-toast';
+import styles from '@/styles/UserProfile.module.css';
 
-interface FormData {
-  displayName: string;
-  bio: string;
-  website: string;
-  location: string;
-  socialLinks: {
-    twitter: string;
-    instagram: string;
-    youtube: string;
-  };
-  preferences: {
-    publicProfile: boolean;
-    theme: 'light' | 'dark' | 'auto';
-  };
+interface Post {
+  id: string;
+  title: string;
+  preview?: string;
+  type: 'news' | 'place' | 'writing' | 'video';
+  imageUrl?: string;
+  createdAt: Date;
+  likesCount: number;
+  commentsCount: number;
 }
 
 export default function MyProfile() {
-  const { user, userProfile, reloadUser } = useAuth();
-  const { db, auth } = getFirebaseClient();
+  const { user, userProfile } = useAuth();
+  const { db } = getFirebaseClient();
 
-  const [form, setForm] = useState<FormData>({
-    displayName: userProfile?.displayName || '',
-    bio: userProfile?.bio || '',
-    website: userProfile?.website || '',
-    location: userProfile?.location || '',
-    socialLinks: {
-      twitter: userProfile?.socialLinks?.twitter || '',
-      instagram: userProfile?.socialLinks?.instagram || '',
-      youtube: userProfile?.socialLinks?.youtube || ''
-    },
-    preferences: {
-      publicProfile: userProfile?.preferences?.publicProfile ?? true,
-      theme: (userProfile?.preferences?.theme as 'light' | 'dark' | 'auto') ?? 'auto'
-    }
-  });
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [filter, setFilter] = useState<'all' | 'news' | 'place' | 'writing'>('all');
+  const [loading, setLoading] = useState(true);
+  const [showFollowers, setShowFollowers] = useState(false);
+  const [showFollowing, setShowFollowing] = useState(false);
+  const [stats, setStats] = useState({ posts: 0, followers: 0, following: 0 });
 
-  const [photoURL, setPhotoURL] = useState<string | undefined>(userProfile?.photoURL);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
+  // Posts (bounded + ordered to satisfy rules)
   useEffect(() => {
-    setForm({
-      displayName: userProfile?.displayName || '',
-      bio: userProfile?.bio || '',
-      website: userProfile?.website || '',
-      location: userProfile?.location || '',
-      socialLinks: {
-        twitter: userProfile?.socialLinks?.twitter || '',
-        instagram: userProfile?.socialLinks?.instagram || '',
-        youtube: userProfile?.socialLinks?.youtube || ''
-      },
-      preferences: {
-        publicProfile: userProfile?.preferences?.publicProfile ?? true,
-        theme: (userProfile?.preferences?.theme as 'light' | 'dark' | 'auto') ?? 'auto'
-      }
+    if (!db || !user) return;
+    const q = query(
+      collection(db, 'posts'),
+      where('authorId', '==', user.uid),
+      where('isDraft', '==', false),
+      orderBy('createdAt', 'desc'),
+      limit(30)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs.map((d) => {
+        const p = d.data() as DocumentData;
+        return {
+          id: d.id,
+          title: p.title || 'Untitled',
+          preview: p.preview,
+          type: (p.type as Post['type']) || 'writing',
+          imageUrl: p.imageUrl,
+          createdAt:
+            p.createdAt && typeof p.createdAt.toDate === 'function'
+              ? (p.createdAt as Timestamp).toDate()
+              : new Date(),
+          likesCount: p.likesCount || 0,
+          commentsCount: p.commentsCount || 0,
+        };
+      });
+      setPosts(data);
+      setLoading(false);
     });
-    setPhotoURL(userProfile?.photoURL);
-  }, [
-    userProfile?.displayName,
-    userProfile?.bio,
-    userProfile?.website,
-    userProfile?.location,
-    userProfile?.socialLinks?.twitter,
-    userProfile?.socialLinks?.instagram,
-    userProfile?.socialLinks?.youtube,
-    userProfile?.preferences?.publicProfile,
-    userProfile?.preferences?.theme,
-    userProfile?.photoURL
-  ]);
+    return () => unsub();
+  }, [db, user]);
 
-  const showMessage = (type: 'success' | 'error', text: string) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 4000);
+  // Live stats
+  useEffect(() => {
+    if (!db || !user) return;
+    const unsub = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+      if (!snap.exists()) return;
+      const u = snap.data() as DocumentData;
+      setStats({
+        posts: u.stats?.postsCount ?? posts.length,
+        followers: u.stats?.followersCount ?? 0,
+        following: u.stats?.followingCount ?? 0,
+      });
+    });
+    return () => unsub();
+  }, [db, user, posts.length]);
+
+  const filtered = useMemo(
+    () => (filter === 'all' ? posts : posts.filter((p) => p.type === filter)),
+    [posts, filter]
+  );
+
+  const copyProfileLink = async () => {
+    if (!userProfile?.username) return;
+    const url = `${window.location.origin}/user/${userProfile.username}`;
+    await navigator.clipboard.writeText(url);
+    toast.success('Profile link copied!');
   };
 
-  const saveProfile = async () => {
-    if (!db || !user?.uid) return;
-    setSaving(true);
-    try {
-      await setDoc(doc(db, 'users', user.uid), {
-        displayName: form.displayName.trim(),
-        bio: form.bio.trim(),
-        website: form.website.trim(),
-        location: form.location.trim(),
-        socialLinks: {
-          twitter: form.socialLinks.twitter.trim(),
-          instagram: form.socialLinks.instagram.trim(),
-          youtube: form.socialLinks.youtube.trim()
-        },
-        preferences: {
-          publicProfile: !!form.preferences.publicProfile,
-          theme: form.preferences.theme
-        },
-        photoURL: photoURL || null,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-
-      if (auth?.currentUser) {
-        if (form.displayName.trim() && auth.currentUser.displayName !== form.displayName.trim()) {
-          await updateAuthProfile(auth.currentUser, { displayName: form.displayName.trim() });
-        }
-      }
-      showMessage('success', 'Profile updated');
-      await reloadUser?.();
-    } catch (e) {
-      console.error('Save profile error:', e);
-      showMessage('error', 'Failed to save');
-    } finally {
-      setSaving(false);
-    }
-  };
+  if (loading) {
+    return (
+      <AuthGuard>
+        <Layout title="My Profile">
+          <div className={styles.loadingContainer}>
+            <div className={styles.spinner} />
+            <p>Loading profile...</p>
+          </div>
+        </Layout>
+      </AuthGuard>
+    );
+  }
+  if (!userProfile) return null;
 
   return (
     <AuthGuard>
-      <Layout title="My Profile - PattiBytes">
-        <div className={styles.page}>
-          <div className={styles.header}>
-            <h1>Edit Profile</h1>
-          </div>
-
-          <div className={styles.card}>
-            <div className={styles.avatarRow}>
-              <ProfilePictureUpload
-                currentUrl={photoURL}
-                onUploaded={(url) => setPhotoURL(url)}
-              />
-              <div className={styles.nameBlock}>
-                <label>Display Name</label>
-                <input
-                  type="text"
-                  value={form.displayName}
-                  onChange={(e) => setForm({ ...form, displayName: e.target.value })}
-                  maxLength={50}
-                />
-              </div>
+      <Layout title={`${userProfile.displayName} - PattiBytes`}>
+        <div className={styles.container}>
+          <motion.header className={styles.header} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <div className={styles.coverPhoto}>
+              <div className={styles.coverGradient} />
             </div>
 
-            <div className={styles.formGrid}>
-              <div className={styles.formGroup}>
-                <label>Bio</label>
-                <textarea
-                  value={form.bio}
-                  onChange={(e) => setForm({ ...form, bio: e.target.value })}
-                  rows={4}
-                  maxLength={160}
+            <div className={styles.profileRow}>
+              <div className={styles.avatarSection}>
+                <ProfilePictureUpload
+                  currentUrl={userProfile.photoURL}
+                  onUploaded={() => toast.success('Profile picture updated!')}
                 />
               </div>
 
-              <div className={styles.formGroup}>
-                <label>Website</label>
-                <input
-                  type="text"
-                  value={form.website}
-                  onChange={(e) => setForm({ ...form, website: e.target.value })}
-                  placeholder="https://example.com"
-                />
-              </div>
+              <div className={styles.info}>
+                <div className={styles.nameBlock}>
+                  <h1>{userProfile.displayName}</h1>
+                  <div className={styles.username}>@{userProfile.username}</div>
+                  {userProfile.isVerified && (
+                    <div className={styles.verified} title="Verified">
+                      <FaCheckCircle />
+                    </div>
+                  )}
+                  {userProfile.role === 'admin' && (
+                    <div className={styles.adminBadge}>
+                      <FaShieldAlt /> Admin
+                    </div>
+                  )}
+                </div>
 
-              <div className={styles.formGroup}>
-                <label>Location</label>
-                <input
-                  type="text"
-                  value={form.location}
-                  onChange={(e) => setForm({ ...form, location: e.target.value })}
-                  placeholder="City, Country"
-                />
-              </div>
+                {userProfile.bio && <div className={styles.bio}>{userProfile.bio}</div>}
 
-              <div className={styles.formGroup}>
-                <label>Twitter</label>
-                <input
-                  type="text"
-                  value={form.socialLinks.twitter}
-                  onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, twitter: e.target.value } })}
-                  placeholder="username"
-                />
-              </div>
+                <div className={styles.meta}>
+                  {userProfile.location && (
+                    <span className={styles.metaItem}>
+                      <FaMapMarkerAlt /> {userProfile.location}
+                    </span>
+                  )}
+                  {userProfile.website && (
+                    <a href={userProfile.website} target="_blank" rel="noopener noreferrer" className={styles.metaLink}>
+                      <FaGlobe /> {userProfile.website.replace(/^https?:\/\//, '')}
+                    </a>
+                  )}
+                  {userProfile.createdAt && (
+                    <span className={styles.metaItem}>
+                      <FaCalendar /> Joined{' '}
+                      {(userProfile.createdAt as Timestamp).toDate
+                        ? (userProfile.createdAt as Timestamp).toDate().toLocaleDateString('en-IN', {
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                    </span>
+                  )}
+                </div>
 
-              <div className={styles.formGroup}>
-                <label>Instagram</label>
-                <input
-                  type="text"
-                  value={form.socialLinks.instagram}
-                  onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, instagram: e.target.value } })}
-                  placeholder="username"
-                />
-              </div>
+                <div className={styles.stats}>
+                  <button onClick={() => setShowFollowers(true)} className={styles.statButton}>
+                    <strong>{stats.followers}</strong>
+                    <span>Followers</span>
+                  </button>
+                  <button onClick={() => setShowFollowing(true)} className={styles.statButton}>
+                    <strong>{stats.following}</strong>
+                    <span>Following</span>
+                  </button>
+                  <div className={styles.statItem}>
+                    <strong>{stats.posts}</strong>
+                    <span>Posts</span>
+                  </div>
+                </div>
 
-              <div className={styles.formGroup}>
-                <label>YouTube</label>
-                <input
-                  type="text"
-                  value={form.socialLinks.youtube}
-                  onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, youtube: e.target.value } })}
-                  placeholder="channel"
-                />
+                <div className={styles.actions}>
+                  <Link href="/settings" className={styles.editBtn}>
+                    <FaEdit /> Edit Profile
+                  </Link>
+                  <Link href="/settings" className={styles.settingsBtn}>
+                    <FaCog /> Settings
+                  </Link>
+                  <button onClick={copyProfileLink} className={styles.copyBtn}>
+                    Copy Link
+                  </button>
+                </div>
               </div>
             </div>
+          </motion.header>
 
-            <div className={styles.actions}>
-              <button className={styles.saveBtn} onClick={saveProfile} disabled={saving}>
-                <FaSave /> {saving ? 'Saving...' : 'Save Changes'}
-              </button>
+          <motion.section className={styles.postsSection} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <div className={styles.postsHeader}>
+              <h2>Posts</h2>
+              <div className={styles.postsFilters}>
+                <button
+                  onClick={() => setFilter('all')}
+                  className={`${styles.filterBtn} ${filter === 'all' ? styles.active : ''}`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setFilter('news')}
+                  className={`${styles.filterBtn} ${filter === 'news' ? styles.active : ''}`}
+                >
+                  <FaNewspaper /> News
+                </button>
+                <button
+                  onClick={() => setFilter('place')}
+                  className={`${styles.filterBtn} ${filter === 'place' ? styles.active : ''}`}
+                >
+                  <FaMapPin /> Places
+                </button>
+                <button
+                  onClick={() => setFilter('writing')}
+                  className={`${styles.filterBtn} ${filter === 'writing' ? styles.active : ''}`}
+                >
+                  <FaPen /> Writings
+                </button>
+              </div>
+              <Link href="/create" className={styles.createBtn}>
+                Create Post
+              </Link>
             </div>
-          </div>
 
-          <AnimatePresence>
-            {message && (
-              <motion.div
-                className={`${styles.message} ${styles[message.type]}`}
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-              >
-                {message.text}
-              </motion.div>
+            {filtered.length === 0 ? (
+              <div className={styles.noPosts}>
+                <FaPen className={styles.noPostsIcon} />
+                <p>You have not posted anything yet</p>
+                <Link href="/create" className={styles.createFirstBtn}>
+                  Create your first post
+                </Link>
+              </div>
+            ) : (
+              <div className={styles.postsGrid}>
+                {filtered.map((post) => (
+                  <Link href={`/posts/${post.id}`} key={post.id} className={styles.postCard}>
+                    {post.imageUrl && (
+                      <div className={styles.postImage}>
+                        <SafeImage src={post.imageUrl} alt={post.title} width={300} height={200} className={styles.image} />
+                      </div>
+                    )}
+                    <div className={styles.postContent}>
+                      <h3>{post.title}</h3>
+                      {post.preview && <p>{post.preview}</p>}
+                      <div className={styles.postMeta}>
+                        <span className={styles.postType}>{post.type}</span>
+                        <span className={styles.postStats}>
+                          {post.likesCount} likes · {post.commentsCount} comments
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             )}
-          </AnimatePresence>
+          </motion.section>
+
+          <FollowersModal isOpen={showFollowers} onClose={() => setShowFollowers(false)} userId={user!.uid} />
+          <FollowingModal isOpen={showFollowing} onClose={() => setShowFollowing(false)} userId={user!.uid} />
         </div>
       </Layout>
     </AuthGuard>

@@ -1395,3 +1395,295 @@
   .noPosts { background: #1f2937; border-color: #374151; }
   .postsSection { color: #f9fafb; }
 }
+/* app-next/styles/UserProfile.module.css */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px 80px;
+}
+
+.header {
+  background: var(--card-bg, #fff);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.coverPhoto {
+  position: relative;
+  height: 180px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+}
+
+.coverGradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.3));
+}
+
+.profileRow {
+  display: grid;
+  gap: 20px;
+  padding: 0 20px 20px;
+  margin-top: -60px;
+}
+
+.avatarSection {
+  position: relative;
+  z-index: 2;
+}
+
+.info {
+  display: grid;
+  gap: 12px;
+}
+
+.nameBlock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.username {
+  color: var(--text-secondary, #6b7280);
+  font-size: 15px;
+}
+
+.verified {
+  color: #3b82f6;
+}
+
+.adminBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bio {
+  line-height: 1.6;
+  color: var(--text, #111827);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.metaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metaLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 16px 0;
+}
+
+.statButton,
+.statItem {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  padding: 12px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.statButton:hover {
+  background: var(--hover, #f9fafb);
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+}
+
+.editBtn,
+.settingsBtn,
+.copyBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--card-bg, #fff);
+  color: var(--text, #111827);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.postsSection {
+  background: var(--card-bg, #fff);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.postsHeader {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.postsFilters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.filterBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--card-bg, #fff);
+  white-space: nowrap;
+}
+
+.filterBtn.active {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  border-color: transparent;
+}
+
+.createBtn {
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.postsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.postCard {
+  display: grid;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--card-bg, #fff);
+  text-decoration: none;
+  color: var(--text, #111827);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.postCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.postImage {
+  aspect-ratio: 16/9;
+  overflow: hidden;
+}
+
+.postContent {
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.postMeta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.noPosts {
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  padding: 60px 20px;
+}
+
+.noPostsIcon {
+  font-size: 48px;
+  opacity: 0.3;
+}
+
+.createFirstBtn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.loadingContainer,
+.errorContainer {
+  display: grid;
+  place-items: center;
+  min-height: 60vh;
+  gap: 12px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border, #e5e7eb);
+  border-top-color: #667eea;
+  border-radius: 999px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .header,
+  .postsSection,
+  .postCard {
+    background: rgba(27, 27, 31, 0.9);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  .filterBtn,
+  .editBtn,
+  .settingsBtn,
+  .copyBtn {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #f3f4f6;
+  }
+}

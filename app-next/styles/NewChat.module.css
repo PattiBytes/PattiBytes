@@ -1,200 +1,159 @@
+/* app-next/styles/NewChat.module.css */
 .newChat {
-  max-width: 600px;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 0 16px 80px;
 }
 
 .header {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 12px;
+  margin: 12px 0 16px;
 }
 
 .backBtn {
-  padding: 8px;
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: #667eea;
-  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--card-bg, #fff);
   text-decoration: none;
-  display: flex;
-  align-items: center;
-}
-
-.header h1 {
-  margin: 0;
-  font-size: 24px;
-  color: #111827;
+  color: var(--text, #111827);
 }
 
 .typeToggle {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .typeToggle button {
-  flex: 1;
-  padding: 12px;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--card-bg, #fff);
 }
 
-.typeToggle button.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+.typeToggle .active {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
   border-color: transparent;
 }
 
 .groupNameInput {
   width: 100%;
-  padding: 12px 16px;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 16px;
-  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--card-bg, #fff);
+  margin-bottom: 12px;
 }
 
 .searchBox {
-  position: relative;
-  margin-bottom: 16px;
-}
-
-.searchBox svg {
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #9ca3af;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--bg, #f9fafb);
+  margin-bottom: 12px;
 }
 
 .searchBox input {
-  width: 100%;
-  padding: 12px 16px 12px 48px;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 16px;
+  border: none;
+  background: transparent;
+  outline: none;
 }
 
 .selected {
-  margin-bottom: 16px;
-}
-
-.selected h3 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-  color: #6b7280;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
 }
 
 .selectedList {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 8px;
 }
 
 .selectedUser {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
-  background: #f3f4f6;
-  border-radius: 24px;
-}
-
-.selectedUser img {
-  border-radius: 50%;
-}
-
-.selectedUser span {
-  font-size: 14px;
-  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--card-bg, #fff);
 }
 
 .selectedUser button {
-  background: none;
   border: none;
-  color: #6b7280;
-  font-size: 20px;
+  background: transparent;
+  font-size: 16px;
   cursor: pointer;
-  padding: 0 4px;
+  line-height: 1;
 }
 
 .usersList {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 8px;
-  margin-bottom: 80px;
 }
 
 .userItem {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: white;
-  border-radius: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--card-bg, #fff);
   cursor: pointer;
-  transition: all 0.2s;
-}
-
-.userItem:hover {
-  background: #f9fafb;
 }
 
 .userItem.selected {
-  background: #ede9fe;
-  border: 2px solid #667eea;
+  outline: 2px solid #667eea;
 }
 
-.userItem img {
-  border-radius: 50%;
-}
-
-.userInfo h4 {
-  margin: 0;
-  font-size: 15px;
-  color: #111827;
-}
-
-.userInfo p {
-  margin: 0;
-  font-size: 13px;
-  color: #6b7280;
+.userInfo {
+  display: grid;
+  gap: 2px;
 }
 
 .createBtn {
-  position: fixed;
-  bottom: calc(80px + env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 14px 32px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  margin-top: 16px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
   border: none;
-  border-radius: 24px;
-  font-size: 16px;
-  font-weight: 600;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
-.createBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-@media (min-width: 768px) {
-  .createBtn {
-    bottom: 24px;
+/* Dark */
+@media (prefers-color-scheme: dark) {
+  .backBtn,
+  .typeToggle button,
+  .groupNameInput,
+  .searchBox,
+  .selected,
+  .selectedUser,
+  .userItem {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #f3f4f6;
   }
 }

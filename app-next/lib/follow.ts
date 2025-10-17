@@ -2,8 +2,6 @@
 import {
   doc,
   getDoc,
-  setDoc,
-  deleteDoc,
   serverTimestamp,
   writeBatch,
   collection,

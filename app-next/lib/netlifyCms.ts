@@ -1,3 +1,4 @@
+// app-next/lib/netlifyCms.ts
 export interface CMSNewsItem {
   id: string;
   slug: string;
@@ -69,23 +70,21 @@ export async function fetchCMSNews(): Promise<CMSNewsItem[]> {
       if (!res.ok) continue;
       const data = await res.json();
       const items = Array.isArray(data) ? data : (data.items || []);
-      return (items as Record<string, unknown>[]).map((item) => ({
-        id: (item.id as string) || (item.slug as string),
-        slug: (item.slug as string) || (item.id as string),
+      return (items as Record<string, unknown>[]).map((item, idx) => ({
+        id: (item.id as string) || (item.slug as string) || `news-${idx}`,
+        slug: (item.slug as string) || (item.id as string) || `news-${idx}`,
         title: item.title as string,
         preview: (item.preview as string) || '',
         date: item.date as string,
         author: item.author as string | undefined,
         image: normalizeCmsImage(item.image as string | undefined),
-        tags: ((item.tags as string[]) || ['news']),
+        tags: (item.tags as string[]) || [],
         body: item.body as string | undefined,
-        url: (item.url as string) || `/news/${(item.id as string) || (item.slug as string)}`,
+        url: (item.url as string) || `${base}/news/${(item.slug as string) || item.id}`,
         send_notification: item.send_notification as boolean | undefined,
-        push_message: item.push_message as string | undefined
+        push_message: item.push_message as string | undefined,
       }));
-    } catch {
-      // try next endpoint
-    }
+    } catch {}
   }
   return [];
 }
@@ -99,23 +98,21 @@ export async function fetchCMSPlaces(): Promise<CMSPlaceItem[]> {
       if (!res.ok) continue;
       const data = await res.json();
       const items = Array.isArray(data) ? data : (data.items || []);
-      return (items as Record<string, unknown>[]).map((item) => ({
-        id: (item.id as string) || (item.slug as string),
-        slug: (item.slug as string) || (item.id as string),
+      return (items as Record<string, unknown>[]).map((item, idx) => ({
+        id: (item.id as string) || (item.slug as string) || `place-${idx}`,
+        slug: (item.slug as string) || (item.id as string) || `place-${idx}`,
         title: item.title as string,
         preview: (item.preview as string) || '',
         date: item.date as string,
         image: normalizeCmsImage(item.image as string | undefined),
         location: item.location as string | undefined,
-        tags: ((item.tags as string[]) || ['places']),
+        tags: (item.tags as string[]) || [],
         body: item.body as string | undefined,
-        url: (item.url as string) || `/places/${(item.id as string) || (item.slug as string)}`,
+        url: (item.url as string) || `${base}/places/${(item.slug as string) || item.id}`,
         send_notification: item.send_notification as boolean | undefined,
-        push_message: item.push_message as string | undefined
+        push_message: item.push_message as string | undefined,
       }));
-    } catch {
-      // try next endpoint
-    }
+    } catch {}
   }
   return [];
 }
@@ -129,24 +126,22 @@ export async function fetchCMSNotifications(): Promise<CMSNotification[]> {
       if (!res.ok) continue;
       const data = await res.json();
       const items = Array.isArray(data) ? data : (data.items || []);
-      return (items as Record<string, unknown>[]).map((item) => ({
-        id: item.id as string,
+      return (items as Record<string, unknown>[]).map((item, idx) => ({
+        id: (item.id as string) || `notif-${idx}`,
         title: item.title as string,
         message: item.message as string,
         target_url: item.target_url as string | undefined,
         image: normalizeCmsImage(item.image as string | undefined),
-        audience: ((item.audience as 'all' | 'segment' | 'specific') || 'all'),
+        audience: (item.audience as 'all' | 'segment' | 'specific') || 'all',
         segment_tag: item.segment_tag as string | undefined,
         specific_subscribers: item.specific_subscribers as Array<{ subscriber: string }> | undefined,
-        send_now: (item.send_now as boolean) ?? true,
+        send_now: (item.send_now as boolean) || false,
         schedule_datetime: item.schedule_datetime as string | undefined,
         author: item.author as string | undefined,
         preview: item.preview as string | undefined,
-        body: item.body as string | undefined
+        body: item.body as string | undefined,
       }));
-    } catch {
-      // try next endpoint
-    }
+    } catch {}
   }
   return [];
 }
