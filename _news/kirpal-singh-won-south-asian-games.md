@@ -7,6 +7,7 @@ preview: ਤਰਨਤਾਰਨ ਜ਼ਿਲ੍ਹੇ ਦੇ ਪੱਟੀ ਸ਼�
   ਕੇਪੀ ਬਾਠ ਨੇ ਰਾਂਚੀ ਵਿੱਚ 25 ਅਕਤੂਬਰ 2025 ਨੂੰ ਸਾਊਥ ਏਸ਼ੀਅਨ ਐਥਲੈਟਿਕਸ ਚੈਂਪੀਅਨਸ਼ਿਪ ਦੇ
   ਦੂਜੇ ਦਿਨ ਪੁਰਸ਼ਾਂ ਦੀ ਡਿਸਕਸ ਥਰੋ ਮੁਕਾਬਲੇ ਵਿੱਚ 56.22 ਮੀਟਰ ਦੀ ਥਰੋ ਨਾਲ ਗੋਲਡ ਮੈਡਲ
   ਜਿੱਤ ਕੇ ਪੰਜਾਬ ਅਤੇ ਭਾਰਤ ਦਾ ਮਾਣ ਵਧਾਇਆ ਹੈ।
+image: https://www.google.com/search?client=ms-android-vivo-terr1-rso2&sca_esv=e9516683f9cf8572&sxsrf=AE3TifNm8oEQFYFMe98LY1cV_-QeyT13TQ:1761451244782&udm=2&fbs=AIIjpHwdlVWI4oi2g38E8_BbusNmV4N_PDMDZa8kD6jzfAqHH_e2wpq3bNF0nim2pM6iwiK5Oss9ItVPKnx1IZlun2Er2w0EpRYv_zGCKue0cob4eiAIghkiyBU_dZuOOxvsAwzIvU-YDG6hcSbBm28_h2HNFsbj821BL3PIy4ivDr6NE0sOkIY3JLy412aQ1Djn0qBZQuC7b-Euwgd4aZKN24ryMCATxu2L-xrF73klMLLBwgSU-8U&q=kirpal+singh+won+gold+medal&sa=X&sqi=2&ved=2ahUKEwiV5e-d_cCQAxW3bmwGHbPzA98QtKgLegQIExAB&biw=392&bih=757&dpr=2.75
 author: PattiBytes
 tags:
   - news
