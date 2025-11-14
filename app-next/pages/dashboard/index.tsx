@@ -594,27 +594,33 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
-                {posts.map((post, index) => {
-                  const isUserPost = post.source === 'user' && !post.id.startsWith('cms-');
-                  const shareUrl = post.url || `${typeof window !== 'undefined' ? window.location.origin : ''}/posts/${post.id}`;
+                
+{posts.map((post, index) => {
+  const isUserPost = post.source === 'user' && !post.id.startsWith('cms-');
+  const shareUrl =
+    post.url ||
+    `${typeof window !== 'undefined' ? window.location.origin : ''}/posts/${post.id}`;
 
-                  const readMoreHref =
-                    post.source === 'cms'
-                      ? post.type === 'news'
-                        ? `/news/${post.slug || post.id.replace('cms-news-', '')}`
-                        : post.type === 'place'
-                        ? `/places/${post.slug || post.id.replace('cms-place-', '')}`
-                        : `/posts/${post.id}`
-                      : `/posts/${post.id}`;
+  const readMoreHref =
+    post.source === 'cms'
+      ? post.type === 'news'
+        ? `/news/${post.slug || post.id.replace('cms-news-', '')}`
+        : post.type === 'place'
+        ? `/places/${post.slug || post.id.replace('cms-place-', '')}`
+        : `/posts/${post.id}`
+      : `/posts/${post.id}`;
 
                   return (
-                    <motion.article
-                      key={post.id}
-                      className={styles.postCard}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: Math.min(index * 0.02, 0.3), duration: 0.4 }}
-                    >
+                   <motion.article
+      key={`${post.id}-${index}`}        // 🔧 make key unique
+      className={styles.postCard}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        delay: Math.min(index * 0.02, 0.3),
+        duration: 0.4,
+      }}
+    >
                       <div className={styles.postHeader}>
                         {post.source === 'user' && post.authorUsername ? (
                           <Link href={`/user/${post.authorUsername}`} className={styles.author}>
