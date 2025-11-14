@@ -1,3 +1,4 @@
+// app-next/pages/api/cms/notifications.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
@@ -21,10 +22,13 @@ type Notif = {
 
 function normalizeUploads(src?: string): string | undefined {
   if (!src) return undefined;
-  if (src.startsWith('/assets/uploads/')) {
-    const base = process.env.NEXT_PUBLIC_SITE_URL || '';
-    return `${base}${src}`;
+
+  if (src.startsWith('assets/uploads') || src.startsWith('/assets/uploads')) {
+    const base = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '');
+    const clean = src.startsWith('/') ? src : `/${src}`;
+    return `${base}${clean}`;
   }
+
   return src;
 }
 
@@ -36,7 +40,10 @@ async function safeReadDir(dir: string): Promise<string[]> {
   }
 }
 
-export default async function handler(_req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  _req: NextApiRequest,
+  res: NextApiResponse,
+) {
   try {
     const baseDir = process.cwd();
     const appDir = path.join(baseDir, '_notifications');
@@ -61,14 +68,17 @@ export default async function handler(_req: NextApiRequest, res: NextApiResponse
         message: (fm.message as string) || '',
         target_url: fm.target_url as string | undefined,
         image: normalizeUploads(fm.image as string | undefined),
-        audience: ((fm.audience as 'all' | 'segment' | 'specific') || 'all'),
+        audience:
+          ((fm.audience as 'all' | 'segment' | 'specific') || 'all'),
         segment_tag: fm.segment_tag as string | undefined,
-        specific_subscribers: fm.specific_subscribers as Array<{ subscriber: string }> | undefined,
+        specific_subscribers:
+          (fm.specific_subscribers as Array<{ subscriber: string }>) ||
+          undefined,
         send_now: (fm.send_now as boolean) ?? true,
         schedule_datetime: fm.schedule_datetime as string | undefined,
         author: fm.author as string | undefined,
         preview: fm.preview as string | undefined,
-        body: parsed.content || ''
+        body: parsed.content || '',
       });
     }
 

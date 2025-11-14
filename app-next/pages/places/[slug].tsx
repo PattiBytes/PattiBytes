@@ -11,7 +11,31 @@ import CMSContent from '@/components/CMSContent';
 import { FaMapMarkerAlt, FaComment } from 'react-icons/fa';
 import styles from '@/styles/PostDetail.module.css';
 
-type Item = { id?: string; slug?: string; title: string; preview?: string; date: string; image?: string; location?: string; body?: string };
+type Item = {
+  id?: string;
+  slug?: string;
+  title: string;
+  preview?: string;
+  date: string;
+  image?: string;
+  location?: string;
+  body?: string;
+};
+
+function getCMSOrigin(): string {
+  if (typeof window !== 'undefined') return window.location.origin;
+  return (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '');
+}
+
+function resolveCMSImage(path?: string): string | undefined {
+  if (!path) return undefined;
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  if (path.startsWith('assets/uploads') || path.startsWith('/assets/uploads')) {
+    const clean = path.startsWith('/') ? path : `/${path}`;
+    return `${getCMSOrigin()}${clean}`;
+  }
+  return path;
+}
 
 async function loadItem(slug: string): Promise<Item | null> {
   try {
@@ -31,8 +55,12 @@ export default function PlaceDetail() {
   const [loading, setLoading] = useState(true);
   const [commentsCount, setCommentsCount] = useState<number | null>(null);
 
-  const postId = useMemo(() => (slug ? `cms-place-${slug}` : ''), [slug]);
-  const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const postId = useMemo(
+    () => (slug ? `cms-place-${slug}` : ''),
+    [slug],
+  );
+  const shareUrl =
+    typeof window !== 'undefined' ? window.location.href : '';
 
   useEffect(() => {
     if (!slug) return;
@@ -46,7 +74,13 @@ export default function PlaceDetail() {
 
   useEffect(() => {
     if (asPath.includes('#comments')) {
-      setTimeout(() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' }), 300);
+      setTimeout(
+        () =>
+          document
+            .getElementById('comments')
+            ?.scrollIntoView({ behavior: 'smooth' }),
+        300,
+      );
     }
   }, [asPath]);
 
@@ -75,20 +109,36 @@ export default function PlaceDetail() {
     );
   }
 
+  const heroSrc = resolveCMSImage(item.image) || item.image;
+
   return (
     <AuthGuard>
       <Layout title={`${item.title} - PattiBytes`}>
         <article className={styles.post}>
-          {item.image && (
+          {heroSrc && (
             <div className={styles.hero}>
-              <SafeImage src={item.image} alt={item.title} width={1200} height={700} />
+              <SafeImage
+                src={heroSrc}
+                alt={item.title}
+                width={1200}
+                height={700}
+              />
             </div>
           )}
           <header className={styles.header}>
             <h1>{item.title}</h1>
             <div className={styles.actionsRow}>
-              <LikeButton postId={postId} className={styles.actionBtn} showCount />
-              <ShareButton postId={postId} url={shareUrl} className={styles.actionBtn} ariaLabel="Share" />
+              <LikeButton
+                postId={postId}
+                className={styles.actionBtn}
+                showCount
+              />
+              <ShareButton
+                postId={postId}
+                url={shareUrl}
+                className={styles.actionBtn}
+                ariaLabel="Share"
+              />
               {item.location && (
                 <span className={styles.location}>
                   <FaMapMarkerAlt /> {item.location}
@@ -96,7 +146,11 @@ export default function PlaceDetail() {
               )}
               <button
                 className={styles.actionBtn}
-                onClick={() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' })}
+                onClick={() =>
+                  document
+                    .getElementById('comments')
+                    ?.scrollIntoView({ behavior: 'smooth' })
+                }
                 aria-label="Comments"
               >
                 <FaComment /> {commentsCount ?? 0}
@@ -109,7 +163,11 @@ export default function PlaceDetail() {
           </div>
 
           <div id="comments" />
-          <PostComments postId={postId} postTitle={item.title} onCountChange={setCommentsCount} />
+          <PostComments
+            postId={postId}
+            postTitle={item.title}
+            onCountChange={setCommentsCount}
+          />
         </article>
       </Layout>
     </AuthGuard>

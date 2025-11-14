@@ -1,3 +1,4 @@
+// app-next/pages/api/cms/places.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
@@ -20,10 +21,13 @@ type Item = {
 
 function normalizeUploads(src?: string): string | undefined {
   if (!src) return undefined;
-  if (src.startsWith('/assets/uploads/')) {
-    const base = process.env.NEXT_PUBLIC_SITE_URL || '';
-    return `${base}${src}`;
+
+  if (src.startsWith('assets/uploads') || src.startsWith('/assets/uploads')) {
+    const base = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '');
+    const clean = src.startsWith('/') ? src : `/${src}`;
+    return `${base}${clean}`;
   }
+
   return src;
 }
 
@@ -35,7 +39,10 @@ async function safeReadDir(dir: string): Promise<string[]> {
   }
 }
 
-export default async function handler(_req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(
+  _req: NextApiRequest,
+  res: NextApiResponse,
+) {
   try {
     const baseDir = process.cwd();
     const appDir = path.join(baseDir, '_places');
@@ -68,11 +75,13 @@ export default async function handler(_req: NextApiRequest, res: NextApiResponse
         body: parsed.content || '',
         url,
         send_notification: (fm.send_notification as boolean) ?? false,
-        push_message: fm.push_message as string | undefined
+        push_message: fm.push_message as string | undefined,
       });
     }
 
-    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    items.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
     res.status(200).json(items);
   } catch (err) {
     console.error('API /api/cms/places error:', err);

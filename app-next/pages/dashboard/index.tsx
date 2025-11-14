@@ -152,18 +152,27 @@ function setCMSCache(data: Omit<CMSCacheShape, 'ts'>) {
   } catch {}
 }
 
-// Helper: resolve CMS images that start with /assets/uploads
+// Helper: resolve CMS images from /assets/uploads or assets/uploads
+function getCMSOrigin(): string {
+  if (typeof window !== 'undefined') return window.location.origin;
+  return (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '');
+}
+
 function resolveCMSImage(path?: string): string | undefined {
   if (!path) return undefined;
-  // If absolute http/https, return as-is
+
+  // already absolute
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  // If relative /assets/uploads, prefix with your main site domain
-  if (path.startsWith('/assets/uploads/')) {
-    // Adjust to your marketing site base, e.g., https://pattibytes.com
-    return `https://pattibytes.com${path}`;
+
+  // assets/uploads... (with or without leading slash)
+  if (path.startsWith('assets/uploads') || path.startsWith('/assets/uploads')) {
+    const clean = path.startsWith('/') ? path : `/${path}`;
+    return `${getCMSOrigin()}${clean}`;
   }
+
   return path;
 }
+
 
 export default function Dashboard() {
   const { user } = useAuth();
