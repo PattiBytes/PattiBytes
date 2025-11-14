@@ -1,3 +1,4 @@
+// app-next/pages/_document.tsx
 import { Html, Head, Main, NextScript } from 'next/document';
 
 export default function Document() {
@@ -8,7 +9,9 @@ export default function Document() {
         <meta name="theme-color" content="#667eea" />
         <link rel="icon" href="/icons/pwab-192.jpg" />
         <link rel="apple-touch-icon" href="/icons/pwab-512.jpg" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
+
+        {/* Use modern mobile-web-app-capable instead of deprecated apple-mobile-web-app-capable */}
+        <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="PattiBytes" />
       </Head>
@@ -19,10 +22,3 @@ export default function Document() {
     </Html>
   );
 }
-// app-next/pages/_document.tsx (inside <Head>)
-
-{/* Remove this if present */}
-{/* <meta name="apple-mobile-web-app-capable" content="yes" /> */}
-
-{/* Keep this instead */}
-<meta name="mobile-web-app-capable" content="yes" />

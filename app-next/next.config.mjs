@@ -1,10 +1,9 @@
-// next.config.mjs
+// app-next/next.config.mjs
 import withPWAInit from '@ducanh2912/next-pwa';
 
 /**
  * Initialize the PWA plugin with its own options.
  * Keep plugin options OUT of the NextConfig object to avoid invalid keys.
- * Docs: https://ducanh-next-pwa.vercel.app/docs/next-pwa/getting-started
  */
 const withPWA = withPWAInit({
   dest: 'public',
@@ -116,6 +115,11 @@ const withPWA = withPWAInit({
       },
     },
   ],
+
+  // IMPORTANT: exclude non-existent Next 15 manifest from precache
+  workboxOptions: {
+    exclude: [/dynamic-css-manifest\.json$/],
+  },
 });
 
 /** @type {import('next').NextConfig} */
@@ -129,22 +133,16 @@ const nextConfig = {
       { protocol: 'https', hostname: 'res.cloudinary.com' },
       { protocol: 'https', hostname: 'www.pattibytes.com' },
       { protocol: 'https', hostname: 'i.ibb.co' },
-      // Removed wildcard "**" to satisfy Next 15 image validation. 
     ],
-    // Keep optimization in prod; disable only locally if you prefer.
     unoptimized: process.env.NODE_ENV === 'development',
   },
 
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: false },
 
-  // Migrate from experimental.turbo to turbopack to satisfy deprecation warning.
   turbopack: {
     root: process.cwd(),
   },
-
-  // If you set outputFileTracingRoot elsewhere, ensure it matches turbopack.root exactly.
-  // outputFileTracingRoot: process.cwd(),
 };
 
 export default withPWA(nextConfig);
