@@ -19,3 +19,10 @@ export default function Document() {
     </Html>
   );
 }
+// app-next/pages/_document.tsx (inside <Head>)
+
+{/* Remove this if present */}
+{/* <meta name="apple-mobile-web-app-capable" content="yes" /> */}
+
+{/* Keep this instead */}
+<meta name="mobile-web-app-capable" content="yes" />
