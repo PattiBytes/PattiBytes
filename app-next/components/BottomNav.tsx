@@ -22,11 +22,9 @@ export default function BottomNav() {
   const { user, userProfile, isAdmin } = useAuth();
   const router = useRouter();
 
-  // CALL HOOKS AT TOP LEVEL ALWAYS - before any conditional returns
   const unreadCounts = useUnreadCounts(user?.uid || null);
   const { messages } = unreadCounts;
 
-  // Early return after hooks
   if (!user) return null;
 
   const isActiveRoute = (href: string) =>
@@ -37,22 +35,27 @@ export default function BottomNav() {
     { href: '/search', icon: FaSearch, label: 'Search' },
     { href: '/create', icon: FaPlus, label: 'Create', highlight: true },
     { href: '/community', icon: FaComments, label: 'Chat', badge: messages },
-    { href: '/profile', icon: FaUser, label: 'Profile', avatar: userProfile?.photoURL || user.photoURL },
+    {
+      href: '/profile',
+      icon: FaUser,
+      label: 'Profile',
+      avatar: userProfile?.photoURL || user.photoURL,
+    },
   ];
 
   const navItems: NavItem[] = isAdmin
-    ? [
-        ...baseNavItems,
-        { href: '/admin', icon: FaShieldAlt, label: 'Admin' },
-      ]
+    ? [...baseNavItems, { href: '/admin', icon: FaShieldAlt, label: 'Admin' }]
     : baseNavItems;
 
-  // Hide on auth
+  // Hide on auth pages
   if (router.pathname.startsWith('/auth/')) return null;
+
+  // Hide on chat detail page /community/[id]
+  if (router.pathname === '/community/[id]') return null;
 
   return (
     <nav className={styles.shell} aria-label="Primary">
-      {/* Desktop/Large screens: vertical rail */}
+      {/* Desktop rail */}
       <div className={styles.rail}>
         {navItems.map((item) => {
           const isActive = isActiveRoute(item.href);
@@ -61,7 +64,9 @@ export default function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`${styles.railItem} ${isActive ? styles.active : ''} ${item.highlight ? styles.highlight : ''}`}
+              className={`${styles.railItem} ${
+                isActive ? styles.active : ''
+              } ${item.highlight ? styles.highlight : ''}`}
               title={item.label}
             >
               {isActive && (
@@ -73,12 +78,20 @@ export default function BottomNav() {
               )}
               <span className={styles.iconWrap}>
                 {item.avatar ? (
-                  <SafeImage src={item.avatar} alt={item.label} width={28} height={28} className={styles.avatar} />
+                  <SafeImage
+                    src={item.avatar}
+                    alt={item.label}
+                    width={28}
+                    height={28}
+                    className={styles.avatar}
+                  />
                 ) : (
                   <Icon className={styles.icon} />
                 )}
                 {!!item.badge && item.badge > 0 && (
-                  <span className={styles.badge}>{item.badge > 9 ? '9+' : item.badge}</span>
+                  <span className={styles.badge}>
+                    {item.badge > 9 ? '9+' : item.badge}
+                  </span>
                 )}
               </span>
               <span className={styles.railLabel}>{item.label}</span>
@@ -87,7 +100,7 @@ export default function BottomNav() {
         })}
       </div>
 
-      {/* Mobile: bottom bar */}
+      {/* Mobile bottom bar */}
       <div className={styles.bottomNav}>
         {navItems.map((item) => {
           const isActive = isActiveRoute(item.href);
@@ -96,7 +109,9 @@ export default function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`${styles.navItem} ${isActive ? styles.active : ''} ${item.highlight ? styles.highlight : ''}`}
+              className={`${styles.navItem} ${
+                isActive ? styles.active : ''
+              } ${item.highlight ? styles.highlight : ''}`}
             >
               {isActive && (
                 <motion.div
@@ -107,12 +122,20 @@ export default function BottomNav() {
               )}
               <span className={styles.iconWrap}>
                 {item.avatar ? (
-                  <SafeImage src={item.avatar} alt={item.label} width={28} height={28} className={styles.avatar} />
+                  <SafeImage
+                    src={item.avatar}
+                    alt={item.label}
+                    width={28}
+                    height={28}
+                    className={styles.avatar}
+                  />
                 ) : (
                   <Icon className={styles.icon} />
                 )}
                 {!!item.badge && item.badge > 0 && (
-                  <span className={styles.badge}>{item.badge > 9 ? '9+' : item.badge}</span>
+                  <span className={styles.badge}>
+                    {item.badge > 9 ? '9+' : item.badge}
+                  </span>
                 )}
               </span>
               <span className={styles.label}>{item.label}</span>

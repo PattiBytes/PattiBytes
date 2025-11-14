@@ -21,7 +21,8 @@ const presetVideos =
   process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET_VIDEOS ||
   process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET ||
   '';
-const presetAvatars = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET_AVATARS || presetImages;
+const presetAvatars =
+  process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET_AVATARS || presetImages;
 
 export function isCloudinaryConfigured(): boolean {
   return Boolean(cloudName && (presetImages || presetVideos));
@@ -61,10 +62,12 @@ async function uploadViaAPI(file: File, type: UploadType): Promise<string> {
  */
 export async function uploadImageOrAvatar(
   file: File,
-  type: Extract<UploadType, 'image' | 'avatar'> = 'image'
+  type: Extract<UploadType, 'image' | 'avatar'> = 'image',
 ): Promise<string> {
   if (!isCloudinaryConfigured()) {
-    throw new Error('Cloudinary not configured. Set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and upload presets.');
+    throw new Error(
+      'Cloudinary not configured. Set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and upload presets.',
+    );
   }
 
   const preset = presetFor(type);
@@ -86,21 +89,26 @@ export async function uploadImageOrAvatar(
 
     if (!res.ok) {
       const raw = await res.text().catch(() => '');
-      // If unsigned upload fails (401/403), fallback to signed API upload
-      if (res.status === 401 || res.status === 403 || res.status === 400) {
-        console.warn('Unsigned upload failed, trying signed API route...');
+      // For ANY 4xx (including 420 OCR error), fallback to signed API upload
+      if (res.status >= 400 && res.status < 500) {
+        console.warn(
+          'Unsigned upload failed, trying signed API route...',
+          res.status,
+          raw,
+        );
         return await uploadViaAPI(file, type);
       }
       throw new Error(`Cloudinary upload failed: ${res.status} ${raw}`);
     }
 
     const data = (await res.json()) as CloudinaryResponse;
-    if (!data.secure_url) throw new Error('No secure_url returned from Cloudinary');
+    if (!data.secure_url)
+      throw new Error('No secure_url returned from Cloudinary');
     return data.secure_url;
   } catch (error) {
     // Network error or CORS issue - fallback to API route
     if (error instanceof TypeError && error.message.includes('fetch')) {
-      console.warn('Network/CORS error, trying signed API route...');
+      console.warn('Network/CORS error, trying signed API route...', error);
       return await uploadViaAPI(file, type);
     }
     throw error;
@@ -110,9 +118,14 @@ export async function uploadImageOrAvatar(
 /**
  * Upload video with progress tracking
  */
-export async function uploadVideo(file: File, onProgress?: (percent: number) => void): Promise<string> {
+export async function uploadVideo(
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<string> {
   if (!isCloudinaryConfigured()) {
-    throw new Error('Cloudinary not configured. Set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and upload presets.');
+    throw new Error(
+      'Cloudinary not configured. Set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and upload presets.',
+    );
   }
 
   const preset = presetFor('video');
@@ -139,20 +152,35 @@ export async function uploadVideo(file: File, onProgress?: (percent: number) => 
       if (xhr.status === 200) {
         try {
           const data = JSON.parse(xhr.responseText) as CloudinaryResponse;
-          if (!data.secure_url) return reject(new Error('No secure_url returned'));
+          if (!data.secure_url)
+            return reject(new Error('No secure_url returned'));
           resolve(data.secure_url);
         } catch {
           reject(new Error('Invalid Cloudinary response'));
         }
-      } else if (xhr.status === 401 || xhr.status === 403 || xhr.status === 400) {
-        // Fallback to signed API upload
-        console.warn('Unsigned video upload failed, trying signed API route...');
+        return;
+      }
+
+      // For any 4xx (including 420), fall back to signed API upload
+      if (xhr.status >= 400 && xhr.status < 500) {
+        console.warn(
+          'Unsigned video upload failed, trying signed API route...',
+          xhr.status,
+          xhr.responseText,
+        );
         uploadViaAPI(file, 'video')
           .then(resolve)
           .catch(reject);
-      } else {
-        reject(new Error(`Cloudinary upload failed: ${xhr.status} ${xhr.responseText || ''}`));
+        return;
       }
+
+      reject(
+        new Error(
+          `Cloudinary upload failed: ${xhr.status} ${
+            xhr.responseText || ''
+          }`,
+        ),
+      );
     });
 
     xhr.addEventListener('error', () => {
@@ -163,22 +191,40 @@ export async function uploadVideo(file: File, onProgress?: (percent: number) => 
         .catch(reject);
     });
 
-    xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`);
+    xhr.open(
+      'POST',
+      `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`,
+    );
     xhr.send(form);
   });
 }
 
-export async function uploadToCloudinary(file: File, type: UploadType = 'image'): Promise<string> {
-  return type === 'video' ? uploadVideo(file) : uploadImageOrAvatar(file, type as 'image' | 'avatar');
+export async function uploadToCloudinary(
+  file: File,
+  type: UploadType = 'image',
+): Promise<string> {
+  return type === 'video'
+    ? uploadVideo(file)
+    : uploadImageOrAvatar(file, type as 'image' | 'avatar');
 }
 
 export function transformImage(
   url: string,
-  opts: { w?: number; h?: number; q?: string; f?: string; crop?: 'fill' | 'fit' | 'scale' } = {}
+  opts: {
+    w?: number;
+    h?: number;
+    q?: string;
+    f?: string;
+    crop?: 'fill' | 'fit' | 'scale';
+  } = {},
 ): string {
   try {
     const u = new URL(url);
-    if (!u.host.includes('res.cloudinary.com') || !u.pathname.includes('/image/upload/')) return url;
+    if (
+      !u.host.includes('res.cloudinary.com') ||
+      !u.pathname.includes('/image/upload/')
+    )
+      return url;
 
     const parts = u.pathname.split('/image/upload/');
     const prefix = parts[0];
@@ -201,7 +247,10 @@ export function transformImage(
   }
 }
 
-export async function deleteFromCloudinary(publicId: string, resourceType?: 'image' | 'video'): Promise<void> {
+export async function deleteFromCloudinary(
+  publicId: string,
+  resourceType?: 'image' | 'video',
+): Promise<void> {
   const res = await fetch('/api/cloudinary/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
