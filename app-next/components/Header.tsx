@@ -110,9 +110,12 @@ export default function Header() {
   // Live unread badges
   const { notifications, messages } = useUnreadCounts(user?.uid || null);
 
-  // Hide header on auth screens for a cleaner flow
-  const hideOnAuth = router.pathname.startsWith('/auth/');
-  if (hideOnAuth) return null;
+  // Hide header on auth and chat id screens for a cleaner flow
+    const hideOnAuth = router.pathname.startsWith('/auth/');
+  const hideOnChat = router.pathname === '/community/[id]';
+
+  if (hideOnAuth || hideOnChat) return null;
+
 
   return (
     <header className={`${styles.header} ${scrolled ? styles.scrolled : ''}`}>
