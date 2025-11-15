@@ -1,5 +1,4 @@
-// app-next/pages/settings/index.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/context/AuthContext';
@@ -16,6 +15,7 @@ type LanguagePref = 'en' | 'pa';
 
 export default function SettingsPage() {
   const { user, userProfile, reloadUser } = useAuth();
+
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
   const [website, setWebsite] = useState('');
@@ -24,26 +24,35 @@ export default function SettingsPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingUsername, setSavingUsername] = useState(false);
 
-  // Preferences (align with lib/username types)
   const [publicProfile, setPublicProfile] = useState(true);
   const [notifications, setNotifications] = useState(true);
   const [theme, setTheme] = useState<ThemePref>('auto');
   const [language, setLanguage] = useState<LanguagePref>('en');
 
+  // Prevent re-initializing form fields every time userProfile changes
+  const initializedRef = useRef(false);
+
   useEffect(() => {
     if (!userProfile) return;
-    setDisplayName(userProfile.displayName || '');
-    setBio(userProfile.bio || '');
-    setWebsite(userProfile.website || '');
-    setLocation(userProfile.location || '');
-    setUsername(userProfile.username || '');
 
-    // Load preferences safely
-    const prefs = userProfile.preferences || {};
-    setPublicProfile(prefs.publicProfile ?? true);
-    setNotifications(prefs.notifications ?? true);
-    setTheme((prefs.theme as ThemePref) || 'auto');
-    setLanguage((prefs.language as LanguagePref) || 'en');
+    // One-time initialization for other fields
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+
+      setDisplayName(userProfile.displayName || '');
+      setBio(userProfile.bio || '');
+      setWebsite(userProfile.website || '');
+      setLocation(userProfile.location || '');
+
+      const prefs = userProfile.preferences || {};
+      setPublicProfile(prefs.publicProfile ?? true);
+      setNotifications(prefs.notifications ?? true);
+      setTheme((prefs.theme as ThemePref) || 'auto');
+      setLanguage((prefs.language as LanguagePref) || 'en');
+    }
+
+    // Always keep username in sync with latest profile
+    setUsername(userProfile.username || '');
   }, [userProfile]);
 
   const saveProfile = async (e: React.FormEvent) => {
@@ -63,11 +72,13 @@ export default function SettingsPage() {
           language,
         },
       });
-      if (reloadUser) await reloadUser();
+      await reloadUser();
       toast.success('Profile updated!');
     } catch (e) {
       console.error('Profile update error:', e);
-      toast.error(e instanceof Error ? e.message : 'Failed to update profile');
+      toast.error(
+        e instanceof Error ? e.message : 'Failed to update profile',
+      );
     } finally {
       setSavingProfile(false);
     }
@@ -76,22 +87,30 @@ export default function SettingsPage() {
   const saveUsername = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
     const newUser = username.trim().toLowerCase();
-    if (!newUser) return toast.error('Username required');
-    if (newUser === userProfile?.username) {
-      return toast('No changes to username');
+    if (!newUser) {
+      toast.error('Username required');
+      return;
     }
+    if (newUser === userProfile?.username) {
+      toast('No changes to username');
+      return;
+    }
+
     try {
       setSavingUsername(true);
       await claimUsername(newUser, user.uid, {
         displayName: displayName.trim() || userProfile?.displayName,
         photoURL: userProfile?.photoURL,
       });
-      if (reloadUser) await reloadUser();
+      await reloadUser();
       toast.success('Username updated!');
     } catch (err) {
       console.error('Username update error:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to update username');
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to update username',
+      );
     } finally {
       setSavingUsername(false);
     }
@@ -107,7 +126,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Profile Settings */}
-          <motion.div 
+          <motion.div
             className={styles.card}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -117,7 +136,7 @@ export default function SettingsPage() {
               <FaUser className={styles.cardIcon} />
               <h2>Profile Information</h2>
             </div>
-            
+
             <form onSubmit={saveProfile} className={styles.form}>
               <div className={styles.avatarRow}>
                 <ProfilePictureUpload
@@ -125,8 +144,10 @@ export default function SettingsPage() {
                   onUploaded={async (url) => {
                     if (!user) return;
                     try {
-                      await updateUserProfile(user.uid, { photoURL: url });
-                      if (reloadUser) await reloadUser();
+                      await updateUserProfile(user.uid, {
+                        photoURL: url,
+                      });
+                      await reloadUser();
                       toast.success('Photo updated!');
                     } catch {
                       toast.error('Failed to update photo');
@@ -139,7 +160,9 @@ export default function SettingsPage() {
                   <input
                     className={styles.input}
                     value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
+                    onChange={(e) =>
+                      setDisplayName(e.target.value)
+                    }
                     maxLength={50}
                     placeholder="Your name"
                   />
@@ -156,7 +179,9 @@ export default function SettingsPage() {
                   rows={3}
                   placeholder="Tell us about yourself…"
                 />
-                <small className={styles.hint}>{bio.length}/160</small>
+                <small className={styles.hint}>
+                  {bio.length}/160
+                </small>
               </div>
 
               <div className={styles.grid2}>
@@ -165,7 +190,9 @@ export default function SettingsPage() {
                   <input
                     className={styles.input}
                     value={website}
-                    onChange={(e) => setWebsite(e.target.value)}
+                    onChange={(e) =>
+                      setWebsite(e.target.value)
+                    }
                     placeholder="https://example.com"
                   />
                 </div>
@@ -174,7 +201,9 @@ export default function SettingsPage() {
                   <input
                     className={styles.input}
                     value={location}
-                    onChange={(e) => setLocation(e.target.value)}
+                    onChange={(e) =>
+                      setLocation(e.target.value)
+                    }
                     placeholder="City, Country"
                   />
                 </div>
@@ -186,7 +215,9 @@ export default function SettingsPage() {
                   <select
                     className={styles.select}
                     value={theme}
-                    onChange={(e) => setTheme(e.target.value as ThemePref)}
+                    onChange={(e) =>
+                      setTheme(e.target.value as ThemePref)
+                    }
                   >
                     <option value="auto">Auto (System)</option>
                     <option value="light">Light</option>
@@ -198,7 +229,9 @@ export default function SettingsPage() {
                   <select
                     className={styles.select}
                     value={language}
-                    onChange={(e) => setLanguage(e.target.value as LanguagePref)}
+                    onChange={(e) =>
+                      setLanguage(e.target.value as LanguagePref)
+                    }
                   >
                     <option value="en">English</option>
                     <option value="pa">Punjabi</option>
@@ -211,12 +244,16 @@ export default function SettingsPage() {
                   <input
                     type="checkbox"
                     checked={publicProfile}
-                    onChange={(e) => setPublicProfile(e.target.checked)}
+                    onChange={(e) =>
+                      setPublicProfile(e.target.checked)
+                    }
                     className={styles.checkbox}
                   />
                   <span className={styles.toggleText}>
                     <strong>Public Profile</strong>
-                    <small>Make your profile visible to everyone</small>
+                    <small>
+                      Make your profile visible to everyone
+                    </small>
                   </span>
                 </label>
               </div>
@@ -226,7 +263,9 @@ export default function SettingsPage() {
                   <input
                     type="checkbox"
                     checked={notifications}
-                    onChange={(e) => setNotifications(e.target.checked)}
+                    onChange={(e) =>
+                      setNotifications(e.target.checked)
+                    }
                     className={styles.checkbox}
                   />
                   <span className={styles.toggleText}>
@@ -236,19 +275,20 @@ export default function SettingsPage() {
                 </label>
               </div>
 
-              <motion.button 
-                className={styles.primary} 
-                type="submit" 
+              <motion.button
+                className={styles.primary}
+                type="submit"
                 disabled={savingProfile}
                 whileTap={{ scale: 0.98 }}
               >
-                <FaSave /> {savingProfile ? 'Saving…' : 'Save Profile'}
+                <FaSave />{' '}
+                {savingProfile ? 'Saving…' : 'Save Profile'}
               </motion.button>
             </form>
           </motion.div>
 
           {/* Username Settings */}
-          <motion.div 
+          <motion.div
             className={styles.card}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -258,7 +298,7 @@ export default function SettingsPage() {
               <FaAt className={styles.cardIcon} />
               <h2>Username</h2>
             </div>
-            
+
             <form onSubmit={saveUsername} className={styles.form}>
               <UsernameField
                 value={username}
@@ -266,19 +306,20 @@ export default function SettingsPage() {
                 excludeCurrent={userProfile?.username}
                 showSuggestions
               />
-              <motion.button 
-                className={styles.primary} 
-                type="submit" 
+              <motion.button
+                className={styles.primary}
+                type="submit"
                 disabled={savingUsername}
                 whileTap={{ scale: 0.98 }}
               >
-                <FaSave /> {savingUsername ? 'Updating…' : 'Update Username'}
+                <FaSave />{' '}
+                {savingUsername ? 'Updating…' : 'Update Username'}
               </motion.button>
             </form>
           </motion.div>
 
           {/* Info */}
-          <motion.div 
+          <motion.div
             className={styles.card}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -289,7 +330,10 @@ export default function SettingsPage() {
               <h2>Tips</h2>
             </div>
             <div className={styles.form}>
-              <p>Set preferences and notifications as per profile needs. These settings are used across the app.</p>
+              <p>
+                Set preferences and notifications as per profile
+                needs. These settings are used across the app.
+              </p>
             </div>
           </motion.div>
         </div>
