@@ -84,25 +84,65 @@ export interface UsernameRecord {
 }
 
 const RESERVED_USERNAMES = [
-  'admin', 'administrator', 'root', 'api', 'www', 'mail', 'email', 'support',
-  'help', 'about', 'contact', 'info', 'service', 'team', 'staff', 'mod',
-  'moderator', 'patti', 'pattibytes', 'official', 'system', 'null', 'undefined',
-  'test', 'demo', 'guest', 'user', 'bot', 'admin1', 'admin2', 'super', 'superuser'
+  'admin',
+  'administrator',
+  'root',
+  'api',
+  'www',
+  'mail',
+  'email',
+  'support',
+  'help',
+  'about',
+  'contact',
+  'info',
+  'service',
+  'team',
+  'staff',
+  'mod',
+  'moderator',
+  'patti',
+  'pattibytes',
+  'official',
+  'system',
+  'null',
+  'undefined',
+  'test',
+  'demo',
+  'guest',
+  'user',
+  'bot',
+  'admin1',
+  'admin2',
+  'super',
+  'superuser',
 ];
 
-export function validateUsername(username: string): { valid: boolean; error?: string } {
-  if (!username || typeof username !== 'string') return { valid: false, error: 'Username is required' };
+export function validateUsername(
+  username: string,
+): { valid: boolean; error?: string } {
+  if (!username || typeof username !== 'string')
+    return { valid: false, error: 'Username is required' };
   const trimmed = username.trim().toLowerCase();
-  if (trimmed.length < 3) return { valid: false, error: 'Username must be at least 3 characters' };
-  if (trimmed.length > 20) return { valid: false, error: 'Username must be less than 20 characters' };
-  if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) return { valid: false, error: 'Only letters, numbers and underscores' };
-  if (trimmed.startsWith('_') || trimmed.endsWith('_')) return { valid: false, error: 'Cannot start/end with underscore' };
-  if (trimmed.includes('__')) return { valid: false, error: 'No consecutive underscores' };
-  if (RESERVED_USERNAMES.includes(trimmed)) return { valid: false, error: 'This username is reserved' };
+  if (trimmed.length < 3)
+    return { valid: false, error: 'Username must be at least 3 characters' };
+  if (trimmed.length > 20)
+    return { valid: false, error: 'Username must be less than 20 characters' };
+  if (!/^[a-zA-Z0-9_]+$/.test(trimmed))
+    return { valid: false, error: 'Only letters, numbers and underscores' };
+  if (trimmed.startsWith('_') || trimmed.endsWith('_'))
+    return { valid: false, error: 'Cannot start/end with underscore' };
+  if (trimmed.includes('__'))
+    return { valid: false, error: 'No consecutive underscores' };
+  if (RESERVED_USERNAMES.includes(trimmed))
+    return { valid: false, error: 'This username is reserved' };
   return { valid: true };
 }
 
-const usernameCache = new Map<string, { available: boolean; timestamp: number }>();
+const usernameCache = new Map<
+  string,
+  { available: boolean; timestamp: number }
+>();
 const CACHE_DURATION = 30_000;
 
 function normalizeUsernameKey(username: string): string {
@@ -114,7 +154,11 @@ function normalizeUserProfile(uid: string, data: DocumentData): UserProfile {
   const email = String(data.email || '');
   const displayName =
     String(data.displayName || '').trim() ||
-    (email ? email.split('@')[0] : username ? `@${username}` : 'User');
+    (email
+      ? email.split('@')[0]
+      : username
+      ? `@${username}`
+      : 'User');
 
   const stats = {
     postsCount: Number(data.stats?.postsCount ?? 0),
@@ -147,22 +191,41 @@ function normalizeUserProfile(uid: string, data: DocumentData): UserProfile {
     isVerified: Boolean(data.isVerified ?? false),
     isOnline: Boolean(data.isOnline ?? false),
     lastSeen: (data.lastSeen as Timestamp | FieldValue) ?? undefined,
-    createdAt: (data.createdAt as Timestamp | FieldValue) ?? serverTimestamp(),
-    updatedAt: (data.updatedAt as Timestamp | FieldValue) ?? serverTimestamp(),
+    createdAt:
+      (data.createdAt as Timestamp | FieldValue) ?? serverTimestamp(),
+    updatedAt:
+      (data.updatedAt as Timestamp | FieldValue) ?? serverTimestamp(),
   }) as UserProfile;
 }
 
-async function ensureUsernameMapping(normalized: string, uid: string): Promise<void> {
+/** Helper to detect the Firestore internal assertion bug so it can be ignored safely. */
+export function isFirestoreInternalAssertion(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    err.message.includes('INTERNAL ASSERTION FAILED: Unexpected state')
+  );
+}
+
+async function ensureUsernameMapping(
+  normalized: string,
+  uid: string,
+): Promise<void> {
   const { db } = getFirebaseClient();
   if (!db) return;
   const mapRef = doc(db, 'usernames', normalized);
   const mapSnap = await getDoc(mapRef);
   if (!mapSnap.exists()) {
-    await setDoc(mapRef, { uid, createdAt: serverTimestamp() }, { merge: true });
+    await setDoc(
+      mapRef,
+      { uid, createdAt: serverTimestamp() },
+      { merge: true },
+    );
   }
 }
 
-export async function checkUsernameAvailable(username: string): Promise<boolean> {
+export async function checkUsernameAvailable(
+  username: string,
+): Promise<boolean> {
   const validation = validateUsername(username);
   if (!validation.valid) return false;
 
@@ -170,7 +233,8 @@ export async function checkUsernameAvailable(username: string): Promise<boolean>
   const now = Date.now();
 
   const cached = usernameCache.get(normalized);
-  if (cached && now - cached.timestamp < CACHE_DURATION) return cached.available;
+  if (cached && now - cached.timestamp < CACHE_DURATION)
+    return cached.available;
 
   const { db } = getFirebaseClient();
   if (!db) throw new Error('Firestore not initialized');
@@ -186,8 +250,14 @@ export async function usernameExists(username: string): Promise<boolean> {
   return !(await checkUsernameAvailable(username));
 }
 
-export function getUsernameSuggestions(baseUsername: string, count = 3): string[] {
-  const base = baseUsername.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15);
+export function getUsernameSuggestions(
+  baseUsername: string,
+  count = 3,
+): string[] {
+  const base = baseUsername
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 15);
   if (!base) {
     return [
       'user' + Math.floor(Math.random() * 9999),
@@ -202,23 +272,46 @@ export function getUsernameSuggestions(baseUsername: string, count = 3): string[
   if (suggestions.length < count) {
     const prefixes = ['the', 'real', 'official'];
     const suffixes = ['official', 'real', 'patti', 'pb'];
-    suggestions.push(`${prefixes[Math.floor(Math.random() * prefixes.length)]}_${base}`);
+    suggestions.push(
+      `${prefixes[Math.floor(Math.random() * prefixes.length)]}_${base}`,
+    );
     if (suggestions.length < count) {
-      suggestions.push(`${base}_${suffixes[Math.floor(Math.random() * suffixes.length)]}`);
+      suggestions.push(
+        `${base}_${
+          suffixes[Math.floor(Math.random() * suffixes.length)]
+        }`,
+      );
     }
   }
   return suggestions.slice(0, count);
 }
 
-export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+/** UPDATED: now catches Firestore's internal Unexpected state bug and returns null instead of crashing. */
+export async function getUserProfile(
+  uid: string,
+): Promise<UserProfile | null> {
   const { db } = getFirebaseClient();
   if (!db) throw new Error('Firestore not initialized');
-  const userDoc = await getDoc(doc(db, 'users', uid));
-  if (!userDoc.exists()) return null;
-  return normalizeUserProfile(uid, userDoc.data());
+
+  try {
+    const userDoc = await getDoc(doc(db, 'users', uid));
+    if (!userDoc.exists()) return null;
+    return normalizeUserProfile(uid, userDoc.data());
+  } catch (err) {
+    if (isFirestoreInternalAssertion(err)) {
+      console.warn(
+        '[getUserProfile] Ignoring Firestore internal assertion (bug in SDK):',
+        err,
+      );
+      return null;
+    }
+    throw err;
+  }
 }
 
-export async function getUserByUsername(username: string): Promise<UserProfile | null> {
+export async function getUserByUsername(
+  username: string,
+): Promise<UserProfile | null> {
   const { db } = getFirebaseClient();
   if (!db) throw new Error('Firestore not initialized');
 
@@ -241,7 +334,7 @@ export async function getUserByUsername(username: string): Promise<UserProfile |
   const q = fsQuery(
     collection(db, 'users'),
     where('username', '==', normalized),
-    limit(1)
+    limit(1),
   );
   const snap = await getDocs(q);
   if (!snap.empty) {
@@ -290,10 +383,14 @@ export async function searchUsersByUsername(
   const fromUsernames = await Promise.all(
     userIds.map(async (uid) => {
       const userDoc = await getDoc(doc(db, 'users', uid));
-      return userDoc.exists() ? normalizeUserProfile(uid, userDoc.data()) : null;
+      return userDoc.exists()
+        ? normalizeUserProfile(uid, userDoc.data())
+        : null;
     }),
   );
-  const primary = fromUsernames.filter((p): p is UserProfile => !!p);
+  const primary = fromUsernames.filter(
+    (p): p is UserProfile => !!p,
+  );
 
   if (primary.length >= limitCount) return primary.slice(0, limitCount);
 
@@ -323,7 +420,6 @@ export async function searchUsersByUsername(
 
   return [...primary, ...fallback].slice(0, limitCount);
 }
-
 
 export async function createUserProfile(profile: {
   uid: string;
@@ -363,13 +459,16 @@ export async function claimUsername(
       const usernameSnapshot = await getDoc(usernameRef);
       if (usernameSnapshot.exists()) {
         const existing = usernameSnapshot.data() as UsernameRecord;
-        if (existing.uid !== uid) throw new Error('Username is already taken');
+        if (existing.uid !== uid)
+          throw new Error('Username is already taken');
       }
 
       const userRef = doc(db, 'users', uid);
       const userSnapshot = await getDoc(userRef);
       const isNewUser = !userSnapshot.exists();
-      const current = isNewUser ? null : (userSnapshot.data() as UserProfile);
+      const current = isNewUser
+        ? null
+        : (userSnapshot.data() as UserProfile);
 
       const batch = writeBatch(db);
 
@@ -379,7 +478,10 @@ export async function claimUsername(
         usernameCache.delete(current.username);
       }
 
-      batch.set(usernameRef, { uid, createdAt: serverTimestamp() });
+      batch.set(usernameRef, {
+        uid,
+        createdAt: serverTimestamp(),
+      });
 
       const now = serverTimestamp();
 
@@ -389,10 +491,13 @@ export async function claimUsername(
       };
 
       if (userProfile) {
-        const cleanedPartial = deepClean(userProfile as Record<string, unknown>);
+        const cleanedPartial = deepClean(
+          userProfile as Record<string, unknown>,
+        );
         Object.assign(profileData, cleanedPartial);
         if (typeof userProfile.displayName === 'string') {
-          profileData.displayNameLower = userProfile.displayName.toLowerCase();
+          profileData.displayNameLower =
+            userProfile.displayName.toLowerCase();
         }
       }
 
@@ -400,7 +505,11 @@ export async function claimUsername(
         profileData.uid = uid;
         profileData.createdAt = now;
         profileData.role = 'user';
-        profileData.stats = { postsCount: 0, followersCount: 0, followingCount: 0 };
+        profileData.stats = {
+          postsCount: 0,
+          followersCount: 0,
+          followingCount: 0,
+        };
         profileData.unreadNotifications = 0;
         profileData.preferences = {
           theme: 'auto',
@@ -412,10 +521,11 @@ export async function claimUsername(
         profileData.isOnline = false;
         profileData.isBanned = false;
 
-        // Avoid any by using a typed record view
         const rec = profileData as Record<string, unknown>;
         if (typeof rec.displayName === 'string') {
-          rec.displayNameLower = String(rec.displayName).toLowerCase();
+          rec.displayNameLower = String(
+            rec.displayName,
+          ).toLowerCase();
         }
       }
 
@@ -425,9 +535,15 @@ export async function claimUsername(
 
       usernameCache.delete(normalized);
 
-      if (userProfile?.displayName && auth?.currentUser && auth.currentUser.uid === uid) {
+      if (
+        userProfile?.displayName &&
+        auth?.currentUser &&
+        auth.currentUser.uid === uid
+      ) {
         try {
-          await updateProfile(auth.currentUser, { displayName: userProfile.displayName });
+          await updateProfile(auth.currentUser, {
+            displayName: userProfile.displayName,
+          });
         } catch (e) {
           console.warn('Failed to update auth profile:', e);
         }
@@ -435,7 +551,11 @@ export async function claimUsername(
       return;
     } catch (error) {
       lastError = error as Error;
-      if (error instanceof Error && error.message.includes('already taken')) throw error;
+      if (
+        error instanceof Error &&
+        error.message.includes('already taken')
+      )
+        throw error;
       if (attempt < maxRetries - 1) {
         await delay(1000 * Math.pow(2, attempt));
       }
@@ -445,7 +565,10 @@ export async function claimUsername(
   throw new Error('Failed to claim username. Please try again.');
 }
 
-export async function updateUserProfile(uid: string, updates: Partial<UserProfile>): Promise<void> {
+export async function updateUserProfile(
+  uid: string,
+  updates: Partial<UserProfile>,
+): Promise<void> {
   const { db, auth } = getFirebaseClient();
   if (!db) throw new Error('Firestore not initialized');
 
@@ -459,12 +582,16 @@ export async function updateUserProfile(uid: string, updates: Partial<UserProfil
   delete toWrite.username;
   delete toWrite.stats;
 
-  if (typeof toWrite.bio === 'string' && (toWrite.bio as string).length > 160) {
+  if (
+    typeof toWrite.bio === 'string' &&
+    (toWrite.bio as string).length > 160
+  ) {
     throw new Error('Bio must be less than 160 characters');
   }
 
   if (typeof toWrite.displayName === 'string') {
-    toWrite.displayNameLower = (toWrite.displayName as string).toLowerCase();
+    toWrite.displayNameLower = (toWrite
+      .displayName as string).toLowerCase();
   }
 
   const cleaned = deepClean(toWrite);
@@ -472,31 +599,46 @@ export async function updateUserProfile(uid: string, updates: Partial<UserProfil
 
   if (updates.displayName && auth?.currentUser?.uid === uid) {
     try {
-      await updateProfile(auth.currentUser, { displayName: updates.displayName });
+      await updateProfile(auth.currentUser, {
+        displayName: updates.displayName,
+      });
     } catch (e) {
       console.warn('Failed to update auth profile:', e);
     }
   }
 }
 
-export async function updateUserOnlineStatus(uid: string, isOnline: boolean): Promise<void> {
+export async function updateUserOnlineStatus(
+  uid: string,
+  isOnline: boolean,
+): Promise<void> {
   const { db } = getFirebaseClient();
   if (!db) return;
   await setDoc(
     doc(db, 'users', uid),
-    deepClean({ isOnline, lastSeen: serverTimestamp(), updatedAt: serverTimestamp() }),
+    deepClean({
+      isOnline,
+      lastSeen: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
     { merge: true },
   );
 }
 
-export async function updateUserStats(uid: string, statsUpdate: Partial<UserProfile['stats']>): Promise<void> {
+export async function updateUserStats(
+  uid: string,
+  statsUpdate: Partial<UserProfile['stats']>,
+): Promise<void> {
   const { db } = getFirebaseClient();
   if (!db) throw new Error('Firestore not initialized');
 
   const userRef = doc(db, 'users', uid);
   const userDoc = await getDoc(userRef);
 
-  const currentStats = (userDoc.exists() && (userDoc.data().stats as UserProfile['stats'])) || {};
+  const currentStats =
+    (userDoc.exists() &&
+      (userDoc.data().stats as UserProfile['stats'])) ||
+    {};
   const safeCurrent = {
     postsCount: Number(currentStats?.postsCount ?? 0),
     followersCount: Number(currentStats?.followersCount ?? 0),
@@ -510,8 +652,12 @@ export async function updateUserStats(uid: string, statsUpdate: Partial<UserProf
 
   const safeMerged = {
     postsCount: Number(merged.postsCount ?? safeCurrent.postsCount),
-    followersCount: Number(merged.followersCount ?? safeCurrent.followersCount),
-    followingCount: Number(merged.followingCount ?? safeCurrent.followingCount),
+    followersCount: Number(
+      merged.followersCount ?? safeCurrent.followersCount,
+    ),
+    followingCount: Number(
+      merged.followingCount ?? safeCurrent.followingCount,
+    ),
   };
 
   await setDoc(
@@ -560,12 +706,18 @@ export async function decrementPostCount(uid: string): Promise<void> {
   );
 }
 
-export async function updateUnreadNotifications(uid: string, count: number): Promise<void> {
+export async function updateUnreadNotifications(
+  uid: string,
+  count: number,
+): Promise<void> {
   const { db } = getFirebaseClient();
   if (!db) return;
   await setDoc(
     doc(db, 'users', uid),
-    deepClean({ unreadNotifications: Math.max(0, count), updatedAt: serverTimestamp() }),
+    deepClean({
+      unreadNotifications: Math.max(0, count),
+      updatedAt: serverTimestamp(),
+    }),
     { merge: true },
   );
 }
