@@ -1669,21 +1669,3 @@
     transform: rotate(360deg);
   }
 }
-
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  .header,
-  .postsSection,
-  .postCard {
-    background: rgba(27, 27, 31, 0.9);
-    border-color: rgba(255, 255, 255, 0.08);
-  }
-  .filterBtn,
-  .editBtn,
-  .settingsBtn,
-  .copyBtn {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.08);
-    color: #f3f4f6;
-  }
-}
