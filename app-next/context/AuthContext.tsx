@@ -120,52 +120,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, db]);
 
   // Auth state listener
-  useEffect(() => {
-    if (!auth) return;
+useEffect(() => {
+  if (!auth) return;
 
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async (firebaseUser) => {
-        setUser(firebaseUser);
-        if (firebaseUser) {
-          try {
-            const profile = await getUserProfile(firebaseUser.uid);
-            setUserProfile(profile || null);
-          } catch (err) {
-            if (isFirestoreInternalAssertion(err)) {
-              console.warn(
-                '[AuthContext] Ignoring Firestore internal assertion in getUserProfile:',
-                err,
-              );
-            } else {
-              console.error(
-                '[AuthContext] Failed to load user profile:',
-                err,
-              );
-            }
-            setUserProfile(null);
-          }
-
-          try {
-            const admin = await checkAdmin(firebaseUser.uid);
-            setIsAdmin(admin);
-          } catch (err) {
-            console.error(
-              '[AuthContext] Failed to check admin status:',
-              err,
-            );
-            setIsAdmin(false);
-          }
+  const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    setUser(firebaseUser);
+    if (firebaseUser) {
+      try {
+        const profile = await getUserProfile(firebaseUser.uid);
+        console.log('[AuthContext] profile for', firebaseUser.uid, profile);
+        setUserProfile(profile || null);
+      } catch (err) {
+        if (isFirestoreInternalAssertion(err)) {
+          console.warn(
+            '[AuthContext] Ignoring Firestore internal assertion in getUserProfile:',
+            err,
+          );
         } else {
-          setUserProfile(null);
-          setIsAdmin(false);
+          console.error(
+            '[AuthContext] Failed to load user profile:',
+            err,
+          );
         }
-        setLoading(false);
-      },
-    );
+        setUserProfile(null);
+      }
 
-    return () => unsubscribe();
-  }, [auth]);
+      // admin flag unchanged...
+    } else {
+      setUserProfile(null);
+      setIsAdmin(false);
+    }
+    setLoading(false);
+  });
+
+  return () => unsubscribe();
+}, [auth]);
+
 
  
 
