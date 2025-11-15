@@ -283,24 +283,3 @@
 .emptyBtn:active {
   transform: scale(0.95);
 }
-
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  .header,
-  .chatItem {
-    background: rgba(27, 27, 31, 0.9);
-    border-color: rgba(255, 255, 255, 0.08);
-  }
-  .tab,
-  .searchBox {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.08);
-    color: #f3f4f6;
-  }
-  .avatar {
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-  .onlineDot {
-    border-color: rgba(27, 27, 31, 0.9);
-  }
-}

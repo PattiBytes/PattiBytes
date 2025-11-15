@@ -142,18 +142,3 @@
   font-weight: 700;
   cursor: pointer;
 }
-
-/* Dark */
-@media (prefers-color-scheme: dark) {
-  .backBtn,
-  .typeToggle button,
-  .groupNameInput,
-  .searchBox,
-  .selected,
-  .selectedUser,
-  .userItem {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.08);
-    color: #f3f4f6;
-  }
-}

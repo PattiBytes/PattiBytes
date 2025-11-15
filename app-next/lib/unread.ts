@@ -66,12 +66,22 @@ export function subscribeUnreadCounts(
   };
 }
 
+// app-next/lib/unread.ts
+
 export function useUnreadCounts(uid: string | null) {
   const { db } = getFirebaseClient();
   const [state, setState] = useState<Counts>({ notifications: 0, messages: 0 });
 
   useEffect(() => {
     if (!db || !uid) return;
+
+    // Avoid Firestore listeners in development (SDK INTERNAL ASSERTION bug)
+    if (process.env.NODE_ENV === 'development') {
+      // Optionally: zero out counts explicitly
+      setState({ notifications: 0, messages: 0 });
+      return;
+    }
+
     return subscribeUnreadCounts(uid, db, setState);
   }, [db, uid]);
 
