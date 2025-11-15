@@ -105,13 +105,3 @@
   .primary, .secondary { flex: 1; text-align: center; }
 }
 
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  .page { background: linear-gradient(to bottom, #111827 0%, #1f2937 100%); }
-  .card { background: #1f2937; border-color: #374151; }
-  .title { color: #f9fafb; }
-  .sub { color: #9ca3af; }
-  .input, .textarea, .select { background: #374151; border-color: #4b5563; color: #f9fafb; }
-  .secondary { background: #1f2937; color: #f9fafb; border-color: #374151; }
-  .secondary:hover { background: #111827; border-color: #4b5563; }
-}
