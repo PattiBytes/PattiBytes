@@ -1,15 +1,13 @@
 // app-next/next.config.mjs
 import withPWAInit from '@ducanh2912/next-pwa';
 
-/**
- * Initialize the PWA plugin with its own options.
- * Keep plugin options OUT of the NextConfig object to avoid invalid keys.
- */
 const withPWA = withPWAInit({
   dest: 'public',
   register: true,
   skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development',
+  // We will completely disable the plugin in dev via conditional export below,
+  // so this flag mainly affects production/preview behaviour.
+  disable: false,
   runtimeCaching: [
     {
       urlPattern: /^https:\/\/fonts\.(?:gstatic)\.com\/.*/i,
@@ -115,17 +113,15 @@ const withPWA = withPWAInit({
       },
     },
   ],
-
-  // IMPORTANT: exclude non-existent Next 15 manifest from precache
+  // Already added earlier to avoid precaching missing dynamic-css-manifest
   workboxOptions: {
     exclude: [/dynamic-css-manifest\.json$/],
   },
 });
 
 /** @type {import('next').NextConfig} */
-const nextConfig = {
+const baseConfig = {
   reactStrictMode: true,
-
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
@@ -136,13 +132,17 @@ const nextConfig = {
     ],
     unoptimized: process.env.NODE_ENV === 'development',
   },
-
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: false },
-
   turbopack: {
     root: process.cwd(),
   },
 };
 
-export default withPWA(nextConfig);
+const isDev = process.env.NODE_ENV === 'development';
+
+// In dev: run plain Next (no PWA plugin) to avoid ENOENT on build-manifest/pages-manifest.
+// In prod/preview: wrap with PWA.
+const nextConfig = isDev ? baseConfig : withPWA(baseConfig);
+
+export default nextConfig;

@@ -301,15 +301,3 @@
   background: white; color: #111827; border: 2px solid #e5e7eb; padding: 0.9rem 1.25rem; border-radius: 0.9rem; font-weight: 800; cursor: pointer; transition: border-color .2s ease, background .2s ease, transform .15s ease;
 }
 .secondary:hover { background: #f9fafb; border-color: #d1d5db; transform: translateY(-1px); }
-
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  .page { background: linear-gradient(to bottom, #111827 0%, #1f2937 100%); }
-  .card { background: #1f2937; border-color: #374151; }
-  .label { color: #e5e7eb; }
-  .input, .textarea, .select { background: #374151; border-color: #4b5563; color: #f9fafb; }
-  .toggle { background: #1f2937; border-color: #374151; }
-  .toggle:hover { background: #111827; border-color: #4b5563; }
-  .toggleText strong { color: #f9fafb; }
-  .toggleText small { color: #9ca3af; }
-}

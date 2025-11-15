@@ -167,40 +167,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, [auth]);
 
-  // Realtime profile updates with error handler to swallow the Firestore bug
-  useEffect(() => {
-    if (!user || !db) return;
-    const userRef = doc(db, 'users', user.uid);
+ 
 
-    const unsubscribe = onSnapshot(
-      userRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          setUserProfile({
-            uid: user.uid,
-            ...(snapshot.data() as Omit<UserProfile, 'uid'>),
-          });
-        } else {
-          setUserProfile(null);
-        }
-      },
-      (error) => {
-        if (isFirestoreInternalAssertion(error)) {
-          console.warn(
-            '[AuthContext] Ignoring Firestore internal assertion in profile listener (SDK bug):',
-            error,
-          );
-          return;
-        }
-        console.error(
-          '[AuthContext] User profile listener error:',
+// Realtime profile updates with error handler to swallow the Firestore bug
+useEffect(() => {
+  if (!user || !db) return;
+
+  // Avoid Firestore listeners in development to sidestep INTERNAL ASSERTION bug
+  if (process.env.NODE_ENV === 'development') {
+    return;
+  }
+
+  const userRef = doc(db, 'users', user.uid);
+
+  const unsubscribe = onSnapshot(
+    userRef,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        setUserProfile({
+          uid: user.uid,
+          ...(snapshot.data() as Omit<UserProfile, 'uid'>),
+        });
+      } else {
+        setUserProfile(null);
+      }
+    },
+    (error) => {
+      if (isFirestoreInternalAssertion(error)) {
+        console.warn(
+          '[AuthContext] Ignoring Firestore internal assertion in profile listener (SDK bug):',
           error,
         );
-      },
-    );
+        return;
+      }
+      console.error(
+        '[AuthContext] User profile listener error:',
+        error,
+      );
+    },
+  );
 
-    return () => unsubscribe();
-  }, [user, db]);
+  return () => unsubscribe();
+}, [user, db]);
+
 
   const signInWithGoogle = async () => {
     if (!auth || !db) throw new Error('Auth not initialized');
