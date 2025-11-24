@@ -1,339 +1,295 @@
-// app-next/pages/settings/index.tsx
-import { useEffect, useRef, useState } from 'react';
+// app-next/pages/profile/index.tsx
+import { useAuth } from '@/context/AuthContext';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  collection,
+  doc,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+  type DocumentData,
+  type Timestamp,
+} from 'firebase/firestore';
+import { getFirebaseClient } from '@/lib/firebase';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
-import { useAuth } from '@/context/AuthContext';
-import UsernameField from '@/components/UsernameField';
+import SafeImage from '@/components/SafeImage';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
-import { updateUserProfile, claimUsername } from '@/lib/username';
+import FollowersModal from '@/components/FollowersModal';
+import FollowingModal from '@/components/FollowingModal';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { FaSave, FaUser, FaAt, FaBell } from 'react-icons/fa';
-import styles from '@/styles/Settings.module.css';
-import { toast } from 'react-hot-toast';
+import {
+  FaEdit,
+  FaCog,
+  FaMapMarkerAlt,
+  FaGlobe,
+  FaCalendar,
+  FaNewspaper,
+  FaMapPin,
+  FaPen,
+  FaCheckCircle,
+  FaShieldAlt,
+} from 'react-icons/fa';
+import toast from 'react-hot-toast';
+import styles from '@/styles/UserProfile.module.css';
 
-type ThemePref = 'light' | 'dark' | 'auto';
-type LanguagePref = 'en' | 'pa';
+interface Post {
+  id: string;
+  title: string;
+  preview?: string;
+  type: 'news' | 'place' | 'writing' | 'video';
+  imageUrl?: string;
+  createdAt: Date;
+  likesCount: number;
+  commentsCount: number;
+}
 
-export default function SettingsPage() {
-  const { user, userProfile, reloadUser } = useAuth();
+export default function MyProfile() {
+  const { user, userProfile } = useAuth();
+  const { db } = getFirebaseClient();
 
-  const [displayName, setDisplayName] = useState('');
-  const [bio, setBio] = useState('');
-  const [website, setWebsite] = useState('');
-  const [location, setLocation] = useState('');
-  const [username, setUsername] = useState('');
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [savingUsername, setSavingUsername] = useState(false);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [filter, setFilter] = useState<'all' | 'news' | 'place' | 'writing'>('all');
+  const [loading, setLoading] = useState(true);
+  const [showFollowers, setShowFollowers] = useState(false);
+  const [showFollowing, setShowFollowing] = useState(false);
+  const [stats, setStats] = useState({ posts: 0, followers: 0, following: 0 });
 
-  const [publicProfile, setPublicProfile] = useState(true);
-  const [notifications, setNotifications] = useState(true);
-  const [theme, setTheme] = useState<ThemePref>('auto');
-  const [language, setLanguage] = useState<LanguagePref>('en');
-
-  // Prevent re-initializing form fields every time userProfile changes
-  const initializedRef = useRef(false);
-
+  // Posts (bounded + ordered to satisfy rules)
   useEffect(() => {
-    if (!userProfile) return;
-
-    // Only initialize from userProfile once per mount
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-
-    setDisplayName(userProfile.displayName || '');
-    setBio(userProfile.bio || '');
-    setWebsite(userProfile.website || '');
-    setLocation(userProfile.location || '');
-    setUsername(userProfile.username || '');
-
-    const prefs = userProfile.preferences || {};
-    setPublicProfile(prefs.publicProfile ?? true);
-    setNotifications(prefs.notifications ?? true);
-    setTheme((prefs.theme as ThemePref) || 'auto');
-    setLanguage((prefs.language as LanguagePref) || 'en');
-  }, [userProfile]);
-
-  const saveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    try {
-      setSavingProfile(true);
-      await updateUserProfile(user.uid, {
-        displayName: displayName.trim(),
-        bio: bio.trim(),
-        website: website.trim(),
-        location: location.trim(),
-        preferences: {
-          publicProfile,
-          notifications,
-          theme,
-          language,
-        },
+    if (!db || !user) return;
+    const q = query(
+      collection(db, 'posts'),
+      where('authorId', '==', user.uid),
+      where('isDraft', '==', false),
+      orderBy('createdAt', 'desc'),
+      limit(30)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const data = snap.docs.map((d) => {
+        const p = d.data() as DocumentData;
+        return {
+          id: d.id,
+          title: p.title || 'Untitled',
+          preview: p.preview,
+          type: (p.type as Post['type']) || 'writing',
+          imageUrl: p.imageUrl,
+          createdAt:
+            p.createdAt && typeof p.createdAt.toDate === 'function'
+              ? (p.createdAt as Timestamp).toDate()
+              : new Date(),
+          likesCount: p.likesCount || 0,
+          commentsCount: p.commentsCount || 0,
+        };
       });
-      await reloadUser();
-      toast.success('Profile updated!');
-    } catch (e) {
-      console.error('Profile update error:', e);
-      toast.error(
-        e instanceof Error ? e.message : 'Failed to update profile',
-      );
-    } finally {
-      setSavingProfile(false);
-    }
+      setPosts(data);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [db, user]);
+
+  // Live stats
+  useEffect(() => {
+    if (!db || !user) return;
+    const unsub = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+      if (!snap.exists()) return;
+      const u = snap.data() as DocumentData;
+      setStats({
+        posts: u.stats?.postsCount ?? posts.length,
+        followers: u.stats?.followersCount ?? 0,
+        following: u.stats?.followingCount ?? 0,
+      });
+    });
+    return () => unsub();
+  }, [db, user, posts.length]);
+
+  const filtered = useMemo(
+    () => (filter === 'all' ? posts : posts.filter((p) => p.type === filter)),
+    [posts, filter]
+  );
+
+  const copyProfileLink = async () => {
+    if (!userProfile?.username) return;
+    const url = `${window.location.origin}/user/${userProfile.username}`;
+    await navigator.clipboard.writeText(url);
+    toast.success('Profile link copied!');
   };
 
-  const saveUsername = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
-    const newUser = username.trim().toLowerCase();
-    if (!newUser) {
-      toast.error('Username required');
-      return;
-    }
-    if (newUser === userProfile?.username) {
-      toast('No changes to username');
-      return;
-    }
-
-    try {
-      setSavingUsername(true);
-      await claimUsername(newUser, user.uid, {
-        displayName: displayName.trim() || userProfile?.displayName,
-        photoURL: userProfile?.photoURL,
-      });
-      await reloadUser();
-      toast.success('Username updated!');
-    } catch (err) {
-      console.error('Username update error:', err);
-      toast.error(
-        err instanceof Error ? err.message : 'Failed to update username',
-      );
-    } finally {
-      setSavingUsername(false);
-    }
-  };
+  if (loading) {
+    return (
+      <AuthGuard>
+        <Layout title="My Profile">
+          <div className={styles.loadingContainer}>
+            <div className={styles.spinner} />
+            <p>Loading profile...</p>
+          </div>
+        </Layout>
+      </AuthGuard>
+    );
+  }
+  if (!userProfile) return null;
 
   return (
     <AuthGuard>
-      <Layout title="Settings - PattiBytes">
-        <div className={styles.page}>
-          <div className={styles.header}>
-            <h1>Settings</h1>
-            <p>Manage your account settings and preferences</p>
-          </div>
-
-          {/* Profile Settings */}
-          <motion.div
-            className={styles.card}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <div className={styles.cardHeader}>
-              <FaUser className={styles.cardIcon} />
-              <h2>Profile Information</h2>
+      <Layout title={`${userProfile.displayName} - PattiBytes`}>
+        <div className={styles.container}>
+          <motion.header className={styles.header} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <div className={styles.coverPhoto}>
+              <div className={styles.coverGradient} />
             </div>
 
-            <form onSubmit={saveProfile} className={styles.form}>
-              <div className={styles.avatarRow}>
+            <div className={styles.profileRow}>
+              <div className={styles.avatarSection}>
                 <ProfilePictureUpload
-                  currentUrl={userProfile?.photoURL}
-                  onUploaded={async (url) => {
-                    if (!user) return;
-                    try {
-                      await updateUserProfile(user.uid, {
-                        photoURL: url,
-                      });
-                      await reloadUser();
-                      toast.success('Photo updated!');
-                    } catch {
-                      toast.error('Failed to update photo');
-                    }
-                  }}
-                  maxSizeMB={5}
+                  currentUrl={userProfile.photoURL}
+                  onUploaded={() => toast.success('Profile picture updated!')}
                 />
+              </div>
+
+              <div className={styles.info}>
                 <div className={styles.nameBlock}>
-                  <label className={styles.label}>Display name</label>
-                  <input
-                    className={styles.input}
-                    value={displayName}
-                    onChange={(e) =>
-                      setDisplayName(e.target.value)
-                    }
-                    maxLength={50}
-                    placeholder="Your name"
-                  />
+                  <h1>{userProfile.displayName}</h1>
+                  <div className={styles.username}>@{userProfile.username}</div>
+                  {userProfile.isVerified && (
+                    <div className={styles.verified} title="Verified">
+                      <FaCheckCircle />
+                    </div>
+                  )}
+                  {userProfile.role === 'admin' && (
+                    <div className={styles.adminBadge}>
+                      <FaShieldAlt /> Admin
+                    </div>
+                  )}
+                </div>
+
+                {userProfile.bio && <div className={styles.bio}>{userProfile.bio}</div>}
+
+                <div className={styles.meta}>
+                  {userProfile.location && (
+                    <span className={styles.metaItem}>
+                      <FaMapMarkerAlt /> {userProfile.location}
+                    </span>
+                  )}
+                  {userProfile.website && (
+                    <a href={userProfile.website} target="_blank" rel="noopener noreferrer" className={styles.metaLink}>
+                      <FaGlobe /> {userProfile.website.replace(/^https?:\/\//, '')}
+                    </a>
+                  )}
+                  {userProfile.createdAt && (
+                    <span className={styles.metaItem}>
+                      <FaCalendar /> Joined{' '}
+                      {(userProfile.createdAt as Timestamp).toDate
+                        ? (userProfile.createdAt as Timestamp).toDate().toLocaleDateString('en-IN', {
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+
+                <div className={styles.stats}>
+                  <button onClick={() => setShowFollowers(true)} className={styles.statButton}>
+                    <strong>{stats.followers}</strong>
+                    <span>Followers</span>
+                  </button>
+                  <button onClick={() => setShowFollowing(true)} className={styles.statButton}>
+                    <strong>{stats.following}</strong>
+                    <span>Following</span>
+                  </button>
+                  <div className={styles.statItem}>
+                    <strong>{stats.posts}</strong>
+                    <span>Posts</span>
+                  </div>
+                </div>
+
+                <div className={styles.actions}>
+                  <Link href="/settings" className={styles.editBtn}>
+                    <FaEdit /> Edit Profile
+                  </Link>
+                  <Link href="/settings" className={styles.settingsBtn}>
+                    <FaCog /> Settings
+                  </Link>
+                  <button onClick={copyProfileLink} className={styles.copyBtn}>
+                    Copy Link
+                  </button>
                 </div>
               </div>
+            </div>
+          </motion.header>
 
-              <div className={styles.row}>
-                <label className={styles.label}>Bio</label>
-                <textarea
-                  className={styles.textarea}
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  maxLength={160}
-                  rows={3}
-                  placeholder="Tell us about yourself…"
-                />
-                <small className={styles.hint}>
-                  {bio.length}/160
-                </small>
+          <motion.section className={styles.postsSection} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <div className={styles.postsHeader}>
+              <h2>Posts</h2>
+              <div className={styles.postsFilters}>
+                <button
+                  onClick={() => setFilter('all')}
+                  className={`${styles.filterBtn} ${filter === 'all' ? styles.active : ''}`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setFilter('news')}
+                  className={`${styles.filterBtn} ${filter === 'news' ? styles.active : ''}`}
+                >
+                  <FaNewspaper /> News
+                </button>
+                <button
+                  onClick={() => setFilter('place')}
+                  className={`${styles.filterBtn} ${filter === 'place' ? styles.active : ''}`}
+                >
+                  <FaMapPin /> Places
+                </button>
+                <button
+                  onClick={() => setFilter('writing')}
+                  className={`${styles.filterBtn} ${filter === 'writing' ? styles.active : ''}`}
+                >
+                  <FaPen /> Writings
+                </button>
               </div>
-
-              <div className={styles.grid2}>
-                <div className={styles.row}>
-                  <label className={styles.label}>Website</label>
-                  <input
-                    className={styles.input}
-                    value={website}
-                    onChange={(e) =>
-                      setWebsite(e.target.value)
-                    }
-                    placeholder="https://example.com"
-                  />
-                </div>
-                <div className={styles.row}>
-                  <label className={styles.label}>Location</label>
-                  <input
-                    className={styles.input}
-                    value={location}
-                    onChange={(e) =>
-                      setLocation(e.target.value)
-                    }
-                    placeholder="City, Country"
-                  />
-                </div>
-              </div>
-
-              <div className={styles.grid2}>
-                <div className={styles.row}>
-                  <label className={styles.label}>Theme</label>
-                  <select
-                    className={styles.select}
-                    value={theme}
-                    onChange={(e) =>
-                      setTheme(e.target.value as ThemePref)
-                    }
-                  >
-                    <option value="auto">Auto (System)</option>
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                  </select>
-                </div>
-                <div className={styles.row}>
-                  <label className={styles.label}>Language</label>
-                  <select
-                    className={styles.select}
-                    value={language}
-                    onChange={(e) =>
-                      setLanguage(e.target.value as LanguagePref)
-                    }
-                  >
-                    <option value="en">English</option>
-                    <option value="pa">Punjabi</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className={styles.toggleRow}>
-                <label className={styles.toggleLabel}>
-                  <input
-                    type="checkbox"
-                    checked={publicProfile}
-                    onChange={(e) =>
-                      setPublicProfile(e.target.checked)
-                    }
-                    className={styles.checkbox}
-                  />
-                  <span className={styles.toggleText}>
-                    <strong>Public Profile</strong>
-                    <small>
-                      Make your profile visible to everyone
-                    </small>
-                  </span>
-                </label>
-              </div>
-
-              <div className={styles.toggleRow}>
-                <label className={styles.toggleLabel}>
-                  <input
-                    type="checkbox"
-                    checked={notifications}
-                    onChange={(e) =>
-                      setNotifications(e.target.checked)
-                    }
-                    className={styles.checkbox}
-                  />
-                  <span className={styles.toggleText}>
-                    <strong>Notifications</strong>
-                    <small>Receive updates</small>
-                  </span>
-                </label>
-              </div>
-
-              <motion.button
-                className={styles.primary}
-                type="submit"
-                disabled={savingProfile}
-                whileTap={{ scale: 0.98 }}
-              >
-                <FaSave />{' '}
-                {savingProfile ? 'Saving…' : 'Save Profile'}
-              </motion.button>
-            </form>
-          </motion.div>
-
-          {/* Username Settings */}
-          <motion.div
-            className={styles.card}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-          >
-            <div className={styles.cardHeader}>
-              <FaAt className={styles.cardIcon} />
-              <h2>Username</h2>
+              <Link href="/create" className={styles.createBtn}>
+                Create Post
+              </Link>
             </div>
 
-            <form onSubmit={saveUsername} className={styles.form}>
-              <UsernameField
-                value={username}
-                onChange={setUsername}
-                excludeCurrent={userProfile?.username}
-                showSuggestions
-              />
-              <motion.button
-                className={styles.primary}
-                type="submit"
-                disabled={savingUsername}
-                whileTap={{ scale: 0.98 }}
-              >
-                <FaSave />{' '}
-                {savingUsername ? 'Updating…' : 'Update Username'}
-              </motion.button>
-            </form>
-          </motion.div>
+            {filtered.length === 0 ? (
+              <div className={styles.noPosts}>
+                <FaPen className={styles.noPostsIcon} />
+                <p>You have not posted anything yet</p>
+                <Link href="/create" className={styles.createFirstBtn}>
+                  Create your first post
+                </Link>
+              </div>
+            ) : (
+              <div className={styles.postsGrid}>
+                {filtered.map((post) => (
+                  <Link href={`/posts/${post.id}`} key={post.id} className={styles.postCard}>
+                    {post.imageUrl && (
+                      <div className={styles.postImage}>
+                        <SafeImage src={post.imageUrl} alt={post.title} width={300} height={200} className={styles.image} />
+                      </div>
+                    )}
+                    <div className={styles.postContent}>
+                      <h3>{post.title}</h3>
+                      {post.preview && <p>{post.preview}</p>}
+                      <div className={styles.postMeta}>
+                        <span className={styles.postType}>{post.type}</span>
+                        <span className={styles.postStats}>
+                          {post.likesCount} likes · {post.commentsCount} comments
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </motion.section>
 
-          {/* Info */}
-          <motion.div
-            className={styles.card}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
-          >
-            <div className={styles.cardHeader}>
-              <FaBell className={styles.cardIcon} />
-              <h2>Tips</h2>
-            </div>
-            <div className={styles.form}>
-              <p>
-                Set preferences and notifications as per profile
-                needs. These settings are used across the app.
-              </p>
-            </div>
-          </motion.div>
+          <FollowersModal isOpen={showFollowers} onClose={() => setShowFollowers(false)} userId={user!.uid} />
+          <FollowingModal isOpen={showFollowing} onClose={() => setShowFollowing(false)} userId={user!.uid} />
         </div>
       </Layout>
     </AuthGuard>
