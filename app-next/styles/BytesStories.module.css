@@ -112,3 +112,430 @@
   .addCircle { width: 56px; height: 56px; }
   .storiesList { gap: 0.75rem; }
 }
+/* app-next/styles/BytesStories.module.css */
+
+
+.stories {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 0 0 12px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  position: relative;
+}
+
+
+.stories::-webkit-scrollbar {
+  display: none;
+}
+
+
+/* Your Bytes Section */
+.yourBytesSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 1rem;
+  background: linear-gradient(135deg, #f0f7ff 0%, #f5f0ff 100%);
+  border-radius: 12px;
+  margin: 0 1rem 1rem 1rem;
+  padding: 1rem;
+  width: 100%;
+  min-width: 0;
+}
+
+
+.yourBytesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+
+.yourBytesHeader h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+  color: #007bff;
+}
+
+
+.createByteBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #007bff;
+  color: white;
+  text-decoration: none;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+}
+
+
+.createByteBtn:hover {
+  background: #0056b3;
+  transform: translateY(-2px);
+}
+
+
+.yourBytesList {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding: 0.5rem 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+
+.yourBytesList::-webkit-scrollbar {
+  display: none;
+}
+
+
+.yourByteCard {
+  flex: 0 0 auto;
+  width: 140px;
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+  position: relative;
+}
+
+
+.yourByteCard:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-4px);
+}
+
+
+.yourByteCard a {
+  text-decoration: none;
+  color: inherit;
+}
+
+
+.bytePreview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: #000;
+  overflow: hidden;
+}
+
+
+.byteThumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+
+.videoIcon,
+.playIcon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 30px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #007bff;
+  font-size: 1rem;
+  z-index: 2;
+}
+
+
+.byteInfo {
+  padding: 0.5rem;
+}
+
+
+.byteStats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #666;
+  margin-bottom: 0.25rem;
+}
+
+
+.byteStats span {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+
+.byteTime {
+  font-size: 0.7rem;
+  color: #999;
+}
+
+
+.byteControls {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: white;
+  border-top: 1px solid #e0e0e0;
+  justify-content: center;
+}
+
+
+.analyzeBtn,
+.deleteBtn {
+  flex: 1;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+
+.analyzeBtn {
+  background: #f0f7ff;
+  color: #007bff;
+  border: 1px solid #007bff;
+}
+
+
+.analyzeBtn:hover {
+  background: #007bff;
+  color: white;
+}
+
+
+.deleteBtn {
+  background: #fee;
+  color: #c33;
+  border: 1px solid #c33;
+}
+
+
+.deleteBtn:hover {
+  background: #c33;
+  color: white;
+}
+
+
+/* Add Story Button */
+.addStory {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 80px;
+  padding: 0.5rem;
+  cursor: pointer;
+  text-decoration: none;
+  color: #333;
+  transition: all 0.2s;
+}
+
+
+.addStory:hover {
+  transform: translateY(-2px);
+}
+
+
+.addCircle {
+  width: 56px;
+  height: 56px;
+  border: 2px dashed #007bff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #007bff;
+  transition: all 0.2s;
+}
+
+
+.addStory:hover .addCircle {
+  border-style: solid;
+  background: #007bff;
+  color: white;
+}
+
+
+.addStory span {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* Stories List */
+.storiesList {
+  display: flex;
+  gap: 1rem;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+
+.storiesList::-webkit-scrollbar {
+  display: none;
+}
+
+
+/* Story Item */
+.story {
+  flex: 0 0 auto;
+  min-width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+
+.story:hover {
+  transform: translateY(-4px);
+}
+
+
+.byteLink {
+  flex: 0 0 auto;
+  text-decoration: none;
+}
+
+
+.storyRing {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border: 2px solid #007bff;
+  border-radius: 50%;
+  padding: 2px;
+  transition: all 0.2s;
+}
+
+
+.storyRing:hover {
+  border-width: 3px;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+
+.storyThumbnail {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+
+.userName {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #333;
+  text-align: center;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+
+.userName:hover {
+  color: #007bff;
+}
+
+
+/* Loading */
+.loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+
+.spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(0, 123, 255, 0.2);
+  border-top-color: #007bff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+@media (max-width: 480px) {
+  .stories {
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
+
+
+  .yourBytesSection {
+    margin: 0 0.75rem 0.75rem 0.75rem;
+  }
+
+
+  .yourByteCard {
+    width: 120px;
+  }
+
+
+  .addCircle {
+    width: 48px;
+    height: 48px;
+    font-size: 1.2rem;
+  }
+
+
+  .storyRing {
+    width: 48px;
+    height: 48px;
+  }
+}

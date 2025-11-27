@@ -84,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // ignore presence errors
       }
     };
+
     const setOffline = async () => {
       try {
         await setDoc(
@@ -119,87 +120,111 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user, db]);
 
-  // Auth state listener
-useEffect(() => {
-  if (!auth) return;
+  // Auth state listener - initial profile load + admin check
+  useEffect(() => {
+    if (!auth) return;
 
-  const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-    setUser(firebaseUser);
-    if (firebaseUser) {
-      try {
-        const profile = await getUserProfile(firebaseUser.uid);
-        console.log('[AuthContext] profile for', firebaseUser.uid, profile);
-        setUserProfile(profile || null);
-      } catch (err) {
-        if (isFirestoreInternalAssertion(err)) {
-          console.warn(
-            '[AuthContext] Ignoring Firestore internal assertion in getUserProfile:',
-            err,
-          );
-        } else {
-          console.error(
-            '[AuthContext] Failed to load user profile:',
-            err,
-          );
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
+      if (firebaseUser) {
+        try {
+          const profile = await getUserProfile(firebaseUser.uid);
+          console.log('[AuthContext] Initial profile load:', {
+            uid: firebaseUser.uid,
+            displayName: profile?.displayName,
+            username: profile?.username,
+          });
+          setUserProfile(profile || null);
+
+          // Check admin status
+          try {
+            const adminStatus = await checkAdmin(firebaseUser.uid);
+            setIsAdmin(adminStatus);
+            console.log('[AuthContext] Admin status:', adminStatus);
+          } catch (err) {
+            console.error('[AuthContext] Admin check error:', err);
+            setIsAdmin(false);
+          }
+        } catch (err) {
+          if (isFirestoreInternalAssertion(err)) {
+            console.warn(
+              '[AuthContext] Ignoring Firestore internal assertion in getUserProfile:',
+              err,
+            );
+          } else {
+            console.error(
+              '[AuthContext] Failed to load user profile:',
+              err,
+            );
+          }
+          setUserProfile(null);
+          setIsAdmin(false);
         }
-        setUserProfile(null);
-      }
-
-      // admin flag unchanged...
-    } else {
-      setUserProfile(null);
-      setIsAdmin(false);
-    }
-    setLoading(false);
-  });
-
-  return () => unsubscribe();
-}, [auth]);
-
-
- 
-
-// Realtime profile updates with error handler to swallow the Firestore bug
-useEffect(() => {
-  if (!user || !db) return;
-
-  // Avoid Firestore listeners in development to sidestep INTERNAL ASSERTION bug
-  if (process.env.NODE_ENV === 'development') {
-    return;
-  }
-
-  const userRef = doc(db, 'users', user.uid);
-
-  const unsubscribe = onSnapshot(
-    userRef,
-    (snapshot) => {
-      if (snapshot.exists()) {
-        setUserProfile({
-          uid: user.uid,
-          ...(snapshot.data() as Omit<UserProfile, 'uid'>),
-        });
       } else {
         setUserProfile(null);
+        setIsAdmin(false);
       }
-    },
-    (error) => {
-      if (isFirestoreInternalAssertion(error)) {
-        console.warn(
-          '[AuthContext] Ignoring Firestore internal assertion in profile listener (SDK bug):',
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [auth]);
+
+  // Realtime profile listener - keeps profile in sync with Firestore
+  // Runs in both development and production
+  useEffect(() => {
+    if (!user || !db) return;
+
+    const userRef = doc(db, 'users', user.uid);
+
+    const unsubscribe = onSnapshot(
+      userRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          try {
+            const profileData = snapshot.data() as Omit<
+              UserProfile,
+              'uid'
+            >;
+            setUserProfile({
+              uid: user.uid,
+              ...profileData,
+            });
+            console.log(
+              '[AuthContext] Profile synced from Firestore:',
+              {
+                displayName: profileData.displayName,
+                username: profileData.username,
+                bio: profileData.bio,
+              },
+            );
+          } catch (err) {
+            console.error(
+              '[AuthContext] Error processing snapshot:',
+              err,
+            );
+          }
+        } else {
+          setUserProfile(null);
+        }
+      },
+      (error) => {
+        if (isFirestoreInternalAssertion(error)) {
+          console.warn(
+            '[AuthContext] Ignoring Firestore internal assertion in profile listener (SDK bug):',
+            error,
+          );
+          return;
+        }
+        console.error(
+          '[AuthContext] User profile listener error:',
           error,
         );
-        return;
-      }
-      console.error(
-        '[AuthContext] User profile listener error:',
-        error,
-      );
-    },
-  );
+      },
+    );
 
-  return () => unsubscribe();
-}, [user, db]);
-
+    return () => unsubscribe();
+  }, [user, db]);
 
   const signInWithGoogle = async () => {
     if (!auth || !db) throw new Error('Auth not initialized');
@@ -251,7 +276,10 @@ useEffect(() => {
       if (user) {
         await setDoc(
           doc(db, 'users', user.uid),
-          { onlineStatus: 'offline', lastSeen: serverTimestamp() },
+          {
+            onlineStatus: 'offline',
+            lastSeen: serverTimestamp(),
+          },
           { merge: true },
         );
       }
@@ -270,6 +298,10 @@ useEffect(() => {
     try {
       const profile = await getUserProfile(user.uid);
       setUserProfile(profile || null);
+      console.log('[AuthContext] User reloaded:', {
+        displayName: profile?.displayName,
+        username: profile?.username,
+      });
     } catch (err) {
       if (isFirestoreInternalAssertion(err)) {
         console.warn(
@@ -282,7 +314,8 @@ useEffect(() => {
       setUserProfile(null);
     }
     try {
-      setIsAdmin(await checkAdmin(user.uid));
+      const adminStatus = await checkAdmin(user.uid);
+      setIsAdmin(adminStatus);
     } catch (err) {
       console.error(
         '[AuthContext] reloadUser admin check error:',

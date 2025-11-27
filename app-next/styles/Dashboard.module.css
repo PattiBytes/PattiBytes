@@ -725,3 +725,289 @@
     min-width: unset;
   }
 }
+/* ===== YOUR BYTES SECTION ===== */
+.yourBytesSection {
+  margin-bottom: 3rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f0f7ff 0%, #f5f0ff 100%);
+  border-radius: 12px;
+  border: 1px solid #e0e8ff;
+}
+
+.yourBytesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.yourBytesHeader h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.createByteBtn {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background: #007bff;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.createByteBtn:hover {
+  background: #0056b3;
+  transform: translateY(-2px);
+}
+
+.bytesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+  .bytesGrid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.75rem;
+  }
+}
+
+.byteCard {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.byteCard:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.byteCard a {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  text-decoration: none;
+  color: inherit;
+}
+
+.bytePreview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: #000;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.byteThumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.videoIcon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #007bff;
+  font-size: 1.2rem;
+}
+
+.byteText {
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.byteStats {
+  display: flex;
+  justify-content: space-around;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  color: #666;
+  border-top: 1px solid #e0e0e0;
+  gap: 0.5rem;
+}
+
+.byteStats span {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.byteTime {
+  padding: 0 0.5rem 0.5rem;
+  font-size: 0.7rem;
+  color: #999;
+}
+
+/* Bytes Analytics */
+.bytesAnalytics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 480px) {
+  .bytesAnalytics {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+}
+
+.analyticCard {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s;
+}
+
+.analyticCard:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.analyticIcon {
+  font-size: 1.8rem;
+  color: #007bff;
+  flex-shrink: 0;
+}
+
+.analyticContent {
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.analyticContent h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: 600;
+}
+
+.analyticValue {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #007bff;
+}
+
+@media (max-width: 480px) {
+  .analyticCard {
+    padding: 0.75rem;
+  }
+
+  .analyticIcon {
+    font-size: 1.4rem;
+  }
+
+  .analyticValue {
+    font-size: 1.2rem;
+  }
+}
+/* Byte Card Actions */
+.byteCardContent {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.byteCardContent > a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  color: inherit;
+}
+
+.byteActions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: white;
+  border-top: 1px solid #e0e0e0;
+  justify-content: center;
+}
+
+.analyzeBtn,
+.deleteBtn {
+  flex: 1;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.analyzeBtn {
+  background: #f0f7ff;
+  color: #007bff;
+  border: 1px solid #007bff;
+}
+
+.analyzeBtn:hover {
+  background: #007bff;
+  color: white;
+}
+
+.deleteBtn {
+  background: #fee;
+  color: #c33;
+  border: 1px solid #c33;
+}
+
+.deleteBtn:hover {
+  background: #c33;
+  color: white;
+}
+
+@media (max-width: 480px) {
+  .analyzeBtn,
+  .deleteBtn {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.5rem;
+  }
+
+  .analyzeBtn span,
+  .deleteBtn span {
+    display: none;
+  }
+}

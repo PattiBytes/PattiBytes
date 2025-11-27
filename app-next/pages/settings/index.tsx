@@ -1,3 +1,4 @@
+// app-next/pages/settings/index.tsx
 import { useEffect, useRef, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
@@ -29,20 +30,31 @@ export default function SettingsPage() {
   const [theme, setTheme] = useState<ThemePref>('auto');
   const [language, setLanguage] = useState<LanguagePref>('en');
 
-  // Prevent re-initializing form fields every time userProfile changes
-  const initializedRef = useRef(false);
+  // Track whether user is actively editing to prevent form resets
+  const isEditingRef = useRef(false);
+  const previousProfileRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!userProfile) return;
 
-    // One-time initialization for other fields
-    if (!initializedRef.current) {
-      initializedRef.current = true;
+    // Serialize profile to detect changes
+    const profileKey = JSON.stringify({
+      username: userProfile.username,
+      displayName: userProfile.displayName,
+      bio: userProfile.bio,
+      website: userProfile.website,
+      location: userProfile.location,
+      preferences: userProfile.preferences,
+    });
 
+    // If profile changed (refresh or reloadUser), update form
+    // But only if user is not actively typing/editing
+    if (previousProfileRef.current !== profileKey && !isEditingRef.current) {
       setDisplayName(userProfile.displayName || '');
       setBio(userProfile.bio || '');
       setWebsite(userProfile.website || '');
       setLocation(userProfile.location || '');
+      setUsername(userProfile.username || '');
 
       const prefs = userProfile.preferences || {};
       setPublicProfile(prefs.publicProfile ?? true);
@@ -51,17 +63,23 @@ export default function SettingsPage() {
       setLanguage((prefs.language as LanguagePref) || 'en');
     }
 
-    // Always keep username in sync with latest profile
-    setUsername(userProfile.username || '');
+    previousProfileRef.current = profileKey;
   }, [userProfile]);
 
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    const nameToSave = displayName.trim();
+    if (!nameToSave) {
+      toast.error('Display name is required');
+      return;
+    }
+
     try {
       setSavingProfile(true);
       await updateUserProfile(user.uid, {
-        displayName: displayName.trim(),
+        displayName: nameToSave,
         bio: bio.trim(),
         website: website.trim(),
         location: location.trim(),
@@ -73,6 +91,7 @@ export default function SettingsPage() {
         },
       });
       await reloadUser();
+      isEditingRef.current = false;
       toast.success('Profile updated!');
     } catch (e) {
       console.error('Profile update error:', e);
@@ -105,6 +124,7 @@ export default function SettingsPage() {
         photoURL: userProfile?.photoURL,
       });
       await reloadUser();
+      isEditingRef.current = false;
       toast.success('Username updated!');
     } catch (err) {
       console.error('Username update error:', err);
@@ -160,9 +180,10 @@ export default function SettingsPage() {
                   <input
                     className={styles.input}
                     value={displayName}
-                    onChange={(e) =>
-                      setDisplayName(e.target.value)
-                    }
+                    onChange={(e) => {
+                      isEditingRef.current = true;
+                      setDisplayName(e.target.value);
+                    }}
                     maxLength={50}
                     placeholder="Your name"
                   />
@@ -174,7 +195,10 @@ export default function SettingsPage() {
                 <textarea
                   className={styles.textarea}
                   value={bio}
-                  onChange={(e) => setBio(e.target.value)}
+                  onChange={(e) => {
+                    isEditingRef.current = true;
+                    setBio(e.target.value);
+                  }}
                   maxLength={160}
                   rows={3}
                   placeholder="Tell us about yourself…"
@@ -190,9 +214,10 @@ export default function SettingsPage() {
                   <input
                     className={styles.input}
                     value={website}
-                    onChange={(e) =>
-                      setWebsite(e.target.value)
-                    }
+                    onChange={(e) => {
+                      isEditingRef.current = true;
+                      setWebsite(e.target.value);
+                    }}
                     placeholder="https://example.com"
                   />
                 </div>
@@ -201,9 +226,10 @@ export default function SettingsPage() {
                   <input
                     className={styles.input}
                     value={location}
-                    onChange={(e) =>
-                      setLocation(e.target.value)
-                    }
+                    onChange={(e) => {
+                      isEditingRef.current = true;
+                      setLocation(e.target.value);
+                    }}
                     placeholder="City, Country"
                   />
                 </div>
@@ -215,9 +241,10 @@ export default function SettingsPage() {
                   <select
                     className={styles.select}
                     value={theme}
-                    onChange={(e) =>
-                      setTheme(e.target.value as ThemePref)
-                    }
+                    onChange={(e) => {
+                      isEditingRef.current = true;
+                      setTheme(e.target.value as ThemePref);
+                    }}
                   >
                     <option value="auto">Auto (System)</option>
                     <option value="light">Light</option>
@@ -229,9 +256,10 @@ export default function SettingsPage() {
                   <select
                     className={styles.select}
                     value={language}
-                    onChange={(e) =>
-                      setLanguage(e.target.value as LanguagePref)
-                    }
+                    onChange={(e) => {
+                      isEditingRef.current = true;
+                      setLanguage(e.target.value as LanguagePref);
+                    }}
                   >
                     <option value="en">English</option>
                     <option value="pa">Punjabi</option>
@@ -244,9 +272,10 @@ export default function SettingsPage() {
                   <input
                     type="checkbox"
                     checked={publicProfile}
-                    onChange={(e) =>
-                      setPublicProfile(e.target.checked)
-                    }
+                    onChange={(e) => {
+                      isEditingRef.current = true;
+                      setPublicProfile(e.target.checked);
+                    }}
                     className={styles.checkbox}
                   />
                   <span className={styles.toggleText}>
@@ -263,9 +292,10 @@ export default function SettingsPage() {
                   <input
                     type="checkbox"
                     checked={notifications}
-                    onChange={(e) =>
-                      setNotifications(e.target.checked)
-                    }
+                    onChange={(e) => {
+                      isEditingRef.current = true;
+                      setNotifications(e.target.checked);
+                    }}
                     className={styles.checkbox}
                   />
                   <span className={styles.toggleText}>
@@ -302,7 +332,10 @@ export default function SettingsPage() {
             <form onSubmit={saveUsername} className={styles.form}>
               <UsernameField
                 value={username}
-                onChange={setUsername}
+                onChange={(val) => {
+                  isEditingRef.current = true;
+                  setUsername(val);
+                }}
                 excludeCurrent={userProfile?.username}
                 showSuggestions
               />

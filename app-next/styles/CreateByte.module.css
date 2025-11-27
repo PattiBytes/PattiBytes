@@ -1,0 +1,270 @@
+/* app-next/styles/CreateByte.module.css */
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  font-size: 1.8rem;
+  margin: 0;
+}
+
+.header p {
+  color: #666;
+  margin: 0.25rem 0 0 0;
+}
+
+.backBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: #f0f0f0;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.backBtn:hover {
+  background: #e0e0e0;
+  transform: translateX(-4px);
+}
+
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.uploadSection {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.uploadOptions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 600px) {
+  .uploadOptions {
+    grid-template-columns: 1fr;
+  }
+}
+
+.info {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #f9f9f9;
+  border-left: 4px solid #007bff;
+  border-radius: 8px;
+}
+
+.info h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.info ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.info li {
+  margin-bottom: 0.75rem;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.info li svg {
+  color: #007bff;
+  flex-shrink: 0;
+}
+
+.error {
+  padding: 2rem;
+  background: #fee;
+  color: #c33;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.editorSection {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+@media (max-width: 800px) {
+  .editorSection {
+    grid-template-columns: 1fr;
+  }
+}
+
+.preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.previewMedia {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.textOverlay {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  z-index: 10;
+  word-wrap: break-word;
+  max-width: 90%;
+}
+
+.text_top {
+  top: 2rem;
+}
+
+.text_middle {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.text_bottom {
+  bottom: 2rem;
+}
+
+.textEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.textEditor h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.textInput {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.textInput:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.textControls {
+  display: flex;
+  gap: 1rem;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.control label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.colorPicker {
+  width: 100%;
+  height: 40px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.changeBtn,
+.postBtn {
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.changeBtn {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.changeBtn:hover:not(:disabled) {
+  background: #e0e0e0;
+}
+
+.postBtn {
+  background: #007bff;
+  color: white;
+}
+
+.postBtn:hover:not(:disabled) {
+  background: #0056b3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.postBtn:disabled,
+.changeBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
