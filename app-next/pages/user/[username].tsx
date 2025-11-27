@@ -1,4 +1,4 @@
-// app-next/pages/user/[username].tsx - COMPLETE WITH MESSAGE FUNCTIONALITY
+// app-next/pages/user/[username].tsx - CORRECTED CHAT NAVIGATION
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import AuthGuard from '@/components/AuthGuard';
@@ -79,6 +79,11 @@ export type PostCard = {
 };
 
 type PostFilter = 'all' | 'news' | 'place' | 'writing';
+
+// Helper to sanitize data for Firestore
+function sanitizeForFirestore<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value, (_k, v) => (v === undefined ? null : v)));
+}
 
 export default function PublicProfilePage() {
   const router = useRouter();
@@ -342,6 +347,7 @@ export default function PublicProfilePage() {
     }
   };
 
+  // CORRECTED: Navigate to /community/[id] instead of /chat
   const openMessage = async () => {
     if (!user || !profile?.uid || !db) {
       toast.error('Please login to send messages');
@@ -356,8 +362,7 @@ export default function PublicProfilePage() {
     try {
       setCreatingChat(true);
 
-      // Check if chat already exists
-      const participants = [user.uid, profile.uid];
+      // Check if private chat already exists (bounded + ordered query)
       const q = fsQuery(
         collection(db, 'chats'),
         where('type', '==', 'private'),
@@ -367,6 +372,8 @@ export default function PublicProfilePage() {
       );
 
       const snapshot = await getDocs(q);
+      
+      // Find existing chat with this user
       const existing = snapshot.docs.find((d) => {
         const data = d.data();
         const parts: string[] = Array.isArray(data.participants) ? data.participants : [];
@@ -375,12 +382,15 @@ export default function PublicProfilePage() {
 
       if (existing) {
         // Chat exists, navigate to it
+        toast.success('Opening chat...');
         router.push(`/community/${existing.id}`);
         return;
       }
 
-      // Create new chat
-      const chatData = {
+      // Create new private chat
+      const participants = [user.uid, profile.uid];
+      
+      const chatData = sanitizeForFirestore({
         type: 'private',
         name: profile.displayName || profile.username || 'Chat',
         photoURL: profile.photoURL || '/images/default-avatar.png',
@@ -394,9 +404,10 @@ export default function PublicProfilePage() {
         [`unread_${profile.uid}`]: 0,
         [`typing_${user.uid}`]: false,
         [`typing_${profile.uid}`]: false,
-      };
+      });
 
       const chatDoc = await addDoc(collection(db, 'chats'), chatData);
+      
       toast.success('Chat created!');
       router.push(`/community/${chatDoc.id}`);
     } catch (error) {
