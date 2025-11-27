@@ -198,7 +198,6 @@ function normalizeUserProfile(uid: string, data: DocumentData): UserProfile {
   }) as UserProfile;
 }
 
-/** Helper to detect the Firestore internal assertion bug so it can be ignored safely. */
 export function isFirestoreInternalAssertion(err: unknown): boolean {
   return (
     err instanceof Error &&
@@ -277,16 +276,13 @@ export function getUsernameSuggestions(
     );
     if (suggestions.length < count) {
       suggestions.push(
-        `${base}_${
-          suffixes[Math.floor(Math.random() * suffixes.length)]
-        }`,
+        `${base}_${suffixes[Math.floor(Math.random() * suffixes.length)]}`,
       );
     }
   }
   return suggestions.slice(0, count);
 }
 
-/** UPDATED: now catches Firestore's internal Unexpected state bug and returns null instead of crashing. */
 export async function getUserProfile(
   uid: string,
 ): Promise<UserProfile | null> {
@@ -296,7 +292,14 @@ export async function getUserProfile(
   try {
     const userDoc = await getDoc(doc(db, 'users', uid));
     if (!userDoc.exists()) return null;
-    return normalizeUserProfile(uid, userDoc.data());
+    const profile = normalizeUserProfile(uid, userDoc.data());
+    console.log('[getUserProfile] loaded profile:', {
+      uid,
+      displayName: profile.displayName,
+      username: profile.username,
+      bio: profile.bio,
+    });
+    return profile;
   } catch (err) {
     if (isFirestoreInternalAssertion(err)) {
       console.warn(
@@ -348,10 +351,6 @@ export async function getUserByUsername(
   return null;
 }
 
-/**
- * Named export used by pages/search/index.tsx
- */
-// Prefix search by username key, then fallback to displayNameLower; returns unique, normalized profiles
 export async function searchUsersByUsername(
   prefix: string,
   limitCount = 10,
@@ -403,7 +402,7 @@ export async function searchUsersByUsername(
     orderBy('displayNameLower'),
     where('displayNameLower', '>=', normalized),
     where('displayNameLower', '<', normalized + '\uf8ff'),
-    limit(remaining * 2), // overfetch to allow dedupe
+    limit(remaining * 2),
   );
 
   const nameSnap = await getDocs(nameQuery);
@@ -429,11 +428,17 @@ export async function createUserProfile(profile: {
   photoURL?: string;
 }): Promise<void> {
   const { uid, email, username, displayName, photoURL } = profile;
+  
+  if (!displayName?.trim()) {
+    throw new Error('Display name is required');
+  }
+
   const available = await checkUsernameAvailable(username);
   if (!available) throw new Error('Username is already taken');
+  
   await claimUsername(username, uid, {
     email,
-    displayName,
+    displayName: displayName.trim(),
     photoURL,
   });
 }
@@ -530,6 +535,13 @@ export async function claimUsername(
       }
 
       const finalProfile = deepClean(profileData);
+      console.log('[claimUsername] Writing profile to Firestore:', {
+        uid,
+        username: finalProfile.username,
+        displayName: finalProfile.displayName,
+        isNewUser,
+      });
+      
       batch.set(userRef, finalProfile, { merge: true });
       await batch.commit();
 
@@ -548,6 +560,7 @@ export async function claimUsername(
           console.warn('Failed to update auth profile:', e);
         }
       }
+      console.log('[claimUsername] Successfully claimed username for:', uid);
       return;
     } catch (error) {
       lastError = error as Error;
@@ -572,6 +585,10 @@ export async function updateUserProfile(
   const { db, auth } = getFirebaseClient();
   if (!db) throw new Error('Firestore not initialized');
 
+  if (updates.displayName && !updates.displayName.trim()) {
+    throw new Error('Display name cannot be empty');
+  }
+
   const toWrite: Record<string, unknown> = {
     ...updates,
     updatedAt: serverTimestamp(),
@@ -595,6 +612,11 @@ export async function updateUserProfile(
   }
 
   const cleaned = deepClean(toWrite);
+  console.log('[updateUserProfile] Writing to Firestore:', {
+    uid,
+    updates: cleaned,
+  });
+  
   await setDoc(doc(db, 'users', uid), cleaned, { merge: true });
 
   if (updates.displayName && auth?.currentUser?.uid === uid) {
