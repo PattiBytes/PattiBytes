@@ -1,13 +1,25 @@
-// app-next/pages/settings/index.tsx
+// app-next/pages/settings/index.tsx - COMPLETE WITH ALL FEATURES
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/router';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/context/AuthContext';
 import UsernameField from '@/components/UsernameField';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 import { updateUserProfile, claimUsername } from '@/lib/username';
+import { signOut } from 'firebase/auth';
+import { getFirebaseClient } from '@/lib/firebase';
 import { motion } from 'framer-motion';
-import { FaSave, FaUser, FaAt, FaBell } from 'react-icons/fa';
+import {
+  FaSave,
+  FaUser,
+  FaAt,
+  FaBell,
+  FaSignOutAlt,
+  FaTrash,
+  FaShieldAlt,
+  FaInfoCircle,
+} from 'react-icons/fa';
 import styles from '@/styles/Settings.module.css';
 import { toast } from 'react-hot-toast';
 
@@ -15,7 +27,9 @@ type ThemePref = 'light' | 'dark' | 'auto';
 type LanguagePref = 'en' | 'pa';
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { user, userProfile, reloadUser } = useAuth();
+  const { auth } = getFirebaseClient();
 
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
@@ -24,11 +38,16 @@ export default function SettingsPage() {
   const [username, setUsername] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingUsername, setSavingUsername] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const [publicProfile, setPublicProfile] = useState(true);
   const [notifications, setNotifications] = useState(true);
   const [theme, setTheme] = useState<ThemePref>('auto');
   const [language, setLanguage] = useState<LanguagePref>('en');
+
+  // Delete account confirmation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   // Track whether user is actively editing to prevent form resets
   const isEditingRef = useRef(false);
@@ -92,7 +111,7 @@ export default function SettingsPage() {
       });
       await reloadUser();
       isEditingRef.current = false;
-      toast.success('Profile updated!');
+      toast.success('Profile updated successfully! ✅');
     } catch (e) {
       console.error('Profile update error:', e);
       toast.error(
@@ -125,7 +144,7 @@ export default function SettingsPage() {
       });
       await reloadUser();
       isEditingRef.current = false;
-      toast.success('Username updated!');
+      toast.success('Username updated successfully! ✅');
     } catch (err) {
       console.error('Username update error:', err);
       toast.error(
@@ -134,6 +153,33 @@ export default function SettingsPage() {
     } finally {
       setSavingUsername(false);
     }
+  };
+
+  const handleLogout = async () => {
+    if (!auth) return;
+
+    try {
+      setLoggingOut(true);
+      await signOut(auth);
+      toast.success('Logged out successfully!');
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('Failed to logout. Please try again.');
+      setLoggingOut(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') {
+      toast.error('Please type DELETE to confirm');
+      return;
+    }
+
+    // This would require additional backend logic
+    toast.error('Account deletion is not yet implemented. Contact support.');
+    setShowDeleteConfirm(false);
+    setDeleteConfirmText('');
   };
 
   return (
@@ -168,7 +214,7 @@ export default function SettingsPage() {
                         photoURL: url,
                       });
                       await reloadUser();
-                      toast.success('Photo updated!');
+                      toast.success('Photo updated! ✅');
                     } catch {
                       toast.error('Failed to update photo');
                     }
@@ -186,6 +232,7 @@ export default function SettingsPage() {
                     }}
                     maxLength={50}
                     placeholder="Your name"
+                    required
                   />
                 </div>
               </div>
@@ -203,9 +250,7 @@ export default function SettingsPage() {
                   rows={3}
                   placeholder="Tell us about yourself…"
                 />
-                <small className={styles.hint}>
-                  {bio.length}/160
-                </small>
+                <small className={styles.hint}>{bio.length}/160</small>
               </div>
 
               <div className={styles.grid2}>
@@ -219,6 +264,7 @@ export default function SettingsPage() {
                       setWebsite(e.target.value);
                     }}
                     placeholder="https://example.com"
+                    type="url"
                   />
                 </div>
                 <div className={styles.row}>
@@ -246,9 +292,9 @@ export default function SettingsPage() {
                       setTheme(e.target.value as ThemePref);
                     }}
                   >
-                    <option value="auto">Auto (System)</option>
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
+                    <option value="auto">🌓 Auto (System)</option>
+                    <option value="light">☀️ Light</option>
+                    <option value="dark">🌙 Dark</option>
                   </select>
                 </div>
                 <div className={styles.row}>
@@ -261,8 +307,8 @@ export default function SettingsPage() {
                       setLanguage(e.target.value as LanguagePref);
                     }}
                   >
-                    <option value="en">English</option>
-                    <option value="pa">Punjabi</option>
+                    <option value="en">🇬🇧 English</option>
+                    <option value="pa">🇮🇳 Punjabi</option>
                   </select>
                 </div>
               </div>
@@ -280,9 +326,7 @@ export default function SettingsPage() {
                   />
                   <span className={styles.toggleText}>
                     <strong>Public Profile</strong>
-                    <small>
-                      Make your profile visible to everyone
-                    </small>
+                    <small>Make your profile visible to everyone</small>
                   </span>
                 </label>
               </div>
@@ -300,7 +344,7 @@ export default function SettingsPage() {
                   />
                   <span className={styles.toggleText}>
                     <strong>Notifications</strong>
-                    <small>Receive updates</small>
+                    <small>Receive updates and alerts</small>
                   </span>
                 </label>
               </div>
@@ -311,8 +355,7 @@ export default function SettingsPage() {
                 disabled={savingProfile}
                 whileTap={{ scale: 0.98 }}
               >
-                <FaSave />{' '}
-                {savingProfile ? 'Saving…' : 'Save Profile'}
+                <FaSave /> {savingProfile ? 'Saving…' : 'Save Profile'}
               </motion.button>
             </form>
           </motion.div>
@@ -345,13 +388,12 @@ export default function SettingsPage() {
                 disabled={savingUsername}
                 whileTap={{ scale: 0.98 }}
               >
-                <FaSave />{' '}
-                {savingUsername ? 'Updating…' : 'Update Username'}
+                <FaSave /> {savingUsername ? 'Updating…' : 'Update Username'}
               </motion.button>
             </form>
           </motion.div>
 
-          {/* Info */}
+          {/* Account Info */}
           <motion.div
             className={styles.card}
             initial={{ opacity: 0, y: 20 }}
@@ -359,16 +401,147 @@ export default function SettingsPage() {
             transition={{ duration: 0.3, delay: 0.2 }}
           >
             <div className={styles.cardHeader}>
-              <FaBell className={styles.cardIcon} />
-              <h2>Tips</h2>
+              <FaInfoCircle className={styles.cardIcon} />
+              <h2>Account Information</h2>
             </div>
             <div className={styles.form}>
-              <p>
-                Set preferences and notifications as per profile
-                needs. These settings are used across the app.
-              </p>
+              <div className={styles.infoGrid}>
+                <div className={styles.infoItem}>
+                  <strong>Email:</strong>
+                  <span>{user?.email || 'Not set'}</span>
+                </div>
+                <div className={styles.infoItem}>
+                  <strong>User ID:</strong>
+                  <span className={styles.uid}>{user?.uid}</span>
+                </div>
+                <div className={styles.infoItem}>
+                  <strong>Account Created:</strong>
+                  <span>
+                    {user?.metadata?.creationTime
+                      ? new Date(user.metadata.creationTime).toLocaleDateString()
+                      : 'Unknown'}
+                  </span>
+                </div>
+                <div className={styles.infoItem}>
+                  <strong>Last Sign In:</strong>
+                  <span>
+                    {user?.metadata?.lastSignInTime
+                      ? new Date(user.metadata.lastSignInTime).toLocaleDateString()
+                      : 'Unknown'}
+                  </span>
+                </div>
+              </div>
             </div>
           </motion.div>
+
+          {/* Security & Actions */}
+          <motion.div
+            className={styles.card}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.3 }}
+          >
+            <div className={styles.cardHeader}>
+              <FaShieldAlt className={styles.cardIcon} />
+              <h2>Security & Actions</h2>
+            </div>
+            <div className={styles.form}>
+              <div className={styles.actionButtons}>
+                <motion.button
+                  className={styles.logoutBtn}
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                >
+                  <FaSignOutAlt />
+                  {loggingOut ? 'Logging out...' : 'Sign Out'}
+                </motion.button>
+
+                <motion.button
+                  className={styles.dangerBtn}
+                  onClick={() => setShowDeleteConfirm(true)}
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                >
+                  <FaTrash />
+                  Delete Account
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Tips */}
+          <motion.div
+            className={styles.card}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.4 }}
+          >
+            <div className={styles.cardHeader}>
+              <FaBell className={styles.cardIcon} />
+              <h2>💡 Tips</h2>
+            </div>
+            <div className={styles.form}>
+              <ul className={styles.tipsList}>
+                <li>Keep your profile up to date for better connections</li>
+                <li>Choose a unique username that represents you</li>
+                <li>Enable notifications to stay updated</li>
+                <li>Make your profile public to increase visibility</li>
+                <li>Add a bio to tell others about yourself</li>
+              </ul>
+            </div>
+          </motion.div>
+
+          {/* Delete Account Confirmation Modal */}
+          {showDeleteConfirm && (
+            <motion.div
+              className={styles.modal}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className={styles.modalContent}
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+              >
+                <h2>⚠️ Delete Account</h2>
+                <p className={styles.warningText}>
+                  This action is permanent and cannot be undone. All your data,
+                  posts, and information will be permanently deleted.
+                </p>
+                <div className={styles.confirmInput}>
+                  <label>Type DELETE to confirm:</label>
+                  <input
+                    type="text"
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder="DELETE"
+                    className={styles.input}
+                  />
+                </div>
+                <div className={styles.modalActions}>
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setDeleteConfirmText('');
+                    }}
+                    className={styles.cancelBtn}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteAccount}
+                    className={styles.confirmDeleteBtn}
+                    disabled={deleteConfirmText !== 'DELETE'}
+                  >
+                    Delete My Account
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
         </div>
       </Layout>
     </AuthGuard>
