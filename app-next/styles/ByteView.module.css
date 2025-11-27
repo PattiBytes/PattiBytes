@@ -869,3 +869,91 @@
     font-size: 1rem;
   }
 }
+.deleteBtn {
+  background: #fee !important;
+  color: #c33 !important;
+}
+
+.deleteBtn:hover {
+  background: #c33 !important;
+  color: white !important;
+}
+
+.deleteCommentBtn {
+  padding: 0.5rem;
+  background: #fee;
+  color: #c33;
+  border: 1px solid #c33;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.deleteCommentBtn:hover {
+  background: #c33;
+  color: white;
+}
+
+.deleteCommentBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+/* Add/Update these in ByteView.module.css */
+
+.officialTag {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-left: 1rem;
+}
+
+.officialBadge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+  color: white;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
+  z-index: 15;
+  animation: officialPulse 2s infinite;
+}
+
+@keyframes officialPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 4px 12px rgba(255, 193, 7, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(255, 193, 7, 0.6);
+  }
+}
+
+.deleteBtn {
+  background: #fee !important;
+  color: #c33 !important;
+}
+
+.deleteBtn:hover {
+  background: #c33 !important;
+  color: white !important;
+}

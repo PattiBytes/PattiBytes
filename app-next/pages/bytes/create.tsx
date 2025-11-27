@@ -1,7 +1,13 @@
-// app-next/pages/bytes/create.tsx
-import { useState } from 'react';
+// app-next/pages/bytes/create.tsx - COMPLETE WITH ADMIN FEATURES
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  doc,
+  getDoc,
+} from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { isCloudinaryConfigured } from '@/lib/cloudinary';
@@ -9,7 +15,7 @@ import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import UploadButton from '@/components/UploadButton';
 import { motion } from 'framer-motion';
-import { FaArrowLeft, FaImage, FaVideo } from 'react-icons/fa';
+import { FaArrowLeft, FaImage, FaVideo, FaStar } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import styles from '@/styles/CreateByte.module.css';
 
@@ -17,6 +23,7 @@ export default function CreateBytePage() {
   const router = useRouter();
   const { user, userProfile } = useAuth();
   const { db } = getFirebaseClient();
+  
   const [isUploading, setIsUploading] = useState(false);
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
@@ -24,6 +31,33 @@ export default function CreateBytePage() {
   const [textColor, setTextColor] = useState('#ffffff');
   const [textPosition, setTextPosition] =
     useState<'top' | 'middle' | 'bottom'>('bottom');
+
+  // Admin states
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isOfficial, setIsOfficial] = useState(false);
+  const [checkingAdmin, setCheckingAdmin] = useState(true);
+
+  // Check if user is admin
+  useEffect(() => {
+    if (!user || !db) {
+      setCheckingAdmin(false);
+      return;
+    }
+
+    const checkAdmin = async () => {
+      try {
+        const adminSnap = await getDoc(doc(db, 'admins', user.uid));
+        setIsAdmin(adminSnap.exists());
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+      } finally {
+        setCheckingAdmin(false);
+      }
+    };
+
+    checkAdmin();
+  }, [user, db]);
 
   const handleUploadComplete = (url: string, type: 'image' | 'video') => {
     setMediaUrl(url);
@@ -54,6 +88,9 @@ export default function CreateBytePage() {
         mediaType,
         createdAt: serverTimestamp(),
         expiresAt,
+        likesCount: 0,
+        commentsCount: 0,
+        viewsCount: 0,
       };
 
       // Add text overlay data if text exists
@@ -63,18 +100,25 @@ export default function CreateBytePage() {
         byteData.textPosition = textPosition;
       }
 
+      // Add official tag if admin selected it
+      if (isAdmin && isOfficial) {
+        byteData.isOfficial = true;
+        byteData.officialAddedAt = serverTimestamp();
+      }
+
       const docRef = await addDoc(collection(db, 'bytes'), byteData);
 
-      toast.success('Byte posted!');
+      toast.success('Byte posted successfully! 🎉');
       setMediaUrl(null);
       setText('');
+      setIsOfficial(false);
 
       setTimeout(() => {
         router.push(`/bytes/${docRef.id}`);
       }, 800);
     } catch (error) {
       console.error('Error creating byte:', error);
-      toast.error('Failed to post byte');
+      toast.error('Failed to post byte. Please try again.');
     } finally {
       setIsUploading(false);
     }
@@ -96,10 +140,15 @@ export default function CreateBytePage() {
             >
               <FaArrowLeft /> Back
             </button>
-            <div>
+            <div className={styles.headerContent}>
               <h1>Create Byte</h1>
               <p>Share a moment that disappears in 24 hours</p>
             </div>
+            {isAdmin && !checkingAdmin && (
+              <div className={styles.adminBadge}>
+                <FaStar /> Admin
+              </div>
+            )}
           </motion.div>
 
           <motion.div
@@ -149,6 +198,11 @@ export default function CreateBytePage() {
                         <li>Expires after 24 hours</li>
                         <li>One byte per user at a time</li>
                       </ul>
+                      {isAdmin && (
+                        <li className={styles.adminFeature}>
+                          <FaStar /> You can mark bytes as official
+                        </li>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -177,6 +231,12 @@ export default function CreateBytePage() {
                           {text}
                         </div>
                       )}
+
+                      {isOfficial && (
+                        <div className={styles.previewOfficialBadge}>
+                          <FaStar /> Official
+                        </div>
+                      )}
                     </div>
 
                     <div className={styles.textEditor}>
@@ -188,7 +248,7 @@ export default function CreateBytePage() {
                         maxLength={200}
                         className={styles.textInput}
                       />
-                      <small>
+                      <small className={styles.charCount}>
                         {text.length}/200
                       </small>
 
@@ -224,9 +284,38 @@ export default function CreateBytePage() {
                         </div>
                       </div>
 
+                      {/* ADMIN ONLY: Official Byte Toggle */}
+                      {isAdmin && (
+                        <div className={styles.adminSection}>
+                          <h3>
+                            <FaStar /> Admin Options
+                          </h3>
+                          <label className={styles.officialToggle}>
+                            <input
+                              type="checkbox"
+                              checked={isOfficial}
+                              onChange={(e) =>
+                                setIsOfficial(e.target.checked)
+                              }
+                              className={styles.checkbox}
+                            />
+                            <span className={styles.toggleLabel}>
+                              <FaStar /> Mark as Official Byte
+                            </span>
+                          </label>
+                          <small className={styles.officialHint}>
+                            Official bytes appear first in the feed with a
+                            golden star badge
+                          </small>
+                        </div>
+                      )}
+
                       <div className={styles.actions}>
                         <button
-                          onClick={() => setMediaUrl(null)}
+                          onClick={() => {
+                            setMediaUrl(null);
+                            setIsOfficial(false);
+                          }}
                           className={styles.changeBtn}
                           disabled={isUploading}
                         >

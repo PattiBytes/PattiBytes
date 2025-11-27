@@ -1,4 +1,4 @@
-// app-next/pages/bytes/[id].tsx
+// app-next/pages/bytes/[id].tsx - COMPLETE UPDATED VERSION
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import {
@@ -13,6 +13,10 @@ import {
   getDocs,
   addDoc,
   serverTimestamp,
+  updateDoc,
+  increment,
+  deleteDoc,
+  setDoc,
 } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import { getUserProfile } from '@/lib/username';
@@ -27,6 +31,9 @@ import {
   FaComment,
   FaShare,
   FaHeart,
+  FaChartBar,
+  FaTrash,
+  FaStar,
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import styles from '@/styles/ByteView.module.css';
@@ -46,6 +53,8 @@ interface ByteData {
   username?: string;
   commentsCount?: number;
   likesCount?: number;
+  viewsCount?: number;
+  isOfficial?: boolean;
 }
 
 interface Comment {
@@ -75,8 +84,51 @@ export default function ByteViewPage() {
   const [commentText, setCommentText] = useState('');
   const [commentLoading, setCommentLoading] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [likeLoading, setLikeLoading] = useState(false);
+  const [viewsIncremented, setViewsIncremented] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
 
   const currentByte = bytes[currentIndex];
+
+  // Check if user is admin
+  useEffect(() => {
+    if (!user || !db) return;
+
+    const checkAdmin = async () => {
+      try {
+        const adminSnap = await getDoc(doc(db, 'admins', user.uid));
+        setIsAdmin(adminSnap.exists());
+      } catch {
+        setIsAdmin(false);
+      }
+    };
+
+    checkAdmin();
+  }, [user, db]);
+
+  // Check if user has liked this byte
+  useEffect(() => {
+    if (!currentByte || !user || !db) return;
+
+    const checkLike = async () => {
+      try {
+        const likeRef = doc(
+          db,
+          'bytes',
+          currentByte.id,
+          'likes',
+          user.uid,
+        );
+        const snap = await getDoc(likeRef);
+        setLiked(snap.exists());
+      } catch {
+        setLiked(false);
+      }
+    };
+
+    checkLike();
+  }, [currentByte, user, db]);
 
   // Load byte and nearby bytes
   useEffect(() => {
@@ -103,23 +155,6 @@ export default function ByteViewPage() {
 
         const profile = await getUserProfile(data.userId);
 
-        const currentByteData: ByteData = {
-          id: snap.id,
-          userId: data.userId,
-          userName: data.userName || 'User',
-          userPhoto:
-            data.userPhoto || '/images/default-avatar.png',
-          mediaUrl: data.mediaUrl,
-          mediaType: data.mediaType || 'image',
-          text: data.text,
-          textColor: data.textColor,
-          textPosition: data.textPosition,
-          createdAt: (data.createdAt as Timestamp).toDate(),
-          expiresAt,
-          username: profile?.username,
-          commentsCount: data.commentsCount || 0,
-          likesCount: data.likesCount || 0,
-        };
 
         const q = query(
           collection(db, 'bytes'),
@@ -149,6 +184,8 @@ export default function ByteViewPage() {
             username: profile?.username,
             commentsCount: d.data().commentsCount || 0,
             likesCount: d.data().likesCount || 0,
+            viewsCount: d.data().viewsCount || 0,
+            isOfficial: d.data().isOfficial || false,
           }))
           .filter((b) => b.expiresAt > now);
 
@@ -169,6 +206,25 @@ export default function ByteViewPage() {
     load();
   }, [id, db]);
 
+  // Increment views on first load
+  useEffect(() => {
+    if (!currentByte || !db || viewsIncremented) return;
+
+    const incrementViews = async () => {
+      try {
+        const byteRef = doc(db, 'bytes', currentByte.id);
+        await updateDoc(byteRef, {
+          viewsCount: increment(1),
+        });
+        setViewsIncremented(true);
+      } catch (error) {
+        console.error('Error incrementing views:', error);
+      }
+    };
+
+    incrementViews();
+  }, [currentByte, db, viewsIncremented]);
+
   // Load comments with proper bounded query
   useEffect(() => {
     if (!currentByte || !db) return;
@@ -178,7 +234,7 @@ export default function ByteViewPage() {
         const q = query(
           collection(db, 'bytes', currentByte.id, 'comments'),
           orderBy('createdAt', 'desc'),
-          limit(50), // Bounded list
+          limit(50),
         );
         const snap = await getDocs(q);
         const data: Comment[] = snap.docs.map((d) => ({
@@ -193,7 +249,6 @@ export default function ByteViewPage() {
         setComments(data);
       } catch (error) {
         console.error('Error loading comments:', error);
-        // Don't show toast, user may not have permission yet
       }
     };
 
@@ -205,6 +260,8 @@ export default function ByteViewPage() {
       setCurrentIndex(currentIndex + 1);
       setProgress(0);
       setShowComments(false);
+      setViewsIncremented(false);
+      setLiked(false);
     } else {
       router.push('/');
     }
@@ -237,6 +294,8 @@ export default function ByteViewPage() {
       setCurrentIndex(currentIndex - 1);
       setProgress(0);
       setShowComments(false);
+      setViewsIncremented(false);
+      setLiked(false);
     }
   };
 
@@ -264,21 +323,28 @@ export default function ByteViewPage() {
 
     try {
       setCommentLoading(true);
+
+      // Add comment
       await addDoc(
         collection(db, 'bytes', currentByte.id, 'comments'),
         {
           userId: user.uid,
-          userName: userProfile.displayName,
+          userName: userProfile.displayName || 'User',
           userPhoto: userProfile.photoURL || null,
           text: commentText.trim(),
           createdAt: serverTimestamp(),
         },
       );
 
+      // Increment comments count
+      await updateDoc(doc(db, 'bytes', currentByte.id), {
+        commentsCount: increment(1),
+      });
+
       setCommentText('');
       toast.success('Comment added!');
 
-      // Reload comments with bounded query
+      // Reload comments
       const q = query(
         collection(db, 'bytes', currentByte.id, 'comments'),
         orderBy('createdAt', 'desc'),
@@ -295,11 +361,80 @@ export default function ByteViewPage() {
         createdAt: (d.data().createdAt as Timestamp).toDate(),
       }));
       setComments(data);
+
+      // Update local state
+      setBytes((prevBytes) =>
+        prevBytes.map((byte) =>
+          byte.id === currentByte.id
+            ? {
+                ...byte,
+                commentsCount: (byte.commentsCount || 0) + 1,
+              }
+            : byte,
+        ),
+      );
     } catch (error) {
       console.error('Error adding comment:', error);
       toast.error('Failed to add comment');
     } finally {
       setCommentLoading(false);
+    }
+  };
+
+  const handleDeleteComment = async (
+    commentId: string,
+    commentUserId: string,
+  ) => {
+    if (!currentByte || !db) return;
+
+    // Only byte owner and comment author can delete
+    const canDelete =
+      commentUserId === user?.uid ||
+      currentByte.userId === user?.uid ||
+      isAdmin;
+    if (!canDelete) {
+      toast.error('You cannot delete this comment');
+      return;
+    }
+
+    try {
+      setDeletingCommentId(commentId);
+
+      // Delete comment
+      await deleteDoc(
+        doc(db, 'bytes', currentByte.id, 'comments', commentId),
+      );
+
+      // Decrement comments count
+      await updateDoc(doc(db, 'bytes', currentByte.id), {
+        commentsCount: increment(-1),
+      });
+
+      // Update local state
+      setComments((prev) =>
+        prev.filter((c) => c.id !== commentId),
+      );
+
+      setBytes((prevBytes) =>
+        prevBytes.map((byte) =>
+          byte.id === currentByte.id
+            ? {
+                ...byte,
+                commentsCount: Math.max(
+                  0,
+                  (byte.commentsCount || 0) - 1,
+                ),
+              }
+            : byte,
+        ),
+      );
+
+      toast.success('Comment deleted!');
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      toast.error('Failed to delete comment');
+    } finally {
+      setDeletingCommentId(null);
     }
   };
 
@@ -324,9 +459,101 @@ export default function ByteViewPage() {
     }
   };
 
-  const handleLike = () => {
-    setLiked(!liked);
-    toast.success(liked ? 'Removed like' : 'Liked!');
+  const handleLike = async () => {
+    if (!currentByte || !db || !user) {
+      toast.error('Please login to like');
+      return;
+    }
+
+    try {
+      setLikeLoading(true);
+      const likeRef = doc(
+        db,
+        'bytes',
+        currentByte.id,
+        'likes',
+        user.uid,
+      );
+      const likeSnap = await getDoc(likeRef);
+
+      if (likeSnap.exists()) {
+        // Unlike
+        await deleteDoc(likeRef);
+        await updateDoc(doc(db, 'bytes', currentByte.id), {
+          likesCount: increment(-1),
+        });
+        setLiked(false);
+        setBytes((prevBytes) =>
+          prevBytes.map((byte) =>
+            byte.id === currentByte.id
+              ? {
+                  ...byte,
+                  likesCount: Math.max(0, (byte.likesCount || 0) - 1),
+                }
+              : byte,
+          ),
+        );
+        toast.success('Removed like');
+      } else {
+        // Like
+        await setDoc(likeRef, {
+          userId: user.uid,
+          byteId: currentByte.id,
+          createdAt: serverTimestamp(),
+        });
+        await updateDoc(doc(db, 'bytes', currentByte.id), {
+          likesCount: increment(1),
+        });
+        setLiked(true);
+        setBytes((prevBytes) =>
+          prevBytes.map((byte) =>
+            byte.id === currentByte.id
+              ? {
+                  ...byte,
+                  likesCount: (byte.likesCount || 0) + 1,
+                }
+              : byte,
+          ),
+        );
+        toast.success('Liked!');
+      }
+    } catch (error) {
+      console.error('Error liking byte:', error);
+      toast.error('Failed to like byte');
+    } finally {
+      setLikeLoading(false);
+    }
+  };
+
+  const handleDeleteByte = async () => {
+    if (!currentByte || !db) return;
+
+    const canDelete =
+      currentByte.userId === user?.uid || isAdmin;
+    if (!canDelete) {
+      toast.error(
+        'You do not have permission to delete this byte',
+      );
+      return;
+    }
+
+    try {
+      // Delete byte and all comments/likes
+      await deleteDoc(doc(db, 'bytes', currentByte.id));
+      toast.success('Byte deleted!');
+      router.push('/');
+    } catch (error) {
+      console.error('Error deleting byte:', error);
+      toast.error('Failed to delete byte');
+    }
+  };
+
+  const handleAnalytics = () => {
+    if (currentByte?.userId === user?.uid || isAdmin) {
+      router.push(`/bytes/analytics/${currentByte.id}`);
+    } else {
+      toast.error('You can only view analytics for your own bytes');
+    }
   };
 
   if (loading) {
@@ -382,6 +609,11 @@ export default function ByteViewPage() {
         </button>
         <div className={styles.counter}>
           {currentIndex + 1} / {bytes.length}
+          {currentByte.isOfficial && (
+            <span className={styles.officialTag}>
+              <FaStar /> Official
+            </span>
+          )}
         </div>
         <div className={styles.spacer} />
       </motion.div>
@@ -396,12 +628,19 @@ export default function ByteViewPage() {
                 setCurrentIndex(idx);
                 setProgress(0);
                 setShowComments(false);
+                setViewsIncremented(false);
               }}
             >
               <div
                 className={styles.progressFill}
                 style={{
-                  width: `${idx === currentIndex ? progress : idx < currentIndex ? 100 : 0}%`,
+                  width: `${
+                    idx === currentIndex
+                      ? progress
+                      : idx < currentIndex
+                        ? 100
+                        : 0
+                  }%`,
                 }}
               />
             </div>
@@ -440,10 +679,18 @@ export default function ByteViewPage() {
 
             {currentByte.text && (
               <div
-                className={`${styles.textOverlay} ${styles[`overlay_${currentByte.textPosition}`]}`}
+                className={`${styles.textOverlay} ${
+                  styles[`overlay_${currentByte.textPosition}`]
+                }`}
                 style={{ color: currentByte.textColor }}
               >
                 {currentByte.text}
+              </div>
+            )}
+
+            {currentByte.isOfficial && (
+              <div className={styles.officialBadge}>
+                <FaStar /> Official Byte
               </div>
             )}
 
@@ -458,6 +705,9 @@ export default function ByteViewPage() {
                 />
                 <div className={styles.userInfo}>
                   <strong>{currentByte.userName}</strong>
+                  {currentByte.username && (
+                    <small>@{currentByte.username}</small>
+                  )}
                   <small>
                     <FaClock /> {hoursLeft}h {minutesLeft}m
                   </small>
@@ -471,10 +721,14 @@ export default function ByteViewPage() {
                   e.stopPropagation();
                   handleLike();
                 }}
-                className={`${styles.actionBtn} ${liked ? styles.liked : ''}`}
+                disabled={likeLoading}
+                className={`${styles.actionBtn} ${
+                  liked ? styles.liked : ''
+                }`}
                 title="Like"
               >
                 <FaHeart />
+                <span>{currentByte.likesCount}</span>
               </button>
               <button
                 onClick={(e) => {
@@ -485,11 +739,7 @@ export default function ByteViewPage() {
                 title="Comments"
               >
                 <FaComment />
-                {comments.length > 0 && (
-                  <span className={styles.badge}>
-                    {comments.length}
-                  </span>
-                )}
+                <span>{currentByte.commentsCount}</span>
               </button>
               <button
                 onClick={(e) => {
@@ -501,6 +751,36 @@ export default function ByteViewPage() {
               >
                 <FaShare />
               </button>
+              {(currentByte.userId === user?.uid || isAdmin) && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAnalytics();
+                    }}
+                    className={styles.actionBtn}
+                    title="View analytics"
+                  >
+                    <FaChartBar />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (
+                        window.confirm(
+                          'Delete this byte? This cannot be undone.',
+                        )
+                      ) {
+                        handleDeleteByte();
+                      }
+                    }}
+                    className={`${styles.actionBtn} ${styles.deleteBtn}`}
+                    title="Delete byte"
+                  >
+                    <FaTrash />
+                  </button>
+                </>
+              )}
             </div>
 
             {currentIndex > 0 && (
@@ -554,33 +834,61 @@ export default function ByteViewPage() {
                   <p>No comments yet. Be the first!</p>
                 </div>
               ) : (
-                comments.map((comment) => (
-                  <motion.div
-                    key={comment.id}
-                    className={styles.commentItem}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                  >
-                    <SafeImage
-                      src={comment.userPhoto}
-                      alt={comment.userName}
-                      width={36}
-                      height={36}
-                      className={styles.commentAvatar}
-                    />
-                    <div className={styles.commentContent}>
-                      <div className={styles.commentHeader}>
-                        <strong>{comment.userName}</strong>
-                        <small>
-                          {getTimeAgo(comment.createdAt)}
-                        </small>
+                comments.map((comment) => {
+                  const canDeleteComment =
+                    comment.userId === user?.uid ||
+                    currentByte.userId === user?.uid ||
+                    isAdmin;
+
+                  return (
+                    <motion.div
+                      key={comment.id}
+                      className={styles.commentItem}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                    >
+                      <SafeImage
+                        src={comment.userPhoto}
+                        alt={comment.userName}
+                        width={36}
+                        height={36}
+                        className={styles.commentAvatar}
+                      />
+                      <div className={styles.commentContent}>
+                        <div className={styles.commentHeader}>
+                          <strong>{comment.userName}</strong>
+                          <small>
+                            {getTimeAgo(comment.createdAt)}
+                          </small>
+                        </div>
+                        <p className={styles.commentText}>
+                          {comment.text}
+                        </p>
                       </div>
-                      <p className={styles.commentText}>
-                        {comment.text}
-                      </p>
-                    </div>
-                  </motion.div>
-                ))
+                      {canDeleteComment && (
+                        <button
+                          onClick={() =>
+                            handleDeleteComment(
+                              comment.id,
+                              comment.userId,
+                            )
+                          }
+                          disabled={
+                            deletingCommentId === comment.id
+                          }
+                          className={styles.deleteCommentBtn}
+                          title="Delete comment"
+                        >
+                          {deletingCommentId === comment.id ? (
+                            <span>...</span>
+                          ) : (
+                            <FaTrash />
+                          )}
+                        </button>
+                      )}
+                    </motion.div>
+                  );
+                })
               )}
             </div>
 
@@ -603,7 +911,9 @@ export default function ByteViewPage() {
                   type="text"
                   placeholder="Add a comment..."
                   value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
+                  onChange={(e) =>
+                    setCommentText(e.target.value)
+                  }
                   className={styles.commentInput}
                   disabled={commentLoading}
                 />
@@ -614,7 +924,7 @@ export default function ByteViewPage() {
                   }
                   className={styles.commentSubmitBtn}
                 >
-                  Post
+                  {commentLoading ? 'Posting...' : 'Post'}
                 </button>
               </form>
             )}

@@ -539,3 +539,199 @@
     height: 48px;
   }
 }
+/* app-next/styles/BytesStories.module.css */
+
+.stories {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border-radius: 0 0 12px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.stories::-webkit-scrollbar {
+  display: none;
+}
+
+/* Add Story */
+.addStory {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 80px;
+  padding: 0.5rem;
+  cursor: pointer;
+  text-decoration: none;
+  color: #333;
+  transition: all 0.2s;
+}
+
+.addStory:hover {
+  transform: translateY(-4px);
+}
+
+.addCircle {
+  width: 56px;
+  height: 56px;
+  border: 2px dashed #007bff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #007bff;
+  transition: all 0.2s;
+  background: white;
+}
+
+.addStory:hover .addCircle {
+  border-style: solid;
+  background: #007bff;
+  color: white;
+}
+
+.addStory span {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Stories List */
+.storiesList {
+  display: flex;
+  gap: 1.5rem;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 0.5rem 0;
+}
+
+.storiesList::-webkit-scrollbar {
+  display: none;
+}
+
+/* Story Item */
+.story {
+  flex: 0 0 auto;
+  min-width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s;
+}
+
+.story:hover {
+  transform: translateY(-4px);
+}
+
+.storyRing {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  border: 2px solid #007bff;
+  border-radius: 50%;
+  padding: 2px;
+  transition: all 0.2s;
+  background: white;
+  overflow: hidden;
+}
+
+.story a:first-child {
+  text-decoration: none;
+  color: inherit;
+}
+
+.story a {
+  text-decoration: none;
+  color: inherit;
+}
+
+.storyRing:hover {
+  border-width: 3px;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.storyAvatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.profileTap {
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.storyName {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #333;
+  text-align: center;
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.storyName:hover {
+  color: #007bff;
+}
+
+.storyName span {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .stories {
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
+
+  .storiesList {
+    gap: 1rem;
+  }
+
+  .storyRing {
+    width: 56px;
+    height: 56px;
+  }
+
+  .addCircle {
+    width: 48px;
+    height: 48px;
+    font-size: 1.2rem;
+  }
+
+  .storyName {
+    font-size: 0.75rem;
+    max-width: 60px;
+  }
+}
+
