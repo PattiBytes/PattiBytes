@@ -1,4 +1,4 @@
-// app-next/pages/user/[username].tsx
+// app-next/pages/user/[username].tsx - COMPLETE WITH MESSAGE FUNCTIONALITY
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import AuthGuard from '@/components/AuthGuard';
@@ -17,6 +17,9 @@ import {
   limit,
   getDocs,
   startAfter,
+  getCountFromServer,
+  addDoc,
+  serverTimestamp,
   type QueryDocumentSnapshot,
   type DocumentData,
   doc,
@@ -40,6 +43,7 @@ import {
   FaEdit,
   FaLink,
   FaPaperPlane,
+  FaSpinner,
 } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import styles from '@/styles/UserProfile.module.css';
@@ -88,6 +92,8 @@ export default function PublicProfilePage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [totalPosts, setTotalPosts] = useState(0);
+  const [loadingPostsCount, setLoadingPostsCount] = useState(true);
 
   const [following, setFollowing] = useState(false);
   const [busyFollow, setBusyFollow] = useState(false);
@@ -96,6 +102,7 @@ export default function PublicProfilePage() {
   const [showFollowing, setShowFollowing] = useState(false);
 
   const [filter, setFilter] = useState<PostFilter>('all');
+  const [creatingChat, setCreatingChat] = useState(false);
 
   const isOwnProfile = !!(user?.uid && profile?.uid && user.uid === profile.uid);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -122,6 +129,32 @@ export default function PublicProfilePage() {
     return () => unsub();
   }, [profile?.uid, db]);
 
+  // Load accurate post count
+  useEffect(() => {
+    const loadPostCount = async () => {
+      if (!db || !profile?.uid) return;
+      
+      try {
+        setLoadingPostsCount(true);
+        const q = fsQuery(
+          collection(db, 'posts'),
+          where('authorId', '==', profile.uid),
+          where('isDraft', '==', false)
+        );
+        
+        const snapshot = await getCountFromServer(q);
+        setTotalPosts(snapshot.data().count);
+      } catch (error) {
+        console.error('Error loading post count:', error);
+        setTotalPosts(profile.stats?.postsCount ?? posts.length);
+      } finally {
+        setLoadingPostsCount(false);
+      }
+    };
+
+    loadPostCount();
+  }, [db, profile?.uid, profile?.stats?.postsCount, posts.length]);
+
   // Load profile and initial posts
   useEffect(() => {
     const run = async () => {
@@ -136,7 +169,6 @@ export default function PublicProfilePage() {
         setLoading(true);
         setError(null);
 
-        // Load user profile
         const up = await getUserByUsername(username);
         if (!up) {
           setError('User not found');
@@ -152,11 +184,11 @@ export default function PublicProfilePage() {
           return;
         }
 
-        // Load user posts - simple query + client-side draft filter
         if (up.uid) {
           const q = fsQuery(
             collection(db, 'posts'),
             where('authorId', '==', up.uid),
+            where('isDraft', '==', false),
             orderBy('createdAt', 'desc'),
             limit(20)
           );
@@ -166,7 +198,6 @@ export default function PublicProfilePage() {
           
           snap.docs.forEach((d) => {
             const raw = d.data() as FirestorePostDoc;
-            if (raw.isDraft === true) return; // Skip drafts
 
             const created = raw.createdAt instanceof Timestamp ? raw.createdAt.toDate() : new Date();
             const t = (raw.type || 'writing').toString();
@@ -193,7 +224,6 @@ export default function PublicProfilePage() {
           setCursor(snap.docs[Math.min(items.length, 12) - 1] || null);
         }
 
-        // Check following status
         if (user?.uid && up.uid && user.uid !== up.uid) {
           try {
             const f = await isFollowing(user.uid, up.uid);
@@ -202,7 +232,8 @@ export default function PublicProfilePage() {
             setFollowing(false);
           }
         }
-      } catch {
+      } catch (err) {
+        console.error('Profile load error:', err);
         setError('Failed to load profile');
       } finally {
         setLoading(false);
@@ -220,6 +251,7 @@ export default function PublicProfilePage() {
       const q = fsQuery(
         collection(db, 'posts'),
         where('authorId', '==', profile.uid),
+        where('isDraft', '==', false),
         orderBy('createdAt', 'desc'),
         startAfter(cursor),
         limit(20)
@@ -230,7 +262,6 @@ export default function PublicProfilePage() {
       
       snap.docs.forEach((d) => {
         const raw = d.data() as FirestorePostDoc;
-        if (raw.isDraft === true) return;
 
         const created = raw.createdAt instanceof Timestamp ? raw.createdAt.toDate() : new Date();
         const t = (raw.type || 'writing').toString();
@@ -255,14 +286,14 @@ export default function PublicProfilePage() {
 
       setPosts((prev) => [...prev, ...more.slice(0, 12)]);
       setCursor(snap.docs[Math.min(more.length, 12) - 1] || null);
-    } catch {
+    } catch (err) {
+      console.error('Load more error:', err);
       toast.error('Failed to load more posts');
     } finally {
       setLoadingMore(false);
     }
   }, [cursor, db, profile?.uid, loadingMore]);
 
-  // Infinite scroll
   useEffect(() => {
     if (!loadMoreRef.current || !cursor || loadingMore) return;
     
@@ -287,13 +318,14 @@ export default function PublicProfilePage() {
       if (following) {
         await unfollowUser(user.uid, profile.uid);
         setFollowing(false);
-        toast.success('Unfollowed');
+        toast.success('Unfollowed successfully');
       } else {
         await followUser(user.uid, profile.uid);
         setFollowing(true);
-        toast.success('Now following');
+        toast.success('Now following!');
       }
-    } catch {
+    } catch (err) {
+      console.error('Follow toggle error:', err);
       toast.error('Failed to update follow status');
     } finally {
       setBusyFollow(false);
@@ -304,15 +336,75 @@ export default function PublicProfilePage() {
     try {
       if (typeof window === 'undefined') return;
       await navigator.clipboard.writeText(window.location.href);
-      toast.success('Profile link copied');
+      toast.success('Profile link copied to clipboard!');
     } catch {
       toast.error('Could not copy link');
     }
   };
 
-  const openMessage = () => {
-    if (!profile?.username) return;
-    router.push(`/chat?to=${encodeURIComponent(profile.username)}`);
+  const openMessage = async () => {
+    if (!user || !profile?.uid || !db) {
+      toast.error('Please login to send messages');
+      return;
+    }
+
+    if (user.uid === profile.uid) {
+      toast.error('You cannot message yourself');
+      return;
+    }
+
+    try {
+      setCreatingChat(true);
+
+      // Check if chat already exists
+      const participants = [user.uid, profile.uid];
+      const q = fsQuery(
+        collection(db, 'chats'),
+        where('type', '==', 'private'),
+        where('participants', 'array-contains', user.uid),
+        orderBy('updatedAt', 'desc'),
+        limit(50)
+      );
+
+      const snapshot = await getDocs(q);
+      const existing = snapshot.docs.find((d) => {
+        const data = d.data();
+        const parts: string[] = Array.isArray(data.participants) ? data.participants : [];
+        return parts.includes(profile.uid);
+      });
+
+      if (existing) {
+        // Chat exists, navigate to it
+        router.push(`/community/${existing.id}`);
+        return;
+      }
+
+      // Create new chat
+      const chatData = {
+        type: 'private',
+        name: profile.displayName || profile.username || 'Chat',
+        photoURL: profile.photoURL || '/images/default-avatar.png',
+        participants,
+        lastMessage: '',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        lastMessageTime: serverTimestamp(),
+        isOfficial: false,
+        [`unread_${user.uid}`]: 0,
+        [`unread_${profile.uid}`]: 0,
+        [`typing_${user.uid}`]: false,
+        [`typing_${profile.uid}`]: false,
+      };
+
+      const chatDoc = await addDoc(collection(db, 'chats'), chatData);
+      toast.success('Chat created!');
+      router.push(`/community/${chatDoc.id}`);
+    } catch (error) {
+      console.error('Error opening/creating chat:', error);
+      toast.error('Failed to open chat');
+    } finally {
+      setCreatingChat(false);
+    }
   };
 
   const filteredPosts = useMemo(() => {
@@ -353,7 +445,6 @@ export default function PublicProfilePage() {
     <AuthGuard>
       <Layout title={`${profile.displayName} (@${profile.username}) - PattiBytes`}>
         <div className={styles.container}>
-          {/* Profile Header */}
           <motion.header 
             className={styles.header}
             initial={{ opacity: 0, y: 20 }}
@@ -371,7 +462,7 @@ export default function PublicProfilePage() {
                     currentUrl={profile.photoURL}
                     onUploaded={(newUrl) => {
                       setProfile((p) => (p ? { ...p, photoURL: newUrl } : p));
-                      toast.success('Profile picture updated');
+                      toast.success('Profile picture updated successfully!');
                     }}
                   />
                 ) : (
@@ -390,7 +481,11 @@ export default function PublicProfilePage() {
                 <div className={styles.nameBlock}>
                   <h1>{profile.displayName}</h1>
                   <div className={styles.username}>@{profile.username}</div>
-                  {profile.isVerified && <div className={styles.verified}>✓</div>}
+                  {profile.isVerified && (
+                    <div className={styles.verified} title="Verified Account">
+                      ✓
+                    </div>
+                  )}
                 </div>
 
                 {profile.bio && <div className={styles.bio}>{profile.bio}</div>}
@@ -431,6 +526,7 @@ export default function PublicProfilePage() {
                   <button 
                     onClick={() => setShowFollowers(true)} 
                     className={styles.statButton}
+                    type="button"
                   >
                     <strong>{profile.stats?.followersCount ?? 0}</strong>
                     <span>Followers</span>
@@ -438,12 +534,19 @@ export default function PublicProfilePage() {
                   <button 
                     onClick={() => setShowFollowing(true)} 
                     className={styles.statButton}
+                    type="button"
                   >
                     <strong>{profile.stats?.followingCount ?? 0}</strong>
                     <span>Following</span>
                   </button>
                   <div className={styles.statItem}>
-                    <strong>{profile.stats?.postsCount ?? posts.length}</strong>
+                    <strong>
+                      {loadingPostsCount ? (
+                        <FaSpinner className={styles.spinIcon} />
+                      ) : (
+                        totalPosts
+                      )}
+                    </strong>
                     <span>Posts</span>
                   </div>
                 </div>
@@ -457,9 +560,12 @@ export default function PublicProfilePage() {
                         className={following ? styles.unfollowBtn : styles.followBtn}
                         whileTap={{ scale: 0.95 }}
                         aria-pressed={following}
+                        type="button"
                       >
                         {busyFollow ? (
-                          'Loading...'
+                          <>
+                            <FaSpinner className={styles.spinIcon} /> Loading...
+                          </>
                         ) : following ? (
                           <>
                             <FaUserCheck /> Following
@@ -470,10 +576,27 @@ export default function PublicProfilePage() {
                           </>
                         )}
                       </motion.button>
-                      <button onClick={openMessage} className={styles.messageBtn}>
-                        <FaPaperPlane /> Message
+                      <button 
+                        onClick={openMessage} 
+                        className={styles.messageBtn}
+                        disabled={creatingChat}
+                        type="button"
+                      >
+                        {creatingChat ? (
+                          <>
+                            <FaSpinner className={styles.spinIcon} /> Opening...
+                          </>
+                        ) : (
+                          <>
+                            <FaPaperPlane /> Message
+                          </>
+                        )}
                       </button>
-                      <button onClick={copyProfileLink} className={styles.copyBtn}>
+                      <button 
+                        onClick={copyProfileLink} 
+                        className={styles.copyBtn}
+                        type="button"
+                      >
                         <FaLink /> Copy Link
                       </button>
                     </>
@@ -487,7 +610,6 @@ export default function PublicProfilePage() {
             </div>
           </motion.header>
 
-          {/* Posts Section */}
           <motion.section 
             className={styles.postsSection}
             initial={{ opacity: 0, y: 20 }}
@@ -495,29 +617,35 @@ export default function PublicProfilePage() {
             transition={{ duration: 0.4, delay: 0.2 }}
           >
             <div className={styles.postsHeader}>
-              <h2>Posts</h2>
+              <h2>
+                Posts {!loadingPostsCount && totalPosts > 0 && `(${totalPosts})`}
+              </h2>
               <div className={styles.postsFilters}>
                 <button
                   onClick={() => setFilter('all')}
                   className={`${styles.filterBtn} ${filter === 'all' ? styles.active : ''}`}
+                  type="button"
                 >
                   All
                 </button>
                 <button
                   onClick={() => setFilter('news')}
                   className={`${styles.filterBtn} ${filter === 'news' ? styles.active : ''}`}
+                  type="button"
                 >
                   <FaNewspaper /> News
                 </button>
                 <button
                   onClick={() => setFilter('place')}
                   className={`${styles.filterBtn} ${filter === 'place' ? styles.active : ''}`}
+                  type="button"
                 >
                   <FaMapPin /> Places
                 </button>
                 <button
                   onClick={() => setFilter('writing')}
                   className={`${styles.filterBtn} ${filter === 'writing' ? styles.active : ''}`}
+                  type="button"
                 >
                   <FaPen /> Writings
                 </button>
@@ -562,8 +690,15 @@ export default function PublicProfilePage() {
                         onClick={loadMore} 
                         disabled={loadingMore}
                         className={styles.loadMoreBtn}
+                        type="button"
                       >
-                        {loadingMore ? 'Loading...' : 'Load More Posts'}
+                        {loadingMore ? (
+                          <>
+                            <FaSpinner className={styles.spinIcon} /> Loading...
+                          </>
+                        ) : (
+                          'Load More Posts'
+                        )}
                       </button>
                     </div>
                     <div ref={loadMoreRef} className={styles.loadMoreSentinel} />
@@ -573,7 +708,6 @@ export default function PublicProfilePage() {
             )}
           </motion.section>
 
-          {/* Modals */}
           <FollowersModal
             isOpen={showFollowers}
             onClose={() => setShowFollowers(false)}
