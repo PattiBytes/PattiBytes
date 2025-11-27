@@ -1,4 +1,4 @@
-// app-next/pages/profile/index.tsx
+// app-next/pages/profile/index.tsx - COMPLETE WITH ACCURATE POST COUNTING
 import { useAuth } from '@/context/AuthContext';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -9,6 +9,7 @@ import {
   orderBy,
   query,
   where,
+  getCountFromServer,
   type DocumentData,
   type Timestamp,
 } from 'firebase/firestore';
@@ -32,6 +33,10 @@ import {
   FaPen,
   FaCheckCircle,
   FaShieldAlt,
+  FaSpinner,
+  FaLink,
+  FaHeart,
+  FaComment,
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import styles from '@/styles/UserProfile.module.css';
@@ -57,10 +62,41 @@ export default function MyProfile() {
   const [showFollowers, setShowFollowers] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
   const [stats, setStats] = useState({ posts: 0, followers: 0, following: 0 });
+  const [loadingPostCount, setLoadingPostCount] = useState(true);
 
-  // Posts (bounded + ordered to satisfy rules)
+  // Load accurate post count
+  useEffect(() => {
+    const loadPostCount = async () => {
+      if (!db || !user?.uid) return;
+
+      try {
+        setLoadingPostCount(true);
+        const q = query(
+          collection(db, 'posts'),
+          where('authorId', '==', user.uid),
+          where('isDraft', '==', false)
+        );
+
+        const snapshot = await getCountFromServer(q);
+        const count = snapshot.data().count;
+
+        setStats((prev) => ({ ...prev, posts: count }));
+      } catch (error) {
+        console.error('Error loading post count:', error);
+        // Fallback to current posts length
+        setStats((prev) => ({ ...prev, posts: posts.length }));
+      } finally {
+        setLoadingPostCount(false);
+      }
+    };
+
+    loadPostCount();
+  }, [db, user?.uid, posts.length]);
+
+  // Load posts (bounded + ordered)
   useEffect(() => {
     if (!db || !user) return;
+
     const q = query(
       collection(db, 'posts'),
       where('authorId', '==', user.uid),
@@ -68,13 +104,14 @@ export default function MyProfile() {
       orderBy('createdAt', 'desc'),
       limit(30)
     );
+
     const unsub = onSnapshot(q, (snap) => {
       const data = snap.docs.map((d) => {
         const p = d.data() as DocumentData;
         return {
           id: d.id,
           title: p.title || 'Untitled',
-          preview: p.preview,
+          preview: p.preview || p.content?.substring(0, 150),
           type: (p.type as Post['type']) || 'writing',
           imageUrl: p.imageUrl,
           createdAt:
@@ -88,23 +125,26 @@ export default function MyProfile() {
       setPosts(data);
       setLoading(false);
     });
+
     return () => unsub();
   }, [db, user]);
 
-  // Live stats
+  // Live follower stats
   useEffect(() => {
     if (!db || !user) return;
+
     const unsub = onSnapshot(doc(db, 'users', user.uid), (snap) => {
       if (!snap.exists()) return;
       const u = snap.data() as DocumentData;
-      setStats({
-        posts: u.stats?.postsCount ?? posts.length,
+      setStats((prev) => ({
+        ...prev,
         followers: u.stats?.followersCount ?? 0,
         following: u.stats?.followingCount ?? 0,
-      });
+      }));
     });
+
     return () => unsub();
-  }, [db, user, posts.length]);
+  }, [db, user]);
 
   const filtered = useMemo(
     () => (filter === 'all' ? posts : posts.filter((p) => p.type === filter)),
@@ -113,15 +153,25 @@ export default function MyProfile() {
 
   const copyProfileLink = async () => {
     if (!userProfile?.username) return;
-    const url = `${window.location.origin}/user/${userProfile.username}`;
-    await navigator.clipboard.writeText(url);
-    toast.success('Profile link copied!');
+    try {
+      const url = `${window.location.origin}/user/${userProfile.username}`;
+      await navigator.clipboard.writeText(url);
+      toast.success('Profile link copied to clipboard!');
+    } catch {
+      toast.error('Failed to copy link');
+    }
   };
+
+  const externalWebsite = useMemo(() => {
+    const v = userProfile?.website?.trim();
+    if (!v) return undefined;
+    return v.startsWith('http://') || v.startsWith('https://') ? v : `https://${v}`;
+  }, [userProfile?.website]);
 
   if (loading) {
     return (
       <AuthGuard>
-        <Layout title="My Profile">
+        <Layout title="My Profile - PattiBytes">
           <div className={styles.loadingContainer}>
             <div className={styles.spinner} />
             <p>Loading profile...</p>
@@ -130,13 +180,20 @@ export default function MyProfile() {
       </AuthGuard>
     );
   }
+
   if (!userProfile) return null;
 
   return (
     <AuthGuard>
       <Layout title={`${userProfile.displayName} - PattiBytes`}>
         <div className={styles.container}>
-          <motion.header className={styles.header} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          {/* Profile Header */}
+          <motion.header
+            className={styles.header}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+          >
             <div className={styles.coverPhoto}>
               <div className={styles.coverGradient} />
             </div>
@@ -145,7 +202,7 @@ export default function MyProfile() {
               <div className={styles.avatarSection}>
                 <ProfilePictureUpload
                   currentUrl={userProfile.photoURL}
-                  onUploaded={() => toast.success('Profile picture updated!')}
+                  onUploaded={() => toast.success('Profile picture updated! ✅')}
                 />
               </div>
 
@@ -154,7 +211,7 @@ export default function MyProfile() {
                   <h1>{userProfile.displayName}</h1>
                   <div className={styles.username}>@{userProfile.username}</div>
                   {userProfile.isVerified && (
-                    <div className={styles.verified} title="Verified">
+                    <div className={styles.verified} title="Verified Account">
                       <FaCheckCircle />
                     </div>
                   )}
@@ -173,9 +230,14 @@ export default function MyProfile() {
                       <FaMapMarkerAlt /> {userProfile.location}
                     </span>
                   )}
-                  {userProfile.website && (
-                    <a href={userProfile.website} target="_blank" rel="noopener noreferrer" className={styles.metaLink}>
-                      <FaGlobe /> {userProfile.website.replace(/^https?:\/\//, '')}
+                  {externalWebsite && (
+                    <a
+                      href={externalWebsite}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.metaLink}
+                    >
+                      <FaGlobe /> {userProfile.website?.replace(/^https?:\/\//, '')}
                     </a>
                   )}
                   {userProfile.createdAt && (
@@ -186,22 +248,39 @@ export default function MyProfile() {
                             month: 'short',
                             year: 'numeric',
                           })
-                        : new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                        : new Date().toLocaleDateString('en-IN', {
+                            month: 'short',
+                            year: 'numeric',
+                          })}
                     </span>
                   )}
                 </div>
 
                 <div className={styles.stats}>
-                  <button onClick={() => setShowFollowers(true)} className={styles.statButton}>
+                  <button
+                    onClick={() => setShowFollowers(true)}
+                    className={styles.statButton}
+                    type="button"
+                  >
                     <strong>{stats.followers}</strong>
                     <span>Followers</span>
                   </button>
-                  <button onClick={() => setShowFollowing(true)} className={styles.statButton}>
+                  <button
+                    onClick={() => setShowFollowing(true)}
+                    className={styles.statButton}
+                    type="button"
+                  >
                     <strong>{stats.following}</strong>
                     <span>Following</span>
                   </button>
                   <div className={styles.statItem}>
-                    <strong>{stats.posts}</strong>
+                    <strong>
+                      {loadingPostCount ? (
+                        <FaSpinner className={styles.spinIcon} />
+                      ) : (
+                        stats.posts
+                      )}
+                    </strong>
                     <span>Posts</span>
                   </div>
                 </div>
@@ -213,46 +292,58 @@ export default function MyProfile() {
                   <Link href="/settings" className={styles.settingsBtn}>
                     <FaCog /> Settings
                   </Link>
-                  <button onClick={copyProfileLink} className={styles.copyBtn}>
-                    Copy Link
+                  <button onClick={copyProfileLink} className={styles.copyBtn} type="button">
+                    <FaLink /> Copy Link
                   </button>
                 </div>
               </div>
             </div>
           </motion.header>
 
-          <motion.section className={styles.postsSection} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          {/* Posts Section */}
+          <motion.section
+            className={styles.postsSection}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
             <div className={styles.postsHeader}>
-              <h2>Posts</h2>
+              <h2>
+                Posts {!loadingPostCount && stats.posts > 0 && `(${stats.posts})`}
+              </h2>
               <div className={styles.postsFilters}>
                 <button
                   onClick={() => setFilter('all')}
                   className={`${styles.filterBtn} ${filter === 'all' ? styles.active : ''}`}
+                  type="button"
                 >
                   All
                 </button>
                 <button
                   onClick={() => setFilter('news')}
                   className={`${styles.filterBtn} ${filter === 'news' ? styles.active : ''}`}
+                  type="button"
                 >
                   <FaNewspaper /> News
                 </button>
                 <button
                   onClick={() => setFilter('place')}
                   className={`${styles.filterBtn} ${filter === 'place' ? styles.active : ''}`}
+                  type="button"
                 >
                   <FaMapPin /> Places
                 </button>
                 <button
                   onClick={() => setFilter('writing')}
                   className={`${styles.filterBtn} ${filter === 'writing' ? styles.active : ''}`}
+                  type="button"
                 >
                   <FaPen /> Writings
                 </button>
+                <Link href="/create" className={styles.createBtn}>
+                  Create Post
+                </Link>
               </div>
-              <Link href="/create" className={styles.createBtn}>
-                Create Post
-              </Link>
             </div>
 
             {filtered.length === 0 ? (
@@ -265,31 +356,67 @@ export default function MyProfile() {
               </div>
             ) : (
               <div className={styles.postsGrid}>
-                {filtered.map((post) => (
-                  <Link href={`/posts/${post.id}`} key={post.id} className={styles.postCard}>
-                    {post.imageUrl && (
-                      <div className={styles.postImage}>
-                        <SafeImage src={post.imageUrl} alt={post.title} width={300} height={200} className={styles.image} />
+                {filtered.map((post, index) => (
+                  <motion.div
+                    key={post.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                  >
+                    <Link href={`/posts/${post.id}`} className={styles.postCard}>
+                      {post.imageUrl && (
+                        <div className={styles.postImage}>
+                          <SafeImage
+                            src={post.imageUrl}
+                            alt={post.title}
+                            width={300}
+                            height={200}
+                            className={styles.image}
+                          />
+                        </div>
+                      )}
+                      <div className={styles.postContent}>
+                        <div className={styles.postTypebadge}>
+                          {post.type === 'news' && <FaNewspaper />}
+                          {post.type === 'place' && <FaMapPin />}
+                          {post.type === 'writing' && <FaPen />}
+                          <span>{post.type}</span>
+                        </div>
+                        <h3>{post.title}</h3>
+                        {post.preview && <p className={styles.postPreview}>{post.preview}</p>}
+                        <div className={styles.postMeta}>
+                          <span className={styles.postStats}>
+                            <FaHeart /> {post.likesCount}
+                          </span>
+                          <span className={styles.postStats}>
+                            <FaComment /> {post.commentsCount}
+                          </span>
+                          <span className={styles.postDate}>
+                            {post.createdAt.toLocaleDateString('en-IN', {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </span>
+                        </div>
                       </div>
-                    )}
-                    <div className={styles.postContent}>
-                      <h3>{post.title}</h3>
-                      {post.preview && <p>{post.preview}</p>}
-                      <div className={styles.postMeta}>
-                        <span className={styles.postType}>{post.type}</span>
-                        <span className={styles.postStats}>
-                          {post.likesCount} likes · {post.commentsCount} comments
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
+                    </Link>
+                  </motion.div>
                 ))}
               </div>
             )}
           </motion.section>
 
-          <FollowersModal isOpen={showFollowers} onClose={() => setShowFollowers(false)} userId={user!.uid} />
-          <FollowingModal isOpen={showFollowing} onClose={() => setShowFollowing(false)} userId={user!.uid} />
+          {/* Modals */}
+          <FollowersModal
+            isOpen={showFollowers}
+            onClose={() => setShowFollowers(false)}
+            userId={user!.uid}
+          />
+          <FollowingModal
+            isOpen={showFollowing}
+            onClose={() => setShowFollowing(false)}
+            userId={user!.uid}
+          />
         </div>
       </Layout>
     </AuthGuard>
