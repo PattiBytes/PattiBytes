@@ -2,6 +2,11 @@ import type { AppProps } from 'next/app';
 import { AuthProvider } from '@/context/AuthContext';
 import { Toaster } from 'react-hot-toast';
 import '@/styles/globals.css';
+// Add these imports at the top
+import '@/styles/admin-theme.css';
+import '@/styles/admin-mixins.css';
+import '@/styles/AdminLayout.module.css';
+
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
