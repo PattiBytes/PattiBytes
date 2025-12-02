@@ -1,0 +1,175 @@
+/* ========== CARD STYLES ========== */
+.cardBasic {
+  background: white;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
+}
+
+.cardElevated {
+  color-scheme: cardBasic;
+  box-shadow: var(--shadow-lg);
+}
+
+.cardGlass {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: var(--blur-md);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* ========== BADGE STYLES ========== */
+.badgeSuccess {
+  background: rgba(81, 207, 102, 0.1);
+  color: var(--color-success);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.badgeDanger {
+  background: rgba(255, 107, 107, 0.1);
+  color: var(--color-danger);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.badgeWarning {
+  background: rgba(255, 146, 43, 0.1);
+  color: var(--color-warning);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.badgePrimary {
+  background: rgba(102, 126, 234, 0.1);
+  color: var(--color-primary);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ========== STATUS INDICATORS ========== */
+.statusOnline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-success);
+  font-weight: var(--font-weight-semibold);
+}
+
+.statusOnline::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--color-success);
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.statusOffline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.statusOffline::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--color-text-secondary);
+  border-radius: 50%;
+}
+
+/* ========== FORM ELEMENTS ========== */
+.formGroup {
+  margin-bottom: var(--spacing-lg);
+}
+
+.formLabel {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.formInput {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  transition: all var(--transition-fast);
+}
+
+.formInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.formTextarea {
+  color-scheme: formInput;
+  resize: vertical;
+  min-height: 120px;
+}
+
+/* ========== HOVER EFFECTS ========== */
+.hoverLift {
+  transition: all var(--transition-base);
+}
+
+.hoverLift:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.hoverScale {
+  transition: transform var(--transition-fast);
+}
+
+.hoverScale:hover {
+  transform: scale(1.05);
+}
+
+.hoverGrow {
+  transition: all var(--transition-base);
+}
+
+.hoverGrow:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ========== TEXT TRUNCATE ========== */
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.truncate2 {
+  display: -webkit-box;
+
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.truncate3 {
+  display: -webkit-box;
+  
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

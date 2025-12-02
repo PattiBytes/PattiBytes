@@ -1,0 +1,610 @@
+/* app-next/styles/AdminPermissions.module.css */
+
+.container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+  padding: 1rem;
+  padding-bottom: 100px;
+}
+
+/* Header */
+.header {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 1.75rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.headerContent h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #1a202c;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  letter-spacing: -0.5px;
+}
+
+.headerContent p {
+  color: #718096;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.refreshBtn {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+  border: none;
+  color: white;
+  font-size: 1.35rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(48, 207, 208, 0.3);
+  flex-shrink: 0;
+}
+
+.refreshBtn:hover:not(:disabled) {
+  transform: scale(1.12);
+  box-shadow: 0 6px 24px rgba(48, 207, 208, 0.4);
+}
+
+.refreshBtn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.refreshBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Grant Card */
+.grantCard {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(48, 207, 208, 0.1);
+}
+
+.grantHeader {
+  margin-bottom: 1.5rem;
+}
+
+.grantHeader h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 0.35rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.grantHeader p {
+  color: #718096;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.grantForm {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.emailInput {
+  flex: 1;
+  min-width: 250px;
+  padding: 0.95rem 1.25rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 14px;
+  font-size: 1rem;
+  color: #2d3748;
+  background: white;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.emailInput:focus {
+  outline: none;
+  border-color: #30cfd0;
+  box-shadow: 0 0 0 4px rgba(48, 207, 208, 0.1);
+  background: #f8fffe;
+}
+
+.grantBtn {
+  padding: 0.95rem 2rem;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+  color: white;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(48, 207, 208, 0.3);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.grantBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(48, 207, 208, 0.4);
+}
+
+.grantBtn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.grantBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Search Section */
+.searchSection {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.searchBox {
+  flex: 1;
+  min-width: 240px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 14px;
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.searchBox:focus-within {
+  box-shadow: 0 6px 24px rgba(48, 207, 208, 0.2);
+}
+
+.searchBox svg {
+  color: #718096;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.searchBox input {
+  flex: 1;
+  border: none;
+  background: none;
+  font-size: 0.95rem;
+  color: #2d3748;
+  outline: none;
+  font-family: inherit;
+}
+
+.searchBox input::placeholder {
+  color: #a0aec0;
+}
+
+.resultCount {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  padding: 0.8rem 1.25rem;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #330867;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+}
+
+/* Loading */
+.loading {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.loading > div:first-child {
+  font-size: 3rem;
+  color: #30cfd0;
+  margin-bottom: 1rem;
+}
+
+.loading p {
+  color: #718096;
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* Empty State */
+.emptyState {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.emptyIcon {
+  font-size: 4rem;
+  color: #cbd5e0;
+  margin-bottom: 1.5rem;
+}
+
+.emptyState h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 0.5rem 0;
+}
+
+.emptyState p {
+  color: #718096;
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* Admins List */
+.adminsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.adminCard {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(48, 207, 208, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.adminCard:hover {
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+  border-color: rgba(48, 207, 208, 0.3);
+}
+
+/* Admin Card Header */
+.adminCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(48, 207, 208, 0.05) 0%, rgba(51, 8, 103, 0.05) 100%);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.3s ease;
+  gap: 1rem;
+}
+
+.adminCardHeader:hover {
+  background: linear-gradient(135deg, rgba(48, 207, 208, 0.1) 0%, rgba(51, 8, 103, 0.1) 100%);
+}
+
+.adminLeft {
+  display: flex;
+  gap: 1rem;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+}
+
+.adminAvatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  object-fit: cover;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 2px solid white;
+  flex-shrink: 0;
+}
+
+.adminMeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.adminMeta h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 0.25rem 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adminMeta p {
+  font-size: 0.9rem;
+  color: #718096;
+  margin: 0 0 0.35rem 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adminDate {
+  font-size: 0.8rem;
+  color: #a0aec0;
+  display: block;
+}
+
+.adminStats {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-shrink: 0;
+}
+
+
+
+.adminStats > div:last-child {
+  font-size: 1.25rem;
+  color: #30cfd0;
+  transition: all 0.3s ease;
+}
+
+.revokeBtn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(245, 101, 101, 0.1);
+  border: none;
+  color: #f56565;
+  font-size: 1.15rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.revokeBtn:hover {
+  background: rgba(245, 101, 101, 0.2);
+  transform: scale(1.1);
+}
+
+.revokeBtn:active {
+  transform: scale(0.95);
+}
+
+/* Permissions Grid */
+.permissionsGrid {
+  padding: 0.5rem;
+  border-top: 1px solid #f0f4f8;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100%, 1fr));
+  gap: 0;
+}
+
+.permissionItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem;
+  border-bottom: 1px solid #f0f4f8;
+  transition: all 0.2s ease;
+}
+
+.permissionItem:hover {
+  background: rgba(48, 207, 208, 0.03);
+}
+
+.permissionItem:last-child {
+  border-bottom: none;
+}
+
+.permHeader {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.permIcon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.permLabel {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 0.25rem;
+}
+
+.permDesc {
+  font-size: 0.8rem;
+  color: #a0aec0;
+  line-height: 1.4;
+}
+
+.permissionActive,
+.permissionInactive {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.permissionActive {
+  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(48, 207, 208, 0.3);
+}
+
+.permissionActive:hover {
+  transform: scale(1.15);
+  box-shadow: 0 6px 16px rgba(48, 207, 208, 0.4);
+}
+
+.permissionInactive {
+  background: #f0f4f8;
+  color: #cbd5e0;
+}
+
+.permissionInactive:hover {
+  background: #e2e8f0;
+  color: #a0aec0;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .container {
+    padding: 0.75rem;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .headerContent h1 {
+    font-size: 1.5rem;
+  }
+
+  .refreshBtn {
+    align-self: flex-end;
+  }
+
+  .grantForm {
+    flex-direction: column;
+  }
+
+  .emailInput,
+  .grantBtn {
+    width: 100%;
+  }
+
+  .searchSection {
+    flex-direction: column;
+  }
+
+  .searchBox,
+  .resultCount {
+    width: 100%;
+  }
+
+  .adminCardHeader {
+    flex-wrap: wrap;
+  }
+
+  .adminLeft {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+
+  .adminStats {
+    justify-self: flex-start;
+  }
+
+  .permissionsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .permissionItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .permissionActive,
+  .permissionInactive {
+    align-self: flex-end;
+    margin-top: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 1.25rem;
+  }
+
+  .grantCard {
+    padding: 1.25rem;
+  }
+
+  .refreshBtn {
+    width: 40px;
+    height: 40px;
+    font-size: 1.1rem;
+  }
+
+  .adminCardHeader {
+    padding: 1rem;
+  }
+
+  .adminAvatar {
+    width: 48px;
+    height: 48px;
+  }
+
+  .adminMeta h3 {
+    font-size: 1rem;
+  }
+
+  .permCount {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.75rem;
+  }
+
+  .revokeBtn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .permissionItem {
+    padding: 1rem;
+  }
+
+  .permHeader {
+    gap: 0.75rem;
+  }
+
+  .permLabel {
+    font-size: 0.9rem;
+  }
+
+  .permDesc {
+    font-size: 0.75rem;
+  }
+}
