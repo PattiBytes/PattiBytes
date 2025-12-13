@@ -1,293 +1,293 @@
-/* app-next/styles/AdminAnalytics.module.css */
-
-.container {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 1rem;
-  padding-bottom: 80px;
+.analytics{
+  max-width: 1150px;
+  margin: 0 auto;
+  padding: 18px 14px 28px;
 }
 
-.header {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-.header h1 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #1a202c;
-  margin: 0 0 0.5rem 0;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.header p {
-  color: #718096;
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.timeFilters {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding: 0.5rem 0;
-  margin-bottom: 1.5rem;
-  scrollbar-width: none;
-}
-
-.timeFilters::-webkit-scrollbar {
-  display: none;
-}
-
-.filterBtn {
-  background: rgba(255, 255, 255, 0.9);
-  border: 2px solid transparent;
-  border-radius: 12px;
-  padding: 0.75rem 1.25rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #4a5568;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.filterBtn:hover {
-  background: white;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.filterBtn.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-color: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
-}
-
-.statsGrid {
+.loading{
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  place-items: center;
+  padding: 26px;
+  color: var(--muted);
+  gap: 8px;
 }
 
-.statCard {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  padding: 1.25rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-}
-
-.statCard::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.3s ease;
-}
-
-.statCard:hover::before {
-  transform: scaleX(1);
-}
-
-.statCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-}
-
-.statIcon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+.header{
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  margin-bottom: 0.75rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
-.statValue {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #1a202c;
-  margin: 0.5rem 0 0.25rem;
-}
-
-.statLabel {
-  font-size: 0.85rem;
-  color: #718096;
-  font-weight: 500;
-}
-
-.statTrend {
-  font-size: 0.8rem;
-  margin-top: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.statTrend.positive {
-  color: #48bb78;
-}
-
-.statTrend.negative {
-  color: #f56565;
-}
-
-.chartCard {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-.chartCard h3 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1a202c;
-  margin: 0 0 1.25rem 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.chartPlaceholder {
-  height: 300px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #718096;
-  font-size: 0.9rem;
-}
-
-.tableContainer {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-.tableHeader {
-  padding: 1.5rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.tableHeader h3 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #1a202c;
+.header h1{
   margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.02em;
 }
 
-.table {
-  width: 100%;
-  border-collapse: collapse;
+.header p{
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
 }
 
-.table thead {
-  background: rgba(102, 126, 234, 0.05);
+.dateRangeSelector{
+  display: inline-flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.table th {
-  padding: 1rem 1.5rem;
-  text-align: left;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #4a5568;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.table td {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  color: #2d3748;
-}
-
-.table tbody tr {
-  transition: background 0.2s ease;
-}
-
-.table tbody tr:hover {
-  background: rgba(102, 126, 234, 0.03);
-}
-
-.loading {
-  text-align: center;
-  padding: 3rem;
-  color: white;
-  font-size: 1.1rem;
-}
-
-.refreshBtn {
-  position: fixed;
-  bottom: 90px;
-  right: 1rem;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  color: white;
-  font-size: 1.5rem;
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+.dateRange{
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: var(--card);
+  color: var(--text);
   cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
+  font-weight: 800;
+}
+
+.active{
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--stroke));
+  background: color-mix(in srgb, var(--brand) 16%, var(--card2));
+}
+
+.metricsGrid{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.metricCard{
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-lg);
+  padding: 14px;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(14px);
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 10px;
   align-items: center;
-  justify-content: center;
-  z-index: 100;
 }
 
-.refreshBtn:hover {
-  transform: scale(1.1) rotate(90deg);
-  box-shadow: 0 6px 28px rgba(102, 126, 234, 0.5);
+.metricIcon{
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--stroke);
+  background: color-mix(in srgb, var(--card2) 78%, transparent);
 }
 
-.refreshBtn:active {
-  transform: scale(0.95) rotate(90deg);
+.metricContent{ display: grid; gap: 2px; }
+
+.metricValue{
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
 }
 
-@media (max-width: 768px) {
-  .statsGrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.metricLabel{
+  font-size: 12px;
+  color: var(--muted);
+}
 
-  .table {
-    font-size: 0.85rem;
-  }
+.activitySection{
+  margin-top: 14px;
+}
 
-  .table th,
-  .table td {
-    padding: 0.75rem 1rem;
-  }
+.activitySection h2{
+  margin: 10px 0;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
 
-  .chartPlaceholder {
-    height: 250px;
-  }
+.activityGrid{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.activityCard{
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-lg);
+  padding: 14px;
+  box-shadow: var(--shadow-soft);
+}
+
+.activityCard h3{
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.activityValue{
+  margin-top: 10px;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.activityPercent{
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chartSection{
+  margin-top: 14px;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-lg);
+  padding: 14px;
+  box-shadow: var(--shadow-soft);
+}
+
+.chartSection h2{
+  margin: 0 0 12px;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.chart{
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.chartBar{
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.barGroup{
+  width: 100%;
+  height: 140px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  align-items: end;
+}
+
+.bar{
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--stroke) 70%, transparent);
+  background: color-mix(in srgb, var(--card2) 85%, transparent);
+}
+
+.chartBar span{
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.chartLegend{
+  margin-top: 12px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.legendItem{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legendItem div{
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--stroke);
+}
+
+.topSection{
+  margin-top: 14px;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-lg);
+  padding: 14px;
+  box-shadow: var(--shadow-soft);
+}
+
+.topSection h2{
+  margin: 0 0 12px;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.topList{
+  display: grid;
+  gap: 10px;
+}
+
+.topItem{
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid var(--stroke);
+  background: color-mix(in srgb, var(--card2) 78%, transparent);
+}
+
+.rank{
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  border: 1px solid var(--stroke);
+  background: color-mix(in srgb, var(--brand) 14%, var(--card2));
+}
+
+.topName{
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.topPosts{
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.footer{
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.refreshBtn{
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: color-mix(in srgb, var(--card2) 78%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.refreshBtn:active{ transform: scale(.99); }
+
+@media (max-width: 1080px){
+  .metricsGrid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .activityGrid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px){
+  .metricsGrid{ grid-template-columns: 1fr; }
+  .activityGrid{ grid-template-columns: 1fr; }
+  .chart{ grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }

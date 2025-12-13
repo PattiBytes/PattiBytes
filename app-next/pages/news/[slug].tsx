@@ -1,4 +1,4 @@
-// pages/news/[slug].tsx
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
@@ -10,6 +10,11 @@ import ShareButton from '@/components/ShareButton';
 import PostComments from '@/components/PostComments';
 import CMSContent from '@/components/CMSContent';
 import { FaComment } from 'react-icons/fa';
+import toast from 'react-hot-toast';
+
+import { useLongPress } from '@/hooks/useLongPress';
+import ActionSheet, { SheetAction } from '@/components/ActionSheet';
+
 import styles from '@/styles/PostDetail.module.css';
 
 type Item = {
@@ -24,7 +29,6 @@ type Item = {
 };
 
 function getSiteOrigin(): string {
-  // Works both server + client (server uses env, client uses window)
   if (typeof window !== 'undefined') return window.location.origin;
   return (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '');
 }
@@ -65,7 +69,6 @@ export default function NewsDetail() {
 
   const from = useMemo(() => {
     const f = router.query.from;
-    // Default to search page so slug pages always have a stable “Back”
     return typeof f === 'string' && f.trim() ? f : '/search';
   }, [router.query.from]);
 
@@ -73,16 +76,50 @@ export default function NewsDetail() {
   const [loading, setLoading] = useState(true);
   const [commentsCount, setCommentsCount] = useState<number | null>(null);
 
-  // Keep consistent with your CMS id scheme used by LikeButton/PostComments
   const postId = useMemo(() => (slug ? `cms-news-${slug}` : ''), [slug]);
 
   const shareUrl = useMemo(() => {
-    // Avoid touching window directly; build from origin + asPath (works SSR too)
     const origin = getSiteOrigin();
     if (!origin) return '';
     const cleanPath = (router.asPath || '').split('#')[0];
     return `${origin}${cleanPath}`;
   }, [router.asPath]);
+
+  // Long-press sheet (hero/title)
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const { pressed, handlers } = useLongPress(
+    () => {
+      if (navigator.vibrate) navigator.vibrate(10);
+      setSheetOpen(true);
+    },
+    { ms: 420 }
+  );
+
+  const sheetActions: SheetAction[] = useMemo(
+    () => [
+      {
+        label: 'Copy link',
+        onPress: async () => {
+          if (!shareUrl) return;
+          await navigator.clipboard.writeText(shareUrl);
+          toast.success('Link copied');
+        },
+      },
+      {
+        label: 'Share',
+        onPress: async () => {
+          if (!shareUrl) return;
+          // @ts-ignore
+          if (navigator.share) await navigator.share({ title: item?.title || 'News', url: shareUrl });
+          else {
+            await navigator.clipboard.writeText(shareUrl);
+            toast.success('Link copied');
+          }
+        },
+      },
+    ],
+    [shareUrl, item?.title]
+  );
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -159,13 +196,15 @@ export default function NewsDetail() {
           {Back}
 
           {heroSrc && (
-            <div className={styles.hero}>
+            <div className={styles.hero} {...handlers} data-pressed={pressed ? 'true' : 'false'}>
               <SafeImage src={heroSrc} alt={item.title} width={1200} height={700} />
             </div>
           )}
 
           <header className={styles.header}>
-            <h1>{item.title}</h1>
+            <h1 {...handlers} data-pressed={pressed ? 'true' : 'false'}>
+              {item.title}
+            </h1>
 
             <div className={styles.actionsRow}>
               <LikeButton postId={postId} className={styles.actionBtn} showCount />
@@ -199,6 +238,13 @@ export default function NewsDetail() {
 
           <div id="comments" />
           <PostComments postId={postId} postTitle={item.title} onCountChange={setCommentsCount} />
+
+          <ActionSheet
+            open={sheetOpen}
+            title={item.title}
+            actions={sheetActions}
+            onClose={() => setSheetOpen(false)}
+          />
         </article>
       </Layout>
     </AuthGuard>

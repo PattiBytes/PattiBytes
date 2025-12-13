@@ -1,0 +1,60 @@
+.overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 9999;
+}
+
+.sheet{
+  width: min(520px, 100%);
+  border-radius: 22px;
+  border: 1px solid var(--stroke);
+  background: color-mix(in srgb, var(--bg2) 78%, transparent);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.title{
+  padding: 14px 16px 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.group{
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.action{
+  width: 100%;
+  text-align: left;
+  padding: 14px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  background: var(--card);
+  color: var(--text);
+}
+.action:active{
+  background: var(--tap);
+}
+
+.destructive{
+  color: var(--danger);
+}
+
+.cancel{
+  width: calc(100% - 20px);
+  margin: 0 10px 12px;
+  padding: 14px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  background: color-mix(in srgb, var(--card2) 75%, transparent);
+  color: var(--text);
+}

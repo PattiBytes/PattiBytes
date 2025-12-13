@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { getFirebaseClient } from '@/lib/firebase';
 import { useRouter } from 'next/router';
@@ -9,6 +9,7 @@ import { RedirectIfAuthenticated } from '@/components/AuthGuard';
 import { motion } from 'framer-motion';
 import { FaGoogle, FaEye, FaEyeSlash, FaEnvelope, FaLock } from 'react-icons/fa';
 import styles from '@/styles/Auth.module.css';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -17,7 +18,11 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
   const router = useRouter();
+  const { signInWithGoogle, loading: authLoading } = useAuth();
+
+  const busy = loading || authLoading;
 
   const handleEmailRegister = async (e: FormEvent) => {
     e.preventDefault();
@@ -44,7 +49,9 @@ export default function Register() {
 
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-      router.push('/auth/setup-username');
+
+      // New user must pick username first
+      router.replace('/auth/setup-username');
     } catch (e) {
       const fe = e as FirebaseError;
       switch (fe.code) {
@@ -69,16 +76,9 @@ export default function Register() {
     setError(null);
     setLoading(true);
 
-    const { auth, googleProvider } = getFirebaseClient();
-    if (!auth || !googleProvider) {
-      setError('Authentication service unavailable');
-      setLoading(false);
-      return;
-    }
-
     try {
-      await signInWithPopup(auth, googleProvider);
-      router.push('/auth/setup-username');
+      await signInWithGoogle();
+      // RedirectIfAuthenticated will move user to setup-username if needed
     } catch (e) {
       const fe = e as FirebaseError;
       switch (fe.code) {
@@ -109,61 +109,74 @@ export default function Register() {
           </div>
 
           <motion.div className={styles.authCard}>
-            <button onClick={handleGoogleRegister} className={styles.googleBtn} disabled={loading}>
-              <FaGoogle /> Sign up with Google
+            <button onClick={handleGoogleRegister} className={styles.googleBtn} disabled={busy} type="button">
+              <FaGoogle /> {busy ? 'Signing up...' : 'Sign up with Google'}
             </button>
 
-            <div className={styles.divider}><span>OR</span></div>
+            <div className={styles.divider}>
+              <span>OR</span>
+            </div>
 
             <form onSubmit={handleEmailRegister} className={styles.authForm}>
               <div className={styles.formGroup}>
-                <label htmlFor="email"><FaEnvelope /> Email</label>
+                <label htmlFor="email">
+                  <FaEnvelope /> Email
+                </label>
                 <input
                   id="email"
                   type="email"
                   placeholder="you@example.com"
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
-                  disabled={loading}
+                  disabled={busy}
                   autoComplete="email"
                 />
               </div>
 
               <div className={styles.formGroup}>
-                <label htmlFor="password"><FaLock /> Password</label>
+                <label htmlFor="password">
+                  <FaLock /> Password
+                </label>
                 <div className={styles.passwordInput}>
                   <input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="At least 6 characters"
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
+                    onChange={(e) => setPassword(e.target.value)}
                     required
-                    disabled={loading}
+                    disabled={busy}
                     autoComplete="new-password"
                   />
-                  <button type="button" className={styles.passwordToggle} onClick={() => setShowPassword(!showPassword)}>
+                  <button
+                    type="button"
+                    className={styles.passwordToggle}
+                    onClick={() => setShowPassword(!showPassword)}
+                    disabled={busy}
+                  >
                     {showPassword ? <FaEyeSlash /> : <FaEye />}
                   </button>
                 </div>
               </div>
 
               <div className={styles.formGroup}>
-                <label htmlFor="confirmPassword"><FaLock /> Confirm Password</label>
+                <label htmlFor="confirmPassword">
+                  <FaLock /> Confirm Password
+                </label>
                 <input
                   id="confirmPassword"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Confirm password"
                   value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  disabled={loading}
+                  disabled={busy}
                   autoComplete="new-password"
                 />
               </div>
 
-              <button type="submit" className={styles.submitBtn} disabled={loading}>
+              <button type="submit" className={styles.submitBtn} disabled={busy}>
                 {loading ? 'Creating account...' : 'Sign Up'}
               </button>
 

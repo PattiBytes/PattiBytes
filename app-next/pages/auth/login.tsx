@@ -12,10 +12,11 @@ import { FirebaseError } from 'firebase/app';
 import styles from '@/styles/Auth.module.css';
 
 export default function Login() {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const router = useRouter();
   const { signInWithEmail, signInWithGoogle, loading: authLoading } = useAuth();
 
-  const [identifier, setIdentifier] = useState(''); // Email or username
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,11 +56,10 @@ export default function Login() {
         email = snapshot.docs[0].data().email;
       }
 
-      // Sign in (AuthContext + onAuthStateChanged will detect admin)
       await signInWithEmail(email, password);
-      
-      // Redirect to dashboard; admin status auto-detected in AuthContext
-      router.push('/dashboard');
+
+      // No manual router.push here.
+      // RedirectIfAuthenticated + AuthGuard will route to setup-username or dashboard.
     } catch (e) {
       const fe = e as FirebaseError;
       switch (fe.code) {
@@ -92,7 +92,7 @@ export default function Login() {
 
     try {
       await signInWithGoogle();
-      // Google flow navigates internally (AuthContext); if profile missing, redirects to complete-profile
+      // No manual routing; guards handle it.
     } catch (e) {
       const fe = e as FirebaseError;
       switch (fe.code) {
