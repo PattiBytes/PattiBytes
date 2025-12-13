@@ -15,6 +15,7 @@ export interface CMSNewsItem {
 }
 
 export interface CMSPlaceItem {
+  description: string | undefined;
   id: string;
   slug: string;
   title: string;
@@ -98,6 +99,7 @@ export async function fetchCMSPlaces(): Promise<CMSPlaceItem[]> {
       if (!res.ok) continue;
       const data = await res.json();
       const items = Array.isArray(data) ? data : (data.items || []);
+     
       return (items as Record<string, unknown>[]).map((item, idx) => ({
         id: (item.id as string) || (item.slug as string) || `place-${idx}`,
         slug: (item.slug as string) || (item.id as string) || `place-${idx}`,
@@ -106,6 +108,7 @@ export async function fetchCMSPlaces(): Promise<CMSPlaceItem[]> {
         date: item.date as string,
         image: normalizeCmsImage(item.image as string | undefined),
         location: item.location as string | undefined,
+         description: (item.description as string | undefined) || (item.body as string | undefined),
         tags: (item.tags as string[]) || [],
         body: item.body as string | undefined,
         url: (item.url as string) || `${base}/places/${(item.slug as string) || item.id}`,

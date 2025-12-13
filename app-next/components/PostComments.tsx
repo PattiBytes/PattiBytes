@@ -1,4 +1,4 @@
-// app-next/components/PostComments.tsx
+import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection,
@@ -108,12 +108,21 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
     };
   };
 
+  // IMPORTANT: don't attach snapshot listeners unless signed-in (rules require auth)
   useEffect(() => {
     if (!baseRef) return;
+    if (!user) return;
+
     setLoadingParents(true);
 
     const q = isCMS
-      ? fsQuery(baseRef, where('postId', '==', postId), where('parentId', '==', null), orderBy('createdAt', 'asc'), limit(pageSize))
+      ? fsQuery(
+          baseRef,
+          where('postId', '==', postId),
+          where('parentId', '==', null),
+          orderBy('createdAt', 'asc'),
+          limit(pageSize),
+        )
       : fsQuery(baseRef, where('parentId', '==', null), orderBy('createdAt', 'asc'), limit(pageSize));
 
     const unsub = onSnapshot(
@@ -126,28 +135,47 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
         setHasMoreParents(snap.docs.length >= pageSize);
         setLoadingParents(false);
       },
-      () => {
+      (err) => {
+        console.warn('PostComments snapshot error:', err);
         showToast('Unable to load comments', 'error');
+        setParents([]);
+        onCountChange?.(0);
         setLoadingParents(false);
-      }
+      },
     );
+
     return () => unsub();
-  }, [baseRef, isCMS, postId, onCountChange, pageSize]);
+  }, [baseRef, isCMS, postId, onCountChange, pageSize, user]);
 
   const loadMoreParents = async () => {
-    if (!baseRef || !lastParentDoc.current || loadingParents || !hasMoreParents) return;
+    if (!baseRef || !user || !lastParentDoc.current || loadingParents || !hasMoreParents) return;
+
     setLoadingParents(true);
     try {
       const q = isCMS
-        ? fsQuery(baseRef, where('postId', '==', postId), where('parentId', '==', null), orderBy('createdAt', 'asc'), startAfter(lastParentDoc.current), limit(pageSize))
-        : fsQuery(baseRef, where('parentId', '==', null), orderBy('createdAt', 'asc'), startAfter(lastParentDoc.current), limit(pageSize));
+        ? fsQuery(
+            baseRef,
+            where('postId', '==', postId),
+            where('parentId', '==', null),
+            orderBy('createdAt', 'asc'),
+            startAfter(lastParentDoc.current),
+            limit(pageSize),
+          )
+        : fsQuery(
+            baseRef,
+            where('parentId', '==', null),
+            orderBy('createdAt', 'asc'),
+            startAfter(lastParentDoc.current),
+            limit(pageSize),
+          );
 
       const snap = await getDocs(q);
       const more = snap.docs.map(mapSnapToComment);
       setParents((prev) => [...prev, ...more]);
       lastParentDoc.current = snap.docs[snap.docs.length - 1] || null;
       setHasMoreParents(snap.docs.length >= pageSize);
-    } catch {
+    } catch (err) {
+      console.warn('loadMoreParents error:', err);
       showToast('Failed to load more', 'error');
     } finally {
       setLoadingParents(false);
@@ -155,10 +183,16 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
   };
 
   const ensureRepliesStream = (parentId: string) => {
-    if (!baseRef || replyUnsubs.current[parentId]) return;
+    if (!baseRef || !user || replyUnsubs.current[parentId]) return;
 
     const q = isCMS
-      ? fsQuery(baseRef, where('postId', '==', postId), where('parentId', '==', parentId), orderBy('createdAt', 'asc'), limit(200))
+      ? fsQuery(
+          baseRef,
+          where('postId', '==', postId),
+          where('parentId', '==', parentId),
+          orderBy('createdAt', 'asc'),
+          limit(200),
+        )
       : fsQuery(baseRef, where('parentId', '==', parentId), orderBy('createdAt', 'asc'), limit(200));
 
     const unsub = onSnapshot(
@@ -167,8 +201,11 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
         const list = snap.docs.map(mapSnapToComment);
         setReplies((prev) => ({ ...prev, [parentId]: list }));
       },
-      () => {}
+      (err) => {
+        console.warn('Replies snapshot error:', err);
+      },
     );
+
     replyUnsubs.current[parentId] = unsub;
   };
 
@@ -184,6 +221,7 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ready || !text.trim() || !user || !userProfile) return;
+
     try {
       setSending(true);
       await addParentComment(
@@ -194,10 +232,10 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
           authorUsername: userProfile.username ?? null,
           authorPhoto: userProfile.photoURL ?? null,
         },
-        text
+        text,
       );
       setText('');
-      showToast('Comment posted! 🎉', 'success');
+      showToast('Comment posted!', 'success');
     } catch (err: unknown) {
       console.error('Post comment error:', err);
       const code = isFirebaseWriteError(err) ? err.code : undefined;
@@ -210,17 +248,23 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
   const sendReply = async (parentId: string) => {
     const value = replyText[parentId]?.trim();
     if (!ready || !value || !user || !userProfile) return;
+
     try {
       setSendingReply((prev) => ({ ...prev, [parentId]: true }));
-      await addReply(postId, parentId, {
-        authorId: user.uid,
-        authorName: userProfile.displayName,
-        authorUsername: userProfile.username ?? null,
-        authorPhoto: userProfile.photoURL ?? null,
-      }, value);
+      await addReply(
+        postId,
+        parentId,
+        {
+          authorId: user.uid,
+          authorName: userProfile.displayName,
+          authorUsername: userProfile.username ?? null,
+          authorPhoto: userProfile.photoURL ?? null,
+        },
+        value,
+      );
       setReplyText((prev) => ({ ...prev, [parentId]: '' }));
       if (!replyUnsubs.current[parentId]) ensureRepliesStream(parentId);
-      showToast('Reply posted! 💬', 'success');
+      showToast('Reply posted!', 'success');
     } catch (err: unknown) {
       console.error('Post reply error:', err);
       const code = isFirebaseWriteError(err) ? err.code : undefined;
@@ -237,16 +281,18 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
 
   const saveEdit = async (c: FsComment) => {
     if (!baseRef) return;
+
     const val = editText[c.id]?.trim();
     if (!val) {
       setEditing((prev) => ({ ...prev, [c.id]: false }));
       return;
     }
+
     try {
       const commentRef = isCMS ? doc(db!, 'globalComments', c.id) : doc(baseRef, c.id);
       await updateDoc(commentRef, { text: val });
       setEditing((prev) => ({ ...prev, [c.id]: false }));
-      showToast('Comment updated! ✏️', 'success');
+      showToast('Comment updated!', 'success');
     } catch (err: unknown) {
       console.error('Edit comment error:', err);
       const code = isFirebaseWriteError(err) ? err.code : undefined;
@@ -256,20 +302,15 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
 
   const removeComment = async (c: FsComment) => {
     if (!confirm('Delete this comment? This action cannot be undone.')) return;
+
     try {
       setDeleting((prev) => ({ ...prev, [c.id]: true }));
       await deleteCommentTx(postId, c.id);
-      showToast('Comment deleted 🗑️', 'success');
+      showToast('Comment deleted', 'success');
     } catch (err) {
       console.error('Delete comment error:', err);
       const code = isFirebaseWriteError(err) ? err.code : undefined;
-      if (code === 'client/not-found') {
-        showToast('Comment already deleted', 'error');
-      } else if (code === 'permission-denied') {
-        showToast('Permission denied', 'error');
-      } else {
-        showToast('Failed to delete comment', 'error');
-      }
+      showToast(code === 'permission-denied' ? 'Permission denied' : 'Failed to delete comment', 'error');
       setDeleting((prev) => ({ ...prev, [c.id]: false }));
     }
   };
@@ -278,11 +319,11 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
 
   const CommentRow = ({ c }: { c: FsComment }) => {
     const profileHref = c.authorUsername ? `/user/${c.authorUsername}` : `/search?u=${encodeURIComponent(c.authorName)}`;
-    const isEditing = editing[c.id];
+    const isEditingRow = editing[c.id];
     const isParent = !c.parentId;
-    const isDeleting = deleting[c.id];
+    const isDeletingRow = deleting[c.id];
 
-    if (isDeleting) {
+    if (isDeletingRow) {
       return (
         <div className={styles.itemDeleting}>
           <FaSpinner className={styles.spinIcon} />
@@ -302,6 +343,7 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
             className={styles.avatar}
           />
         </Link>
+
         <div className={styles.bubble}>
           <div className={styles.meta}>
             <Link href={profileHref} className={styles.authorLink}>
@@ -310,7 +352,7 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
             <span className={styles.timestamp}>{c.createdAt.toLocaleString()}</span>
           </div>
 
-          {isEditing ? (
+          {isEditingRow ? (
             <div className={styles.editRow}>
               <textarea
                 value={editText[c.id] || ''}
@@ -320,10 +362,10 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
                 className={styles.editTextarea}
               />
               <div className={styles.editActions}>
-                <button onClick={() => saveEdit(c)} className={styles.btnSave}>
+                <button onClick={() => saveEdit(c)} className={styles.btnSave} type="button">
                   Save
                 </button>
-                <button onClick={() => setEditing((p) => ({ ...p, [c.id]: false }))} className={styles.btnCancel}>
+                <button onClick={() => setEditing((p) => ({ ...p, [c.id]: false }))} className={styles.btnCancel} type="button">
                   Cancel
                 </button>
               </div>
@@ -334,25 +376,28 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
 
           <div className={styles.actionsSmall}>
             <CommentLikeButton postId={postId} commentId={c.id} className={styles.actionSm} isCMS={isCMS} />
+
             {isParent ? (
               <button
                 className={styles.actionSm}
+                type="button"
                 onClick={() => {
                   setReplyOpen((p) => ({ ...p, [c.id]: !p[c.id] }));
                   if (!replies[c.id]) ensureRepliesStream(c.id);
                 }}
                 aria-expanded={!!replyOpen[c.id]}
               >
-                💬 Reply ({c.repliesCount || 0})
+                Reply ({c.repliesCount || 0})
               </button>
             ) : null}
+
             {canModify(c) ? (
               <>
-                <button className={styles.actionSm} onClick={() => startEdit(c)}>
-                  ✏️ Edit
+                <button className={styles.actionSm} type="button" onClick={() => startEdit(c)}>
+                  Edit
                 </button>
-                <button className={styles.actionSmDanger} onClick={() => removeComment(c)}>
-                  🗑️ Delete
+                <button className={styles.actionSmDanger} type="button" onClick={() => removeComment(c)}>
+                  Delete
                 </button>
               </>
             ) : null}
@@ -375,6 +420,7 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
                 className={styles.replyInput}
               />
               <button
+                type="button"
                 onClick={() => sendReply(c.id)}
                 disabled={!replyText[c.id]?.trim() || sendingReply[c.id]}
                 className={styles.btnReply}
@@ -388,8 +434,9 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
             {(replies[c.id] || []).map((r) => (
               <CommentRow key={r.id} c={r} />
             ))}
+
             {!replies[c.id] && (c.repliesCount || 0) > 0 && (
-              <button className={styles.loadReplies} onClick={() => ensureRepliesStream(c.id)}>
+              <button className={styles.loadReplies} type="button" onClick={() => ensureRepliesStream(c.id)}>
                 View {c.repliesCount} {c.repliesCount === 1 ? 'reply' : 'replies'} →
               </button>
             )}
@@ -453,7 +500,7 @@ export default function PostComments({ postId, onCountChange, pageSize = 200 }: 
 
       {hasMoreParents && (
         <div className={styles.moreBar}>
-          <button onClick={loadMoreParents} disabled={loadingParents} className={styles.btnLoadMore}>
+          <button onClick={loadMoreParents} disabled={loadingParents} className={styles.btnLoadMore} type="button">
             {loadingParents ? (
               <>
                 <FaSpinner className={styles.spinIcon} /> Loading...
