@@ -1,5 +1,5 @@
-// app-next/pages/places/[slug].tsx
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
@@ -30,6 +30,7 @@ function getCMSOrigin(): string {
 function resolveCMSImage(path?: string): string | undefined {
   if (!path) return undefined;
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
+
   if (path.startsWith('assets/uploads') || path.startsWith('/assets/uploads')) {
     const clean = path.startsWith('/') ? path : `/${path}`;
     return `${getCMSOrigin()}${clean}`;
@@ -49,40 +50,46 @@ async function loadItem(slug: string): Promise<Item | null> {
 }
 
 export default function PlaceDetail() {
-  const { query, asPath } = useRouter();
-  const slug = typeof query.slug === 'string' ? query.slug : '';
+  const router = useRouter();
+  const slug = typeof router.query.slug === 'string' ? router.query.slug : '';
+  const from = typeof router.query.from === 'string' ? router.query.from : '';
+
   const [item, setItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(true);
   const [commentsCount, setCommentsCount] = useState<number | null>(null);
 
-  const postId = useMemo(
-    () => (slug ? `cms-place-${slug}` : ''),
-    [slug],
-  );
-  const shareUrl =
-    typeof window !== 'undefined' ? window.location.href : '';
+  const postId = useMemo(() => (slug ? `cms-place-${slug}` : ''), [slug]);
+
+  const shareUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return window.location.href;
+  }, []);
 
   useEffect(() => {
     if (!slug) return;
+    let cancelled = false;
+
     (async () => {
       setLoading(true);
       const it = await loadItem(slug);
-      setItem(it);
-      setLoading(false);
+      if (!cancelled) {
+        setItem(it);
+        setLoading(false);
+      }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   useEffect(() => {
-    if (asPath.includes('#comments')) {
-      setTimeout(
-        () =>
-          document
-            .getElementById('comments')
-            ?.scrollIntoView({ behavior: 'smooth' }),
-        300,
-      );
-    }
-  }, [asPath]);
+    if (!router.asPath.includes('#comments')) return;
+    const t = setTimeout(() => {
+      document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [router.asPath]);
 
   if (loading) {
     return (
@@ -103,6 +110,9 @@ export default function PlaceDetail() {
         <Layout title="Not Found - PattiBytes">
           <div className={styles.notFound}>
             <h2>Content not found</h2>
+            <div style={{ marginTop: 12 }}>
+              {from ? <Link href={from}>← Back</Link> : <button onClick={() => router.back()}>← Back</button>}
+            </div>
           </div>
         </Layout>
       </AuthGuard>
@@ -115,43 +125,40 @@ export default function PlaceDetail() {
     <AuthGuard>
       <Layout title={`${item.title} - PattiBytes`}>
         <article className={styles.post}>
+          <div style={{ marginBottom: 12 }}>
+            {from ? <Link href={from}>← Back</Link> : <button onClick={() => router.back()}>← Back</button>}
+          </div>
+
           {heroSrc && (
             <div className={styles.hero}>
-              <SafeImage
-                src={heroSrc}
-                alt={item.title}
-                width={1200}
-                height={700}
-              />
+              <SafeImage src={heroSrc} alt={item.title} width={1200} height={700} />
             </div>
           )}
+
           <header className={styles.header}>
             <h1>{item.title}</h1>
+
             <div className={styles.actionsRow}>
-              <LikeButton
-                postId={postId}
-                className={styles.actionBtn}
-                showCount
-              />
+              <LikeButton postId={postId} className={styles.actionBtn} showCount />
+
               <ShareButton
                 postId={postId}
                 url={shareUrl}
                 className={styles.actionBtn}
                 ariaLabel="Share"
               />
+
               {item.location && (
                 <span className={styles.location}>
                   <FaMapMarkerAlt /> {item.location}
                 </span>
               )}
+
               <button
                 className={styles.actionBtn}
-                onClick={() =>
-                  document
-                    .getElementById('comments')
-                    ?.scrollIntoView({ behavior: 'smooth' })
-                }
+                onClick={() => document.getElementById('comments')?.scrollIntoView({ behavior: 'smooth' })}
                 aria-label="Comments"
+                type="button"
               >
                 <FaComment /> {commentsCount ?? 0}
               </button>
@@ -163,11 +170,7 @@ export default function PlaceDetail() {
           </div>
 
           <div id="comments" />
-          <PostComments
-            postId={postId}
-            postTitle={item.title}
-            onCountChange={setCommentsCount}
-          />
+          <PostComments postId={postId} postTitle={item.title} onCountChange={setCommentsCount} />
         </article>
       </Layout>
     </AuthGuard>
