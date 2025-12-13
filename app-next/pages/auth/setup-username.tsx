@@ -103,7 +103,7 @@ export default function SetupUsername() {
         photoURL: user.photoURL || undefined
       });
 
-      router.replace('/dashboard');
+      router.replace('/auth/complete-profile?next=' + encodeURIComponent('/dashboard'));
       
     } catch (error) {
       console.error('Username claim error:', error);

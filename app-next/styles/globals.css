@@ -1379,3 +1379,86 @@ a, button, input, textarea, select {
 .safe-area-bottom {
   padding-bottom: var(--safe-area-bottom);
 }
+/* styles/globals.css */
+:root{
+  --bg: #0b1220;
+  --bg2: #0a0f1a;
+  --card: rgba(255,255,255,.06);
+  --card2: rgba(255,255,255,.09);
+  --stroke: rgba(255,255,255,.10);
+  --text: rgba(255,255,255,.92);
+  --muted: rgba(255,255,255,.66);
+  --brand: #7c3aed;
+
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+
+  --shadow: 0 10px 30px rgba(0,0,0,.35);
+  --shadow-soft: 0 8px 20px rgba(0,0,0,.25);
+
+  --tap: rgba(124,58,237,.18);
+  --danger: #ef4444;
+}
+
+@media (prefers-color-scheme: light){
+  :root{
+    --bg: #f6f7fb;
+    --bg2: #ffffff;
+    --card: rgba(15,23,42,.05);
+    --card2: rgba(15,23,42,.08);
+    --stroke: rgba(15,23,42,.10);
+    --text: rgba(15,23,42,.92);
+    --muted: rgba(15,23,42,.62);
+    --shadow: 0 12px 30px rgba(2,6,23,.10);
+    --shadow-soft: 0 10px 22px rgba(2,6,23,.08);
+    --tap: rgba(124,58,237,.12);
+  }
+}
+
+html, body{
+  height: 100%;
+}
+
+body{
+  margin: 0;
+  color: var(--text);
+  background: radial-gradient(1200px 700px at 20% -10%, rgba(124,58,237,.22), transparent 55%),
+              radial-gradient(900px 600px at 90% 10%, rgba(16,185,129,.16), transparent 52%),
+              linear-gradient(180deg, var(--bg), var(--bg2));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior-y: none;
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-top: env(safe-area-inset-top);
+}
+
+*{
+  box-sizing: border-box;
+}
+
+a{
+  color: inherit;
+  text-decoration: none;
+}
+
+button, a, [role="button"]{
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pb-card{
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(14px);
+}
+
+.pb-pressable{
+  transition: transform 120ms ease, filter 120ms ease, background 120ms ease;
+  will-change: transform;
+}
+.pb-pressable[data-pressed="true"]{
+  transform: scale(.985);
+  filter: brightness(.98);
+}
