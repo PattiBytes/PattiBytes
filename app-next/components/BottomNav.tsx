@@ -3,7 +3,15 @@ import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import SafeImage from './SafeImage';
-import { FaHome, FaSearch, FaPlus, FaComments, FaUser, FaShieldAlt } from 'react-icons/fa';
+import {
+  FaHome,
+  FaSearch,
+  FaPlus,
+  FaComments,
+  FaUser,
+  FaShieldAlt,
+  FaShoppingBag,
+} from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { type IconType } from 'react-icons';
 import { useUnreadCounts } from '@/lib/unread';
@@ -27,12 +35,22 @@ export default function BottomNav() {
 
   if (!user) return null;
 
+  // Hide on auth pages
+  if (router.pathname.startsWith('/auth/')) return null;
+
+  // Hide on chat detail page /community/[id]
+  if (router.pathname === '/community/[id]') return null;
+
   const isActiveRoute = (href: string) =>
     router.pathname === href || router.pathname.startsWith(`${href}/`);
 
   const baseNavItems: NavItem[] = [
     { href: '/dashboard', icon: FaHome, label: 'Home' },
     { href: '/search', icon: FaSearch, label: 'Search' },
+
+    // New
+    { href: '/shop', icon: FaShoppingBag, label: 'Shop' },
+
     { href: '/create', icon: FaPlus, label: 'Create', highlight: true },
     { href: '/community', icon: FaComments, label: 'Chat', badge: messages },
     {
@@ -47,35 +65,32 @@ export default function BottomNav() {
     ? [...baseNavItems, { href: '/admin', icon: FaShieldAlt, label: 'Admin' }]
     : baseNavItems;
 
-  // Hide on auth pages
-  if (router.pathname.startsWith('/auth/')) return null;
-
-  // Hide on chat detail page /community/[id]
-  if (router.pathname === '/community/[id]') return null;
-
   return (
     <nav className={styles.shell} aria-label="Primary">
       {/* Desktop rail */}
-      <div className={styles.rail}>
+      <div className={styles.rail} role="navigation" aria-label="Primary (desktop)">
         {navItems.map((item) => {
           const isActive = isActiveRoute(item.href);
           const Icon = item.icon;
+
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`${styles.railItem} ${
-                isActive ? styles.active : ''
-              } ${item.highlight ? styles.highlight : ''}`}
+              className={`${styles.railItem} ${isActive ? styles.active : ''} ${
+                item.highlight ? styles.highlight : ''
+              }`}
+              aria-current={isActive ? 'page' : undefined}
               title={item.label}
             >
               {isActive && (
                 <motion.div
                   className={styles.railIndicator}
                   layoutId="activeRail"
-                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 30 }}
                 />
               )}
+
               <span className={styles.iconWrap}>
                 {item.avatar ? (
                   <SafeImage
@@ -88,12 +103,14 @@ export default function BottomNav() {
                 ) : (
                   <Icon className={styles.icon} />
                 )}
+
                 {!!item.badge && item.badge > 0 && (
-                  <span className={styles.badge}>
+                  <span className={styles.badge} aria-label={`${item.badge} unread`}>
                     {item.badge > 9 ? '9+' : item.badge}
                   </span>
                 )}
               </span>
+
               <span className={styles.railLabel}>{item.label}</span>
             </Link>
           );
@@ -101,25 +118,28 @@ export default function BottomNav() {
       </div>
 
       {/* Mobile bottom bar */}
-      <div className={styles.bottomNav}>
+      <div className={styles.bottomNav} role="navigation" aria-label="Primary (mobile)">
         {navItems.map((item) => {
           const isActive = isActiveRoute(item.href);
           const Icon = item.icon;
+
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`${styles.navItem} ${
-                isActive ? styles.active : ''
-              } ${item.highlight ? styles.highlight : ''}`}
+              className={`${styles.navItem} ${isActive ? styles.active : ''} ${
+                item.highlight ? styles.highlight : ''
+              }`}
+              aria-current={isActive ? 'page' : undefined}
             >
               {isActive && (
                 <motion.div
                   className={styles.activeIndicator}
                   layoutId="activeTab"
-                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 30 }}
                 />
               )}
+
               <span className={styles.iconWrap}>
                 {item.avatar ? (
                   <SafeImage
@@ -132,12 +152,14 @@ export default function BottomNav() {
                 ) : (
                   <Icon className={styles.icon} />
                 )}
+
                 {!!item.badge && item.badge > 0 && (
-                  <span className={styles.badge}>
+                  <span className={styles.badge} aria-label={`${item.badge} unread`}>
                     {item.badge > 9 ? '9+' : item.badge}
                   </span>
                 )}
               </span>
+
               <span className={styles.label}>{item.label}</span>
             </Link>
           );
