@@ -1,197 +1,252 @@
 /* app-next/styles/BottomNav.module.css */
 
+/* Shell manages both layouts */
 .shell {
-  position: relative;
-  z-index: 40;
+  position: fixed;
+  z-index: 29;
+  pointer-events: none; /* allow inner bars to handle hit-tests */
 }
 
-/* Desktop rail (left side) */
+/* Desktop rail (visible >= 1024px) */
 .rail {
   position: fixed;
-  left: 14px;
-  top: 84px;
-  width: 90px;
-  display: none;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(229, 231, 235, 0.75);
-  backdrop-filter: blur(10px);
+  top: 60px; /* below header */
+  left: 0;
+  bottom: 0;
+  width: 78px;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  display: none; /* hidden by default */
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  z-index: 900;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.04);
+  pointer-events: auto;
 }
 
 .railItem {
   position: relative;
-  display: grid;
-  place-items: center;
+  width: 100%;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 6px;
-  padding: 10px 8px;
-  border-radius: 14px;
-  color: #111827;
   text-decoration: none;
-  border: 1px solid transparent;
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  color: #6b7280;
+  border-radius: 12px;
+  transition: background 0.2s, color 0.2s;
 }
 
 .railItem:hover {
-  background: rgba(248, 250, 252, 0.9);
-  border-color: rgba(229, 231, 235, 0.9);
-  transform: translateY(-1px);
+  background: #f9fafb;
+  color: #374151;
 }
 
 .railLabel {
-  font-size: 11px;
-  font-weight: 800;
-  color: #334155;
-  line-height: 1;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
 }
 
 .railIndicator {
   position: absolute;
-  left: -6px;
-  top: 12px;
-  bottom: 12px;
-  width: 4px;
-  border-radius: 999px;
-  background: #667eea;
-}
-
-.active {
-  background: rgba(102, 126, 234, 0.12);
-  border-color: rgba(102, 126, 234, 0.35);
-}
-
-.highlight {
-  background: rgba(16, 185, 129, 0.12);
-  border-color: rgba(16, 185, 129, 0.35);
-}
-
-.iconWrap {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-}
-
-.icon {
-  font-size: 18px;
-  color: #111827;
-}
-
-.avatar {
-  border-radius: 999px;
-  border: 2px solid rgba(148, 163, 184, 0.45);
-  object-fit: cover;
-}
-
-.badge {
-  position: absolute;
-  top: -6px;
-  right: -8px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: #ef4444;
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 900;
-  display: grid;
-  place-items: center;
-  border: 2px solid #ffffff;
-}
-
-/* Mobile bottom bar */
-.bottomNav {
-  position: fixed;
   left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.92);
-  border-top: 1px solid rgba(229, 231, 235, 0.9);
-  backdrop-filter: blur(12px);
-
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 28px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 0 4px 4px 0;
 }
 
-.bottomNav::-webkit-scrollbar {
-  height: 0;
-}
-
-.navItem {
-  position: relative;
-  flex: 1 0 64px;
-  min-width: 64px;
-
-  display: grid;
-  place-items: center;
-  gap: 4px;
-  padding: 10px 6px;
-  border-radius: 14px;
-  text-decoration: none;
-  color: #111827;
-
-  transition: background 0.15s ease, transform 0.15s ease;
-}
-
-.navItem:hover {
-  background: rgba(248, 250, 252, 0.9);
-}
-
-.label {
-  font-size: 11px;
-  font-weight: 900;
-  color: #334155;
-  line-height: 1;
-  text-align: center;
-}
-
-.activeIndicator {
-  position: absolute;
-  top: 6px;
-  left: 10px;
-  right: 10px;
-  height: 3px;
-  border-radius: 999px;
-  background: #667eea;
-}
-
-/* “Create” special button feel on mobile */
-.navItem.highlight {
-  transform: translateY(-6px);
-  background: rgba(16, 185, 129, 0.14);
-  border: 1px solid rgba(16, 185, 129, 0.35);
-}
-
-.navItem.highlight .icon {
-  color: #065f46;
-}
-
-/* Show rail on larger screens, show bottom bar on smaller screens */
-@media (min-width: 980px) {
+/* Hide rail on small & medium screens */
+@media (max-width: 1023px) {
   .rail {
-    display: grid;
+    display: none;
+  }
+}
+
+/* Show rail on large screens >= 1024px */
+@media (min-width: 1024px) {
+  .rail {
+    display: flex;
   }
   .bottomNav {
     display: none;
   }
 }
 
-/* Compact phones */
-@media (max-width: 420px) {
+/* Mobile bottom bar (visible < 1024px) */
+.bottomNav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 65px;
+  background: white;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 1000;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  pointer-events: auto;
+}
+
+.navItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-decoration: none;
+  color: #6b7280;
+  position: relative;
+  flex: 1;
+  height: 100%;
+  transition: color 0.2s;
+  padding: 8px 4px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.navItem:active {
+  transform: scale(0.95);
+}
+
+.iconWrap {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+
+.icon {
+  font-size: 22px;
+  transition: all 0.2s;
+}
+
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.active {
+  color: #667eea;
+}
+
+.active .avatar {
+  border-color: #667eea;
+}
+
+.active .icon {
+  transform: scale(1.1);
+}
+
+.activeIndicator {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 3px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 0 0 8px 8px;
+}
+
+.highlight {
+  color: #667eea;
+}
+
+.highlight .icon {
+  font-size: 26px;
+  filter: drop-shadow(0 2px 6px rgba(102, 126, 234, 0.5));
+}
+
+/* Unread badge (for notifications and messages) */
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid #fff;
+  z-index: 1;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .rail {
+    background: #1b1b1f;
+    border-right-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .railItem {
+    color: #f3f4f6;
+  }
+
+  .railItem:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+  }
+
+  .bottomNav {
+    background: rgba(15, 15, 17, 0.95);
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
+
   .navItem {
-    min-width: 58px;
-    padding: 9px 6px;
+    color: #f3f4f6;
   }
-  .icon {
-    font-size: 17px;
+
+  .active {
+    color: #818cf8;
   }
-  .label {
-    font-size: 10px;
+
+  .active .avatar {
+    border-color: #818cf8;
   }
+
+  .highlight {
+    color: #818cf8;
+  }
+
+  .badge {
+    border-color: rgba(0, 0, 0, 0.4);
+  }
+}
+
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid var(--card-bg, #fff);
 }

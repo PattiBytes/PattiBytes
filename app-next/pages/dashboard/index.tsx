@@ -15,16 +15,15 @@ import {
   type QueryDocumentSnapshot,
   type DocumentData,
 } from 'firebase/firestore';
+
 import { getFirebaseClient } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import BytesStories from '@/components/BytesStories';
-import SafeImage from '@/components/SafeImage';
-import VideoReel from '@/components/VideoReel';
-import ShareButton from '@/components/ShareButton';
-import LikeButton from '@/components/LikeButton';
 import ConfirmModal from '@/components/ConfirmModal';
+import FeedPostCard, { type Post } from '@/components/FeedPostCard';
+
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -34,9 +33,6 @@ import {
   FaVideo,
   FaTimes,
   FaBell,
-  FaEye,
-  FaComment,
-  FaTrash,
   FaArrowUp,
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
@@ -65,31 +61,6 @@ interface FirestorePostDoc {
   viewsCount?: number;
   isOfficial?: boolean;
   isDraft?: boolean;
-}
-
-interface Post {
-  id: string;
-  title: string;
-  content: string;
-  preview?: string;
-  type: PostType;
-  source: 'user' | 'cms';
-  authorId?: string;
-  authorName: string;
-  authorUsername?: string;
-  authorPhoto?: string;
-  imageUrl?: string;
-  videoUrl?: string;
-  mediaType?: 'image' | 'video';
-  location?: string;
-  createdAt: Date;
-  likesCount: number;
-  commentsCount: number;
-  sharesCount: number;
-  viewsCount?: number;
-  url?: string;
-  slug?: string;
-  isOfficial?: boolean;
 }
 
 interface CMSNewsItem {
@@ -132,7 +103,6 @@ type CMSCacheShape = {
   notifs: CMSNotificationItem[];
 };
 
-
 function getCMSCache(): CMSCacheShape | null {
   try {
     const raw = sessionStorage.getItem(CMS_CACHE_KEY);
@@ -161,19 +131,13 @@ function getCMSOrigin(): string {
 
 function resolveCMSImage(path?: string): string | undefined {
   if (!path) return undefined;
-
-  // already absolute
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-
-  // assets/uploads... (with or without leading slash)
   if (path.startsWith('assets/uploads') || path.startsWith('/assets/uploads')) {
     const clean = path.startsWith('/') ? path : `/${path}`;
     return `${getCMSOrigin()}${clean}`;
   }
-
   return path;
 }
-
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -186,10 +150,13 @@ export default function Dashboard() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [filter, setFilter] = useState<'all' | 'news' | 'places' | 'writings' | 'user-content' | 'video'>('all');
+
   const [urgentNotification, setUrgentNotification] = useState<CMSNotificationItem | null>(null);
   const [showNotification, setShowNotification] = useState(false);
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; postId: string; title: string } | null>(null);
 
   const lastDoc = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
@@ -208,21 +175,17 @@ export default function Dashboard() {
         setIsAdmin(false);
       }
     };
-    check();
+    void check();
   }, [db, user]);
 
   // Scroll to top detection
   useEffect(() => {
-    const handleScroll = () => {
-      setShowScrollTop(window.scrollY > 400);
-    };
+    const handleScroll = () => setShowScrollTop(window.scrollY > 400);
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   const filterFn = useCallback(
     (items: Post[]) => {
@@ -278,8 +241,8 @@ export default function Dashboard() {
         title: n.title,
         content: n.preview || '',
         preview: n.preview,
-        type: 'news' as PostType,
-        source: 'cms' as const,
+        type: 'news',
+        source: 'cms',
         authorName: n.author || 'PattiBytes Desk',
         authorPhoto: '/images/default-avatar.png',
         imageUrl: resolveCMSImage(n.image),
@@ -291,13 +254,14 @@ export default function Dashboard() {
         slug: n.slug || n.id,
         isOfficial: true,
       }));
+
       const officialPlaces: Post[] = cached.places.map((p, idx) => ({
         id: `cms-place-${p.id || p.slug || idx}`,
         title: p.title,
         content: p.preview || '',
         preview: p.preview,
-        type: 'place' as PostType,
-        source: 'cms' as const,
+        type: 'place',
+        source: 'cms',
         authorName: 'PattiBytes',
         authorPhoto: '/images/default-avatar.png',
         imageUrl: resolveCMSImage(p.image),
@@ -310,6 +274,7 @@ export default function Dashboard() {
         slug: p.slug || p.id,
         isOfficial: true,
       }));
+
       const cPosts = [...officialNews, ...officialPlaces];
       setCmsPosts(cPosts);
       buildFeed(userPosts, cPosts);
@@ -318,7 +283,12 @@ export default function Dashboard() {
     }
 
     try {
-      const [news, places, notifs] = await Promise.all([fetchCMSNews(), fetchCMSPlaces(), fetchCMSNotifications()]);
+      const [news, places, notifs] = await Promise.all([
+        fetchCMSNews(),
+        fetchCMSPlaces(),
+        fetchCMSNotifications(),
+      ]);
+
       setCMSCache({ news, places, notifs });
 
       const officialNews: Post[] = news.map((n, idx) => ({
@@ -326,8 +296,8 @@ export default function Dashboard() {
         title: n.title,
         content: n.preview || '',
         preview: n.preview,
-        type: 'news' as PostType,
-        source: 'cms' as const,
+        type: 'news',
+        source: 'cms',
         authorName: n.author || 'PattiBytes Desk',
         authorPhoto: '/images/default-avatar.png',
         imageUrl: resolveCMSImage(n.image),
@@ -339,13 +309,14 @@ export default function Dashboard() {
         slug: n.slug || n.id,
         isOfficial: true,
       }));
+
       const officialPlaces: Post[] = places.map((p, idx) => ({
         id: `cms-place-${p.id || p.slug || idx}`,
         title: p.title,
         content: p.preview || '',
         preview: p.preview,
-        type: 'place' as PostType,
-        source: 'cms' as const,
+        type: 'place',
+        source: 'cms',
         authorName: 'PattiBytes',
         authorPhoto: '/images/default-avatar.png',
         imageUrl: resolveCMSImage(p.image),
@@ -358,6 +329,7 @@ export default function Dashboard() {
         slug: p.slug || p.id,
         isOfficial: true,
       }));
+
       const cPosts = [...officialNews, ...officialPlaces];
       setCmsPosts(cPosts);
       buildFeed(userPosts, cPosts);
@@ -371,17 +343,20 @@ export default function Dashboard() {
   useEffect(() => {
     if (!db) return;
     setLoading(true);
+
     const q = fsQuery(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(20));
+
     const unsub = onSnapshot(
       q,
       (snap) => {
         const uPosts: Post[] = [];
+
         snap.docs.forEach((d) => {
           const data = d.data() as FirestorePostDoc;
-          // Skip drafts on the client side
           if (data.isDraft === true) return;
 
           const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
+
           uPosts.push({
             id: d.id,
             title: data.title || '',
@@ -409,6 +384,7 @@ export default function Dashboard() {
         if (snap.docs.length > 0) {
           lastDoc.current = snap.docs[snap.docs.length - 1] as QueryDocumentSnapshot<DocumentData>;
         }
+
         setUserPosts(uPosts);
         buildFeed(uPosts, cmsPosts);
         setLoading(false);
@@ -419,11 +395,12 @@ export default function Dashboard() {
         toast.error('Unable to load posts. Check permissions.');
       }
     );
+
     return () => unsub();
   }, [db, buildFeed, cmsPosts]);
 
   useEffect(() => {
-    loadCMS();
+    void loadCMS();
   }, [loadCMS]);
 
   useEffect(() => {
@@ -432,21 +409,30 @@ export default function Dashboard() {
 
   const loadMore = useCallback(async () => {
     if (!db || !lastDoc.current || loadingMore || !hasMore) return;
+
     setLoadingMore(true);
     try {
-      const q = fsQuery(collection(db, 'posts'), orderBy('createdAt', 'desc'), startAfter(lastDoc.current), limit(20));
+      const q = fsQuery(
+        collection(db, 'posts'),
+        orderBy('createdAt', 'desc'),
+        startAfter(lastDoc.current),
+        limit(20)
+      );
+
       const snap = await getDocs(q);
+
       if (snap.empty) {
         setHasMore(false);
         return;
       }
+
       const morePosts: Post[] = [];
       snap.docs.forEach((d) => {
         const data = d.data() as FirestorePostDoc;
-        // Skip drafts
         if (data.isDraft === true) return;
 
         const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
+
         morePosts.push({
           id: d.id,
           title: data.title || '',
@@ -481,21 +467,22 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (loading || loadingMore || !hasMore) return;
+
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) loadMore();
+        if (entries[0].isIntersecting) void loadMore();
       },
       { threshold: 0.5 }
     );
+
     observer.current = io;
     const el = loadMoreRef.current;
     if (el) io.observe(el);
+
     return () => io.disconnect();
   }, [loading, loadingMore, hasMore, loadMore]);
 
-  const confirmDelete = (postId: string, title: string) => {
-    setDeleteModal({ open: true, postId, title });
-  };
+  const confirmDelete = (postId: string, title: string) => setDeleteModal({ open: true, postId, title });
 
   const performDelete = async () => {
     if (!deleteModal || !db) return;
@@ -508,27 +495,13 @@ export default function Dashboard() {
     }
   };
 
-  const getPostIcon = (type: string) => {
-    switch (type) {
-      case 'news':
-        return <FaNewspaper />;
-      case 'place':
-        return <FaMapMarkerAlt />;
-      case 'writing':
-        return <FaPen />;
-      case 'video':
-        return <FaVideo />;
-      default:
-        return null;
-    }
-  };
-
   const feedEmpty = !loading && posts.length === 0;
 
   return (
     <AuthGuard>
       <Layout title="Dashboard - PattiBytes">
         <Toaster position="top-center" />
+
         <div className={styles.dashboard}>
           {/* Notification Banner */}
           <AnimatePresence>
@@ -542,11 +515,13 @@ export default function Dashboard() {
                 <FaBell />
                 <span className={styles.notifTitle}>{urgentNotification.title}</span>
                 <span className={styles.notifMessage}>{urgentNotification.message}</span>
+
                 {urgentNotification.target_url && (
                   <a href={urgentNotification.target_url} target="_blank" rel="noopener noreferrer">
                     View
                   </a>
                 )}
+
                 <button onClick={() => setShowNotification(false)} aria-label="Close">
                   <FaTimes />
                 </button>
@@ -561,18 +536,23 @@ export default function Dashboard() {
             <button className={`${styles.tab} ${filter === 'all' ? styles.activeTab : ''}`} onClick={() => setFilter('all')}>
               All
             </button>
+
             <button className={`${styles.tab} ${filter === 'news' ? styles.activeTab : ''}`} onClick={() => setFilter('news')}>
               <FaNewspaper /> News
             </button>
+
             <button className={`${styles.tab} ${filter === 'places' ? styles.activeTab : ''}`} onClick={() => setFilter('places')}>
               <FaMapMarkerAlt /> Places
             </button>
+
             <button className={`${styles.tab} ${filter === 'writings' ? styles.activeTab : ''}`} onClick={() => setFilter('writings')}>
               <FaPen /> Writings
             </button>
+
             <button className={`${styles.tab} ${filter === 'user-content' ? styles.activeTab : ''}`} onClick={() => setFilter('user-content')}>
               <FaVideo /> User
             </button>
+
             <button className={`${styles.tab} ${filter === 'video' ? styles.activeTab : ''}`} onClick={() => setFilter('video')}>
               <FaVideo /> Videos
             </button>
@@ -595,119 +575,16 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
-                
-{posts.map((post, index) => {
-  const isUserPost = post.source === 'user' && !post.id.startsWith('cms-');
-  const shareUrl =
-    post.url ||
-    `${typeof window !== 'undefined' ? window.location.origin : ''}/posts/${post.id}`;
-
-  const readMoreHref =
-    post.source === 'cms'
-      ? post.type === 'news'
-        ? `/news/${post.slug || post.id.replace('cms-news-', '')}`
-        : post.type === 'place'
-        ? `/places/${post.slug || post.id.replace('cms-place-', '')}`
-        : `/posts/${post.id}`
-      : `/posts/${post.id}`;
-
-                  return (
-                   <motion.article
-      key={`${post.id}-${index}`}        // 🔧 make key unique
-      className={styles.postCard}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        delay: Math.min(index * 0.02, 0.3),
-        duration: 0.4,
-      }}
-    >
-                      <div className={styles.postHeader}>
-                        {post.source === 'user' && post.authorUsername ? (
-                          <Link href={`/user/${post.authorUsername}`} className={styles.author}>
-                            <SafeImage
-                              src={post.authorPhoto || '/images/default-avatar.png'}
-                              alt={post.authorName}
-                              width={48}
-                              height={48}
-                              className={styles.authorAvatar}
-                            />
-                            <div className={styles.authorInfo}>
-                              <h4>{post.authorName}</h4>
-                              <p>@{post.authorUsername}</p>
-                            </div>
-                          </Link>
-                        ) : (
-                          <div className={styles.author}>
-                            <div className={styles.authorAvatarPlaceholder}>{post.authorName.charAt(0).toUpperCase()}</div>
-                            <div className={styles.authorInfo}>
-                              <h4>{post.authorName}</h4>
-                              <p className={styles.cmsLabel}>Official</p>
-                            </div>
-                          </div>
-                        )}
-                        <div className={styles.postMeta}>
-                          <div className={styles.postType}>
-                            {getPostIcon(post.type)}
-                            <span>{post.type}</span>
-                          </div>
-                          {post.viewsCount !== undefined && post.viewsCount > 0 && (
-                            <div className={styles.views}>
-                              <FaEye /> {post.viewsCount}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {post.mediaType === 'video' && post.videoUrl ? (
-                        <VideoReel src={post.videoUrl} poster={post.imageUrl} />
-                      ) : post.imageUrl ? (
-                        <div className={styles.postImage}>
-                          <SafeImage src={post.imageUrl} alt={post.title} width={600} height={400} className="image" />
-                        </div>
-                      ) : null}
-
-                      <div className={styles.postContent}>
-                        {post.title && <h3>{post.title}</h3>}
-                        {post.location && (
-                          <p className={styles.location}>
-                            <FaMapMarkerAlt /> {post.location}
-                          </p>
-                        )}
-                        {(post.preview || post.content) && <p>{(post.preview || post.content).toString().substring(0, 220)}...</p>}
-                        <Link href={readMoreHref} className={styles.readMore}>
-                          Read More →
-                        </Link>
-                      </div>
-
-                      <div className={styles.postActions}>
-                        {isUserPost ? (
-                          <LikeButton postId={post.id} className={styles.actionButton} />
-                        ) : (
-                          <button className={styles.actionButton} disabled aria-label="Like">
-                            <span>❤</span>
-                            <span>{post.likesCount || 0}</span>
-                          </button>
-                        )}
-                        <Link href={`${readMoreHref}#comments`} className={styles.actionButton} aria-label="Comments">
-                          <FaComment />
-                          <span>{post.commentsCount || 0}</span>
-                        </Link>
-                        <ShareButton postId={post.id} url={shareUrl} className={styles.actionButton} />
-                        {isUserPost && (user?.uid === post.authorId || isAdmin) ? (
-                          <button className={styles.actionButton} onClick={() => confirmDelete(post.id, post.title)} aria-label="Delete" title="Delete post">
-                            <FaTrash />
-                          </button>
-                        ) : null}
-                      </div>
-
-                      <div className={styles.postFooter}>
-                        <span>{post.createdAt.toLocaleDateString()}</span>
-                        {(post.isOfficial || post.source === 'cms') && <span className={styles.officialBadge}>Official</span>}
-                      </div>
-                    </motion.article>
-                  );
-                })}
+                {posts.map((post, index) => (
+                  <FeedPostCard
+                    key={post.id}
+                    post={post}
+                    index={index}
+                    currentUid={user?.uid}
+                    isAdmin={isAdmin}
+                    onDelete={confirmDelete}
+                  />
+                ))}
 
                 {hasMore && (
                   <div ref={loadMoreRef} className={styles.loadMore}>
