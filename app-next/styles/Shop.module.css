@@ -1,0 +1,93 @@
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 18px 14px 90px; /* bottom space for mobile nav */
+}
+
+.header {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 900;
+}
+
+.header p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.card {
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid #eef2f7;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  box-shadow: 0 10px 25px rgba(17, 24, 39, 0.05);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08);
+}
+
+.cardTop {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.badge {
+  font-size: 12px;
+  font-weight: 900;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(102, 126, 234, 0.12);
+  border: 1px solid rgba(102, 126, 234, 0.28);
+  color: #334155;
+}
+
+.title {
+  font-weight: 900;
+  font-size: 16px;
+}
+
+.price {
+  font-weight: 900;
+  color: #111827;
+}
+
+.btn {
+  border: none;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #667eea;
+  color: #fff;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

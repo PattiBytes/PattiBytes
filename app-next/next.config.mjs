@@ -3,10 +3,12 @@ import withPWAInit from '@ducanh2912/next-pwa';
 
 const withPWA = withPWAInit({
   dest: 'public',
+  devIndicators: false,
   register: true,
   skipWaiting: true,
   // We will completely disable the plugin in dev via conditional export below,
   // so this flag mainly affects production/preview behaviour.
+  
   disable: false,
   runtimeCaching: [
     {
