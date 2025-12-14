@@ -46,23 +46,31 @@ export interface UserProfile {
   username: string;
   email: string;
   displayName: string;
+  displayNameLower?: string;
+
   photoURL?: string;
   bio?: string;
   website?: string;
   location?: string;
   role?: 'user' | 'admin';
   isBanned?: boolean;
+
   socialLinks?: {
     twitter?: string;
     instagram?: string;
     youtube?: string;
     linkedin?: string;
   };
+
   preferences?: {
     theme?: 'light' | 'dark' | 'auto';
     language?: 'en' | 'pa';
     notifications?: boolean;
     publicProfile?: boolean;
+    allowSearchIndexing?: boolean;
+     allowDMs?: boolean;
+    allowComments?: boolean;
+     showActivityStatus?: boolean;
   };
   stats?: {
     postsCount?: number;
@@ -167,11 +175,17 @@ function normalizeUserProfile(uid: string, data: DocumentData): UserProfile {
   };
 
   const preferences = {
-    theme: (data.preferences?.theme as 'light' | 'dark' | 'auto') ?? 'auto',
-    language: (data.preferences?.language as 'en' | 'pa') ?? 'en',
-    notifications: Boolean(data.preferences?.notifications ?? true),
-    publicProfile: Boolean(data.preferences?.publicProfile ?? true),
-  };
+  theme: (data.preferences?.theme as 'light' | 'dark' | 'auto') ?? 'auto',
+  language: (data.preferences?.language as 'en' | 'pa') ?? 'en',
+  notifications: Boolean(data.preferences?.notifications ?? true),
+  publicProfile: Boolean(data.preferences?.publicProfile ?? true),
+
+  showActivityStatus: Boolean(data.preferences?.showActivityStatus ?? true),
+  allowSearchIndexing: Boolean(data.preferences?.allowSearchIndexing ?? true),
+  allowDMs: Boolean(data.preferences?.allowDMs ?? true),
+  allowComments: Boolean(data.preferences?.allowComments ?? true),
+};
+
 
   return deepClean({
     uid,
@@ -515,6 +529,18 @@ export async function claimUsername(
           followersCount: 0,
           followingCount: 0,
         };
+        profileData.preferences = {
+  theme: 'auto',
+  language: 'en',
+  notifications: true,
+  publicProfile: true,
+
+  showActivityStatus: true,
+  allowSearchIndexing: true,
+  allowDMs: true,
+  allowComments: true,
+};
+
         profileData.unreadNotifications = 0;
         profileData.preferences = {
           theme: 'auto',
