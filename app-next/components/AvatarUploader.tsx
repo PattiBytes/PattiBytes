@@ -40,18 +40,18 @@ export default function AvatarUploader({ user }: { user: User }) {
       return;
     }
 
-    try {
-      const secureUrl = await uploadToCloudinary(file, 'avatar');
-      setUrl(secureUrl);
-      await setDoc(doc(db, 'users', user.uid), { photoURL: secureUrl }, { merge: true });
-    } catch (err) {
+   try {
+  const secureUrl = await uploadToCloudinary(file, 'avatar', undefined);
+  setUrl(secureUrl);
+  await setDoc(doc(db, 'users', user.uid), { photoURL: secureUrl }, { merge: true });
+} catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setBusy(false);
     }
   };
-
+ 
   return (
     <div>
       <SafeImage

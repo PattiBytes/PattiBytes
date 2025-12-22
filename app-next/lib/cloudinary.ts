@@ -191,6 +191,7 @@ export async function uploadVideo(
 }
 
 export async function uploadToCloudinary(
+  
 file: File, detectedType: string, p0: unknown, type: UploadType = 'image',
 ): Promise<string> {
   return type === 'video' ? uploadVideo(file) : uploadImageOrAvatar(file, type as 'image' | 'avatar');
