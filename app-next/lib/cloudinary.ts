@@ -40,7 +40,7 @@ function presetFor(type: UploadType): string {
 async function uploadViaAPI(file: File, type: UploadType): Promise<string> {
   const form = new FormData();
   form.append('file', file);
-  form.append('type', type); // Tell API route the correct type
+  form.append('type', type);
 
   const res = await fetch('/api/cloudinary/upload', {
     method: 'POST',
@@ -64,7 +64,7 @@ export async function uploadImageOrAvatar(
   file: File,
   type: Extract<UploadType, 'image' | 'avatar'> = 'image',
 ): Promise<string> {
-  // AUTO-DETECT: If it's actually a video, route to uploadVideo
+  // AUTO-DETECT: If it is actually a video, route to uploadVideo
   if (file.type.startsWith('video/')) {
     console.warn('Video file passed to uploadImageOrAvatar, routing to uploadVideo');
     return uploadVideo(file);
@@ -190,13 +190,22 @@ export async function uploadVideo(
   });
 }
 
+/**
+ * Main upload function - handles all file types
+ */
 export async function uploadToCloudinary(
-  
-file: File, detectedType: string, p0: unknown, type: UploadType = 'image',
+  file: File,
+  type: UploadType = 'image',
+  onProgress?: (percent: number) => void,
 ): Promise<string> {
-  return type === 'video' ? uploadVideo(file) : uploadImageOrAvatar(file, type as 'image' | 'avatar');
+  return type === 'video'
+    ? uploadVideo(file, onProgress)
+    : uploadImageOrAvatar(file, type as 'image' | 'avatar');
 }
 
+/**
+ * Transform Cloudinary image URL with options
+ */
 export function transformImage(
   url: string,
   opts: {
@@ -232,6 +241,9 @@ export function transformImage(
   }
 }
 
+/**
+ * Delete media from Cloudinary
+ */
 export async function deleteFromCloudinary(
   publicId: string,
   resourceType?: 'image' | 'video',
