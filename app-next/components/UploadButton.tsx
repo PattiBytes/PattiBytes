@@ -1,9 +1,10 @@
+// app-next/components/UploadButton.tsx
 import { useRef, useState } from 'react';
 import SafeImage from './SafeImage';
 import { FaUpload, FaTimes } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import styles from '@/styles/UploadButton.module.css';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+import { uploadToCloudinary, type UploadType } from '@/lib/cloudinary';
 
 interface UploadButtonProps {
   onUploadComplete?: (url: string) => void;
@@ -15,30 +16,39 @@ interface UploadButtonProps {
 
 export default function UploadButton({
   onUploadComplete,
-  accept = 'image/*',
+  accept = 'image/*,video/*',
   maxSize = 10,
   buttonText = 'Upload File',
   showPreview = true,
 }: UploadButtonProps) {
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0); // simulated for Cloudinary
+  const [progress, setProgress] = useState(0);
   const [preview, setPreview] = useState<string | null>(null);
+  const [fileType, setFileType] = useState<UploadType | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file size
     if (file.size > maxSize * 1024 * 1024) {
       toast.error(`File must be less than ${maxSize}MB`);
       return;
     }
+
+    // Validate file type against accept prop
     if (accept && !file.type.match(accept.replace('*', '.*'))) {
       toast.error('Invalid file type');
       return;
     }
 
-    if (showPreview && file.type.startsWith('image/')) {
+    // Detect file type
+    const detectedType: UploadType = file.type.startsWith('video/') ? 'video' : 'image';
+    setFileType(detectedType);
+
+    // Show preview for images and videos
+    if (showPreview) {
       const reader = new FileReader();
       reader.onload = (ev) => setPreview(ev.target?.result as string);
       reader.readAsDataURL(file);
@@ -46,9 +56,14 @@ export default function UploadButton({
 
     try {
       setUploading(true);
-      setProgress(30);
+      setProgress(0);
 
-      const url = await uploadToCloudinary(file);
+      // Upload with progress callback for videos
+      const url = await uploadToCloudinary(
+        file,
+        detectedType,
+        detectedType === 'video' ? setProgress : undefined
+      );
 
       setProgress(100);
       toast.success('Upload successful!');
@@ -57,6 +72,7 @@ export default function UploadButton({
       console.error('Cloudinary upload error:', error);
       toast.error('Upload failed. Please try again.');
       setPreview(null);
+      setFileType(null);
     } finally {
       setUploading(false);
       setTimeout(() => setProgress(0), 400);
@@ -65,6 +81,7 @@ export default function UploadButton({
 
   const handleRemovePreview = () => {
     setPreview(null);
+    setFileType(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -84,14 +101,37 @@ export default function UploadButton({
       />
 
       {!preview ? (
-        <button type="button" onClick={handleButtonClick} disabled={uploading} className={styles.uploadBtn}>
-          <FaUpload />
-          {uploading ? 'Uploading...' : buttonText}
+        <button
+          type="button"
+          onClick={handleButtonClick}
+          disabled={uploading}
+          className={styles.uploadBtn}
+        >
+          {uploading ? (
+            <>
+              <div className={styles.spinner} />
+              Uploading...
+            </>
+          ) : (
+            <>
+              <FaUpload />
+              {buttonText}
+            </>
+          )}
         </button>
       ) : (
         <div className={styles.previewContainer}>
-          <SafeImage src={preview} alt="Preview" width={300} height={200} className={styles.preview} />
-          <button type="button" onClick={handleRemovePreview} className={styles.removeBtn} disabled={uploading}>
+          {fileType === 'video' ? (
+            <video src={preview} controls className={styles.preview} />
+          ) : (
+            <SafeImage src={preview} alt="Preview" width={300} height={200} className={styles.preview} />
+          )}
+          <button
+            type="button"
+            onClick={handleRemovePreview}
+            className={styles.removeBtn}
+            disabled={uploading}
+          >
             <FaTimes />
           </button>
         </div>
