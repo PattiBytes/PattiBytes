@@ -40,7 +40,7 @@ function presetFor(type: UploadType): string {
 async function uploadViaAPI(file: File, type: UploadType): Promise<string> {
   const form = new FormData();
   form.append('file', file);
-  form.append('type', type);
+  form.append('type', type); // Tell API route the correct type
 
   const res = await fetch('/api/cloudinary/upload', {
     method: 'POST',
@@ -64,6 +64,12 @@ export async function uploadImageOrAvatar(
   file: File,
   type: Extract<UploadType, 'image' | 'avatar'> = 'image',
 ): Promise<string> {
+  // AUTO-DETECT: If it's actually a video, route to uploadVideo
+  if (file.type.startsWith('video/')) {
+    console.warn('Video file passed to uploadImageOrAvatar, routing to uploadVideo');
+    return uploadVideo(file);
+  }
+
   if (!isCloudinaryConfigured()) {
     throw new Error(
       'Cloudinary not configured. Set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and upload presets.',
@@ -91,19 +97,14 @@ export async function uploadImageOrAvatar(
       const raw = await res.text().catch(() => '');
       // For ANY 4xx (including 420 OCR error), fallback to signed API upload
       if (res.status >= 400 && res.status < 500) {
-        console.warn(
-          'Unsigned upload failed, trying signed API route...',
-          res.status,
-          raw,
-        );
+        console.warn('Unsigned upload failed, trying signed API route...', res.status, raw);
         return await uploadViaAPI(file, type);
       }
       throw new Error(`Cloudinary upload failed: ${res.status} ${raw}`);
     }
 
     const data = (await res.json()) as CloudinaryResponse;
-    if (!data.secure_url)
-      throw new Error('No secure_url returned from Cloudinary');
+    if (!data.secure_url) throw new Error('No secure_url returned from Cloudinary');
     return data.secure_url;
   } catch (error) {
     // Network error or CORS issue - fallback to API route
@@ -152,8 +153,7 @@ export async function uploadVideo(
       if (xhr.status === 200) {
         try {
           const data = JSON.parse(xhr.responseText) as CloudinaryResponse;
-          if (!data.secure_url)
-            return reject(new Error('No secure_url returned'));
+          if (!data.secure_url) return reject(new Error('No secure_url returned'));
           resolve(data.secure_url);
         } catch {
           reject(new Error('Invalid Cloudinary response'));
@@ -163,11 +163,7 @@ export async function uploadVideo(
 
       // For any 4xx (including 420), fall back to signed API upload
       if (xhr.status >= 400 && xhr.status < 500) {
-        console.warn(
-          'Unsigned video upload failed, trying signed API route...',
-          xhr.status,
-          xhr.responseText,
-        );
+        console.warn('Unsigned video upload failed, trying signed API route...', xhr.status, xhr.responseText);
         uploadViaAPI(file, 'video')
           .then(resolve)
           .catch(reject);
@@ -176,9 +172,7 @@ export async function uploadVideo(
 
       reject(
         new Error(
-          `Cloudinary upload failed: ${xhr.status} ${
-            xhr.responseText || ''
-          }`,
+          `Cloudinary upload failed: ${xhr.status} ${xhr.responseText || ''}`,
         ),
       );
     });
@@ -191,21 +185,15 @@ export async function uploadVideo(
         .catch(reject);
     });
 
-    xhr.open(
-      'POST',
-      `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`,
-    );
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`);
     xhr.send(form);
   });
 }
 
 export async function uploadToCloudinary(
-  file: File,
-  type: UploadType = 'image',
+file: File, detectedType: string, p0: unknown, type: UploadType = 'image',
 ): Promise<string> {
-  return type === 'video'
-    ? uploadVideo(file)
-    : uploadImageOrAvatar(file, type as 'image' | 'avatar');
+  return type === 'video' ? uploadVideo(file) : uploadImageOrAvatar(file, type as 'image' | 'avatar');
 }
 
 export function transformImage(
@@ -220,11 +208,7 @@ export function transformImage(
 ): string {
   try {
     const u = new URL(url);
-    if (
-      !u.host.includes('res.cloudinary.com') ||
-      !u.pathname.includes('/image/upload/')
-    )
-      return url;
+    if (!u.host.includes('res.cloudinary.com') || !u.pathname.includes('/image/upload/')) return url;
 
     const parts = u.pathname.split('/image/upload/');
     const prefix = parts[0];
