@@ -1,5 +1,5 @@
 // app-next/pages/dashboard/index.tsx
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   collection,
   query as fsQuery,
@@ -14,6 +14,8 @@ import {
   deleteDoc,
   type QueryDocumentSnapshot,
   type DocumentData,
+  where,
+  documentId,
 } from 'firebase/firestore';
 
 import { getFirebaseClient } from '@/lib/firebase';
@@ -38,6 +40,7 @@ import {
 import { Toaster, toast } from 'react-hot-toast';
 import styles from '@/styles/Dashboard.module.css';
 import { fetchCMSNews, fetchCMSPlaces, fetchCMSNotifications } from '@/lib/netlifyCms';
+import ActionSheet, { type SheetAction } from '@/components/ActionSheet';
 
 type PostType = 'news' | 'place' | 'writing' | 'video';
 
@@ -73,7 +76,6 @@ interface CMSNewsItem {
   date: string;
   url: string;
 }
-
 interface CMSPlaceItem {
   id?: string;
   slug?: string;
@@ -84,7 +86,6 @@ interface CMSPlaceItem {
   date: string;
   url: string;
 }
-
 interface CMSNotificationItem {
   id: string;
   title: string;
@@ -123,7 +124,6 @@ function setCMSCache(data: Omit<CMSCacheShape, 'ts'>) {
   } catch {}
 }
 
-// Helper: resolve CMS images from /assets/uploads or assets/uploads
 function getCMSOrigin(): string {
   if (typeof window !== 'undefined') return window.location.origin;
   return (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/+$/, '');
@@ -137,6 +137,12 @@ function resolveCMSImage(path?: string): string | undefined {
     return `${getCMSOrigin()}${clean}`;
   }
   return path;
+}
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
 
 export default function Dashboard() {
@@ -163,6 +169,70 @@ export default function Dashboard() {
   const observer = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const cmsLoaded = useRef(false);
+
+  // ActionSheet (long-press)
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetPost, setSheetPost] = useState<Post | null>(null);
+
+  const openPostActions = (p: Post) => {
+    setSheetPost(p);
+    setSheetOpen(true);
+  };
+
+  const confirmDelete = (postId: string, title: string) => setDeleteModal({ open: true, postId, title });
+
+  const sheetActions: SheetAction[] = useMemo(() => {
+    if (!sheetPost) return [];
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const href =
+      sheetPost.source === 'cms'
+        ? sheetPost.type === 'news'
+          ? `/news/${sheetPost.slug || sheetPost.id.replace('cms-news-', '')}`
+          : sheetPost.type === 'place'
+            ? `/places/${sheetPost.slug || sheetPost.id.replace('cms-place-', '')}`
+            : `/posts/${sheetPost.id}`
+        : `/posts/${sheetPost.id}`;
+
+    const shareUrl = sheetPost.url || `${origin}${href}`;
+
+    const canDelete =
+      sheetPost.source === 'user' &&
+      (user?.uid === sheetPost.authorId || isAdmin);
+
+    return [
+      {
+        label: 'Copy link',
+        onPress: async () => {
+          await navigator.clipboard.writeText(shareUrl);
+          toast.success('Link copied');
+          setSheetOpen(false);
+        },
+      },
+      {
+        label: 'Share',
+        onPress: async () => {
+          // ts-ignore
+          if (navigator.share) await navigator.share({ title: sheetPost.title, url: shareUrl });
+          else {
+            await navigator.clipboard.writeText(shareUrl);
+            toast.success('Link copied');
+          }
+          setSheetOpen(false);
+        },
+      },
+      ...(canDelete
+        ? [{
+            label: 'Delete post',
+            destructive: true,
+            onPress: () => {
+              setSheetOpen(false);
+              confirmDelete(sheetPost.id, sheetPost.title);
+            },
+          }]
+        : []),
+    ];
+  }, [sheetPost, user?.uid, isAdmin]);
 
   // Admin check
   useEffect(() => {
@@ -206,7 +276,7 @@ export default function Dashboard() {
           return items;
       }
     },
-    [filter]
+    [filter],
   );
 
   const buildFeed = useCallback(
@@ -214,7 +284,37 @@ export default function Dashboard() {
       const merged = [...uPosts, ...cPosts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       setPosts(filterFn(merged));
     },
-    [filterFn]
+    [filterFn],
+  );
+
+  const hydrateCmsCounts = useCallback(
+    async (baseCms: Post[]): Promise<Post[]> => {
+      if (!db) return baseCms;
+
+      const ids = baseCms.map((p) => p.id);
+      const chunks = chunk(ids, 10); // Firestore 'in' supports max 10 values
+      const stats = new Map<string, Partial<Post>>();
+
+      for (const group of chunks) {
+        const q = fsQuery(collection(db, 'posts'), where(documentId(), 'in', group));
+        const snap = await getDocs(q);
+        snap.docs.forEach((d) => {
+          const data = d.data() as FirestorePostDoc;
+          stats.set(d.id, {
+            likesCount: data.likesCount ?? 0,
+            commentsCount: data.commentsCount ?? 0,
+            sharesCount: data.sharesCount ?? 0,
+            viewsCount: data.viewsCount ?? 0,
+          });
+        });
+      }
+
+      return baseCms.map((p) => ({
+        ...p,
+        ...(stats.get(p.id) || {}),
+      }));
+    },
+    [db],
   );
 
   // CMS loader
@@ -234,63 +334,7 @@ export default function Dashboard() {
       }
     };
 
-    const cached = getCMSCache();
-    if (cached) {
-      const officialNews: Post[] = cached.news.map((n, idx) => ({
-        id: `cms-news-${n.id || n.slug || idx}`,
-        title: n.title,
-        content: n.preview || '',
-        preview: n.preview,
-        type: 'news',
-        source: 'cms',
-        authorName: n.author || 'PattiBytes Desk',
-        authorPhoto: '/images/default-avatar.png',
-        imageUrl: resolveCMSImage(n.image),
-        createdAt: new Date(n.date),
-        likesCount: 0,
-        commentsCount: 0,
-        sharesCount: 0,
-        url: n.url,
-        slug: n.slug || n.id,
-        isOfficial: true,
-      }));
-
-      const officialPlaces: Post[] = cached.places.map((p, idx) => ({
-        id: `cms-place-${p.id || p.slug || idx}`,
-        title: p.title,
-        content: p.preview || '',
-        preview: p.preview,
-        type: 'place',
-        source: 'cms',
-        authorName: 'PattiBytes',
-        authorPhoto: '/images/default-avatar.png',
-        imageUrl: resolveCMSImage(p.image),
-        location: p.location || 'Punjab',
-        createdAt: new Date(p.date),
-        likesCount: 0,
-        commentsCount: 0,
-        sharesCount: 0,
-        url: p.url,
-        slug: p.slug || p.id,
-        isOfficial: true,
-      }));
-
-      const cPosts = [...officialNews, ...officialPlaces];
-      setCmsPosts(cPosts);
-      buildFeed(userPosts, cPosts);
-      applyNotifsOnce(cached.notifs);
-      return;
-    }
-
-    try {
-      const [news, places, notifs] = await Promise.all([
-        fetchCMSNews(),
-        fetchCMSPlaces(),
-        fetchCMSNotifications(),
-      ]);
-
-      setCMSCache({ news, places, notifs });
-
+    const buildFromCache = (news: CMSNewsItem[], places: CMSPlaceItem[]) => {
       const officialNews: Post[] = news.map((n, idx) => ({
         id: `cms-news-${n.id || n.slug || idx}`,
         title: n.title,
@@ -330,16 +374,39 @@ export default function Dashboard() {
         isOfficial: true,
       }));
 
-      const cPosts = [...officialNews, ...officialPlaces];
-      setCmsPosts(cPosts);
-      buildFeed(userPosts, cPosts);
+      return [...officialNews, ...officialPlaces];
+    };
+
+    const cached = getCMSCache();
+    if (cached) {
+      const baseCms = buildFromCache(cached.news, cached.places);
+      const hydrated = await hydrateCmsCounts(baseCms);
+      setCmsPosts(hydrated);
+      buildFeed(userPosts, hydrated);
+      applyNotifsOnce(cached.notifs);
+      return;
+    }
+
+    try {
+      const [news, places, notifs] = await Promise.all([
+        fetchCMSNews(),
+        fetchCMSPlaces(),
+        fetchCMSNotifications(),
+      ]);
+
+      setCMSCache({ news, places, notifs });
+
+      const baseCms = buildFromCache(news, places);
+      const hydrated = await hydrateCmsCounts(baseCms);
+      setCmsPosts(hydrated);
+      buildFeed(userPosts, hydrated);
       applyNotifsOnce(notifs);
     } catch {
       // Silent CMS failure
     }
-  }, [buildFeed, userPosts]);
+  }, [buildFeed, hydrateCmsCounts, userPosts]);
 
-  // Realtime user posts (CLIENT-SIDE filtering of drafts)
+  // Realtime user posts
   useEffect(() => {
     if (!db) return;
     setLoading(true);
@@ -352,6 +419,9 @@ export default function Dashboard() {
         const uPosts: Post[] = [];
 
         snap.docs.forEach((d) => {
+          // Prevent “virtual CMS docs” inside posts from showing in feed
+          if (d.id.startsWith('cms-')) return;
+
           const data = d.data() as FirestorePostDoc;
           if (data.isDraft === true) return;
 
@@ -393,7 +463,7 @@ export default function Dashboard() {
       () => {
         setLoading(false);
         toast.error('Unable to load posts. Check permissions.');
-      }
+      },
     );
 
     return () => unsub();
@@ -416,11 +486,10 @@ export default function Dashboard() {
         collection(db, 'posts'),
         orderBy('createdAt', 'desc'),
         startAfter(lastDoc.current),
-        limit(20)
+        limit(20),
       );
 
       const snap = await getDocs(q);
-
       if (snap.empty) {
         setHasMore(false);
         return;
@@ -428,6 +497,8 @@ export default function Dashboard() {
 
       const morePosts: Post[] = [];
       snap.docs.forEach((d) => {
+        if (d.id.startsWith('cms-')) return;
+
         const data = d.data() as FirestorePostDoc;
         if (data.isDraft === true) return;
 
@@ -472,7 +543,7 @@ export default function Dashboard() {
       (entries) => {
         if (entries[0].isIntersecting) void loadMore();
       },
-      { threshold: 0.5 }
+      { threshold: 0.5 },
     );
 
     observer.current = io;
@@ -481,8 +552,6 @@ export default function Dashboard() {
 
     return () => io.disconnect();
   }, [loading, loadingMore, hasMore, loadMore]);
-
-  const confirmDelete = (postId: string, title: string) => setDeleteModal({ open: true, postId, title });
 
   const performDelete = async () => {
     if (!deleteModal || !db) return;
@@ -503,7 +572,6 @@ export default function Dashboard() {
         <Toaster position="top-center" />
 
         <div className={styles.dashboard}>
-          {/* Notification Banner */}
           <AnimatePresence>
             {urgentNotification && showNotification && (
               <motion.div
@@ -531,7 +599,6 @@ export default function Dashboard() {
 
           <BytesStories />
 
-          {/* Filter Tabs */}
           <div className={styles.filterTabs}>
             <button className={`${styles.tab} ${filter === 'all' ? styles.activeTab : ''}`} onClick={() => setFilter('all')}>
               All
@@ -558,7 +625,6 @@ export default function Dashboard() {
             </button>
           </div>
 
-          {/* Feed */}
           <div className={styles.feed}>
             {loading ? (
               <div className={styles.loading}>
@@ -577,12 +643,13 @@ export default function Dashboard() {
               <>
                 {posts.map((post, index) => (
                   <FeedPostCard
-                    key={post.id}
+                    key={`${post.source}-${post.id}`}
                     post={post}
                     index={index}
                     currentUid={user?.uid}
                     isAdmin={isAdmin}
                     onDelete={confirmDelete}
+                    onOpenActions={openPostActions}
                   />
                 ))}
 
@@ -600,7 +667,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Scroll to Top Button */}
           <AnimatePresence>
             {showScrollTop && (
               <motion.button
@@ -618,7 +684,13 @@ export default function Dashboard() {
           </AnimatePresence>
         </div>
 
-        {/* Delete Confirmation Modal */}
+        <ActionSheet
+          open={sheetOpen}
+          title={sheetPost?.title || 'Actions'}
+          actions={sheetActions}
+          onClose={() => setSheetOpen(false)}
+        />
+
         {deleteModal && (
           <ConfirmModal
             open={deleteModal.open}
