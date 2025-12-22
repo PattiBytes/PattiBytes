@@ -1,16 +1,35 @@
+# .github/workflows/webpushr-on-publish.yml
 name: Send Webpushr Notifications (on content changes)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
     paths:
       - '_notifications/**'
       - '_news/**'
       - '_places/**'
+  
+  # Allow manual triggering with optional dry-run
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Only log payloads without sending'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+# Prevent overlapping runs
+concurrency:
+  group: webpushr-notifications
+  cancel-in-progress: false
 
 jobs:
   send-notifications:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout repo (full history)
         uses: actions/checkout@v4
@@ -20,12 +39,19 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: '3.11'  # Pin version for stability
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyyaml requests
+
+      - name: Verify script exists
+        run: |
+          if [ ! -f ".github/scripts/send_notifications.py" ]; then
+            echo "❌ Script not found: .github/scripts/send_notifications.py"
+            exit 1
+          fi
 
       - name: Run notifications script
         env:
@@ -34,6 +60,17 @@ jobs:
           SITE_URL: ${{ secrets.SITE_URL }}
           BEFORE_COMMIT: ${{ github.event.before }}
           AFTER_COMMIT: ${{ github.sha }}
-          DRY_RUN: "false"   # set to "true" to only log payloads without sending
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
+          echo "🔍 Checking changes between $BEFORE_COMMIT and $AFTER_COMMIT"
           python .github/scripts/send_notifications.py
+
+      - name: Upload debug logs
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: webpushr-debug-logs
+          path: |
+            *.log
+            .github/scripts/
+          retention-days: 7
