@@ -12,6 +12,7 @@
     "@ducanh2912/next-pwa": "^10.2.9",
     "@supabase/supabase-js": "^2.74.0",
     "cloudinary": "^2.7.0",
+    "clsx": "^2.1.1",
     "firebase": "^12.6.0",
     "firebase-admin": "^13.6.0",
     "formidable": "^3.5.4",

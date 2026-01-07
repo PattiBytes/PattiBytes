@@ -14,6 +14,8 @@ import {
   deleteDoc,
   type QueryDocumentSnapshot,
   type DocumentData,
+  type QuerySnapshot,
+  type FirestoreError,
 } from 'firebase/firestore';
 
 import { getFirebaseClient } from '@/lib/firebase';
@@ -37,9 +39,21 @@ import {
 } from 'react-icons/fa';
 import { Toaster, toast } from 'react-hot-toast';
 import styles from '@/styles/Dashboard.module.css';
-import { fetchCMSNews, fetchCMSPlaces, fetchCMSNotifications } from '@/lib/netlifyCms';
+import {
+  fetchCMSNews,
+  fetchCMSPlaces,
+  fetchCMSNotifications,
+} from '@/lib/netlifyCms';
 
 type PostType = 'news' | 'place' | 'writing' | 'video';
+
+type FeedFilter =
+  | 'all'
+  | 'news'
+  | 'places'
+  | 'writings'
+  | 'user-content'
+  | 'video';
 
 interface FirestorePostDoc {
   title?: string;
@@ -104,8 +118,9 @@ type CMSCacheShape = {
 };
 
 function getCMSCache(): CMSCacheShape | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const raw = sessionStorage.getItem(CMS_CACHE_KEY);
+    const raw = window.sessionStorage.getItem(CMS_CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CMSCacheShape;
     if (!parsed?.ts) return null;
@@ -117,10 +132,13 @@ function getCMSCache(): CMSCacheShape | null {
 }
 
 function setCMSCache(data: Omit<CMSCacheShape, 'ts'>) {
+  if (typeof window === 'undefined') return;
   try {
     const payload: CMSCacheShape = { ts: Date.now(), ...data };
-    sessionStorage.setItem(CMS_CACHE_KEY, JSON.stringify(payload));
-  } catch {}
+    window.sessionStorage.setItem(CMS_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore
+  }
 }
 
 // Helper: resolve CMS images from /assets/uploads or assets/uploads
@@ -149,19 +167,24 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'news' | 'places' | 'writings' | 'user-content' | 'video'>('all');
+  const [filter, setFilter] = useState<FeedFilter>('all');
 
-  const [urgentNotification, setUrgentNotification] = useState<CMSNotificationItem | null>(null);
+  const [urgentNotification, setUrgentNotification] =
+    useState<CMSNotificationItem | null>(null);
   const [showNotification, setShowNotification] = useState(false);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
-  const [deleteModal, setDeleteModal] = useState<{ open: boolean; postId: string; title: string } | null>(null);
+  const [deleteModal, setDeleteModal] = useState<{
+    open: boolean;
+    postId: string;
+    title: string;
+  } | null>(null);
 
   const lastDoc = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
   const observer = useRef<IntersectionObserver | null>(null);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const cmsLoaded = useRef(false);
 
   // Admin check
@@ -185,10 +208,14 @@ export default function Dashboard() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+  const scrollToTop = () =>
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth',
+    });
 
   const filterFn = useCallback(
-    (items: Post[]) => {
+    (items: Post[]): Post[] => {
       switch (filter) {
         case 'all':
           return items;
@@ -201,35 +228,39 @@ export default function Dashboard() {
         case 'writings':
           return items.filter((p) => p.type === 'writing');
         case 'video':
-          return items.filter((p) => p.mediaType === 'video' || p.type === 'video');
+          return items.filter(
+            (p) => p.mediaType === 'video' || p.type === 'video',
+          );
         default:
           return items;
       }
     },
-    [filter]
+    [filter],
   );
 
   const buildFeed = useCallback(
     (uPosts: Post[], cPosts: Post[]) => {
-      const merged = [...uPosts, ...cPosts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const merged = [...uPosts, ...cPosts].sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      );
       setPosts(filterFn(merged));
     },
-    [filterFn]
+    [filterFn],
   );
 
   // CMS loader
   const loadCMS = useCallback(async () => {
-    if (cmsLoaded.current) return;
+    if (cmsLoaded.current || typeof window === 'undefined') return;
     cmsLoaded.current = true;
 
     const applyNotifsOnce = (notifs: CMSNotificationItem[]) => {
       if (!notifs.length) return;
       const nid = notifs[0].id;
       const seenKey = `notification_seen_${nid}`;
-      if (!localStorage.getItem(seenKey)) {
+      if (!window.localStorage.getItem(seenKey)) {
         setUrgentNotification(notifs[0]);
         setShowNotification(true);
-        localStorage.setItem(seenKey, 'true');
+        window.localStorage.setItem(seenKey, 'true');
         setTimeout(() => setShowNotification(false), 5000);
       }
     };
@@ -339,31 +370,53 @@ export default function Dashboard() {
     }
   }, [buildFeed, userPosts]);
 
-  // Realtime user posts (CLIENT-SIDE filtering of drafts)
+  // Realtime user posts (client-side filtering of drafts)
   useEffect(() => {
     if (!db) return;
     setLoading(true);
 
-    const q = fsQuery(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(20));
+    const q = fsQuery(
+      collection(db, 'posts'),
+      orderBy('createdAt', 'desc'),
+      limit(20),
+    );
 
     const unsub = onSnapshot(
       q,
-      (snap) => {
+      (snap: QuerySnapshot<DocumentData>) => {
         const uPosts: Post[] = [];
 
-        snap.docs.forEach((d) => {
+        snap.docs.forEach((d: QueryDocumentSnapshot<DocumentData>) => {
           const data = d.data() as FirestorePostDoc;
           if (data.isDraft === true) return;
 
-          const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
+          const createdAt =
+            data.createdAt instanceof Timestamp
+              ? data.createdAt.toDate()
+              : new Date();
+
+          const isVideo =
+            data.mediaType === 'video' ||
+            !!data.videoUrl ||
+            data.type === 'video';
+
+          const postType: PostType =
+            data.type === 'news' ||
+            data.type === 'place' ||
+            data.type === 'writing' ||
+            data.type === 'video'
+              ? data.type
+              : isVideo
+              ? 'video'
+              : 'writing';
 
           uPosts.push({
             id: d.id,
             title: data.title || '',
             content: data.content || '',
             preview: data.preview,
-            type: (data.type || data.mediaType || 'writing') as PostType,
-            mediaType: data.mediaType || (data.videoUrl ? 'video' : 'image'),
+            type: postType,
+            mediaType: isVideo ? 'video' : 'image',
             source: 'user',
             authorId: data.authorId,
             authorName: data.authorName || 'Anonymous',
@@ -382,18 +435,20 @@ export default function Dashboard() {
         });
 
         if (snap.docs.length > 0) {
-          lastDoc.current = snap.docs[snap.docs.length - 1] as QueryDocumentSnapshot<DocumentData>;
+          lastDoc.current =
+            snap.docs[snap.docs.length - 1] as QueryDocumentSnapshot<DocumentData>;
         }
 
         setUserPosts(uPosts);
         buildFeed(uPosts, cmsPosts);
         setLoading(false);
-        setHasMore(snap.docs.length >= 20);
+        setHasMore(snap.docs.length === 20);
       },
-      () => {
+      (err: FirestoreError) => {
+        console.warn('Dashboard posts snapshot error', err);
         setLoading(false);
         toast.error('Unable to load posts. Check permissions.');
-      }
+      },
     );
 
     return () => unsub();
@@ -416,30 +471,47 @@ export default function Dashboard() {
         collection(db, 'posts'),
         orderBy('createdAt', 'desc'),
         startAfter(lastDoc.current),
-        limit(20)
+        limit(20),
       );
 
       const snap = await getDocs(q);
-
       if (snap.empty) {
         setHasMore(false);
         return;
       }
 
       const morePosts: Post[] = [];
-      snap.docs.forEach((d) => {
+      snap.docs.forEach((d: QueryDocumentSnapshot<DocumentData>) => {
         const data = d.data() as FirestorePostDoc;
         if (data.isDraft === true) return;
 
-        const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
+        const createdAt =
+          data.createdAt instanceof Timestamp
+            ? data.createdAt.toDate()
+            : new Date();
+
+        const isVideo =
+          data.mediaType === 'video' ||
+          !!data.videoUrl ||
+          data.type === 'video';
+
+        const postType: PostType =
+          data.type === 'news' ||
+          data.type === 'place' ||
+          data.type === 'writing' ||
+          data.type === 'video'
+            ? data.type
+            : isVideo
+            ? 'video'
+            : 'writing';
 
         morePosts.push({
           id: d.id,
           title: data.title || '',
           content: data.content || '',
           preview: data.preview,
-          type: (data.type || data.mediaType || 'writing') as PostType,
-          mediaType: data.mediaType || (data.videoUrl ? 'video' : 'image'),
+          type: postType,
+          mediaType: isVideo ? 'video' : 'image',
           source: 'user',
           authorId: data.authorId,
           authorName: data.authorName || 'Anonymous',
@@ -457,9 +529,10 @@ export default function Dashboard() {
         });
       });
 
-      lastDoc.current = snap.docs[snap.docs.length - 1] as QueryDocumentSnapshot<DocumentData>;
+      lastDoc.current =
+        snap.docs[snap.docs.length - 1] as QueryDocumentSnapshot<DocumentData>;
       setUserPosts((prev) => [...prev, ...morePosts]);
-      setHasMore(snap.docs.length >= 20);
+      setHasMore(snap.docs.length === 20);
     } finally {
       setLoadingMore(false);
     }
@@ -472,7 +545,7 @@ export default function Dashboard() {
       (entries) => {
         if (entries[0].isIntersecting) void loadMore();
       },
-      { threshold: 0.5 }
+      { threshold: 0.5 },
     );
 
     observer.current = io;
@@ -482,7 +555,8 @@ export default function Dashboard() {
     return () => io.disconnect();
   }, [loading, loadingMore, hasMore, loadMore]);
 
-  const confirmDelete = (postId: string, title: string) => setDeleteModal({ open: true, postId, title });
+  const confirmDelete = (postId: string, title: string) =>
+    setDeleteModal({ open: true, postId, title });
 
   const performDelete = async () => {
     if (!deleteModal || !db) return;
@@ -513,16 +587,27 @@ export default function Dashboard() {
                 exit={{ opacity: 0, y: -20 }}
               >
                 <FaBell />
-                <span className={styles.notifTitle}>{urgentNotification.title}</span>
-                <span className={styles.notifMessage}>{urgentNotification.message}</span>
+                <span className={styles.notifTitle}>
+                  {urgentNotification.title}
+                </span>
+                <span className={styles.notifMessage}>
+                  {urgentNotification.message}
+                </span>
 
                 {urgentNotification.target_url && (
-                  <a href={urgentNotification.target_url} target="_blank" rel="noopener noreferrer">
+                  <a
+                    href={urgentNotification.target_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     View
                   </a>
                 )}
 
-                <button onClick={() => setShowNotification(false)} aria-label="Close">
+                <button
+                  onClick={() => setShowNotification(false)}
+                  aria-label="Close"
+                >
                   <FaTimes />
                 </button>
               </motion.div>
@@ -533,27 +618,63 @@ export default function Dashboard() {
 
           {/* Filter Tabs */}
           <div className={styles.filterTabs}>
-            <button className={`${styles.tab} ${filter === 'all' ? styles.activeTab : ''}`} onClick={() => setFilter('all')}>
+            <button
+              className={`${styles.tab} ${
+                filter === 'all' ? styles.activeTab : ''
+              }`}
+              onClick={() => setFilter('all')}
+              type="button"
+            >
               All
             </button>
 
-            <button className={`${styles.tab} ${filter === 'news' ? styles.activeTab : ''}`} onClick={() => setFilter('news')}>
+            <button
+              className={`${styles.tab} ${
+                filter === 'news' ? styles.activeTab : ''
+              }`}
+              onClick={() => setFilter('news')}
+              type="button"
+            >
               <FaNewspaper /> News
             </button>
 
-            <button className={`${styles.tab} ${filter === 'places' ? styles.activeTab : ''}`} onClick={() => setFilter('places')}>
+            <button
+              className={`${styles.tab} ${
+                filter === 'places' ? styles.activeTab : ''
+              }`}
+              onClick={() => setFilter('places')}
+              type="button"
+            >
               <FaMapMarkerAlt /> Places
             </button>
 
-            <button className={`${styles.tab} ${filter === 'writings' ? styles.activeTab : ''}`} onClick={() => setFilter('writings')}>
+            <button
+              className={`${styles.tab} ${
+                filter === 'writings' ? styles.activeTab : ''
+              }`}
+              onClick={() => setFilter('writings')}
+              type="button"
+            >
               <FaPen /> Writings
             </button>
 
-            <button className={`${styles.tab} ${filter === 'user-content' ? styles.activeTab : ''}`} onClick={() => setFilter('user-content')}>
-              <FaVideo /> User
+            <button
+              className={`${styles.tab} ${
+                filter === 'user-content' ? styles.activeTab : ''
+              }`}
+              onClick={() => setFilter('user-content')}
+              type="button"
+            >
+              User
             </button>
 
-            <button className={`${styles.tab} ${filter === 'video' ? styles.activeTab : ''}`} onClick={() => setFilter('video')}>
+            <button
+              className={`${styles.tab} ${
+                filter === 'video' ? styles.activeTab : ''
+              }`}
+              onClick={() => setFilter('video')}
+              type="button"
+            >
               <FaVideo /> Videos
             </button>
           </div>
