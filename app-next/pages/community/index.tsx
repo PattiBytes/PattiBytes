@@ -1,12 +1,32 @@
 // app-next/pages/community/index.tsx
 import { useState, useEffect, useMemo } from 'react';
-import { collection, query, where, orderBy, onSnapshot, limit, doc, getDoc, type DocumentData, type Timestamp } from 'firebase/firestore';
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  limit,
+  doc,
+  getDoc,
+  type DocumentData,
+  type Timestamp,
+} from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import AuthGuard from '@/components/AuthGuard';
 import Layout from '@/components/Layout';
 import SafeImage from '@/components/SafeImage';
-import { FaPlus, FaUsers, FaSearch, FaComments, FaBullhorn } from 'react-icons/fa';
+import {
+  FaPlus,
+  FaUsers,
+  FaSearch,
+  FaComments,
+  FaBullhorn,
+  FaCheckCircle,
+  FaClock,
+  FaCircle,
+} from 'react-icons/fa';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import styles from '@/styles/Community.module.css';
@@ -27,7 +47,23 @@ interface Chat {
   otherUserPhoto?: string;
   isTyping?: boolean;
   isOnline?: boolean;
+  isOfficial?: boolean;
 }
+
+const container = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+};
+
+const item = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 },
+};
 
 export default function Community() {
   const { user, isAdmin } = useAuth();
@@ -37,88 +73,135 @@ export default function Community() {
   const [tab, setTab] = useState<'all' | 'private' | 'groups'>('all');
   const { db } = getFirebaseClient();
 
+  // Load chats
   useEffect(() => {
     if (!user?.uid || !db) return;
+
     const q = query(
       collection(db, 'chats'),
       where('participants', 'array-contains', user.uid),
       orderBy('lastMessageTime', 'desc'),
       limit(50)
     );
-    const unsub = onSnapshot(q, async (snapshot) => {
-      const list: Chat[] = [];
-      for (const d of snapshot.docs) {
-        const c = d.data() as DocumentData;
-        const type: ChatType = c.type || 'private';
-        if (type === 'private') {
-          const otherId = (c.participants as string[]).find((id) => id !== user.uid);
-          if (!otherId) continue;
-          const otherSnap = await getDoc(doc(db, 'users', otherId));
-          const other = otherSnap.exists() ? otherSnap.data() : null;
-          list.push({
-            id: d.id,
-            type,
-            participants: c.participants,
-            lastMessage: c.lastMessage || '',
-            lastMessageTime:
-              c.lastMessageTime && typeof c.lastMessageTime.toDate === 'function'
-                ? (c.lastMessageTime as Timestamp).toDate()
-                : new Date(0),
-            unreadCount: c[`unread_${user.uid}`] || 0,
-            otherUserId: otherId,
-            otherUserName: other?.displayName || 'User',
-            otherUserPhoto: other?.photoURL || '/images/default-avatar.png',
-            isTyping: c[`typing_${otherId}`] || false,
-            isOnline: other?.isOnline || false,
-          });
-        } else {
-          list.push({
-            id: d.id,
-            type,
-            name: c.name || 'Group Chat',
-            photoURL: c.photoURL,
-            participants: c.participants,
-            lastMessage: c.lastMessage || '',
-            lastMessageTime:
-              c.lastMessageTime && typeof c.lastMessageTime.toDate === 'function'
-                ? (c.lastMessageTime as Timestamp).toDate()
-                : new Date(0),
-            unreadCount: c[`unread_${user.uid}`] || 0,
-          });
+
+    const unsub = onSnapshot(
+      q,
+      async (snapshot) => {
+        const list: Chat[] = [];
+
+        for (const d of snapshot.docs) {
+          const c = d.data() as DocumentData;
+          const type: ChatType = c.type || 'private';
+
+          if (type === 'private') {
+            const otherId = (c.participants as string[]).find((id) => id !== user.uid);
+            if (!otherId) continue;
+
+            const otherSnap = await getDoc(doc(db, 'users', otherId));
+            const other = otherSnap.exists() ? otherSnap.data() : null;
+
+            list.push({
+              id: d.id,
+              type,
+              participants: c.participants,
+              lastMessage: c.lastMessage || '',
+              lastMessageTime:
+                c.lastMessageTime && typeof c.lastMessageTime.toDate === 'function'
+                  ? (c.lastMessageTime as Timestamp).toDate()
+                  : new Date(0),
+              unreadCount: c[`unread_${user.uid}`] || 0,
+              otherUserId: otherId,
+              otherUserName: other?.displayName || 'User',
+              otherUserPhoto: other?.photoURL || '/images/default-avatar.png',
+              isTyping: c[`typing_${otherId}`] || false,
+              isOnline: other?.onlineStatus === 'online' || false,
+            });
+          } else {
+            list.push({
+              id: d.id,
+              type,
+              name: c.name || 'Group Chat',
+              photoURL: c.photoURL,
+              participants: c.participants,
+              lastMessage: c.lastMessage || '',
+              lastMessageTime:
+                c.lastMessageTime && typeof c.lastMessageTime.toDate === 'function'
+                  ? (c.lastMessageTime as Timestamp).toDate()
+                  : new Date(0),
+              unreadCount: c[`unread_${user.uid}`] || 0,
+              isOfficial: c.isOfficial || false,
+            });
+          }
         }
+
+        setChats(
+          list.sort((a, b) => (b.lastMessageTime?.getTime?.() || 0) - (a.lastMessageTime?.getTime?.() || 0))
+        );
+        setLoading(false);
+      },
+      (err) => {
+        console.warn('Community snapshot error:', err);
+        setLoading(false);
       }
-      setChats(list.sort((a, b) => (b.lastMessageTime?.getTime?.() || 0) - (a.lastMessageTime?.getTime?.() || 0)));
-      setLoading(false);
-    });
+    );
+
     return () => unsub();
   }, [user?.uid, db]);
 
   const filtered = useMemo(() => {
     let result = chats;
+
     if (tab === 'private') result = chats.filter((c) => c.type === 'private');
     if (tab === 'groups') result = chats.filter((c) => c.type !== 'private');
+
     const q = searchQuery.trim().toLowerCase();
     if (!q) return result;
-    return result.filter((c) => (c.type === 'private' ? c.otherUserName : c.name)?.toLowerCase().includes(q));
+
+    return result.filter((c) =>
+      (c.type === 'private' ? c.otherUserName : c.name)?.toLowerCase().includes(q)
+    );
   }, [chats, tab, searchQuery]);
+
+  const formatTime = (date?: Date) => {
+    if (!date) return '';
+
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d`;
+    if (hours > 0) return `${hours}h`;
+    if (minutes > 0) return `${minutes}m`;
+    return 'now';
+  };
 
   return (
     <AuthGuard>
       <Layout title="Community - PattiBytes">
-        <motion.div
-          className={styles.community}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          <header className={styles.header}>
+        <div className={styles.community}>
+          {/* Header */}
+          <motion.header
+            className={styles.header}
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+          >
             <div className={styles.headerTop}>
-              <div className={styles.title}>
-                <FaComments className={styles.icon} />
-                <h1>Community</h1>
+              <div className={styles.titleGroup}>
+                <div className={styles.iconWrap}>
+                  <FaComments />
+                </div>
+                <div>
+                  <h1>Community</h1>
+                  <p className={styles.subtitle}>Connect with people around you</p>
+                </div>
               </div>
               <Link href="/community/new" className={styles.newChatBtn} title="New Chat">
                 <FaPlus />
+                <span>New</span>
               </Link>
             </div>
 
@@ -127,19 +210,29 @@ export default function Community() {
                 onClick={() => setTab('all')}
                 className={`${styles.tab} ${tab === 'all' ? styles.active : ''}`}
               >
-                All
+                <FaComments />
+                <span>All</span>
+                {chats.length > 0 && <span className={styles.count}>{chats.length}</span>}
               </button>
               <button
                 onClick={() => setTab('private')}
                 className={`${styles.tab} ${tab === 'private' ? styles.active : ''}`}
               >
-                <FaComments /> Chats
+                <FaCircle />
+                <span>Chats</span>
+                {chats.filter((c) => c.type === 'private').length > 0 && (
+                  <span className={styles.count}>{chats.filter((c) => c.type === 'private').length}</span>
+                )}
               </button>
               <button
                 onClick={() => setTab('groups')}
                 className={`${styles.tab} ${tab === 'groups' ? styles.active : ''}`}
               >
-                <FaUsers /> Groups
+                <FaUsers />
+                <span>Groups</span>
+                {chats.filter((c) => c.type !== 'private').length > 0 && (
+                  <span className={styles.count}>{chats.filter((c) => c.type !== 'private').length}</span>
+                )}
               </button>
             </div>
 
@@ -151,15 +244,25 @@ export default function Community() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className={styles.clearBtn} aria-label="Clear">
+                  ×
+                </button>
+              )}
             </div>
-          </header>
+          </motion.header>
 
+          {/* Admin Banner */}
           {isAdmin && (
-            <Link href="/admin/chats" className={styles.officialBanner}>
-              <FaBullhorn /> Manage Chats
-            </Link>
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <Link href="/admin/chats" className={styles.officialBanner}>
+                <FaBullhorn />
+                <span>Manage Official Chats & Broadcasts</span>
+              </Link>
+            </motion.div>
           )}
 
+          {/* Chat List */}
           <AnimatePresence mode="wait">
             {loading ? (
               <motion.div
@@ -178,24 +281,25 @@ export default function Community() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
               >
-                <FaComments className={styles.emptyIcon} />
-                <p>No conversations yet</p>
+                <div className={styles.emptyIcon}>
+                  <FaComments />
+                </div>
+                <h3>No conversations yet</h3>
+                <p>Start connecting with people in your community</p>
                 <Link href="/community/new" className={styles.emptyBtn}>
+                  <FaPlus />
                   Start a conversation
                 </Link>
               </motion.div>
             ) : (
-              <motion.div className={styles.chatList} layout>
-                {filtered.map((chat, index) => (
-                  <motion.div
-                    key={chat.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ delay: index * 0.05, duration: 0.3 }}
-                    whileHover={{ scale: 1.02, translateY: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
+              <motion.div
+                className={styles.chatList}
+                variants={container}
+                initial="hidden"
+                animate="show"
+              >
+                {filtered.map((chat) => (
+                  <motion.div key={chat.id} variants={item} layout>
                     <Link href={`/community/${chat.id}`} className={styles.chatItem}>
                       <div className={styles.avatarWrap}>
                         <SafeImage
@@ -210,34 +314,27 @@ export default function Community() {
                           className={styles.avatar}
                         />
                         {chat.type === 'private' && chat.isOnline && (
-                          <motion.div
-                            className={styles.onlineDot}
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: 'spring', stiffness: 300 }}
-                          />
+                          <span className={styles.onlineDot} title="Online" />
+                        )}
+                        {chat.type !== 'private' && chat.isOfficial && (
+                          <span className={styles.officialBadge} title="Official">
+                            <FaCheckCircle />
+                          </span>
                         )}
                       </div>
 
                       <div className={styles.chatInfo}>
                         <div className={styles.chatHeader}>
                           <h3>{chat.type === 'private' ? chat.otherUserName : chat.name}</h3>
-                          {chat.lastMessageTime && (
-                            <span className={styles.time}>
-                              {chat.lastMessageTime.toLocaleTimeString('en-IN', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                          )}
+                          <span className={styles.time}>
+                            <FaClock />
+                            {formatTime(chat.lastMessageTime)}
+                          </span>
                         </div>
+
                         <div className={styles.chatPreview}>
                           {chat.isTyping ? (
-                            <motion.span
-                              className={styles.typing}
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                            >
+                            <span className={styles.typing}>
                               typing
                               <motion.span
                                 animate={{ opacity: [0, 1, 0] }}
@@ -245,31 +342,31 @@ export default function Community() {
                               >
                                 ...
                               </motion.span>
-                            </motion.span>
+                            </span>
                           ) : (
-                            <span className={styles.message}>{chat.lastMessage || 'Say hello'}</span>
+                            <p className={styles.message}>{chat.lastMessage || 'Say hello 👋'}</p>
                           )}
                         </div>
                       </div>
 
                       {chat.unreadCount > 0 && (
-                        <motion.span
-                          className={styles.unreadBadge}
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ type: 'spring', stiffness: 300 }}
-                        >
-                          {chat.unreadCount > 9 ? '9+' : chat.unreadCount}
-                        </motion.span>
+                        <span className={styles.unreadBadge}>
+                          {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                        </span>
                       )}
-                      {chat.type !== 'private' && <FaUsers className={styles.groupIcon} />}
+
+                      {chat.type !== 'private' && (
+                        <div className={styles.groupIcon}>
+                          <FaUsers />
+                        </div>
+                      )}
                     </Link>
                   </motion.div>
                 ))}
               </motion.div>
             )}
           </AnimatePresence>
-        </motion.div>
+        </div>
       </Layout>
     </AuthGuard>
   );

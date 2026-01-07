@@ -5,13 +5,13 @@ import {
   serverTimestamp,
   increment,
   getDoc,
+  collection,
   type Firestore,
   type Transaction,
 } from 'firebase/firestore';
 import { getFirebaseClient } from '@/lib/firebase';
 
-// Helper: generic transaction retry (Firestore will retry some errors,
-// but we also guard against transient failures explicitly if needed)
+// Helper: generic transaction retry
 async function runWithRetry<T>(
   db: Firestore,
   fn: (tx: Transaction) => Promise<T>,
@@ -23,7 +23,7 @@ async function runWithRetry<T>(
       return await runTransaction(db, fn);
     } catch (err) {
       lastError = err;
-      // For failed-precondition / aborted, retry; otherwise rethrow immediately
+
       const msg = err instanceof Error ? err.message : String(err);
       if (
         msg.includes('failed-precondition') ||
@@ -31,7 +31,6 @@ async function runWithRetry<T>(
         msg.includes('10 ')
       ) {
         if (attempt < maxRetries - 1) {
-          // simple backoff
           await new Promise((r) => setTimeout(r, 100 * (attempt + 1)));
           continue;
         }
@@ -39,12 +38,10 @@ async function runWithRetry<T>(
       throw err;
     }
   }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error('Transaction failed');
+  throw lastError instanceof Error ? lastError : new Error('Transaction failed');
 }
 
-// Helper to ensure CMS post exists before liking
+// Ensure CMS post exists before liking
 async function ensureCMSPost(db: Firestore, postId: string) {
   if (!postId.startsWith('cms-')) return; // Only for CMS posts
 
@@ -52,7 +49,6 @@ async function ensureCMSPost(db: Firestore, postId: string) {
   const existing = await getDoc(postRef);
   if (existing.exists()) return;
 
-  // Create minimal virtual post (idempotent)
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(postRef);
     if (snap.exists()) return;
@@ -73,15 +69,25 @@ async function ensureCMSPost(db: Firestore, postId: string) {
   });
 }
 
+// Small helper for notifications
+function createNotificationRef(db: Firestore) {
+  return doc(collection(db, 'notifications'));
+}
+
+/**
+ * Toggle like on a post.
+ * - Works for normal posts and CMS posts (CMS via virtual posts). [file:1]
+ * - On first-time like, notifies post author (except self-like, or system author).
+ */
 export async function togglePostLike(
   postId: string,
   uid: string,
   wantLike: boolean,
-) {
+): Promise<void> {
   const { db } = getFirebaseClient();
   if (!db) throw new Error('Firestore not initialized');
 
-  // Ensure CMS post exists
+  // Ensure CMS posts have a virtual post doc
   await ensureCMSPost(db, postId);
 
   const postRef = doc(db, 'posts', postId);
@@ -92,55 +98,100 @@ export async function togglePostLike(
       tx.get(postRef),
       tx.get(likeRef),
     ]);
+
     if (!postSnap.exists()) throw new Error('Post missing');
+
+    const postData = postSnap.data() as {
+      authorId?: string;
+      title?: string;
+    };
 
     if (wantLike) {
       if (likeSnap.exists()) return;
+
+      // Create notification for post author (if not self & not system)
+      const targetUserId = postData.authorId;
+      if (targetUserId && targetUserId !== uid && targetUserId !== 'system') {
+        const notifRef = createNotificationRef(db);
+        tx.set(notifRef, {
+          userId: targetUserId,
+          title: 'New like on your post',
+          body: 'Someone liked your post.', // keep generic to avoid extra reads
+          type: 'post-like',
+          icon: 'heart',
+          postId,
+          actorId: uid,
+          postTitle: postData.title ?? '',
+          isRead: false,
+          createdAt: serverTimestamp(),
+        });
+      }
+
       tx.set(likeRef, { uid, createdAt: serverTimestamp() });
-      // Always use atomic increment; do not read + write the count
       tx.update(postRef, { likesCount: increment(1) });
     } else {
       if (!likeSnap.exists()) return;
+
       tx.delete(likeRef);
-      // Use increment(-1); Firestore guarantees atomic update even with concurrent writers
       tx.update(postRef, { likesCount: increment(-1) });
+      // No notification on unlike
     }
   });
 }
 
+/**
+ * Toggle like on a comment.
+ * - Only for user posts (comments are under posts/{postId}/comments). [file:1]
+ * - On first-time like, notifies comment author (except self-like).
+ */
 export async function toggleCommentLike(
   postId: string,
   commentId: string,
   uid: string,
   wantLike: boolean,
-) {
+): Promise<void> {
   const { db } = getFirebaseClient();
   if (!db) throw new Error('Firestore not initialized');
 
   const cRef = doc(db, 'posts', postId, 'comments', commentId);
-  const likeRef = doc(
-    db,
-    'posts',
-    postId,
-    'comments',
-    commentId,
-    'likes',
-    uid,
-  );
+  const likeRef = doc(db, 'posts', postId, 'comments', commentId, 'likes', uid);
 
   await runWithRetry(db, async (tx) => {
     const [cSnap, likeSnap] = await Promise.all([
       tx.get(cRef),
       tx.get(likeRef),
     ]);
+
     if (!cSnap.exists()) throw new Error('Comment missing');
+
+    const cData = cSnap.data() as { authorId?: string };
 
     if (wantLike) {
       if (likeSnap.exists()) return;
+
+      // Notify comment author when someone likes their comment
+      const targetUserId = cData.authorId;
+      if (targetUserId && targetUserId !== uid) {
+        const notifRef = createNotificationRef(db);
+        tx.set(notifRef, {
+          userId: targetUserId,
+          title: 'New like on your comment',
+          body: 'Someone liked your comment.',
+          type: 'comment-like',
+          icon: 'heart',
+          postId,
+          commentId,
+          actorId: uid,
+          isRead: false,
+          createdAt: serverTimestamp(),
+        });
+      }
+
       tx.set(likeRef, { uid, createdAt: serverTimestamp() });
       tx.update(cRef, { likesCount: increment(1) });
     } else {
       if (!likeSnap.exists()) return;
+
       tx.delete(likeRef);
       tx.update(cRef, { likesCount: increment(-1) });
     }

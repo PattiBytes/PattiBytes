@@ -10,7 +10,7 @@ import {
   FaComments,
   FaUser,
   FaShieldAlt,
-  FaShoppingBag,
+  FaVideo,
 } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { type IconType } from 'react-icons';
@@ -49,8 +49,8 @@ export default function BottomNav() {
     { href: '/search', icon: FaSearch, label: 'Search' },
 
     // New
-    { href: '/shop', icon: FaShoppingBag, label: 'Shop' },
-
+   // { href: '/shop', icon: FaShoppingBag, label: 'Shop' },
+    { href: '/videos', icon: FaVideo, label: 'VideoBytes' },
     { href: '/create', icon: FaPlus, label: 'Create', highlight: true },
     { href: '/community', icon: FaComments, label: 'Chat', badge: messages },
     {

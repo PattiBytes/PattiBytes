@@ -62,7 +62,6 @@ function getPostIcon(type: string) {
 
 function shouldStartLongPress(e: React.PointerEvent) {
   const el = e.target as HTMLElement | null;
-  // Prevent long-press when user is interacting with buttons/links in card
   if (el?.closest('a,button,input,textarea,select,label')) return false;
   return true;
 }
@@ -73,37 +72,60 @@ export default function FeedPostCard(props: {
   currentUid?: string;
   isAdmin: boolean;
   onDelete: (postId: string, title: string) => void;
-  onOpenActions?: (post: Post) => void; // optional: if you later add an action sheet
+  onOpenActions?: (post: Post) => void;
 }) {
   const { post, index, currentUid, isAdmin, onDelete, onOpenActions } = props;
 
   const isUserPost = post.source === 'user' && !post.id.startsWith('cms-');
+  const isVideoPost = post.type === 'video' || post.mediaType === 'video';
 
   const readMoreHref = useMemo(() => {
     if (post.source === 'cms') {
-      if (post.type === 'news') return `/news/${post.slug || post.id.replace('cms-news-', '')}`;
-      if (post.type === 'place') return `/places/${post.slug || post.id.replace('cms-place-', '')}`;
+      if (post.type === 'news') {
+        return `/news/${post.slug || post.id.replace('cms-news-', '')}`;
+      }
+      if (post.type === 'place') {
+        return `/places/${post.slug || post.id.replace('cms-place-', '')}`;
+      }
       return `/posts/${post.id}`;
     }
-    return `/posts/${post.id}`;
-  }, [post.id, post.slug, post.source, post.type]);
 
-  const commentsHref = useMemo(() => `${readMoreHref}#comments`, [readMoreHref]);
+    // User posts
+    if (isVideoPost) {
+      // Dedicated video watch page
+      return `/videos/${post.id}`;
+    }
+
+    return `/posts/${post.id}`;
+  }, [post.id, post.slug, post.source, post.type, isVideoPost]);
+
+  const commentsHref = useMemo(
+    () => `${readMoreHref}#comments`,
+    [readMoreHref],
+  );
 
   const shareUrl = useMemo(() => {
     if (post.url) return post.url;
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    return `${origin}${readMoreHref}`;
+    if (typeof window === 'undefined') return readMoreHref;
+    return `${window.location.origin}${readMoreHref}`;
   }, [post.url, readMoreHref]);
 
   const canDelete = isUserPost && (currentUid === post.authorId || isAdmin);
 
+  const comments = post.commentsCount ?? 0;
+  const shares = post.sharesCount ?? 0;
+  const views = post.viewsCount ?? 0;
+
   const { handlers } = useLongPress(
     () => {
-      // Optional: open action sheet on long-press
       onOpenActions?.(post);
     },
-    { ms: 460, moveTolerancePx: 12, preventContextMenu: true, shouldStart: shouldStartLongPress }
+    {
+      ms: 460,
+      moveTolerancePx: 12,
+      preventContextMenu: true,
+      shouldStart: shouldStartLongPress,
+    },
   );
 
   return (
@@ -115,9 +137,13 @@ export default function FeedPostCard(props: {
       transition={{ delay: Math.min(index * 0.02, 0.3), duration: 0.4 }}
       {...handlers}
     >
+      {/* Header */}
       <div className={styles.postHeader}>
         {post.source === 'user' && post.authorUsername ? (
-          <Link href={`/user/${post.authorUsername}`} className={styles.author}>
+          <Link
+            href={`/user/${post.authorUsername}`}
+            className={styles.author}
+          >
             <SafeImage
               src={post.authorPhoto || '/images/default-avatar.png'}
               alt={post.authorName}
@@ -147,22 +173,32 @@ export default function FeedPostCard(props: {
             {getPostIcon(post.type)}
             <span>{post.type}</span>
           </div>
-          {post.viewsCount !== undefined && post.viewsCount > 0 && (
+          {views > 0 && (
             <div className={styles.views}>
-              <FaEye /> {post.viewsCount}
+              <FaEye /> {views}
             </div>
           )}
         </div>
       </div>
 
-      {post.mediaType === 'video' && post.videoUrl ? (
-        <VideoReel src={post.videoUrl} poster={post.imageUrl} />
+      {/* Media */}
+      {isVideoPost && post.videoUrl ? (
+        <Link href={readMoreHref} className={styles.postImage}>
+          <VideoReel src={post.videoUrl} poster={post.imageUrl} />
+        </Link>
       ) : post.imageUrl ? (
         <div className={styles.postImage}>
-          <SafeImage src={post.imageUrl} alt={post.title} width={600} height={400} className="image" />
+          <SafeImage
+            src={post.imageUrl}
+            alt={post.title}
+            width={600}
+            height={400}
+            className="image"
+          />
         </div>
       ) : null}
 
+      {/* Content */}
       <div className={styles.postContent}>
         {post.title && <h3>{post.title}</h3>}
         {post.location && (
@@ -174,41 +210,53 @@ export default function FeedPostCard(props: {
           <p>{String(post.preview || post.content).substring(0, 220)}...</p>
         )}
         <Link href={readMoreHref} className={styles.readMore}>
-          Read More →
+          {isVideoPost ? 'Watch Video →' : 'Read More →'}
         </Link>
       </div>
 
+      {/* Actions */}
       <div className={styles.postActions}>
-        {isUserPost ? (
-          <LikeButton postId={post.id} className={styles.actionButton} />
-        ) : (
-          <button className={styles.actionButton} disabled aria-label="Like">
-            <span>❤</span>
-            <span>{post.likesCount || 0}</span>
-          </button>
-        )}
+        <LikeButton
+          postId={post.id}
+          className={styles.actionButton}
+          showCount
+        />
 
-        <Link href={commentsHref} className={styles.actionButton} aria-label="Comments">
+        <Link
+          href={commentsHref}
+          className={styles.actionButton}
+          aria-label="Comments"
+        >
           <FaComment />
-          <span>{post.commentsCount || 0}</span>
+          <span>{comments}</span>
         </Link>
 
-        <ShareButton postId={post.id} url={shareUrl} className={styles.actionButton} />
+        <ShareButton
+          postId={post.id}
+          url={shareUrl}
+          className={styles.actionButton}
+        />
 
-        {canDelete ? (
+        {canDelete && (
           <button
             className={styles.actionButton}
             onClick={() => onDelete(post.id, post.title)}
             aria-label="Delete"
             title="Delete post"
+            type="button"
           >
             <FaTrash />
           </button>
-        ) : null}
+        )}
       </div>
 
+      {/* Footer */}
       <div className={styles.postFooter}>
         <span>{post.createdAt.toLocaleDateString()}</span>
+        <span>
+          {comments} comments • {shares} shares{' '}
+          {views ? `• ${views} views` : ''}
+        </span>
         {(post.isOfficial || post.source === 'cms') && (
           <span className={styles.officialBadge}>Official</span>
         )}

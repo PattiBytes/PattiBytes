@@ -1262,3 +1262,192 @@
 .modalActions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .btn { border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); padding: 10px 12px; border-radius: 12px; cursor: pointer; }
 .btnDanger { border: 1px solid rgba(239,68,68,0.35); background: rgba(239,68,68,0.12); padding: 10px 12px; border-radius: 12px; cursor: pointer; color: #ffb4b4; }
+
+/* ===========================
+   MODAL BACKDROP + ANIMATION
+   =========================== */
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  backdrop-filter: blur(2px);
+  animation: modal-backdrop-fade 0.16s ease-out;
+}
+
+@keyframes modal-backdrop-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ===========================
+   MODAL PANEL (DESKTOP BASE)
+   =========================== */
+
+.modalPanel {
+  max-width: 520px;
+  width: 100%;
+  max-height: 80vh;
+  background: var(--card-bg);
+  color: var(--text-primary);
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.03);
+  padding: 16px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  animation: modal-scale-in 0.18s ease-out;
+  overflow: hidden;
+}
+
+/* wider version (comments modal) */
+.modalPanelWide {
+  max-width: 720px;
+}
+
+@keyframes modal-scale-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ===========================
+   HEADER
+   =========================== */
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.modalTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.modalClose {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 999px;
+  transition:
+    background 0.15s ease-out,
+    transform 0.1s ease-out;
+}
+
+.modalClose:hover {
+  background: rgba(255, 255, 255, 0.04);
+  transform: scale(1.02);
+}
+
+.modalClose:active {
+  transform: scale(0.96);
+}
+
+/* ===========================
+   BODY
+   =========================== */
+
+.modalBody {
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin-top: 2px;
+  padding-right: 2px; /* small room for scrollbar */
+  overflow-y: auto;
+}
+
+/* For comments modal: flex layout so content scrolls nicely */
+.modalBodyComments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.modalCommentsInner {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Optional subtle scrollbar styling (WebKit only) */
+.modalBody::-webkit-scrollbar,
+.modalCommentsInner::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modalBody::-webkit-scrollbar-track,
+.modalCommentsInner::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modalBody::-webkit-scrollbar-thumb,
+.modalCommentsInner::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+
+/* ===========================
+   RESPONSIVE BEHAVIOR
+   =========================== */
+
+/* Phones: bottom sheet look */
+@media (max-width: 600px) {
+  .modalBackdrop {
+    padding: 0;
+    align-items: flex-end; /* slide up from bottom */
+  }
+
+  .modalPanel,
+  .modalPanelWide {
+    max-width: 100%;
+    width: 100%;
+    max-height: 90vh;
+    border-radius: 16px 16px 0 0;
+    border-left: none;
+    border-right: none;
+    padding: 14px 14px 18px;
+    box-shadow:
+      0 -4px 20px rgba(0, 0, 0, 0.7),
+      0 0 0 1px rgba(255, 255, 255, 0.02);
+  }
+
+  .modalHeader {
+    margin-bottom: 4px;
+  }
+}
+
+/* Very short screens (landscape phones) */
+@media (max-height: 500px) {
+  .modalPanel,
+  .modalPanelWide {
+    max-height: 96vh;
+  }
+}

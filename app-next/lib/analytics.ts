@@ -39,9 +39,16 @@ async function runWithRetry<T>(
     : new Error('Transaction failed');
 }
 
-// Increment views once per session per post
+function isCMSPost(postId: string): boolean {
+  return postId.startsWith('cms-');
+}
+
+// Increment views once per session per post (user posts only)
 export async function incrementViewOnce(postId: string) {
   if (typeof window === 'undefined') return;
+
+  // Do not track views for CMS posts here (no virtual posts)
+  if (isCMSPost(postId)) return;
 
   const key = `viewed-post-${postId}`;
   if (sessionStorage.getItem(key)) return;
