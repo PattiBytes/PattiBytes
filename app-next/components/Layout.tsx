@@ -29,7 +29,10 @@ export default function Layout({
         <meta name="description" content={description} />
 
         {/* PWA mobile web app */}
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+        />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="theme-color" content="#667eea" />
@@ -46,6 +49,13 @@ export default function Layout({
         <Header />
         <InstallPrompt />
         <main className={styles.main}>{children}</main>
+
+        {/* Bottom nav is rendered only when:
+            - page opts in with showBottomNav
+            - user is logged in
+            Visibility on desktop vs mobile is handled in CSS:
+            .bottomNav { display: none; } in @media (min-width: 768px)
+        */}
         {showBottomNav && user && <BottomNav />}
       </div>
     </>

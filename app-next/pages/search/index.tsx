@@ -279,20 +279,27 @@ export default function SearchPage(): React.ReactElement {
         );
         const mvSnap = await getDocs(mostViewedQ);
         if (!cancelled) {
-          const mv: PostResult[] = mvSnap.docs.map((d) => {
-            const data = d.data() as Record<string, unknown>;
-            const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
-            return {
-              id: d.id,
-              title: String(data.title || 'Untitled'),
-              authorName: typeof data.authorName === 'string' ? data.authorName : 'Anonymous',
-              imageUrl: (data.imageUrl as string | null | undefined) ?? null,
-              createdAt,
-              viewsCount: typeof data.viewsCount === 'number' ? data.viewsCount : 0,
-              type: (data.type as string | undefined) ?? 'writing',
-              url: `/posts/${d.id}`,
-            };
-          });
+         const mv: PostResult[] = mvSnap.docs.map(d => {
+  const data = d.data as unknown as Record<string, unknown>;
+  const createdAt =
+    data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
+
+  const rawType = (data.type as string | undefined) ?? 'writing';
+  const isVideo = rawType === 'video' || Boolean(data.videoUrl);
+  const url = isVideo ? `videos/${d.id}` : `posts/${d.id}`;
+
+  return {
+    id: d.id,
+    title: String(data.title ?? 'Untitled'),
+    authorName: typeof data.authorName === 'string' ? data.authorName : 'Anonymous',
+    imageUrl: (data.imageUrl as string | null | undefined) ?? null,
+    createdAt,
+    viewsCount: typeof data.viewsCount === 'number' ? data.viewsCount : 0,
+    type: rawType,
+    url,
+  };
+});
+
           setMostViewedPosts(mv);
         }
 
@@ -305,20 +312,27 @@ export default function SearchPage(): React.ReactElement {
         );
         const latestSnap = await getDocs(latestQ);
         if (!cancelled) {
-          const lp: PostResult[] = latestSnap.docs.map((d) => {
-            const data = d.data() as Record<string, unknown>;
-            const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
-            return {
-              id: d.id,
-              title: String(data.title || 'Untitled'),
-              authorName: typeof data.authorName === 'string' ? data.authorName : 'Anonymous',
-              imageUrl: (data.imageUrl as string | null | undefined) ?? null,
-              createdAt,
-              viewsCount: typeof data.viewsCount === 'number' ? data.viewsCount : 0,
-              type: (data.type as string | undefined) ?? 'writing',
-              url: `/posts/${d.id}`,
-            };
-          });
+         const lp: PostResult[] = latestSnap.docs.map(d => {
+  const data = d.data as unknown as Record<string, unknown>;
+  const createdAt =
+    data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
+
+  const rawType = (data.type as string | undefined) ?? 'writing';
+  const isVideo = rawType === 'video' || Boolean(data.videoUrl);
+  const url = isVideo ? `videos/${d.id}` : `posts/${d.id}`;
+
+  return {
+    id: d.id,
+    title: String(data.title ?? 'Untitled'),
+    authorName: typeof data.authorName === 'string' ? data.authorName : 'Anonymous',
+    imageUrl: (data.imageUrl as string | null | undefined) ?? null,
+    createdAt,
+    viewsCount: typeof data.viewsCount === 'number' ? data.viewsCount : 0,
+    type: rawType,
+    url,
+  };
+});
+
           setLatestPosts(lp);
         }
 
@@ -455,7 +469,7 @@ export default function SearchPage(): React.ReactElement {
           );
           const titleSnap = await getDocs(titleQ);
 
-          const postResults = titleSnap.docs
+         const postResults: SearchResult[] = titleSnap.docs
             .map((d) => {
               const data = d.data() as Record<string, unknown>;
               const score = scoreResult(searchTerm, [
