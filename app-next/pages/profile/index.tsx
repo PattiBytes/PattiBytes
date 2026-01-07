@@ -37,6 +37,7 @@ import {
   FaLink,
   FaHeart,
   FaComment,
+  FaVideo,
 } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import styles from '@/styles/UserProfile.module.css';
@@ -63,7 +64,9 @@ export default function MyProfile() {
   const [showFollowing, setShowFollowing] = useState(false);
   const [stats, setStats] = useState({ posts: 0, followers: 0, following: 0 });
   const [loadingPostCount, setLoadingPostCount] = useState(true);
-
+const getPostHref = (post: Post) => {
+    return post.type === 'video' ? `/videos/${post.id}` : `/posts/${post.id}`;
+  };
   // Load accurate post count
   useEffect(() => {
     const loadPostCount = async () => {
@@ -307,6 +310,7 @@ export default function MyProfile() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.2 }}
           >
+            
             <div className={styles.postsHeader}>
               <h2>
                 Posts {!loadingPostCount && stats.posts > 0 && `(${stats.posts})`}
@@ -355,54 +359,58 @@ export default function MyProfile() {
                 </Link>
               </div>
             ) : (
-              <div className={styles.postsGrid}>
-                {filtered.map((post, index) => (
-                  <motion.div
-                    key={post.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                  >
-                    <Link href={`/posts/${post.id}`} className={styles.postCard}>
-                      {post.imageUrl && (
-                        <div className={styles.postImage}>
-                          <SafeImage
-                            src={post.imageUrl}
-                            alt={post.title}
-                            width={300}
-                            height={200}
-                            className={styles.image}
-                          />
-                        </div>
-                      )}
-                      <div className={styles.postContent}>
-                        <div className={styles.postTypebadge}>
-                          {post.type === 'news' && <FaNewspaper />}
-                          {post.type === 'place' && <FaMapPin />}
-                          {post.type === 'writing' && <FaPen />}
-                          <span>{post.type}</span>
-                        </div>
-                        <h3>{post.title}</h3>
-                        {post.preview && <p className={styles.postPreview}>{post.preview}</p>}
-                        <div className={styles.postMeta}>
-                          <span className={styles.postStats}>
-                            <FaHeart /> {post.likesCount}
-                          </span>
-                          <span className={styles.postStats}>
-                            <FaComment /> {post.commentsCount}
-                          </span>
-                          <span className={styles.postDate}>
-                            {post.createdAt.toLocaleDateString('en-IN', {
-                              month: 'short',
-                              day: 'numeric',
-                            })}
-                          </span>
-                        </div>
-                      </div>
-                    </Link>
-                  </motion.div>
-                ))}
-              </div>
+             <div className={styles.postsGrid}>
+  {filtered.map((post, index) => (
+    <motion.div
+      key={post.id}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: index * 0.05 }}
+    >
+      <Link href={getPostHref(post)} className={styles.postCard}>
+        {post.imageUrl && (
+          <div className={styles.postImage}>
+            <SafeImage
+              src={post.imageUrl}
+              alt={post.title}
+              width={300}
+              height={200}
+              className={styles.image}
+            />
+          </div>
+        )}
+        <div className={styles.postContent}>
+          <div className={styles.postTypeBadge}>
+            {post.type === 'news' && <FaNewspaper />}
+            {post.type === 'place' && <FaMapPin />}
+            {post.type === 'writing' && <FaPen />}
+            {post.type === 'video' && <FaVideo />} {/* optional */}
+            <span>{post.type}</span>
+          </div>
+          <h3>{post.title}</h3>
+          {post.preview && (
+            <p className={styles.postPreview}>{post.preview}</p>
+          )}
+          <div className={styles.postMeta}>
+            <span className={styles.postStats}>
+              <FaHeart /> {post.likesCount}
+            </span>
+            <span className={styles.postStats}>
+              <FaComment /> {post.commentsCount}
+            </span>
+            <span className={styles.postDate}>
+              {post.createdAt.toLocaleDateString('en-IN', {
+                month: 'short',
+                day: 'numeric',
+              })}
+            </span>
+          </div>
+        </div>
+      </Link>
+    </motion.div>
+  ))}
+</div>
+
             )}
           </motion.section>
 
