@@ -1,19 +1,22 @@
+/* Base layout */
 .layout {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f9fafb;
 }
 
+/* Main content – mobile: leave space for bottom nav */
 .main {
   flex: 1;
-  padding-top: 60px;
-  padding-bottom: 80px;
-  min-height: 100vh;
+  padding-top: 60px;      /* header height */
+  padding-bottom: 72px;   /* space for bottom nav on mobile */
+  padding-left: 16px;
+  padding-right: 16px;
 }
 
-@media (min-width: 768px) {
+/* On large screens, bottom nav is hidden, so remove the extra bottom padding */
+@media (min-width: 1024px) {
   .main {
-    padding-bottom: 20px;
+    padding-bottom: 24px;  /* or 0, depending on how much breathing room you want */
   }
 }

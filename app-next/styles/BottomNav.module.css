@@ -233,3 +233,11 @@
     border-color: rgba(0, 0, 0, 0.4);
   }
 }
+@media (min-width: 1024px) {
+  .rail {
+    display: flex;
+  }
+  .bottomNav {
+    display: none !important;
+  }
+}
