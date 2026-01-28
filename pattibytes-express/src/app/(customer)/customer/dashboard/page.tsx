@@ -1,5 +1,4 @@
-/* eslint-disable @next/next/no-html-link-for-pages */
-/* eslint-disable react/jsx-no-comment-textnodes */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -9,6 +8,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Search, MapPin, Star, Clock, TrendingUp } from 'lucide-react';
 import { Merchant } from '@/types';
 import { useRouter } from 'next/navigation';
+import { toast } from 'react-toastify';
 
 export default function CustomerDashboardPage() {
   const { user } = useAuth();
@@ -31,10 +31,18 @@ export default function CustomerDashboardPage() {
         .order('rating', { ascending: false })
         .limit(6);
 
-      if (error) throw error;
-      setRestaurants(data as Merchant[]);
-    } catch (error) {
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+
+      setRestaurants(data as Merchant[] || []);
+    } catch (error: any) {
       console.error('Failed to load restaurants:', error);
+      // Don't show error toast on initial load if no data exists
+      if (error?.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+        toast.error('Unable to load restaurants. Please try again later.');
+      }
     } finally {
       setLoading(false);
     }
@@ -62,6 +70,7 @@ export default function CustomerDashboardPage() {
               placeholder="Search for restaurants, cuisines, or dishes..."
               className="w-full pl-12 pr-4 py-4 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-lg"
               onClick={() => router.push('/customer/search')}
+              readOnly
             />
           </div>
         </div>
@@ -103,12 +112,12 @@ export default function CustomerDashboardPage() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900">Popular Restaurants</h2>
-            <a
-              href="/customer/restaurants"
+            <button
+              onClick={() => router.push('/customer/restaurants')}
               className="text-primary hover:text-orange-600 font-medium"
             >
               View All →
-            </a>
+            </button>
           </div>
 
           {loading ? (
@@ -118,10 +127,11 @@ export default function CustomerDashboardPage() {
               ))}
             </div>
           ) : restaurants.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-lg">
+            <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
               <MapPin size={64} className="mx-auto text-gray-400 mb-4" />
-              <h3 className="text-xl font-bold text-gray-900 mb-2">No restaurants available</h3>
-              <p className="text-gray-600">Check back soon for new restaurants</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">No restaurants yet</h3>
+              <p className="text-gray-600 mb-4">We&apos;re working on adding restaurants to your area</p>
+              <p className="text-sm text-gray-500">Check back soon or contact support for more information</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -155,7 +165,7 @@ export default function CustomerDashboardPage() {
                       </div>
                       <div className="flex items-center gap-1 text-sm text-gray-600">
                         <MapPin size={16} />
-                        <span>{restaurant.address?.address?.split(',')[0] || 'Nearby'}</span>
+                        <span>Nearby</span>
                       </div>
                     </div>
                   </div>
@@ -166,26 +176,24 @@ export default function CustomerDashboardPage() {
         </div>
 
         {/* Quick Actions */}
-        // eslint-disable-next-line react/jsx-no-comment-textnodes
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          // eslint-disable-next-line @next/next/no-html-link-for-pages
-          <a
-            href="/customer/orders"
-            className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl p-6 text-white hover:shadow-lg transition-shadow"
+          <button
+            onClick={() => router.push('/customer/orders')}
+            className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl p-6 text-white hover:shadow-lg transition-shadow text-left"
           >
             <Clock size={32} className="mb-3" />
             <h3 className="text-xl font-bold mb-2">My Orders</h3>
             <p className="opacity-90">Track your current and past orders</p>
-          </a>
+          </button>
 
-          <a
-            href="/customer/restaurants"
-            className="bg-gradient-to-br from-green-500 to-teal-500 rounded-xl p-6 text-white hover:shadow-lg transition-shadow"
+          <button
+            onClick={() => router.push('/customer/restaurants')}
+            className="bg-gradient-to-br from-green-500 to-teal-500 rounded-xl p-6 text-white hover:shadow-lg transition-shadow text-left"
           >
             <MapPin size={32} className="mb-3" />
             <h3 className="text-xl font-bold mb-2">Explore Restaurants</h3>
             <p className="opacity-90">Discover new dining options near you</p>
-          </a>
+          </button>
         </div>
       </div>
     </DashboardLayout>

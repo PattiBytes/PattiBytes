@@ -27,10 +27,10 @@ export default function CustomerRestaurantsPage() {
         .select('*')
         .eq('is_active', true)
         .eq('is_verified', true)
-        .order('rating', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setRestaurants(data as Merchant[]);
+      setRestaurants(data as Merchant[] || []);
     } catch (error) {
       console.error('Failed to load restaurants:', error);
     } finally {
@@ -102,11 +102,11 @@ export default function CustomerRestaurantsPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1">
                       <Star className="text-yellow-400 fill-yellow-400" size={16} />
-                      <span className="text-sm font-medium">{restaurant.rating || 4.5}</span>
+                      <span className="text-sm font-medium">4.5</span>
                     </div>
                     <div className="flex items-center gap-1 text-sm text-gray-600">
                       <MapPin size={16} />
-                      <span>{restaurant.address?.address?.split(',')[0] || 'Nearby'}</span>
+                      <span>Nearby</span>
                     </div>
                   </div>
                 </div>
