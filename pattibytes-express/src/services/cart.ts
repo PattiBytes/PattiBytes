@@ -1,7 +1,18 @@
 import { MenuItem } from '@/types';
 
-export interface CartItem extends MenuItem {
+export interface CartItem {
+  id: string;
+  merchant_id: string;
+  name: string;
+  description?: string;
+  price: number;
+  category: string;
+  image_url?: string;
+  is_available: boolean;
+  is_veg: boolean;
   quantity: number;
+  created_at: string;
+  updated_at: string;
 }
 
 const CART_KEY = 'pattibytes_cart';
@@ -15,9 +26,10 @@ export const cartService = {
 
   saveCart(cart: CartItem[]) {
     localStorage.setItem(CART_KEY, JSON.stringify(cart));
+    window.dispatchEvent(new Event('cartUpdated'));
   },
 
-  addItem(item: MenuItem) {
+  addItem(item: MenuItem): CartItem[] {
     const cart = this.getCart();
     const existing = cart.find((i) => i.id === item.id);
 
@@ -31,7 +43,7 @@ export const cartService = {
     return cart;
   },
 
-  removeItem(itemId: string) {
+  removeItem(itemId: string): CartItem[] {
     const cart = this.getCart();
     const existing = cart.find((i) => i.id === itemId);
 
@@ -47,7 +59,7 @@ export const cartService = {
     return cart;
   },
 
-  updateQuantity(itemId: string, quantity: number) {
+  updateQuantity(itemId: string, quantity: number): CartItem[] {
     const cart = this.getCart();
     const item = cart.find((i) => i.id === itemId);
 
@@ -61,6 +73,7 @@ export const cartService = {
 
   clearCart() {
     localStorage.removeItem(CART_KEY);
+    window.dispatchEvent(new Event('cartUpdated'));
   },
 
   getTotal(): number {
@@ -71,5 +84,10 @@ export const cartService = {
   getCount(): number {
     const cart = this.getCart();
     return cart.reduce((sum, item) => sum + item.quantity, 0);
+  },
+
+  getMerchantId(): string | null {
+    const cart = this.getCart();
+    return cart.length > 0 ? cart[0].merchant_id : null;
   },
 };

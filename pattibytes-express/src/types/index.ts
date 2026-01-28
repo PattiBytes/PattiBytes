@@ -13,6 +13,8 @@ export interface User {
 }
 
 export interface Merchant {
+  address: any;
+  rating: ReactNode;
   id: string;
   user_id: string;
   business_name: string;
@@ -38,6 +40,10 @@ export interface Merchant {
 }
 
 export interface MenuItem {
+  category: ReactNode;
+  category: string;
+  category: any;
+  category: any;
   id: string;
   merchant_id: string;
   category_id: string;

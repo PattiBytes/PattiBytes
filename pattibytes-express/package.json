@@ -16,6 +16,7 @@
     "@supabase/supabase-js": "^2.93.2",
     "@tailwindcss/forms": "^0.5.11",
     "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
     "framer-motion": "^12.29.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.563.0",
