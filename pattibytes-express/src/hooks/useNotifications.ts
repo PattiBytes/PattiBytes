@@ -1,77 +1,69 @@
-'use client';
-
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { useAuth } from './useAuth';
 import { notificationService } from '@/services/notifications';
+import { supabase } from '@/lib/supabase';
 import { Notification } from '@/types';
-import { toast } from 'react-toastify';
 
-export function useNotifications(userId: string | undefined) {
+export function useNotifications() {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userId) return;
-
-    const loadNotifications = async () => {
-      try {
-        const [notifs, count] = await Promise.all([
-          notificationService.getNotifications(userId),
-          notificationService.getUnreadCount(userId),
-        ]);
-        setNotifications(notifs);
-        setUnreadCount(count);
-      } catch (error) {
-        console.error('Failed to load notifications:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!user) return;
 
     loadNotifications();
 
-    // Subscribe to real-time notifications
-    const channel = notificationService.subscribeToNotifications(
-      userId,
-      (newNotification) => {
-        setNotifications((prev) => [newNotification, ...prev]);
-        setUnreadCount((prev) => prev + 1);
-        
-        // Show toast notification
-        toast.info(newNotification.title, {
-          position: 'top-right',
-          autoClose: 5000,
-        });
-      }
-    );
+    // Subscribe to new notifications
+    const channel = supabase
+      .channel('notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          loadNotifications();
+        }
+      )
+      .subscribe();
 
     return () => {
-      notificationService.unsubscribe(channel);
+      supabase.removeChannel(channel);
     };
-  }, [userId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
-  const markAsRead = async (notificationId: string) => {
+  const loadNotifications = async () => {
+    if (!user) return;
+
     try {
-      await notificationService.markAsRead(notificationId);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
+      const [notifs, count] = await Promise.all([
+        notificationService.getNotifications(user.id),
+        notificationService.getUnreadCount(user.id),
+      ]);
+      setNotifications(notifs);
+      setUnreadCount(count);
     } catch (error) {
-      console.error('Failed to mark as read:', error);
+      console.error('Failed to load notifications:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const markAsRead = async (notificationId: string) => {
+    await notificationService.markAsRead(notificationId);
+    await loadNotifications();
+  };
+
   const markAllAsRead = async () => {
-    if (!userId) return;
-    
-    try {
-      await notificationService.markAllAsRead(userId);
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      setUnreadCount(0);
-    } catch (error) {
-      console.error('Failed to mark all as read:', error);
-    }
+    if (!user) return;
+    await notificationService.markAllAsRead(user.id);
+    await loadNotifications();
   };
 
   return {
@@ -80,5 +72,6 @@ export function useNotifications(userId: string | undefined) {
     loading,
     markAsRead,
     markAllAsRead,
+    refresh: loadNotifications,
   };
 }

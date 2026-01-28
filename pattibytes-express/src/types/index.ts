@@ -1,63 +1,93 @@
 export interface User {
   id: string;
-  full_name: string;
   email: string;
+  full_name: string;
   phone?: string;
-  avatar_url?: string;
   role: 'customer' | 'merchant' | 'driver' | 'admin' | 'superadmin';
-  is_active: boolean;
-  is_verified: boolean;
-  is_email_verified: boolean;
   created_at: string;
   updated_at: string;
 }
 
+export interface DeliveryAddress {
+  address: string;
+  latitude?: number;
+  longitude?: number;
+  instructions?: string;
+}
+
 export interface Merchant {
-  address: any;
-  rating: ReactNode;
   id: string;
   user_id: string;
+  owner_id: string;
   business_name: string;
-  business_type: string;
-  cuisine_types: string[];
   description?: string;
-  logo_url?: string;
+  cuisine_type?: string[];
+  address: DeliveryAddress;
+  phone: string;
+  email: string;
   banner_url?: string;
-  phone?: string;
-  email?: string;
-  latitude: number;
-  longitude: number;
+  logo_url?: string;
   is_active: boolean;
   is_verified: boolean;
-  average_rating: number;
-  total_reviews: number;
-  delivery_radius_km: number;
-  min_order_amount: number;
-  estimated_prep_time: number;
-  commission_rate: number;
+  rating: number;
+  total_orders: number;
+  opening_hours?: Record<string, { open: string; close: string }>;
   created_at: string;
   updated_at: string;
 }
 
 export interface MenuItem {
-  category: ReactNode;
-  category: string;
-  category: any;
-  category: any;
   id: string;
   merchant_id: string;
-  category_id: string;
   name: string;
   description?: string;
   price: number;
+  category: string;
   image_url?: string;
-  is_veg: boolean;
   is_available: boolean;
-  preparation_time: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  customization_options: any[];
+  is_veg: boolean;
+  preparation_time?: number;
+  tags?: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface OrderItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  image_url?: string;
+  special_instructions?: string;
+}
+
+export interface Order {
+  id: string;
+  customer_id: string;
+  merchant_id: string;
+  driver_id?: string;
+  items: OrderItem[];
+  subtotal: number;
+  delivery_fee: number;
+  tax: number;
+  total: number;
+  delivery_address: DeliveryAddress;
+  payment_method: string;
+  payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
+  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'out_for_delivery' | 'delivered' | 'cancelled';
+  special_instructions?: string;
+  estimated_delivery_time?: string;
+  actual_delivery_time?: string;
+  rating?: number;
+  review?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CartItem {
+  menuItem: MenuItem;
+  quantity: number;
+  specialInstructions?: string;
 }
 
 export interface Notification {
@@ -66,34 +96,48 @@ export interface Notification {
   title: string;
   body?: string;
   type: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data?: any;
+  data?: Record<string, unknown>;
   is_read: boolean;
   created_at: string;
 }
 
-export interface Order {
+export interface Review {
   id: string;
+  order_id: string;
   customer_id: string;
   merchant_id: string;
-  driver_id?: string;
-  status: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  items: any;
-  subtotal: number;
-  delivery_fee: number;
-  tax: number;
-  discount: number;
-  tip: number;
-  total: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  delivery_address: any;
-  special_instructions?: string;
-  scheduled_time?: string;
-  payment_method: string;
-  payment_status: string;
-  razorpay_order_id?: string;
-  razorpay_payment_id?: string;
+  rating: number;
+  comment?: string;
+  created_at: string;
+}
+
+export interface Driver {
+  id: string;
+  user_id: string;
+  full_name: string;
+  phone: string;
+  vehicle_type: string;
+  vehicle_number: string;
+  license_number: string;
+  is_available: boolean;
+  is_verified: boolean;
+  rating: number;
+  total_deliveries: number;
+  current_location?: {
+    latitude: number;
+    longitude: number;
+  };
   created_at: string;
   updated_at: string;
+}
+
+export interface AccessRequest {
+  id: string;
+  user_id: string;
+  requested_role: string;
+  status: 'pending' | 'approved' | 'rejected';
+  notes?: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  created_at: string;
 }

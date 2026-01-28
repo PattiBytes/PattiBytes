@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -9,16 +8,34 @@ import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Plus, Search, Edit, Trash2, Upload } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { uploadToCloudinary } from '@/lib/cloudinary';
-import { MenuItem } from '@/types';
 
-export default function MerchantMenuPage() {
+interface Merchant {
+  id: string;
+  business_name: string;
+  owner_id: string;
+}
+
+interface MenuItem {
+  id: string;
+  merchant_id: string;
+  name: string;
+  description?: string;
+  price: number;
+  category: string;
+  image_url?: string;
+  is_available: boolean;
+  is_veg: boolean;
+}
+
+export default function AdminMenusPage() {
   const { user } = useAuth();
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [selectedMerchant, setSelectedMerchant] = useState<string>('');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [merchantId, setMerchantId] = useState<string>('');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -31,31 +48,28 @@ export default function MerchantMenuPage() {
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
 
   useEffect(() => {
-    if (user) {
-      loadMerchantId();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+    loadMerchants();
+  }, []);
 
   useEffect(() => {
-    if (merchantId) {
+    if (selectedMerchant) {
       loadMenuItems();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [merchantId]);
+  }, [selectedMerchant]);
 
-  const loadMerchantId = async () => {
+  const loadMerchants = async () => {
     try {
       const { data, error } = await supabase
         .from('merchants')
-        .select('id')
-        .eq('owner_id', user!.id)
-        .single();
+        .select('id, business_name, owner_id')
+        .eq('is_verified', true)
+        .order('business_name');
 
       if (error) throw error;
-      setMerchantId(data.id);
+      setMerchants(data as Merchant[]);
     } catch (error) {
-      toast.error('Failed to load merchant data');
+      toast.error('Failed to load merchants');
     }
   };
 
@@ -65,7 +79,7 @@ export default function MerchantMenuPage() {
       const { data, error } = await supabase
         .from('menu_items')
         .select('*')
-        .eq('merchant_id', merchantId)
+        .eq('merchant_id', selectedMerchant)
         .order('category');
 
       if (error) throw error;
@@ -99,6 +113,7 @@ export default function MerchantMenuPage() {
 
     try {
       if (editingItem) {
+        // Update existing item
         const { error } = await supabase
           .from('menu_items')
           .update(formData)
@@ -107,9 +122,10 @@ export default function MerchantMenuPage() {
         if (error) throw error;
         toast.success('Menu item updated successfully');
       } else {
+        // Create new item
         const { error } = await supabase
           .from('menu_items')
-          .insert([{ ...formData, merchant_id: merchantId }]);
+          .insert([{ ...formData, merchant_id: selectedMerchant }]);
 
         if (error) throw error;
         toast.success('Menu item added successfully');
@@ -127,6 +143,7 @@ export default function MerchantMenuPage() {
         is_veg: true,
       });
       loadMenuItems();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(error.message || 'Failed to save menu item');
     } finally {
@@ -174,116 +191,132 @@ export default function MerchantMenuPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">My Menu</h1>
-            <p className="text-gray-600 mt-1">Manage your restaurant menu</p>
+            <h1 className="text-3xl font-bold text-gray-900">Menu Management</h1>
+            <p className="text-gray-600 mt-1">Manage menus for all restaurants</p>
           </div>
         </div>
 
-        {/* Actions Bar */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-3 text-gray-400" size={20} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search menu items..."
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
-          </div>
-          <button
-            onClick={() => {
-              setEditingItem(null);
-              setFormData({
-                name: '',
-                description: '',
-                price: 0,
-                category: 'Main Course',
-                image_url: '',
-                is_available: true,
-                is_veg: true,
-              });
-              setShowModal(true);
-            }}
-            className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium flex items-center gap-2"
+        {/* Merchant Selection */}
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Select Restaurant
+          </label>
+          <select
+            value={selectedMerchant}
+            onChange={(e) => setSelectedMerchant(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
           >
-            <Plus size={20} />
-            Add Item
-          </button>
+            <option value="">Choose a restaurant...</option>
+            {merchants.map((merchant) => (
+              <option key={merchant.id} value={merchant.id}>
+                {merchant.business_name}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* Menu Items Grid */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-gray-200 h-64 rounded-lg animate-pulse" />
-            ))}
-          </div>
-        ) : filteredItems.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg">
-            <Upload size={64} className="mx-auto text-gray-400 mb-4" />
-            <h2 className="text-xl font-bold text-gray-900 mb-2">No menu items</h2>
-            <p className="text-gray-600 mb-6">Add items to start selling</p>
-            <button
-              onClick={() => setShowModal(true)}
-              className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium inline-flex items-center gap-2"
-            >
-              <Plus size={20} />
-              Add Your First Item
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {filteredItems.map((item) => (
-              <div key={item.id} className="bg-white rounded-lg shadow overflow-hidden">
-                {item.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.image_url}
-                    alt={item.name}
-                    className="w-full h-48 object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
-                    <Upload size={48} className="text-gray-400" />
-                  </div>
-                )}
-                <div className="p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h3 className="font-bold text-gray-900">{item.name}</h3>
-                      <p className="text-sm text-gray-600">{item.category}</p>
-                    </div>
-                    <div className="flex gap-1">
-                      <span className={`text-xs px-2 py-1 rounded ${item.is_veg ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {item.is_veg ? 'Veg' : 'Non-veg'}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-lg font-bold text-primary mb-3">₹{item.price}</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleEdit(item)}
-                      className="flex-1 bg-blue-50 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100 font-medium flex items-center justify-center gap-2"
-                    >
-                      <Edit size={16} />
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="flex-1 bg-red-50 text-red-600 px-3 py-2 rounded-lg hover:bg-red-100 font-medium flex items-center justify-center gap-2"
-                    >
-                      <Trash2 size={16} />
-                      Delete
-                    </button>
-                  </div>
-                </div>
+        {selectedMerchant && (
+          <>
+            {/* Actions Bar */}
+            <div className="flex items-center gap-4 mb-6">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-3 text-gray-400" size={20} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search menu items..."
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
               </div>
-            ))}
-          </div>
+              <button
+                onClick={() => {
+                  setEditingItem(null);
+                  setFormData({
+                    name: '',
+                    description: '',
+                    price: 0,
+                    category: 'Main Course',
+                    image_url: '',
+                    is_available: true,
+                    is_veg: true,
+                  });
+                  setShowModal(true);
+                }}
+                className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium flex items-center gap-2"
+              >
+                <Plus size={20} />
+                Add Item
+              </button>
+            </div>
+
+            {/* Menu Items Grid */}
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="bg-gray-200 h-64 rounded-lg animate-pulse" />
+                ))}
+              </div>
+            ) : filteredItems.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-lg">
+                <Upload size={64} className="mx-auto text-gray-400 mb-4" />
+                <h2 className="text-xl font-bold text-gray-900 mb-2">No menu items</h2>
+                <p className="text-gray-600">Add items to get started</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {filteredItems.map((item) => (
+                  <div key={item.id} className="bg-white rounded-lg shadow overflow-hidden">
+                    {item.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.image_url}
+                        alt={item.name}
+                        className="w-full h-48 object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
+                        <Upload size={48} className="text-gray-400" />
+                      </div>
+                    )}
+                    <div className="p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h3 className="font-bold text-gray-900">{item.name}</h3>
+                          <p className="text-sm text-gray-600">{item.category}</p>
+                        </div>
+                        <div className="flex gap-1">
+                          <span className={`text-xs px-2 py-1 rounded ${item.is_veg ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            {item.is_veg ? 'Veg' : 'Non-veg'}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-lg font-bold text-primary mb-3">₹{item.price}</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEdit(item)}
+                          className="flex-1 bg-blue-50 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100 font-medium flex items-center justify-center gap-2"
+                        >
+                          <Edit size={16} />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="flex-1 bg-red-50 text-red-600 px-3 py-2 rounded-lg hover:bg-red-100 font-medium flex items-center justify-center gap-2"
+                        >
+                          <Trash2 size={16} />
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
-        {/* Add/Edit Modal - Same as admin version */}
+        {/* Add/Edit Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">

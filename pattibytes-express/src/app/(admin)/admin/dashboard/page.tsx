@@ -1,52 +1,93 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable react/jsx-no-comment-textnodes */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { Users, Store, Truck, Package, DollarSign, TrendingUp, AlertCircle } from 'lucide-react';
-import Link from 'next/link';
-import { superadminService } from '@/services/superadmin';
+import { 
+  Users, ShoppingBag, DollarSign, TrendingUp, 
+  Store, Truck, Clock, CheckCircle 
+} from 'lucide-react';
 
-export default function AdminDashboard() {
-  const { user } = useAuth();
-   
-  const [stats, setStats] = useState<any>(null);
+export default function AdminDashboardPage() {
+  const { user, userRole } = useAuth();
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalMerchants: 0,
+    totalDrivers: 0,
+    totalOrders: 0,
+    pendingOrders: 0,
+    todayOrders: 0,
+    totalRevenue: 0,
+    todayRevenue: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadStats = async () => {
-      try {
-        const data = await superadminService.getPlatformStats();
-        setStats(data);
-      } catch (error) {
-        console.error('Failed to load stats:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (user) loadStats();
+     
+  }, [user]);
 
-    loadStats();
-  }, []);
+  const loadStats = async () => {
+    try {
+      // Get user counts
+      const { count: usersCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
 
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-        </div>
-      </DashboardLayout>
-    );
-  }
+      const { count: merchantsCount } = await supabase
+        .from('merchants')
+        .select('*', { count: 'exact', head: true });
+
+      const { count: driversCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'driver');
+
+      // Get order stats
+      const { data: orders } = await supabase
+        .from('orders')
+        .select('total, status, created_at');
+
+      const today = new Date().toISOString().split('T')[0];
+      const todayOrders = orders?.filter(o => o.created_at.startsWith(today)) || [];
+      const pendingOrders = orders?.filter(o => o.status === 'pending') || [];
+
+      const totalRevenue = orders?.reduce((sum, o) => sum + (o.total || 0), 0) || 0;
+      const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+
+      setStats({
+        totalUsers: usersCount || 0,
+        totalMerchants: merchantsCount || 0,
+        totalDrivers: driversCount || 0,
+        totalOrders: orders?.length || 0,
+        pendingOrders: pendingOrders.length,
+        todayOrders: todayOrders.length,
+        totalRevenue,
+        todayRevenue,
+      });
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600 mt-1">Platform overview and management</p>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {userRole === 'superadmin' ? 'Super Admin' : 'Admin'} Dashboard
+            </h1>
+            <p className="text-gray-600 mt-1">
+              {userRole === 'superadmin' 
+                ? 'Full system control and management' 
+                : 'Platform overview and management'}
+            </p>
+          </div>
         </div>
 
         {/* Stats Grid */}
@@ -55,11 +96,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Users</p>
-                // eslint-disable-next-line react/jsx-no-comment-textnodes, react/jsx-no-comment-textnodes
-                <p className="text-2xl font-bold text-gray-900 mt-1">
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                 {stats?.users ? Object.values(stats.users as Record<string, number>).reduce((a, b) => a + b, 0) : 0}
-                </p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalUsers}</p>
               </div>
               <Users className="text-blue-500" size={32} />
             </div>
@@ -68,169 +105,138 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Active Merchants</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">
-                  {stats?.activeMerchants || 0}
-                </p>
+                <p className="text-sm text-gray-600">Total Merchants</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalMerchants}</p>
               </div>
-              <Store className="text-green-500" size={32} />
+              <Store className="text-orange-500" size={32} />
             </div>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Platform Revenue</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">
-                  ₹{stats?.platformRevenue?.toFixed(0) || 0}
-                </p>
+                <p className="text-sm text-gray-600">Total Drivers</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalDrivers}</p>
               </div>
-              <DollarSign className="text-purple-500" size={32} />
+              <Truck className="text-green-500" size={32} />
             </div>
           </div>
 
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">
-                  ₹{stats?.totalRevenue?.toFixed(0) || 0}
-                </p>
+                <p className="text-sm text-gray-600">Total Orders</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalOrders}</p>
               </div>
-              <TrendingUp className="text-orange-500" size={32} />
+              <ShoppingBag className="text-purple-500" size={32} />
             </div>
           </div>
         </div>
 
-        {/* Pending Approvals */}
-        {(stats?.pendingMerchants > 0 || stats?.pendingDrivers > 0) && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-8">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="text-yellow-600 flex-shrink-0" size={24} />
-              <div className="flex-1">
-                <h3 className="font-semibold text-yellow-900 mb-2">Pending Approvals</h3>
-                <div className="space-y-1">
-                  {stats.pendingMerchants > 0 && (
-                    <p className="text-yellow-800">
-                      {stats.pendingMerchants} merchant(s) awaiting verification
-                    </p>
-                  )}
-                  {stats.pendingDrivers > 0 && (
-                    <p className="text-yellow-800">
-                      {stats.pendingDrivers} driver(s) awaiting verification
-                    </p>
-                  )}
-                </div>
-                <Link
-                  href="/admin/approvals"
-                  className="inline-block mt-3 bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700"
-                >
-                  Review Now
-                </Link>
+        {/* Today's Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-yellow-50 rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-yellow-600 font-medium">Pending Orders</p>
+                <p className="text-2xl font-bold text-yellow-900 mt-1">{stats.pendingOrders}</p>
               </div>
+              <Clock className="text-yellow-600" size={32} />
             </div>
           </div>
-        )}
 
-        {/* Quick Actions Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <Link
-            href="/admin/merchants"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
-          >
-            <Store className="text-green-500 mb-3" size={32} />
-            <h3 className="font-semibold text-gray-900 text-lg">Manage Merchants</h3>
-            <p className="text-sm text-gray-600 mt-2">
-              View and manage all restaurant partners
-            </p>
-          </Link>
+          <div className="bg-green-50 rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600 font-medium">Today&apos;s Orders</p>
+                <p className="text-2xl font-bold text-green-900 mt-1">{stats.todayOrders}</p>
+              </div>
+              <CheckCircle className="text-green-600" size={32} />
+            </div>
+          </div>
 
-          <Link
-            href="/admin/drivers"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
-          >
-            <Truck className="text-blue-500 mb-3" size={32} />
-            <h3 className="font-semibold text-gray-900 text-lg">Manage Drivers</h3>
-            <p className="text-sm text-gray-600 mt-2">
-              View and manage delivery partners
-            </p>
-          </Link>
+          <div className="bg-blue-50 rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-600 font-medium">Today&apos;s Revenue</p>
+                <p className="text-2xl font-bold text-blue-900 mt-1">₹{stats.todayRevenue.toFixed(0)}</p>
+              </div>
+              <DollarSign className="text-blue-600" size={32} />
+            </div>
+          </div>
 
-          <Link
-            href="/admin/orders"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
-          >
-            <Package className="text-purple-500 mb-3" size={32} />
-            <h3 className="font-semibold text-gray-900 text-lg">All Orders</h3>
-            <p className="text-sm text-gray-600 mt-2">
-              Monitor and manage all platform orders
-            </p>
-          </Link>
-
-          <Link
-            href="/admin/users"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
-          >
-            <Users className="text-indigo-500 mb-3" size={32} />
-            <h3 className="font-semibold text-gray-900 text-lg">User Management</h3>
-            <p className="text-sm text-gray-600 mt-2">
-              View and manage platform users
-            </p>
-          </Link>
-
-          <Link
-            href="/admin/analytics"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
-          >
-            <TrendingUp className="text-orange-500 mb-3" size={32} />
-            <h3 className="font-semibold text-gray-900 text-lg">Analytics</h3>
-            <p className="text-sm text-gray-600 mt-2">
-              View platform performance metrics
-            </p>
-          </Link>
-
-          {user?.role === 'superadmin' && (
-            <Link
-              href="/admin/superadmin"
-              className="bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg shadow p-6 hover:shadow-lg transition-shadow text-white"
-            >
-              <AlertCircle className="mb-3" size={32} />
-              <h3 className="font-semibold text-lg">Super Admin</h3>
-              <p className="text-sm text-purple-100 mt-2">
-                Advanced platform controls
-              </p>
-            </Link>
-          )}
+          <div className="bg-purple-50 rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-purple-600 font-medium">Total Revenue</p>
+                <p className="text-2xl font-bold text-purple-900 mt-1">₹{stats.totalRevenue.toFixed(0)}</p>
+              </div>
+              <TrendingUp className="text-purple-600" size={32} />
+            </div>
+          </div>
         </div>
 
-        {/* User Breakdown */}
+        {/* Quick Actions */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">User Distribution</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <p className="text-3xl font-bold text-blue-600">
-                {stats?.users?.customer || 0}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">Customers</p>
-            </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <p className="text-3xl font-bold text-green-600">
-                {stats?.users?.merchant || 0}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">Merchants</p>
-            </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <p className="text-3xl font-bold text-purple-600">
-                {stats?.users?.driver || 0}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">Drivers</p>
-            </div>
-            <div className="text-center p-4 bg-orange-50 rounded-lg">
-              <p className="text-3xl font-bold text-orange-600">
-                {(stats?.users?.admin || 0) + (stats?.users?.superadmin || 0)}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">Admins</p>
-            </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Quick Actions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <a
+              href="/admin/merchants"
+              className="bg-orange-50 border-2 border-orange-200 rounded-lg p-4 hover:bg-orange-100 transition-colors"
+            >
+              <Store className="text-orange-600 mb-2" size={24} />
+              <h3 className="font-bold text-gray-900">Manage Merchants</h3>
+              <p className="text-sm text-gray-600 mt-1">View and verify merchants</p>
+            </a>
+
+            <a
+              href="/admin/orders"
+              className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 hover:bg-blue-100 transition-colors"
+            >
+              <ShoppingBag className="text-blue-600 mb-2" size={24} />
+              <h3 className="font-bold text-gray-900">View Orders</h3>
+              <p className="text-sm text-gray-600 mt-1">Monitor all platform orders</p>
+            </a>
+
+            <a
+              href="/admin/access-requests"
+              className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4 hover:bg-purple-100 transition-colors"
+            >
+              <Users className="text-purple-600 mb-2" size={24} />
+              <h3 className="font-bold text-gray-900">Access Requests</h3>
+              <p className="text-sm text-gray-600 mt-1">Review role requests</p>
+            </a>
+
+            <a
+              href="/admin/menus"
+              className="bg-green-50 border-2 border-green-200 rounded-lg p-4 hover:bg-green-100 transition-colors"
+            >
+              <ShoppingBag className="text-green-600 mb-2" size={24} />
+              <h3 className="font-bold text-gray-900">Manage Menus</h3>
+              <p className="text-sm text-gray-600 mt-1">Add/edit menu items</p>
+            </a>
+
+            {userRole === 'superadmin' && (
+              <>
+                <a
+                  href="/admin/users"
+                  className="bg-red-50 border-2 border-red-200 rounded-lg p-4 hover:bg-red-100 transition-colors"
+                >
+                  <Users className="text-red-600 mb-2" size={24} />
+                  <h3 className="font-bold text-gray-900">Manage Users</h3>
+                  <p className="text-sm text-gray-600 mt-1">View and manage all users</p>
+                </a>
+
+                <a
+                  href="/admin/admins"
+                  className="bg-indigo-50 border-2 border-indigo-200 rounded-lg p-4 hover:bg-indigo-100 transition-colors"
+                >
+                  <Users className="text-indigo-600 mb-2" size={24} />
+                  <h3 className="font-bold text-gray-900">Manage Admins</h3>
+                  <p className="text-sm text-gray-600 mt-1">Add or remove admin users</p>
+                </a>
+              </>
+            )}
           </div>
         </div>
       </div>
