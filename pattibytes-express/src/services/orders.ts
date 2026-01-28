@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
 import { Order } from '@/types';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 export const orderService = {
   async createOrder(
     customerId: string,
     merchantId: string,
-     
     items: any[],
     deliveryAddress: any,
     paymentMethod: string,
@@ -85,5 +85,36 @@ export const orderService = {
     if (error) throw error;
 
     return data as Order[];
+  },
+
+  async getMerchantOrders(merchantId: string): Promise<Order[]> {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('merchant_id', merchantId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data as Order[];
+  },
+
+  subscribeToOrder(orderId: string, callback: (order: Order) => void): RealtimeChannel {
+    const channel = supabase
+      .channel(`order-${orderId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `id=eq.${orderId}`,
+        },
+        (payload) => {
+          callback(payload.new as Order);
+        }
+      )
+      .subscribe();
+
+    return channel;
   },
 };

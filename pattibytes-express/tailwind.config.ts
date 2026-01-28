@@ -9,6 +9,10 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+         animation: {
+    shine: 'shine 3s infinite',
+  },
+  
         primary: '#FF6B35',
         secondary: '#2C3E50',
         success: '#27AE60',
