@@ -23,6 +23,8 @@ export interface Merchant {
   description?: string;
   cuisine_type?: string[];
   address: DeliveryAddress;
+  latitude?: number;
+  longitude?: number;
   phone: string;
   email: string;
   banner_url?: string;
@@ -35,6 +37,7 @@ export interface Merchant {
   created_at: string;
   updated_at: string;
 }
+
 
 export interface MenuItem {
   id: string;
