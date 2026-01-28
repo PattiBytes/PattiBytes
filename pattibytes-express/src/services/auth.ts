@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export const authService = {
   async signup(email: string, password: string, fullName: string, role: string) {
@@ -25,6 +25,22 @@ export const authService = {
     return data;
   },
 
+  // NEW: Google OAuth Login
+  async loginWithGoogle() {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    });
+    if (error) throw error;
+    return data;
+  },
+
   async logout() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
@@ -41,5 +57,19 @@ export const authService = {
       .single();
 
     return profile;
+  },
+
+  async resetPassword(email: string) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password`,
+    });
+    if (error) throw error;
+  },
+
+  async updatePassword(newPassword: string) {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (error) throw error;
   },
 };
