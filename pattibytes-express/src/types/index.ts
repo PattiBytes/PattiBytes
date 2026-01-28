@@ -10,9 +10,13 @@ export interface User {
 
 export interface DeliveryAddress {
   address: string;
-  latitude?: number;
-  longitude?: number;
-  instructions?: string;
+  city?: string;
+  state?: string;
+  zipcode?: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface Merchant {

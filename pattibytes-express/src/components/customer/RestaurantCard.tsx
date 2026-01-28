@@ -1,74 +1,66 @@
-'use client';
-
-import Link from 'next/link';
-import Image from 'next/image';
 import { Merchant } from '@/types';
-import { Star, Clock, MapPin } from 'lucide-react';
+import { MapPin, Star, Clock } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface RestaurantCardProps {
   restaurant: Merchant;
 }
 
 export default function RestaurantCard({ restaurant }: RestaurantCardProps) {
+  const router = useRouter();
+
   return (
-    <Link href={`/customer/restaurant/${restaurant.id}`}>
-      <div className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden cursor-pointer group">
-        {/* Image */}
-        <div className="relative h-48 bg-gray-200">
-          {restaurant.banner_url ? (
-            <Image
-              src={restaurant.banner_url}
-              alt={restaurant.business_name}
-              fill
-              className="object-cover group-hover:scale-105 transition-transform"
-            />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center">
-              <span className="text-white text-2xl font-bold">
-                {restaurant.business_name.charAt(0)}
-              </span>
-            </div>
+    <div
+      onClick={() => router.push(`/customer/restaurant/${restaurant.id}`)}
+      className="bg-white rounded-lg shadow overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+    >
+      {restaurant.banner_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={restaurant.banner_url}
+          alt={restaurant.business_name}
+          className="w-full h-48 object-cover"
+        />
+      ) : (
+        <div className="w-full h-48 bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center">
+          <span className="text-white text-5xl">🍽️</span>
+        </div>
+      )}
+
+      <div className="p-4">
+        <div className="flex items-start justify-between mb-2">
+          <h3 className="font-bold text-gray-900 text-lg">{restaurant.business_name}</h3>
+          {restaurant.is_verified && (
+            <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+              Verified
+            </span>
           )}
         </div>
 
-        {/* Content */}
-        <div className="p-4">
-          <h3 className="font-bold text-gray-900 text-lg truncate">
-            {restaurant.business_name}
-          </h3>
+        <p className="text-sm text-gray-600 mt-1 truncate">
+          {restaurant.cuisine_type || 'Multi-cuisine'}
+        </p>
 
-          <p className="text-sm text-gray-600 mt-1 truncate">
-            {restaurant.cuisine_types?.join(', ') || 'Multi-cuisine'}
-          </p>
-
-          <div className="flex items-center justify-between mt-4">
-            <div className="flex items-center gap-1">
-              <Star className="fill-yellow-400 text-yellow-400" size={16} />
-              <span className="font-semibold text-gray-900">
-                {restaurant.average_rating.toFixed(1)}
-              </span>
-              <span className="text-gray-600 text-sm">
-                ({restaurant.total_reviews})
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1 text-gray-600 text-sm">
-              <Clock size={16} />
-              <span>{restaurant.estimated_prep_time} min</span>
-            </div>
+        <div className="flex items-center justify-between mt-4">
+          <div className="flex items-center gap-1">
+            <Star className="text-yellow-400 fill-yellow-400" size={16} />
+            <span className="text-sm font-medium">4.5</span>
+            <span className="text-sm text-gray-500">(100+)</span>
           </div>
 
-          <div className="mt-3 flex items-center justify-between text-sm">
-            <span className="text-gray-600">
-              Min Order: ₹{restaurant.min_order_amount}
-            </span>
-            <div className="flex items-center gap-1 text-gray-600">
-              <MapPin size={14} />
-              <span>{restaurant.delivery_radius_km}km</span>
-            </div>
+          <div className="flex items-center gap-1 text-sm text-gray-600">
+            <Clock size={16} />
+            <span>30-40 min</span>
           </div>
         </div>
+
+        {restaurant.address?.address && (
+          <div className="flex items-center gap-1 text-sm text-gray-500 mt-2">
+            <MapPin size={14} />
+            <span className="truncate">{restaurant.address.address.split(',')[0]}</span>
+          </div>
+        )}
       </div>
-    </Link>
+    </div>
   );
 }
