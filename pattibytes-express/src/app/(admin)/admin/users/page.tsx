@@ -34,7 +34,7 @@ export default function AdminUsersPage() {
 
       const { data, error } = await query;
       if (error) throw error;
-      setUsers(data as User[]);
+      setUsers(data as User[] || []);
     } catch (error) {
       console.error('Failed to load users:', error);
     } finally {
@@ -43,8 +43,8 @@ export default function AdminUsersPage() {
   };
 
   const filteredUsers = users.filter(user =>
-    user.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+    user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const getRoleBadge = (role: string) => {
@@ -168,11 +168,11 @@ export default function AdminUsersPage() {
                       <div className="flex items-center">
                         <div className="h-10 w-10 flex-shrink-0">
                           <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-white font-bold">
-                            {user.full_name.charAt(0).toUpperCase()}
+                            {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
                           </div>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{user.full_name}</div>
+                          <div className="text-sm font-medium text-gray-900">{user.full_name || 'Unknown'}</div>
                           <div className="text-sm text-gray-500">{user.email}</div>
                         </div>
                       </div>
