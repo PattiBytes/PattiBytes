@@ -5,6 +5,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import PWAInstaller from '@/components/PWAInstaller';
+import Header from '@/components/common/Header';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -24,8 +25,8 @@ export const metadata: Metadata = {
     default: 'PattiBytes Express - ਪੱਟੀ ਦੀ ਲੋੜ, ਹਾਢੇ ਕੋਲ ਤੋੜ',
     template: '%s | PattiBytes Express',
   },
-  description: 'Fast food delivery service in Ludhiana, Punjab. Order from local restaurants and get food delivered quickly.',
-  keywords: ['food delivery', 'ludhiana', 'punjab', 'restaurant', 'online food', 'pattibytes', 'ਪੱਟੀਬਾਈਟਸ'],
+  description: 'Fast food delivery service in Patti, Punjab. Order from local restaurants and get food delivered quickly.',
+  keywords: ['food delivery', 'patti', 'punjab', 'restaurant', 'online food', 'pattibytes', 'ਪੱਟੀਬਾਈਟਸ'],
   authors: [{ name: 'PattiBytes Express' }],
   manifest: '/manifest.json',
   icons: {
@@ -49,7 +50,7 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'PattiBytes Express',
     title: 'PattiBytes Express - Food Delivery',
-    description: 'Fast food delivery in Ludhiana, Punjab',
+    description: 'Fast food delivery in Patti, Punjab',
     images: [
       {
         url: '/icon-192.png',
@@ -62,7 +63,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary',
     title: 'PattiBytes Express',
-    description: 'Fast food delivery in Ludhiana, Punjab',
+    description: 'Fast food delivery in Patti, Punjab',
     images: ['/icon-192.png'],
   },
 };
@@ -89,6 +90,7 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>
+           <Header />
           <PWAInstaller />
           {children}
           <ToastContainer

@@ -5,8 +5,9 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { User, Mail, Phone, Lock, Briefcase, Bike, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { User, Mail, Phone, Lock, Briefcase, Bike, CheckCircle, Clock, XCircle, Save } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useRouter } from 'next/navigation';
 
 interface AccessRequest {
   id: string;
@@ -17,8 +18,19 @@ interface AccessRequest {
   reviewed_at?: string;
 }
 
+interface ExtendedUser {
+  id: string;
+  email: string;
+  full_name: string;
+  phone: string;
+  role: string;
+  profile_completed?: boolean;
+  [key: string]: any;
+}
+
 export default function CustomerProfilePage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [formData, setFormData] = useState({
@@ -30,6 +42,8 @@ export default function CustomerProfilePage() {
     newPassword: '',
     confirmPassword: '',
   });
+
+  const extendedUser = user as ExtendedUser;
 
   useEffect(() => {
     if (user) {
@@ -70,13 +84,14 @@ export default function CustomerProfilePage() {
         .update({
           full_name: formData.full_name,
           phone: formData.phone,
+          updated_at: new Date().toISOString(),
         })
         .eq('id', user!.id);
 
       if (error) throw error;
 
       toast.success('Profile updated successfully');
-      window.location.reload();
+      setTimeout(() => window.location.reload(), 1000);
     } catch (error: any) {
       toast.error(error.message || 'Failed to update profile');
     } finally {
@@ -138,7 +153,7 @@ export default function CustomerProfilePage() {
 
       if (error) throw error;
 
-      toast.success('Access request submitted! Admins will review it soon.');
+      toast.success('Access request submitted!');
       loadAccessRequests();
     } catch (error: any) {
       toast.error(error.message || 'Failed to submit request');
@@ -162,10 +177,21 @@ export default function CustomerProfilePage() {
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Profile Settings</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
+          {extendedUser && !extendedUser.profile_completed && (
+            <button
+              onClick={() => router.push('/customer/profile/complete')}
+              className="btn-primary px-4 py-2 rounded-lg flex items-center gap-2"
+            >
+              <Save size={20} />
+              Complete Profile
+            </button>
+          )}
+        </div>
 
         <div className="space-y-6">
-          {/* Profile Information */}
+          {/* Profile Info */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-6">Profile Information</h2>
             <form onSubmit={handleUpdateProfile} className="space-y-4">
@@ -241,6 +267,7 @@ export default function CustomerProfilePage() {
                     onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     minLength={6}
+                    placeholder="Minimum 6 characters"
                   />
                 </div>
               </div>
@@ -257,13 +284,14 @@ export default function CustomerProfilePage() {
                     onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     minLength={6}
+                    placeholder="Re-enter new password"
                   />
                 </div>
               </div>
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !passwordData.newPassword || !passwordData.confirmPassword}
                 className="w-full bg-gray-900 text-white px-4 py-3 rounded-lg hover:bg-gray-800 font-medium disabled:opacity-50"
               >
                 {loading ? 'Updating...' : 'Update Password'}
@@ -275,7 +303,7 @@ export default function CustomerProfilePage() {
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-6">Request Panel Access</h2>
             <p className="text-gray-600 mb-6">
-              Want to become a merchant or delivery driver? Request access and our team will review your application.
+              Want to become a merchant or delivery driver? Request access below.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -286,7 +314,7 @@ export default function CustomerProfilePage() {
                 <Briefcase className="text-orange-600 mb-3" size={32} />
                 <h3 className="font-bold text-gray-900 mb-2">Merchant Panel</h3>
                 <p className="text-sm text-gray-600">
-                  Manage your restaurant, menu, and orders
+                  Manage your restaurant and orders
                 </p>
               </button>
 
@@ -302,7 +330,6 @@ export default function CustomerProfilePage() {
               </button>
             </div>
 
-            {/* Access Requests History */}
             {accessRequests.length > 0 && (
               <div>
                 <h3 className="font-bold text-gray-900 mb-4">Your Requests</h3>
@@ -319,7 +346,7 @@ export default function CustomerProfilePage() {
                             {request.requested_role} Panel
                           </p>
                           <p className="text-sm text-gray-600">
-                            Requested on {new Date(request.created_at).toLocaleDateString()}
+                            {new Date(request.created_at).toLocaleDateString()}
                           </p>
                         </div>
                       </div>

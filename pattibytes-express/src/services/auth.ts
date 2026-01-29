@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { supabase, getRedirectUrl } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export const authService = {
-  async signup(email: string, password: string, fullName: string, phone: string, role: string) {
+  async signup(email: string, password: string, fullName: string, phone: string, role: string = 'customer') {
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      // Sign up user
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -13,74 +14,132 @@ export const authService = {
             phone,
             role,
           },
-          emailRedirectTo: `${getRedirectUrl()}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
-      if (authError) throw authError;
+      if (signUpError) throw signUpError;
+      if (!authData.user) throw new Error('Signup failed');
 
       // Wait for trigger to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      return authData;
+      // Verify profile was created - with proper error handling
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+      if (!profile) {
+        // Manually create profile if trigger failed
+        console.log('Creating profile manually...');
+        
+        const profileData = {
+          id: authData.user.id,
+          email,
+          full_name: fullName,
+          phone,
+          role,
+          approval_status: role === 'customer' ? 'approved' : 'pending',
+          profile_completed: role === 'customer',
+          is_active: true,
+        };
+
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert([profileData])
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Profile creation error:', insertError);
+          // Try one more time with upsert
+          const { error: upsertError } = await supabase
+            .from('profiles')
+            .upsert([profileData], { onConflict: 'id' });
+          
+          if (upsertError) {
+            console.error('Profile upsert error:', upsertError);
+            throw new Error('Failed to create user profile. Please contact support.');
+          }
+        }
+      }
+
+      return authData.user;
     } catch (error: any) {
       console.error('Signup error:', error);
-      throw error;
+      
+      // Handle rate limit error
+      if (error.message?.includes('rate limit')) {
+        throw new Error('Too many signup attempts. Please wait 10 minutes and try again.');
+      }
+      
+      // Handle duplicate email
+      if (error.message?.includes('already registered')) {
+        throw new Error('This email is already registered. Please login instead.');
+      }
+      
+      throw new Error(error.message || 'Failed to create account');
     }
   },
 
   async login(email: string, password: string) {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 
-      if (error) throw error;
+  if (error) {
+    if (error.message?.includes('Email not confirmed')) {
+      throw new Error('Please check your email and confirm your account before logging in.');
+    }
+    if (error.message?.includes('Invalid login')) {
+      throw new Error('Invalid email or password');
+    }
+    throw error;
+  }
+  
+  if (!data.user) throw new Error('Login failed');
 
-      const { data: profile, error: profileError } = await supabase
+    // Get profile with retry
+    let profile = null;
+    let retries = 3;
+    
+    while (retries > 0 && !profile) {
+      const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', data.user.id)
-        .single();
+        .maybeSingle();
+
+      if (profileData) {
+        profile = profileData;
+        break;
+      }
 
       if (profileError) {
         console.error('Profile fetch error:', profileError);
-        
-        // Customers are auto-approved, others need approval
-        const approvalStatus = data.user.user_metadata?.role === 'customer' 
-          ? 'approved' 
-          : 'pending';
-        
-        const { data: newProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert([{
-            id: data.user.id,
-            email: data.user.email,
-            full_name: data.user.user_metadata?.full_name || '',
-            phone: data.user.user_metadata?.phone || '',
-            role: data.user.user_metadata?.role || 'customer',
-            approval_status: approvalStatus,
-          }])
-          .select()
-          .single();
-
-        if (createError) throw createError;
-        return newProfile;
       }
 
-      return profile;
-    } catch (error: any) {
-      console.error('Login error:', error);
-      throw error;
+      retries--;
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
+
+    if (!profile) {
+      throw new Error('Profile not found. Please contact support.');
+    }
+
+    return profile;
   },
 
   async loginWithGoogle() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${getRedirectUrl()}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
@@ -99,21 +158,20 @@ export const authService = {
 
   async getCurrentUser() {
     const { data: { user } } = await supabase.auth.getUser();
-    
     if (!user) return null;
 
     const { data: profile } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     return profile;
   },
 
   async resetPassword(email: string) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${getRedirectUrl()}/auth/reset-password`,
+      redirectTo: `${window.location.origin}/auth/reset-password`,
     });
 
     if (error) throw error;
