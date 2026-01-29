@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState, Suspense } from 'react';
@@ -31,6 +32,11 @@ function SignupForm() {
       return;
     }
 
+    if (!formData.phone || formData.phone.length < 10) {
+      toast.error('Please enter a valid phone number');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -42,7 +48,7 @@ function SignupForm() {
         formData.role
       );
 
-      toast.success('Account created! Please check your email to verify.');
+      toast.success('Account created successfully!');
       
       // Auto login after signup
       setTimeout(async () => {
@@ -50,23 +56,33 @@ function SignupForm() {
           const profile = await authService.login(formData.email, formData.password);
           
           // Check if needs approval
-          if (['merchant', 'driver', 'admin'].includes(profile.role) && 
-              profile.approval_status === 'pending') {
-            router.push('/auth/pending-approval');
-          } else if (!profile.profile_completed && profile.role !== 'customer') {
-            router.push(`/${profile.role}/profile/complete`);
-          } else {
-            router.push(`/${profile.role}/dashboard`);
+          if (['merchant', 'driver', 'admin'].includes(profile.role)) {
+            if (profile.approval_status === 'pending') {
+              toast.info('Your account is pending approval');
+              router.push('/auth/pending-approval');
+              return;
+            }
           }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (error) {
+
+          // Check if profile needs completion
+          if (!profile.profile_completed && profile.role !== 'customer') {
+            toast.info('Please complete your profile');
+            router.push(`/${profile.role}/profile/complete`);
+            return;
+          }
+
+          // Redirect to dashboard
+          toast.success(`Welcome ${profile.full_name}!`);
+          router.push(`/${profile.role}/dashboard`);
+        } catch (loginError: any) {
+          console.error('Auto-login failed:', loginError);
+          toast.info('Please login with your credentials');
           router.push('/auth/login');
         }
-      }, 1000);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      }, 1500);
     } catch (error: any) {
       console.error('Signup failed:', error);
-      toast.error(error.message || 'Signup failed');
+      toast.error(error.message || 'Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -90,6 +106,7 @@ function SignupForm() {
                 src="/icon-192.png"
                 alt="PattiBytes"
                 fill
+                sizes="80px"
                 className="object-contain animate-scaleIn"
                 priority
               />
@@ -113,6 +130,7 @@ function SignupForm() {
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   placeholder="John Doe"
                   required
+                  minLength={2}
                 />
               </div>
             </div>
@@ -147,6 +165,7 @@ function SignupForm() {
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   placeholder="+91 9876543210"
                   required
+                  minLength={10}
                 />
               </div>
             </div>

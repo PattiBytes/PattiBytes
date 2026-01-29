@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, ShoppingBag, User, Settings, Store, Truck, Users } from 'lucide-react';
+import { Home, ShoppingBag, User, Search, Store, Truck, BarChart3, Wallet } from 'lucide-react';
 
 interface NavItem {
   name: string;
@@ -22,29 +22,30 @@ export default function BottomNav({ role }: BottomNavProps) {
     if (role === 'customer') {
       return [
         { name: 'Home', href: '/customer/dashboard', icon: Home },
-        { name: 'Orders', href: '/customer/orders', icon: ShoppingBag },
+        { name: 'Search', href: '/customer/search', icon: Search },
+        { name: 'Cart', href: '/customer/cart', icon: ShoppingBag },
         { name: 'Profile', href: '/customer/profile', icon: User },
       ];
     } else if (role === 'merchant') {
       return [
-        { name: 'Dashboard', href: '/merchant/dashboard', icon: Home },
+        { name: 'Home', href: '/merchant/dashboard', icon: Home },
         { name: 'Orders', href: '/merchant/orders', icon: ShoppingBag },
         { name: 'Menu', href: '/merchant/menu', icon: Store },
         { name: 'Profile', href: '/merchant/profile', icon: User },
       ];
     } else if (role === 'driver') {
       return [
-        { name: 'Dashboard', href: '/driver/dashboard', icon: Home },
-        { name: 'Deliveries', href: '/driver/deliveries', icon: Truck },
-        { name: 'Earnings', href: '/driver/earnings', icon: ShoppingBag },
+        { name: 'Home', href: '/driver/dashboard', icon: Home },
+        { name: 'Orders', href: '/driver/orders', icon: Truck },
+        { name: 'Earnings', href: '/driver/earnings', icon: Wallet },
         { name: 'Profile', href: '/driver/profile', icon: User },
       ];
     } else if (role === 'admin' || role === 'superadmin') {
       return [
-        { name: 'Dashboard', href: '/admin/dashboard', icon: Home },
+        { name: 'Home', href: '/admin/dashboard', icon: Home },
         { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
-        { name: 'Users', href: '/admin/users', icon: Users },
-        { name: 'Settings', href: '/admin/settings', icon: Settings },
+        { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
+        { name: 'Profile', href: '/admin/settings', icon: User },
       ];
     }
 
@@ -57,7 +58,7 @@ export default function BottomNav({ role }: BottomNavProps) {
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">
       <div className="flex justify-around items-center h-16">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           const Icon = item.icon;
           
           return (
