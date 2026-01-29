@@ -61,14 +61,14 @@ export async function middleware(req: NextRequest) {
 
   const path = req.nextUrl.pathname;
 
-  // Public routes that don't require authentication
+  // Public routes
   const publicRoutes = ['/', '/auth/login', '/auth/signup', '/auth/callback', '/qr', '/auth/forgot-password'];
   
   if (publicRoutes.includes(path) || path.startsWith('/auth/')) {
     return response;
   }
 
-  // Require authentication for all other routes
+  // Require authentication
   if (!session) {
     const redirectUrl = new URL('/auth/login', req.url);
     redirectUrl.searchParams.set('redirect', path);
@@ -91,8 +91,13 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/auth/login?error=account_suspended', req.url));
   }
 
-  // Check approval status for non-customers
-  if (['merchant', 'driver', 'admin', 'superadmin'].includes(profile.role)) {
+  // SUPERADMIN HAS ACCESS TO EVERYTHING - Skip all other checks
+  if (profile.role === 'superadmin') {
+    return response;
+  }
+
+  // Check approval status for non-customers (except superadmin already handled above)
+  if (['merchant', 'driver', 'admin'].includes(profile.role)) {
     if (profile.approval_status === 'pending' && !path.startsWith('/auth/pending-approval')) {
       return NextResponse.redirect(new URL('/auth/pending-approval', req.url));
     }
@@ -101,19 +106,18 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // Check profile completion - redirect to profile/complete if not completed
+  // Check profile completion
   if (!profile.profile_completed && profile.role !== 'customer') {
     const completeProfilePath = `/${profile.role}/profile/complete`;
     if (path !== completeProfilePath && !path.startsWith('/auth/')) {
       return NextResponse.redirect(new URL(completeProfilePath, req.url));
     }
-    // Allow access to complete profile page
     if (path === completeProfilePath) {
       return response;
     }
   }
 
-  // Role-based route protection
+  // Role-based route protection (superadmin already has access via check above)
   if (path.startsWith('/admin/') && !['admin', 'superadmin'].includes(profile.role)) {
     return NextResponse.redirect(new URL(`/${profile.role}/dashboard`, req.url));
   }
