@@ -56,65 +56,75 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const getNavItems = (): NavItem[] => {
     if (!user) return [];
 
-    // Customer Navigation
-    if (user.role === 'customer') {
-      return [
-        { name: 'Home', href: '/customer/dashboard', icon: Home },
-        { name: 'Search', href: '/customer/search', icon: Search },
-        { name: 'Cart', href: '/customer/cart', icon: ShoppingBag },
-        { name: 'Orders', href: '/customer/orders', icon: Receipt },
-        { name: 'Notifications', href: '/customer/notifications', icon: Bell },
-        { name: 'Profile', href: '/customer/profile', icon: User },
-      ];
-    }
-
-    // Merchant Navigation
-    if (user.role === 'merchant') {
-      return [
-        { name: 'Dashboard', href: '/merchant/dashboard', icon: Home },
-        { name: 'Orders', href: '/merchant/orders', icon: ShoppingBag },
-        { name: 'Menu', href: '/merchant/menu', icon: Store },
-        { name: 'Analytics', href: '/merchant/analytics', icon: BarChart3 },
-        { name: 'Profile', href: '/merchant/profile', icon: User },
-      ];
-    }
-
-    // Driver Navigation
-    if (user.role === 'driver') {
-      return [
-        { name: 'Dashboard', href: '/driver/dashboard', icon: Home },
-        { name: 'Deliveries', href: '/driver/orders', icon: Truck },
-        { name: 'Earnings', href: '/driver/earnings', icon: Wallet },
-        { name: 'Profile', href: '/driver/profile', icon: User },
-      ];
-    }
-
-    // Admin/Superadmin Navigation
-    if (user.role === 'admin' || user.role === 'superadmin') {
-      const adminItems: NavItem[] = [
-        { name: 'Dashboard', href: '/admin/dashboard', icon: Home },
-        { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
-        { name: 'Users', href: '/admin/users', icon: Users },
-        { name: 'Merchants', href: '/admin/merchants', icon: Store },
-        { name: 'Drivers', href: '/admin/drivers', icon: Truck },
-        { name: 'Approvals', href: '/admin/access-requests', icon: Bell },
-        { name: 'Promo Codes', href: '/admin/promo-codes', icon: Tag },
-        { name: 'Settings', href: '/admin/settings', icon: Settings },
-      ];
-
-      // Superadmin only items
-      if (user.role === 'superadmin') {
-        adminItems.push(
-          { name: 'Admins', href: '/admin/admins', icon: Users },
-          { name: 'Super Admin', href: '/admin/superadmin', icon: Crown }
-        );
-      }
-
-      return adminItems;
-    }
-
-    return [];
+    // ✅ ALL USERS GET CUSTOMER DASHBOARD ACCESS
+  const customerDashboardItem = {
+    name: 'Browse Food',
+    href: '/customer/dashboard',
+    icon: Home
   };
+
+  // Customer Navigation
+  if (user.role === 'customer') {
+    return [
+      { name: 'Home', href: '/customer/dashboard', icon: Home },
+      { name: 'Search', href: '/customer/search', icon: Search },
+      { name: 'Cart', href: '/customer/cart', icon: ShoppingBag },
+      { name: 'Orders', href: '/customer/orders', icon: Receipt },
+      { name: 'Notifications', href: '/customer/notifications', icon: Bell },
+      { name: 'Profile', href: '/customer/profile', icon: User },
+    ];
+  }
+
+  // Merchant Navigation (with customer access)
+  if (user.role === 'merchant') {
+    return [
+      { name: 'Dashboard', href: '/merchant/dashboard', icon: Home },
+      { name: 'Orders', href: '/merchant/orders', icon: ShoppingBag },
+      { name: 'Menu', href: '/merchant/menu', icon: Store },
+      { name: 'Analytics', href: '/merchant/analytics', icon: BarChart3 },
+      customerDashboardItem, // ✅ Add customer dashboard
+      { name: 'Profile', href: '/merchant/profile', icon: User },
+    ];
+  }
+
+  // Driver Navigation (with customer access)
+  if (user.role === 'driver') {
+    return [
+      { name: 'Dashboard', href: '/driver/dashboard', icon: Home },
+      { name: 'Deliveries', href: '/driver/orders', icon: Truck },
+      { name: 'Earnings', href: '/driver/earnings', icon: Wallet },
+      customerDashboardItem, // ✅ Add customer dashboard
+      { name: 'Profile', href: '/driver/profile', icon: User },
+    ];
+  }
+
+  // Admin/Superadmin Navigation (with customer access)
+  if (user.role === 'admin' || user.role === 'superadmin') {
+    const adminItems: NavItem[] = [
+      { name: 'Dashboard', href: '/admin/dashboard', icon: Home },
+      { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
+      { name: 'Users', href: '/admin/users', icon: Users },
+      { name: 'Merchants', href: '/admin/merchants', icon: Store },
+      { name: 'Drivers', href: '/admin/drivers', icon: Truck },
+      { name: 'Approvals', href: '/admin/access-requests', icon: Bell },
+      { name: 'Promo Codes', href: '/admin/promo-codes', icon: Tag },
+      customerDashboardItem, // ✅ Add customer dashboard
+      { name: 'Settings', href: '/admin/settings', icon: Settings },
+    ];
+
+    if (user.role === 'superadmin') {
+      adminItems.push(
+        { name: 'Admins', href: '/admin/admins', icon: Users },
+        { name: 'Super Admin', href: '/admin/superadmin', icon: Crown }
+      );
+    }
+
+    return adminItems;
+  }
+
+  return [];
+};
+
 
   const navItems = getNavItems();
 

@@ -14,17 +14,24 @@ export const authService = {
             phone,
             role,
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
-      if (signUpError) throw signUpError;
-      if (!authData.user) throw new Error('Signup failed');
+      if (signUpError) {
+        console.error('Signup error:', signUpError);
+        throw signUpError;
+      }
+      
+      if (!authData.user) {
+        throw new Error('Signup failed - no user returned');
+      }
 
-      // Wait for trigger to complete
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('User created:', authData.user.id);
 
-      // Verify profile was created - with proper error handling
+      // Wait for trigger to create profile
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Verify profile exists
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -32,169 +39,147 @@ export const authService = {
         .maybeSingle();
 
       if (profileError) {
-        console.error('Profile fetch error:', profileError);
+        console.error('Profile verification error:', profileError);
       }
 
       if (!profile) {
-        // Manually create profile if trigger failed
-        console.log('Creating profile manually...');
+        console.log('Profile not created by trigger, creating manually...');
         
-        const profileData = {
-          id: authData.user.id,
-          email,
-          full_name: fullName,
-          phone,
-          role,
-          approval_status: role === 'customer' ? 'approved' : 'pending',
-          profile_completed: role === 'customer',
-          is_active: true,
-        };
-
-        const { error: insertError } = await supabase
+        // Create profile manually
+        const { data: newProfile, error: createError } = await supabase
           .from('profiles')
-          .insert([profileData])
+          .insert({
+            id: authData.user.id,
+            email: authData.user.email!,
+            full_name: fullName,
+            phone,
+            role,
+            approval_status: role === 'customer' ? 'approved' : 'pending',
+            profile_completed: role === 'customer',
+            is_active: true,
+          })
           .select()
           .single();
 
-        if (insertError) {
-          console.error('Profile creation error:', insertError);
-          // Try one more time with upsert
-          const { error: upsertError } = await supabase
-            .from('profiles')
-            .upsert([profileData], { onConflict: 'id' });
-          
-          if (upsertError) {
-            console.error('Profile upsert error:', upsertError);
-            throw new Error('Failed to create user profile. Please contact support.');
-          }
+        if (createError) {
+          console.error('Manual profile creation error:', createError);
+          throw new Error('Failed to create profile. Please contact support.');
+        }
+
+        console.log('Profile created manually:', newProfile);
+      }
+
+      // Create access request for merchant/driver
+      if (role === 'merchant' || role === 'driver') {
+        const { error: requestError } = await supabase
+          .from('access_requests')
+          .insert({
+            user_id: authData.user.id,
+            requested_role: role,
+            status: 'pending',
+          });
+
+        if (requestError) {
+          console.error('Access request error:', requestError);
         }
       }
 
       return authData.user;
     } catch (error: any) {
-      console.error('Signup error:', error);
+      console.error('Signup failed:', error);
       
-      // Handle rate limit error
       if (error.message?.includes('rate limit')) {
-        throw new Error('Too many signup attempts. Please wait 10 minutes and try again.');
+        throw new Error('Too many signup attempts. Please wait 10 minutes.');
       }
       
-      // Handle duplicate email
       if (error.message?.includes('already registered')) {
-        throw new Error('This email is already registered. Please login instead.');
+        throw new Error('This email is already registered. Please login.');
       }
       
-      throw new Error(error.message || 'Failed to create account');
+      throw new Error(error.message || 'Signup failed. Please try again.');
     }
   },
 
   async login(email: string, password: string) {
-    try {
-      // Step 1: Sign in with Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+  try {
+    console.log('Attempting login for:', email);
 
-      if (error) {
-        console.error('Auth error:', error);
-        
-        if (error.message?.includes('Email not confirmed')) {
-          throw new Error('Please check your email and confirm your account before logging in.');
-        }
-        if (error.message?.includes('Invalid login credentials')) {
-          throw new Error('Invalid email or password');
-        }
-        throw new Error(error.message || 'Login failed');
-      }
+    // Sign in
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      console.error('Login error:', error);
       
-      if (!data.user) throw new Error('Login failed - no user returned');
-
-      // Step 2: Verify session with getUser() for security
-      const { data: { user: verifiedUser }, error: verifyError } = await supabase.auth.getUser();
-      
-      if (verifyError || !verifiedUser) {
-        console.error('Session verification failed:', verifyError);
-        throw new Error('Session verification failed. Please try again.');
+      if (error.message?.includes('Email not confirmed')) {
+        throw new Error('Please confirm your email first.');
       }
-
-      // Step 3: Get profile with retry and better error handling
-      let profile = null;
-      let retries = 3;
-      
-      while (retries > 0 && !profile) {
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', verifiedUser.id)
-          .maybeSingle(); // Use maybeSingle instead of single
-
-        if (profileError) {
-          console.error('Profile fetch error (attempt ' + (4 - retries) + '):', profileError);
-          
-          // If it's a 406 error, check headers
-          if (profileError.code === 'PGRST106') {
-            console.error('406 Error - Check Supabase client headers');
-          }
-        }
-
-        if (profileData) {
-          profile = profileData;
-          break;
-        }
-
-        retries--;
-        if (retries > 0) {
-          console.log('Retrying profile fetch...');
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+      if (error.message?.includes('Invalid login credentials')) {
+        throw new Error('Invalid email or password');
       }
+      throw new Error(error.message || 'Login failed');
+    }
+    
+    if (!data.user) {
+      throw new Error('Login failed - no user returned');
+    }
 
-      // Step 4: If still no profile, create one
-      if (!profile) {
-        console.log('Profile not found, creating new profile...');
-        
-        const newProfile = {
-          id: verifiedUser.id,
-          email: verifiedUser.email!,
-          full_name: verifiedUser.user_metadata?.full_name || '',
-          phone: verifiedUser.user_metadata?.phone || '',
-          role: verifiedUser.user_metadata?.role || 'customer',
+    console.log('Login successful, user ID:', data.user.id);
+
+    // Get profile - simplified with single attempt
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error('Profile fetch error:', profileError);
+      throw new Error('Failed to load profile. Please try again.');
+    }
+
+    if (!profile) {
+      console.log('Profile not found, creating...');
+      
+      // Create profile
+      const { data: newProfile, error: createError } = await supabase
+        .from('profiles')
+        .insert({
+          id: data.user.id,
+          email: data.user.email!,
+          full_name: data.user.user_metadata?.full_name || '',
+          phone: data.user.user_metadata?.phone || '',
+          role: data.user.user_metadata?.role || 'customer',
           approval_status: 'approved',
           profile_completed: true,
           is_active: true,
-        };
+        })
+        .select()
+        .single();
 
-        const { data: createdProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert([newProfile])
-          .select()
-          .single();
-
-        if (createError) {
-          console.error('Failed to create profile:', createError);
-          throw new Error('Profile not found and could not be created. Please contact support.');
-        }
-
-        profile = createdProfile;
+      if (createError) {
+        console.error('Profile creation error:', createError);
+        throw new Error('Failed to create profile. Please contact support.');
       }
 
-      return profile;
-    } catch (error: any) {
-      console.error('Login error:', error);
-      throw error;
+      return newProfile;
     }
-  },
+
+    console.log('Profile loaded successfully:', profile.role);
+    return profile; // ✅ Just return the profile, don't redirect here
+  } catch (error: any) {
+    console.error('Login failed:', error);
+    throw error;
+  }
+},
 
   async loginWithGoogle() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
       },
     });
 
@@ -208,24 +193,15 @@ export const authService = {
   },
 
   async getCurrentUser() {
-    // Use secure getUser() method
     const { data: { user }, error } = await supabase.auth.getUser();
     
-    if (error || !user) {
-      console.error('Error getting user:', error);
-      return null;
-    }
+    if (error || !user) return null;
 
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .maybeSingle();
-
-    if (profileError) {
-      console.error('Error fetching profile:', profileError);
-      return null;
-    }
 
     return profile;
   },

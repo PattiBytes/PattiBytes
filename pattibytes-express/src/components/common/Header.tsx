@@ -99,12 +99,17 @@ export default function Header() {
           </div>
 
           {/* Mobile Menu Button */}
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="md:hidden p-2 rounded-lg hover:bg-gray-100"
-          >
-            {menuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
+<button
+  onClick={() => setMenuOpen(!menuOpen)}
+  className="md:hidden p-2 rounded-lg hover:bg-gray-100 text-gray-900" // Added text-gray-900
+>
+  {menuOpen ? (
+    <X size={24} className="text-gray-900" />
+  ) : (
+    <Menu size={24} className="text-gray-900" />
+  )}
+</button>
+
         </div>
 
         {/* Mobile Menu */}

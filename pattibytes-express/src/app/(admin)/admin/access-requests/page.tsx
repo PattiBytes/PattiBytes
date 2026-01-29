@@ -1,125 +1,150 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { CheckCircle, XCircle, Clock, User, Mail, Phone } from 'lucide-react';
 import { toast } from 'react-toastify';
 
-interface Profile {
+interface AccessRequest {
   id: string;
-  email: string;
-  full_name: string;
-  phone: string;
-  role: string;
-  approval_status: string;
+  user_id: string;
+  requested_role: string;
+  status: string;
   created_at: string;
+  reviewed_at?: string;
+  profiles: {
+    full_name: string;
+    email: string;
+    phone: string;
+    role: string;
+  };
 }
 
 export default function AccessRequestsPage() {
-  const { user } = useAuth();
-  const [requests, setRequests] = useState<Profile[]>([]);
+  const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
 
   useEffect(() => {
     loadRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    // Real-time subscription
+    const channel = supabase
+      .channel('access_requests_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'access_requests' },
+        () => {
+          loadRequests();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
   const loadRequests = async () => {
-    setLoading(true);
     try {
       let query = supabase
-        .from('profiles')
-        .select('id, email, full_name, phone, role, approval_status, created_at')
-        .in('role', ['merchant', 'driver']);
+        .from('access_requests')
+        .select(`
+          *,
+          profiles:user_id (
+            full_name,
+            email,
+            phone,
+            role
+          )
+        `)
+        .order('created_at', { ascending: false });
 
       if (filter !== 'all') {
-        query = query.eq('approval_status', filter);
+        query = query.eq('status', filter);
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false });
+      const { data, error } = await query;
 
       if (error) throw error;
-      setRequests((data || []) as Profile[]);
+      setRequests(data || []);
     } catch (error) {
-      console.error('Failed to load requests:', error);
-      toast.error('Failed to load approval requests');
+      console.error('Error loading requests:', error);
+      toast.error('Failed to load access requests');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleApprove = async (userId: string) => {
+  const handleRequest = async (requestId: string, userId: string, newStatus: 'approved' | 'rejected', requestedRole: string) => {
     try {
-      const { error } = await supabase
-        .from('profiles')
+      // Update access request status
+      const { error: requestError } = await supabase
+        .from('access_requests')
         .update({
-          approval_status: 'approved',
-          approved_at: new Date().toISOString(),
-          approved_by: user?.id,
+          status: newStatus,
+          reviewed_at: new Date().toISOString(),
         })
-        .eq('id', userId);
+        .eq('id', requestId);
 
-      if (error) throw error;
+      if (requestError) throw requestError;
 
-      toast.success('User approved successfully!');
+      // If approved, update user's role and approval status
+      if (newStatus === 'approved') {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            role: requestedRole,
+            approval_status: 'approved',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', userId);
+
+        if (profileError) throw profileError;
+
+        // Send notification (you can implement this later)
+        toast.success(`Access request ${newStatus}! User can now access ${requestedRole} panel.`);
+      } else {
+        toast.success(`Access request ${newStatus}`);
+      }
+
       loadRequests();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      console.error('Failed to approve:', error);
-      toast.error(error.message || 'Failed to approve user');
-    }
-  };
-
-  const handleReject = async (userId: string) => {
-    if (!confirm('Are you sure you want to reject this request?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          approval_status: 'rejected',
-          approved_at: new Date().toISOString(),
-          approved_by: user?.id,
-        })
-        .eq('id', userId);
-
-      if (error) throw error;
-
-      toast.success('Request rejected');
-      loadRequests();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      console.error('Failed to reject:', error);
-      toast.error(error.message || 'Failed to reject request');
+      console.error('Error updating request:', error);
+      toast.error(error.message || 'Failed to update request');
     }
   };
 
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
+      <div className="p-6">
+        <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Access Requests</h1>
-          <p className="text-gray-600 mt-1">Review and approve merchant & driver applications</p>
+          <p className="text-gray-600 mt-2">Review and manage access requests from users</p>
         </div>
 
-        {/* Filters */}
+        {/* Filter Tabs */}
         <div className="bg-white rounded-lg shadow mb-6">
-          <div className="flex border-b border-gray-200 overflow-x-auto">
-            {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
+          <div className="flex border-b overflow-x-auto">
+            {['all', 'pending', 'approved', 'rejected'].map((status) => (
               <button
                 key={status}
-                onClick={() => setFilter(status)}
-                className={`flex-1 px-6 py-4 font-medium whitespace-nowrap ${
+                onClick={() => setFilter(status as any)}
+                className={`px-6 py-3 font-medium capitalize whitespace-nowrap ${
                   filter === status
                     ? 'text-primary border-b-2 border-primary'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                {status.charAt(0).toUpperCase() + status.slice(1)}
+                {status}
+                {status === 'pending' && requests.filter(r => r.status === 'pending').length > 0 && (
+                  <span className="ml-2 bg-primary text-white text-xs px-2 py-1 rounded-full">
+                    {requests.filter(r => r.status === 'pending').length}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -127,99 +152,95 @@ export default function AccessRequestsPage() {
 
         {/* Requests List */}
         {loading ? (
-          <div className="space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-gray-200 h-32 rounded-lg animate-pulse" />
-            ))}
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-primary mx-auto"></div>
           </div>
-        ) : requests.length > 0 ? (
-          <div className="space-y-4">
-            {requests.map((request) => (
-              <div key={request.id} className="bg-white rounded-lg shadow p-6">
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                  <div className="flex gap-4 flex-1">
-                    <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
-                      <User className="text-white" size={24} />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-lg text-gray-900 truncate">
-                        {request.full_name || 'Unnamed User'}
-                      </h3>
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-2 text-sm text-gray-600">
-                        <div className="flex items-center gap-1">
-                          <Mail size={16} className="flex-shrink-0" />
-                          <span className="truncate">{request.email}</span>
-                        </div>
-                        {request.phone && (
-                          <div className="flex items-center gap-1">
-                            <Phone size={16} className="flex-shrink-0" />
-                            <span>{request.phone}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full font-medium">
-                          {request.role === 'merchant' ? '🏪 Merchant' : '🚗 Driver'}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {new Date(request.created_at).toLocaleDateString('en-IN')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex sm:flex-col gap-2">
-                    {request.approval_status === 'pending' ? (
-                      <>
-                        <button
-                          onClick={() => handleApprove(request.id)}
-                          className="flex-1 sm:flex-initial px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
-                        >
-                          <CheckCircle size={18} />
-                          <span className="hidden sm:inline">Approve</span>
-                        </button>
-                        <button
-                          onClick={() => handleReject(request.id)}
-                          className="flex-1 sm:flex-initial px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium flex items-center justify-center gap-2"
-                        >
-                          <XCircle size={18} />
-                          <span className="hidden sm:inline">Reject</span>
-                        </button>
-                      </>
-                    ) : (
-                      <span
-                        className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
-                          request.approval_status === 'approved'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {request.approval_status === 'approved' ? (
-                          <>
-                            <CheckCircle size={18} />
-                            Approved
-                          </>
-                        ) : (
-                          <>
-                            <XCircle size={18} />
-                            Rejected
-                          </>
-                        )}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+        ) : requests.length === 0 ? (
+          <div className="bg-white rounded-lg shadow p-12 text-center">
+            <Clock className="mx-auto text-gray-400 mb-4" size={48} />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No requests found</h3>
+            <p className="text-gray-600">There are no {filter !== 'all' ? filter : ''} access requests at the moment.</p>
           </div>
         ) : (
-          <div className="text-center py-12 bg-white rounded-lg">
-            <Clock size={64} className="mx-auto text-gray-400 mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">No requests found</h3>
-            <p className="text-gray-600">
-              {filter === 'pending' ? 'No pending approval requests' : 'No requests in this category'}
-            </p>
+          <div className="grid gap-4">
+            {requests.map((request) => (
+              <div key={request.id} className="bg-white rounded-lg shadow p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                      <User className="text-primary" size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">
+                        {request.profiles.full_name}
+                      </h3>
+                      <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+                        <span className="flex items-center gap-1">
+                          <Mail size={14} />
+                          {request.profiles.email}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Phone size={14} />
+                          {request.profiles.phone}
+                        </span>
+                      </div>
+                      <div className="mt-2">
+                        <span className="text-sm text-gray-600">Current role: </span>
+                        <span className="text-sm font-semibold text-gray-900 capitalize">
+                          {request.profiles.role}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <span
+                      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${
+                        request.status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : request.status === 'approved'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {request.status === 'pending' && <Clock size={16} />}
+                      {request.status === 'approved' && <CheckCircle size={16} />}
+                      {request.status === 'rejected' && <XCircle size={16} />}
+                      {request.status}
+                    </span>
+                    <p className="text-xs text-gray-500 mt-2">
+                      {new Date(request.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                  <p className="text-sm text-gray-700">
+                    <span className="font-semibold">Requested access to:</span>{' '}
+                    <span className="capitalize font-bold text-primary">{request.requested_role} Panel</span>
+                  </p>
+                </div>
+
+                {request.status === 'pending' && (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleRequest(request.id, request.user_id, 'approved', request.requested_role)}
+                      className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle size={20} />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleRequest(request.id, request.user_id, 'rejected', request.requested_role)}
+                      className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 font-medium flex items-center justify-center gap-2"
+                    >
+                      <XCircle size={20} />
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
