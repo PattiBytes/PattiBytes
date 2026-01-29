@@ -45,20 +45,21 @@ export default function MerchantMenuPage() {
   }, [merchantId]);
 
   const loadMerchantId = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('merchants')
-        .select('id')
-        .eq('owner_id', user!.id)
-        .single();
+  try {
+    const { data, error } = await supabase
+      .from('merchants')
+      .select('id')
+      .eq('user_id', user!.id) // ✅ Changed from owner_id to user_id
+      .single();
 
-      if (error) throw error;
-      setMerchantId(data.id);
-    } catch (error) {
-      console.error('Error loading merchant ID:', error);
-      toast.error('Failed to load merchant data');
-    }
-  };
+    if (error) throw error;
+    setMerchantId(data.id);
+  } catch (error) {
+    console.error('Error loading merchant ID:', error);
+    toast.error('Failed to load merchant data');
+  }
+};
+
 
   const loadMenuItems = async () => {
     setLoading(true);

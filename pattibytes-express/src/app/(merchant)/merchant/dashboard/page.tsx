@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { orderService } from '@/services/orders';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { ShoppingBag, DollarSign, TrendingUp, Clock, CheckCircle } from 'lucide-react';
+import { logger } from '@/lib/logger';
+import { toast } from 'react-toastify';
 
 export default function MerchantDashboardPage() {
   const { user } = useAuth();
@@ -28,16 +30,42 @@ export default function MerchantDashboardPage() {
 
   const loadMerchantData = async () => {
     try {
-      // Get merchant ID from user profile
-      const { data: merchantData } = await supabase
+      // Get merchant ID using user_id (not owner_id)
+      // eslint-disable-next-line prefer-const
+      let { data: merchantData, error } = await supabase
         .from('merchants')
         .select('id')
         .eq('user_id', user!.id)
-        .single();
+        .maybeSingle();
+
+      if (error) {
+        logger.error('Error loading merchant data', error);
+        throw error;
+      }
 
       if (!merchantData) {
-        console.error('No merchant profile found');
-        return;
+        logger.info('No merchant profile found, creating one...');
+        
+        // Create merchant profile automatically
+        const { data: newMerchant, error: createError } = await supabase
+          .from('merchants')
+          .insert({
+            user_id: user!.id,
+            name: user!.full_name + "'s Restaurant",
+            email: user!.email,
+            phone: user!.phone,
+            status: 'active',
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          logger.error('Error creating merchant', createError);
+          throw createError;
+        }
+
+        merchantData = newMerchant;
+        toast.success('Merchant profile created! Please complete your restaurant details.');
       }
 
       setMerchantId(merchantData.id);
@@ -63,7 +91,8 @@ export default function MerchantDashboardPage() {
         todayRevenue,
       });
     } catch (error) {
-      console.error('Failed to load merchant data:', error);
+      logger.error('Failed to load merchant data', error);
+      toast.error('Failed to load merchant data');
     } finally {
       setLoading(false);
     }

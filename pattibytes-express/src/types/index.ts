@@ -1,4 +1,6 @@
 export interface User {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  avatar_url: any;
   id: string;
   email: string;
   full_name: string;
