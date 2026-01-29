@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authService } from '@/services/auth';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'react-toastify';
 import { Mail, Lock, ArrowLeft } from 'lucide-react';
 
@@ -22,7 +23,27 @@ export default function LoginPage() {
 
     try {
       const user = await authService.login(formData.email, formData.password);
-      
+
+      // Check approval status for merchant/driver
+      if (user.role === 'merchant' || user.role === 'driver') {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('approval_status')
+          .eq('id', user.id)
+          .single();
+
+        if (profile?.approval_status === 'pending') {
+          router.push('/auth/pending-approval');
+          return;
+        }
+
+        if (profile?.approval_status === 'rejected') {
+          toast.error('Your account application was rejected. Please contact support.');
+          await authService.logout();
+          return;
+        }
+      }
+
       toast.success('Login successful!');
 
       setTimeout(() => {
@@ -61,29 +82,30 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
+      <div className="max-w-md w-full animate-fadeIn">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-gray-700 hover:text-primary mb-6 transition-colors"
+          className="inline-flex items-center gap-2 text-gray-700 hover:text-primary mb-6 transition-colors hover-scale"
         >
           <ArrowLeft size={20} />
           <span>Back to Home</span>
         </Link>
 
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-white rounded-2xl shadow-xl p-8 hover-lift">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-white font-bold text-2xl">P</span>
+            <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg animate-scaleIn">
+              <span className="text-white font-bold text-2xl">PB</span>
             </div>
             <h1 className="text-3xl font-bold text-gray-900">Welcome Back</h1>
-            <p className="text-gray-600 mt-2">Sign in to continue to Pattibytes</p>
+            <p className="text-gray-600 mt-2">Sign in to PattiBytes Express</p>
+            <p className="text-sm text-primary font-semibold">ਪੱਟੀ ਦੀ ਲੋੜ, ਹਾਢੇ ਕੋਲ ਤੋੜ</p>
           </div>
 
           {/* Google Sign-In */}
           <button
             onClick={handleGoogleLogin}
             disabled={googleLoading}
-            className="w-full mb-6 bg-white border-2 border-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-50 font-medium flex items-center justify-center gap-3 disabled:opacity-50 transition-all"
+            className="w-full mb-6 bg-white border-2 border-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-50 hover:border-primary font-medium flex items-center justify-center gap-3 disabled:opacity-50 transition-all"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -103,7 +125,14 @@ export default function LoginPage() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            {googleLoading ? 'Connecting to Google...' : 'Continue with Google'}
+            {googleLoading ? (
+              <>
+                <div className="spinner"></div>
+                Connecting...
+              </>
+            ) : (
+              'Continue with Google'
+            )}
           </button>
 
           <div className="relative mb-6">
@@ -126,7 +155,7 @@ export default function LoginPage() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   placeholder="you@example.com"
                   required
                 />
@@ -143,7 +172,7 @@ export default function LoginPage() {
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   placeholder="Enter your password"
                   required
                 />
@@ -166,9 +195,16 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary text-white py-3 rounded-lg hover:bg-orange-600 font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full btn-primary py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <>
+                  <div className="spinner"></div>
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
             </button>
           </form>
 

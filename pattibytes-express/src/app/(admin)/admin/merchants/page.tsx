@@ -1,45 +1,42 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { Merchant } from '@/types';
-import { Store, Search, Filter, CheckCircle, XCircle, Eye } from 'lucide-react';
+import { Plus, Store, Mail, Phone, MapPin, Trash2, Key } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { Merchant } from '@/types';
 
 export default function AdminMerchantsPage() {
   const { user } = useAuth();
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [formData, setFormData] = useState({
+    business_name: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: 'Punjab',
+    zipcode: '',
+    cuisine_type: '',
+    description: '',
+  });
 
   useEffect(() => {
     if (user) loadMerchants();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, statusFilter]);
+     
+  }, [user]);
 
   const loadMerchants = async () => {
-    setLoading(true);
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('merchants')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (statusFilter === 'active') {
-        query = query.eq('is_active', true);
-      } else if (statusFilter === 'inactive') {
-        query = query.eq('is_active', false);
-      } else if (statusFilter === 'verified') {
-        query = query.eq('is_verified', true);
-      } else if (statusFilter === 'unverified') {
-        query = query.eq('is_verified', false);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
       setMerchants(data as Merchant[] || []);
     } catch (error) {
@@ -50,185 +47,358 @@ export default function AdminMerchantsPage() {
     }
   };
 
-  const toggleStatus = async (merchantId: string, currentStatus: boolean) => {
+  const generatePassword = () => {
+    return Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+  };
+
+  const handleAddMerchant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     try {
-      const { error } = await supabase
+      // Generate random password
+      const tempPassword = generatePassword();
+      const merchantEmail = formData.email;
+
+      // 1. Create auth user for merchant
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: merchantEmail,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          full_name: formData.business_name,
+          phone: formData.phone,
+        },
+      });
+
+      if (authError) throw authError;
+
+      // 2. Update profile with merchant role
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          role: 'merchant',
+          full_name: formData.business_name,
+          phone: formData.phone,
+        })
+        .eq('id', authData.user.id);
+
+      if (profileError) throw profileError;
+
+      // 3. Create merchant record
+      const { error: merchantError } = await supabase
         .from('merchants')
-        .update({ is_active: !currentStatus })
-        .eq('id', merchantId);
+        .insert([
+          {
+            user_id: authData.user.id,
+            owner_id: authData.user.id,
+            business_name: formData.business_name,
+            email: merchantEmail,
+            phone: formData.phone,
+            address: {
+              address: formData.address,
+              city: formData.city,
+              state: formData.state,
+              zipcode: formData.zipcode,
+            },
+            cuisine_type: formData.cuisine_type,
+            description: formData.description,
+            is_active: true,
+            is_verified: true,
+          },
+        ]);
 
-      if (error) throw error;
+      if (merchantError) throw merchantError;
 
-      toast.success(`Merchant ${!currentStatus ? 'activated' : 'deactivated'}`);
+      // Show credentials to admin
+      toast.success(
+        `Restaurant added! Credentials:\nEmail: ${merchantEmail}\nPassword: ${tempPassword}\n\n⚠️ Save these credentials!`,
+        { autoClose: false }
+      );
+
+      // Optional: Send email with credentials (if email service configured)
+      await sendCredentialsEmail(merchantEmail, tempPassword, formData.business_name);
+
+      setShowAddModal(false);
+      setFormData({
+        business_name: '',
+        email: '',
+        phone: '',
+        address: '',
+        city: '',
+        state: 'Punjab',
+        zipcode: '',
+        cuisine_type: '',
+        description: '',
+      });
       loadMerchants();
-    } catch (error) {
-      toast.error('Failed to update merchant status');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      console.error('Failed to add merchant:', error);
+      toast.error(error.message || 'Failed to add restaurant');
     }
   };
 
-  const toggleVerification = async (merchantId: string, currentStatus: boolean) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const sendCredentialsEmail = async (email: string, password: string, business_name?: string) => {
+    // Implement email sending logic here
+    console.log('Send email to:', email, 'Password:', password);
+    // You can use services like SendGrid, Resend, or nodemailer
+  };
+
+  const handleDelete = async (merchantId: string) => {
+    if (!confirm('Are you sure you want to delete this restaurant?')) return;
+
     try {
       const { error } = await supabase
         .from('merchants')
-        .update({ is_verified: !currentStatus })
+        .delete()
         .eq('id', merchantId);
 
       if (error) throw error;
-
-      toast.success(`Merchant ${!currentStatus ? 'verified' : 'unverified'}`);
+      toast.success('Restaurant deleted');
       loadMerchants();
     } catch (error) {
-      toast.error('Failed to update verification status');
+      console.error('Failed to delete merchant:', error);
+      toast.error('Failed to delete restaurant');
     }
   };
-
-  const filteredMerchants = merchants.filter(m =>
-    m.business_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.email?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">All Merchants</h1>
-            <p className="text-gray-600 mt-1">Manage restaurant partners</p>
+            <h1 className="text-3xl font-bold text-gray-900">Manage Restaurants</h1>
+            <p className="text-gray-600 mt-1">Add and manage restaurant partners</p>
           </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium flex items-center gap-2 shadow-lg"
+          >
+            <Plus size={20} />
+            Add Restaurant
+          </button>
         </div>
 
-        {/* Filters */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-3 text-gray-400" size={20} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search merchants..."
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Filter size={20} className="text-gray-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="verified">Verified</option>
-              <option value="unverified">Unverified</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Merchants List */}
         {loading ? (
-          <div className="grid grid-cols-1 gap-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="bg-gray-200 h-32 rounded-lg animate-pulse" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="bg-gray-200 h-64 rounded-lg animate-pulse" />
             ))}
           </div>
-        ) : filteredMerchants.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg">
-            <Store size={64} className="mx-auto text-gray-400 mb-4" />
-            <h2 className="text-xl font-bold text-gray-900 mb-2">No merchants found</h2>
-            <p className="text-gray-600">Try adjusting your search or filters</p>
+        ) : merchants.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {merchants.map((merchant) => (
+              <div key={merchant.id} className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-pink-500 rounded-full flex items-center justify-center">
+                      <Store className="text-white" size={24} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900">{merchant.business_name}</h3>
+                      <span className={`text-xs px-2 py-1 rounded-full ${merchant.is_verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                        {merchant.is_verified ? 'Verified' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="flex items-center gap-2">
+                    <Mail size={16} />
+                    <span className="truncate">{merchant.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone size={16} />
+                    <span>{merchant.phone}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin size={16} />
+                    <span className="truncate">{merchant.address?.address || 'No address'}</span>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+                  <button
+                    onClick={() => handleDelete(merchant.id)}
+                    className="flex-1 bg-red-50 text-red-600 px-4 py-2 rounded-lg hover:bg-red-100 font-medium flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={16} />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Business
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Contact
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredMerchants.map((merchant) => (
-                  <tr key={merchant.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="h-10 w-10 flex-shrink-0">
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-white font-bold">
-                            {merchant.business_name?.charAt(0)?.toUpperCase() || 'M'}
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {merchant.business_name || 'Unnamed Business'}
-                          </div>
-                          <div className="text-sm text-gray-500">{merchant.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{merchant.phone || 'N/A'}</div>
-                      <div className="text-sm text-gray-500">{merchant.email}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex gap-2">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            merchant.is_active
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          {merchant.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            merchant.is_verified
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}
-                        >
-                          {merchant.is_verified ? 'Verified' : 'Unverified'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => toggleStatus(merchant.id, merchant.is_active)}
-                          className={`px-3 py-1 rounded ${
-                            merchant.is_active
-                              ? 'bg-red-100 text-red-800 hover:bg-red-200'
-                              : 'bg-green-100 text-green-800 hover:bg-green-200'
-                          }`}
-                        >
-                          {merchant.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button
-                          onClick={() => toggleVerification(merchant.id, merchant.is_verified)}
-                          className={`px-3 py-1 rounded ${
-                            merchant.is_verified
-                              ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                              : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-                          }`}
-                        >
-                          {merchant.is_verified ? 'Unverify' : 'Verify'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="text-center py-12 bg-white rounded-lg">
+            <Store size={64} className="mx-auto text-gray-400 mb-4" />
+            <h3 className="text-xl font-bold text-gray-900 mb-2">No restaurants yet</h3>
+            <p className="text-gray-600">Add your first restaurant partner</p>
+          </div>
+        )}
+
+        {/* Add Restaurant Modal */}
+        {showAddModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-2xl font-bold text-gray-900">Add New Restaurant</h2>
+              </div>
+
+              <form onSubmit={handleAddMerchant} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Business Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.business_name}
+                    onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Phone *
+                    </label>
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Address *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      State
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.state}
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Pincode *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.zipcode}
+                      onChange={(e) => setFormData({ ...formData, zipcode: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      maxLength={6}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Cuisine Type
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.cuisine_type}
+                    onChange={(e) => setFormData({ ...formData, cuisine_type: e.target.value })}
+                    placeholder="e.g., Punjabi, Chinese, Italian"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={3}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <Key className="text-blue-600 flex-shrink-0 mt-1" size={20} />
+                    <div>
+                      <p className="font-semibold text-blue-900 mb-1">Auto-Generated Credentials</p>
+                      <p className="text-sm text-blue-800">
+                        A random password will be generated and displayed after creation. 
+                        The merchant can login with their email and change the password later.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium"
+                  >
+                    Add Restaurant
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>

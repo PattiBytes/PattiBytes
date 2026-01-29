@@ -1,26 +1,21 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+export const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-// For build time, provide dummy values if not available
-const buildTimeUrl = supabaseUrl || 'https://placeholder.supabase.co';
-const buildTimeKey = supabaseAnonKey || 'placeholder-key';
-
-if (typeof window !== 'undefined' && (!supabaseUrl || !supabaseAnonKey)) {
-  console.error('❌ Missing Supabase environment variables!');
-  console.log('Please check your .env.local file');
-}
-
-export const supabase = createClient(buildTimeUrl, buildTimeKey);
-
-// Admin client (server-side only)
-export const supabaseAdmin = supabaseServiceKey && supabaseUrl
-  ? createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
-  : null;
+// Get redirect URL based on environment
+export const getRedirectUrl = () => {
+  if (typeof window !== 'undefined') {
+    const { hostname, port, protocol } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${protocol}//${hostname}:${port}`;
+    }
+    // Use current origin for production
+    return window.location.origin;
+  }
+  
+  // Fallback for SSR
+  return process.env.NEXT_PUBLIC_SITE_URL || 'https://pbexpress.pattibytes.com';
+};

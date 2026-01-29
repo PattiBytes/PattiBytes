@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { authService } from '@/services/auth';
 import { toast } from 'react-toastify';
@@ -10,6 +9,7 @@ import { Mail, Lock, User, Phone, ArrowLeft, UserCircle } from 'lucide-react';
 
 export default function SignupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -20,6 +20,14 @@ export default function SignupPage() {
     confirmPassword: '',
     role: 'customer',
   });
+
+  useEffect(() => {
+    // Check if role is passed in URL query
+    const roleParam = searchParams.get('role');
+    if (roleParam && ['customer', 'merchant', 'driver'].includes(roleParam)) {
+      setFormData((prev) => ({ ...prev, role: roleParam }));
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,8 +53,18 @@ export default function SignupPage() {
         formData.role
       );
 
-      toast.success('Account created! Please check your email to verify.');
-      router.push('/auth/login');
+      // Different messages based on role
+      if (formData.role === 'merchant' || formData.role === 'driver') {
+        toast.success(
+          '🎉 Registration successful! Your account is pending approval. We will notify you via email once approved.',
+          { autoClose: 5000 }
+        );
+        router.push('/auth/pending-approval');
+      } else {
+        toast.success('Account created! Please check your email to verify.');
+        router.push('/auth/login');
+      }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(error.message || 'Signup failed');
     } finally {
@@ -58,6 +76,7 @@ export default function SignupPage() {
     setGoogleLoading(true);
     try {
       await authService.loginWithGoogle();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       if (!error.message.includes('Redirecting')) {
         toast.error('Google signup failed');
@@ -68,7 +87,7 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 flex items-center justify-center p-4 py-12">
-      <div className="max-w-md w-full">
+      <div className="max-w-md w-full animate-fadeIn">
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-gray-700 hover:text-primary mb-6 transition-colors"
@@ -77,20 +96,26 @@ export default function SignupPage() {
           <span>Back to Home</span>
         </Link>
 
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-white rounded-2xl shadow-xl p-8 hover-lift">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-white font-bold text-2xl">P</span>
+            <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+              <span className="text-white font-bold text-2xl">PB</span>
             </div>
             <h1 className="text-3xl font-bold text-gray-900">Create Account</h1>
-            <p className="text-gray-600 mt-2">Join Pattibytes today</p>
+            <p className="text-gray-600 mt-2">
+              {formData.role === 'merchant'
+                ? 'Join as a Restaurant Partner'
+                : formData.role === 'driver'
+                ? 'Join as a Delivery Partner'
+                : 'Join PattiBytes Express'}
+            </p>
           </div>
 
           {/* Google Sign-Up */}
           <button
             onClick={handleGoogleSignup}
             disabled={googleLoading}
-            className="w-full mb-6 bg-white border-2 border-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-50 font-medium flex items-center justify-center gap-3 disabled:opacity-50 transition-all"
+            className="w-full mb-6 bg-white border-2 border-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-50 hover:border-primary font-medium flex items-center justify-center gap-3 disabled:opacity-50 transition-all"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -125,7 +150,30 @@ export default function SignupPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Full Name
+                I am a
+              </label>
+              <div className="relative">
+                <UserCircle className="absolute left-3 top-3 text-gray-400" size={20} />
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                >
+                  <option value="customer">🛒 Customer</option>
+                  <option value="merchant">🏪 Restaurant Owner</option>
+                  <option value="driver">🚗 Delivery Driver</option>
+                </select>
+              </div>
+              {(formData.role === 'merchant' || formData.role === 'driver') && (
+                <p className="mt-2 text-sm text-blue-600 bg-blue-50 p-3 rounded-lg">
+                  ℹ️ Your account will be reviewed and approved by our team within 24-48 hours.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Full Name *
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-3 text-gray-400" size={20} />
@@ -133,7 +181,7 @@ export default function SignupPage() {
                   type="text"
                   value={formData.fullName}
                   onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   placeholder="John Doe"
                   required
                 />
@@ -142,7 +190,7 @@ export default function SignupPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
+                Email Address *
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 text-gray-400" size={20} />
@@ -150,7 +198,7 @@ export default function SignupPage() {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   placeholder="you@example.com"
                   required
                 />
@@ -159,7 +207,7 @@ export default function SignupPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Phone Number
+                Phone Number *
               </label>
               <div className="relative">
                 <Phone className="absolute left-3 top-3 text-gray-400" size={20} />
@@ -167,7 +215,7 @@ export default function SignupPage() {
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   placeholder="+91 9876543210"
                   required
                 />
@@ -176,25 +224,7 @@ export default function SignupPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                I am a
-              </label>
-              <div className="relative">
-                <UserCircle className="absolute left-3 top-3 text-gray-400" size={20} />
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                  <option value="customer">Customer</option>
-                  <option value="merchant">Restaurant Owner</option>
-                  <option value="driver">Delivery Driver</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Password
+                Password *
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 text-gray-400" size={20} />
@@ -202,7 +232,7 @@ export default function SignupPage() {
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   placeholder="Min. 6 characters"
                   required
                 />
@@ -211,7 +241,7 @@ export default function SignupPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Confirm Password
+                Confirm Password *
               </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 text-gray-400" size={20} />
@@ -219,7 +249,7 @@ export default function SignupPage() {
                   type="password"
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   placeholder="Confirm password"
                   required
                 />
@@ -229,9 +259,16 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary text-white py-3 rounded-lg hover:bg-orange-600 font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-6"
+              className="w-full btn-primary py-3 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed mt-6 flex items-center justify-center gap-2"
             >
-              {loading ? 'Creating Account...' : 'Create Account'}
+              {loading ? (
+                <>
+                  <div className="spinner"></div>
+                  Creating Account...
+                </>
+              ) : (
+                'Create Account'
+              )}
             </button>
           </form>
 
