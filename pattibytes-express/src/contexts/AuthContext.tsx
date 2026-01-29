@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { User, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -16,6 +16,7 @@ interface Profile {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   addresses?: any[];
   profile_completed?: boolean;
+  is_active?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -52,12 +53,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
+    // Initial auth check with secure getUser()
     checkUser();
     
+    // Listen for auth changes but ALWAYS verify with getUser()
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event: AuthChangeEvent, session: Session | null) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          await loadUserProfile(session.user.id);
+      async (event: AuthChangeEvent) => {
+        console.log('Auth event:', event);
+
+        // ✅ SECURE: Always verify session with getUser()
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          try {
+            // Verify the session is authentic
+            const { data: { user: verifiedUser }, error } = await supabase.auth.getUser();
+            
+            if (error) {
+              console.error('Error verifying user:', error);
+              setUser(null);
+              setAuthUser(null);
+              return;
+            }
+
+            if (verifiedUser) {
+              setAuthUser(verifiedUser);
+              await loadUserProfile(verifiedUser.id);
+            }
+          } catch (error) {
+            console.error('Error in auth state change:', error);
+            setUser(null);
+            setAuthUser(null);
+          }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setAuthUser(null);
@@ -66,6 +91,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (!pathname.startsWith('/auth') && pathname !== '/') {
             router.push('/');
           }
+        } else if (event === 'USER_UPDATED') {
+          // Verify and refresh user data
+          const { data: { user: verifiedUser } } = await supabase.auth.getUser();
+          if (verifiedUser) {
+            setAuthUser(verifiedUser);
+            await loadUserProfile(verifiedUser.id);
+          }
         }
       }
     );
@@ -73,19 +105,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       authListener.subscription.unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, router]);
 
   const checkUser = async () => {
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      // ✅ SECURE: Using getUser() instead of getSession()
+      const { data: { user: authUser }, error } = await supabase.auth.getUser();
       
+      if (error) {
+        console.error('Error getting user:', error);
+        setAuthUser(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
       if (authUser) {
         setAuthUser(authUser);
         await loadUserProfile(authUser.id);
       }
     } catch (error) {
       console.error('Error checking user:', error);
+      setAuthUser(null);
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -97,11 +140,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle(); // Changed from .single() to .maybeSingle()
 
-      if (error) throw error;
+      if (error) {
+        console.error('Profile fetch error:', error);
+        
+        // Don't throw on profile not found - user might not have profile yet
+        if (error.code === 'PGRST116') {
+          console.warn('Profile not found for user:', userId);
+          setUser(null);
+          return;
+        }
+        
+        throw error;
+      }
 
-      setUser(data);
+      if (data) {
+        setUser(data);
+      } else {
+        console.warn('No profile data returned for user:', userId);
+        setUser(null);
+      }
     } catch (error) {
       console.error('Error loading user profile:', error);
       setUser(null);
@@ -111,17 +170,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = async () => {
     if (authUser) {
       await loadUserProfile(authUser.id);
+    } else {
+      // If no authUser, check again
+      await checkUser();
     }
   };
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
+      setLoading(true);
+      
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Logout error:', error);
+        // Still clear local state even if API call fails
+      }
+
+      // Clear state
+      setUser(null);
+      setAuthUser(null);
+      
+      // Redirect to home
+      router.push('/');
+      router.refresh();
+    } catch (error) {
+      console.error('Error logging out:', error);
+      // Still clear state on error
       setUser(null);
       setAuthUser(null);
       router.push('/');
-    } catch (error) {
-      console.error('Error logging out:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
