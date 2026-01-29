@@ -1,167 +1,89 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, MapPin, Clock, ShieldCheck, Bike, Store, Users } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+import { ArrowRight, Zap, Shield, Clock, Star } from 'lucide-react';
+import Header from '@/components/common/Header';
 
 export default function HomePage() {
-  const router = useRouter();
-  const { isAuthenticated, loading, userRole } = useAuth();
-
   useEffect(() => {
-    // Auto-redirect authenticated users to their dashboard
-    if (!loading && isAuthenticated && userRole) {
-      if (userRole === 'customer') {
-        router.push('/customer/dashboard');
-      } else if (userRole === 'merchant') {
-        router.push('/merchant/dashboard');
-      } else if (userRole === 'driver') {
-        router.push('/driver/dashboard');
-      } else if (userRole === 'admin' || userRole === 'superadmin') {
-        router.push('/admin/dashboard');
-      }
+    // Register service worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((error) => {
+        console.error('Service worker registration failed:', error);
+      });
     }
-  }, [isAuthenticated, loading, userRole, router]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  // Show landing page only for guests
-  if (isAuthenticated) {
-    return null; // Will redirect via useEffect
-  }
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50">
-      {/* Simple Header for Guests */}
-      <header className="bg-white shadow-sm sticky top-0 z-50">
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                PB
-              </div>
-              <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent">
-                  PattiBytes Express
-                </h1>
-                <p className="text-xs text-gray-600">Delicious food, delivered fast</p>
-              </div>
-            </Link>
-            <div className="flex items-center gap-4">
-              <Link
-                href="/auth/login"
-                className="text-gray-700 hover:text-primary font-medium transition-colors"
-              >
-                Login
-              </Link>
-              <Link
-                href="/auth/signup"
-                className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600 font-medium transition-colors shadow-md hover:shadow-lg"
-              >
-                Sign Up
-              </Link>
-            </div>
-          </div>
-        </nav>
-      </header>
+    <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white">
+      <Header />
 
       {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div>
-            <div className="inline-flex items-center gap-2 bg-orange-100 text-orange-800 px-4 py-2 rounded-full text-sm font-semibold mb-6">
-              <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>
-              Now delivering in Ludhiana
+            <div className="inline-block bg-orange-100 text-orange-600 px-4 py-2 rounded-full text-sm font-semibold mb-6">
+              🎉 Now serving Patti!
             </div>
             
-            <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
-              Food Delivery from
-              <span className="text-primary"> Local Favorites</span>
+            <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-4">
+              PattiBytes Express
             </h1>
-            <p className="text-xl text-gray-600 mt-6">
-              Order from restaurants, cafes, dhabas and more in Ludhiana. 
-              Fast delivery, great prices, amazing taste!
+            
+            <p className="text-2xl md:text-3xl mb-2 font-bold text-primary">
+              ਪੱਟੀ ਦੀ ਲੋੜ, ਹਾਢੇ ਕੋਲ ਤੋੜ
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-4 mt-8">
+            <p className="text-xl text-gray-600 mb-8">
+              Your favorite local restaurants, delivered fast to your doorstep
+            </p>
+
+            <div className="flex flex-wrap gap-4">
               <Link
-                href="/auth/signup?role=customer"
-                className="bg-primary text-white px-8 py-4 rounded-lg hover:bg-orange-600 font-semibold text-lg flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+                href="/auth/signup"
+                className="bg-gradient-to-r from-orange-500 to-pink-500 text-white px-8 py-4 rounded-lg hover:shadow-xl transition-all font-semibold text-lg flex items-center gap-2"
               >
                 Order Now
                 <ArrowRight size={20} />
               </Link>
+              
               <Link
                 href="/auth/signup?role=merchant"
-                className="bg-white text-primary border-2 border-primary px-8 py-4 rounded-lg hover:bg-orange-50 font-semibold text-lg transition-all"
+                className="bg-white text-gray-900 px-8 py-4 rounded-lg border-2 border-gray-300 hover:border-primary transition-all font-semibold text-lg"
               >
-                Join as Partner
+                Partner With Us
               </Link>
             </div>
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-6 mt-12">
-              <div className="text-center lg:text-left">
-                <p className="text-3xl font-bold text-primary">50+</p>
-                <p className="text-gray-600 mt-1">Partners</p>
+              <div>
+                <div className="text-3xl font-bold text-primary">100+</div>
+                <div className="text-sm text-gray-600">Restaurants</div>
               </div>
-              <div className="text-center lg:text-left">
-                <p className="text-3xl font-bold text-primary">1000+</p>
-                <p className="text-gray-600 mt-1">Orders</p>
+              <div>
+                <div className="text-3xl font-bold text-primary">10k+</div>
+                <div className="text-sm text-gray-600">Happy Customers</div>
               </div>
-              <div className="text-center lg:text-left">
-                <p className="text-3xl font-bold text-primary">30min</p>
-                <p className="text-gray-600 mt-1">Delivery</p>
+              <div>
+                <div className="text-3xl font-bold text-primary">30 min</div>
+                <div className="text-sm text-gray-600">Avg Delivery</div>
               </div>
             </div>
           </div>
 
           <div className="relative">
-            <div className="bg-gradient-to-br from-primary to-orange-600 rounded-3xl p-8 shadow-2xl transform hover:scale-105 transition-transform duration-300">
-              <div className="bg-white rounded-2xl p-6 space-y-4">
-                <div className="flex items-center gap-4 p-4 bg-orange-50 rounded-xl hover:bg-orange-100 transition-colors">
-                  <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-pink-500 rounded-xl flex items-center justify-center shadow-md">
-                    <Store className="text-white" size={32} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-900">Choose Restaurant</p>
-                    <p className="text-sm text-gray-600">Browse from 50+ options</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 p-4 bg-orange-50 rounded-xl hover:bg-orange-100 transition-colors">
-                  <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-teal-500 rounded-xl flex items-center justify-center shadow-md">
-                    <MapPin className="text-white" size={32} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-900">Select Location</p>
-                    <p className="text-sm text-gray-600">Delivery anywhere</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 p-4 bg-orange-50 rounded-xl hover:bg-orange-100 transition-colors">
-                  <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-500 rounded-xl flex items-center justify-center shadow-md">
-                    <Bike className="text-white" size={32} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-900">Fast Delivery</p>
-                    <p className="text-sm text-gray-600">30 minutes average</p>
-                  </div>
-                </div>
-              </div>
+            <div className="relative z-10">
+              <img
+                src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&h=800&fit=crop"
+                alt="Delicious Food"
+                className="rounded-3xl shadow-2xl"
+              />
             </div>
-            
-            {/* Decorative elements */}
-            <div className="absolute -top-4 -right-4 w-24 h-24 bg-yellow-300 rounded-full opacity-50 blur-2xl"></div>
-            <div className="absolute -bottom-4 -left-4 w-32 h-32 bg-pink-300 rounded-full opacity-50 blur-2xl"></div>
+            <div className="absolute -top-4 -right-4 w-72 h-72 bg-gradient-to-br from-orange-400 to-pink-500 rounded-full opacity-20 blur-3xl"></div>
+            <div className="absolute -bottom-4 -left-4 w-72 h-72 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full opacity-20 blur-3xl"></div>
           </div>
         </div>
       </section>
@@ -169,140 +91,99 @@ export default function HomePage() {
       {/* Features */}
       <section className="bg-white py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900">Why Choose Us?</h2>
-            <p className="text-xl text-gray-600 mt-4">
-              Simple, fast, and reliable food delivery
-            </p>
-          </div>
+          <h2 className="text-4xl font-bold text-center mb-4">Why Choose Us?</h2>
+          <p className="text-center text-gray-600 mb-12">ਸਾਡੇ ਨਾਲ ਆਪਣਾ ਮਨਪਸੰਦ ਖਾਣਾ ਮੰਗਵਾਓ</p>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-gradient-to-br from-orange-50 to-pink-50 rounded-2xl p-8 text-center hover:shadow-xl transition-shadow">
-              <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+          <div className="grid md:grid-cols-4 gap-8">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <Zap className="text-white" size={32} />
+              </div>
+              <h3 className="font-bold text-xl mb-2">Lightning Fast</h3>
+              <p className="text-gray-600">30-minute delivery guarantee</p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <Shield className="text-white" size={32} />
+              </div>
+              <h3 className="font-bold text-xl mb-2">Safe & Secure</h3>
+              <p className="text-gray-600">Contactless delivery available</p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
                 <Clock className="text-white" size={32} />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">Fast Delivery</h3>
-              <p className="text-gray-600">
-                30 minutes or less guaranteed
-              </p>
+              <h3 className="font-bold text-xl mb-2">Track Live</h3>
+              <p className="text-gray-600">Real-time order tracking</p>
             </div>
 
-            <div className="bg-gradient-to-br from-green-50 to-teal-50 rounded-2xl p-8 text-center hover:shadow-xl transition-shadow">
-              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <ShieldCheck className="text-white" size={32} />
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <Star className="text-white" size={32} />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">100% Safe</h3>
-              <p className="text-gray-600">
-                Verified partners and hygiene standards
-              </p>
-            </div>
-
-            <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-8 text-center hover:shadow-xl transition-shadow">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <Users className="text-white" size={32} />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">24/7 Support</h3>
-              <p className="text-gray-600">
-                Always here to help you
-              </p>
+              <h3 className="font-bold text-xl mb-2">Best Quality</h3>
+              <p className="text-gray-600">Verified restaurants only</p>
             </div>
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="bg-gradient-to-br from-primary to-orange-600 py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-white">
-          <h2 className="text-4xl font-bold mb-6">Ready to Get Started?</h2>
-          <p className="text-xl mb-8 opacity-90">Join thousands of happy customers ordering food daily</p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/auth/signup?role=customer"
-              className="bg-white text-primary px-8 py-4 rounded-lg hover:shadow-lg transition-all transform hover:scale-105 font-semibold text-lg"
-            >
-              Start Ordering
-            </Link>
-            <Link
-              href="/qr"
-              className="bg-white/20 backdrop-blur-lg text-white px-8 py-4 rounded-lg hover:bg-white/30 transition-all border-2 border-white font-semibold text-lg"
-            >
-              📱 Get Mobile App
-            </Link>
-          </div>
+      <section className="bg-gradient-to-r from-orange-500 to-pink-500 py-20">
+        <div className="max-w-4xl mx-auto px-4 text-center">
+          <h2 className="text-4xl font-bold text-white mb-4">
+            Ready to Order?
+          </h2>
+          <p className="text-xl text-white/90 mb-8">
+            Join thousands of happy customers in Punjab
+          </p>
+          <Link
+            href="/auth/signup"
+            className="inline-block bg-white text-orange-600 px-8 py-4 rounded-lg hover:shadow-xl transition-all font-semibold text-lg"
+          >
+            Get Started Now
+          </Link>
         </div>
       </section>
 
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
+          <div className="grid md:grid-cols-4 gap-8">
             <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center">
-                  <span className="text-white font-bold">PB</span>
-                </div>
-                <h3 className="text-xl font-bold">PattiBytes Express</h3>
-              </div>
-              <p className="text-gray-400">
-                Delivering happiness, one meal at a time.
+              <h3 className="font-bold text-xl mb-4">PattiBytes Express</h3>
+              <p className="text-gray-400 text-sm">
+                ਪੱਟੀ ਦੀ ਲੋੜ, ਹਾਢੇ ਕੋਲ ਤੋੜ
               </p>
             </div>
-            
             <div>
               <h4 className="font-semibold mb-4">Company</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><Link href="#" className="hover:text-white transition-colors">About Us</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Careers</Link></li>
-                <li><a href="mailto:contact@pattibytes.com" className="hover:text-white transition-colors">Contact</a></li>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li><Link href="/about">About Us</Link></li>
+                <li><Link href="/contact">Contact</Link></li>
+                <li><Link href="/careers">Careers</Link></li>
               </ul>
             </div>
-            
             <div>
-              <h4 className="font-semibold mb-4">For Partners</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><Link href="/auth/signup?role=merchant" className="hover:text-white transition-colors">Partner with us</Link></li>
-                <li><Link href="/auth/signup?role=driver" className="hover:text-white transition-colors">Become a driver</Link></li>
+              <h4 className="font-semibold mb-4">Support</h4>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li><Link href="/help">Help Center</Link></li>
+                <li><Link href="/terms">Terms</Link></li>
+                <li><Link href="/privacy">Privacy</Link></li>
               </ul>
             </div>
-            
             <div>
-              <h4 className="font-semibold mb-4">Follow Us</h4>
-              <div className="space-y-2 text-gray-400">
-                <p>
-                  <a 
-                    href="https://instagram.com/thrillyverse" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="hover:text-white transition-colors"
-                  >
-                    @thrillyverse
-                  </a>
-                </p>
-                <p>
-                  <a 
-                    href="https://instagram.com/pattibytes" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="hover:text-white transition-colors"
-                  >
-                    @pattibytes
-                  </a>
-                </p>
-              </div>
+              <h4 className="font-semibold mb-4">Partner</h4>
+              <ul className="space-y-2 text-sm text-gray-400">
+                <li><Link href="/auth/signup?role=merchant">Become a Partner</Link></li>
+                <li><Link href="/auth/signup?role=driver">Deliver With Us</Link></li>
+              </ul>
             </div>
           </div>
-          
-          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-gray-400 text-center md:text-left">
-              &copy; 2026 PattiBytes Express. All rights reserved.
-            </p>
-            <Link 
-              href="/qr"
-              className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              <span className="text-xl">📱</span>
-              Get Mobile App
-            </Link>
+          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-sm text-gray-400">
+            © 2026 PattiBytes Express. All rights reserved.
           </div>
         </div>
       </footer>

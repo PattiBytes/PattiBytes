@@ -1,77 +1,103 @@
-import { supabase } from '@/lib/supabase';
-import { User } from '@/types';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { supabase, getRedirectUrl } from '@/lib/supabase';
 
 export const authService = {
-  async login(email: string, password: string): Promise<User> {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+  async signup(email: string, password: string, fullName: string, phone: string, role: string) {
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            phone,
+            role,
+          },
+          emailRedirectTo: `${getRedirectUrl()}/auth/callback`,
+        },
+      });
 
-    if (error) throw error;
+      if (authError) throw authError;
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
+      // Wait for trigger to complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-    if (profileError) throw profileError;
-    return profile as User;
+      return authData;
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      throw error;
+    }
   },
 
-  async loginWithGoogle(): Promise<User> {
-    const { error } = await supabase.auth.signInWithOAuth({
+  async login(email: string, password: string) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        
+        // Customers are auto-approved, others need approval
+        const approvalStatus = data.user.user_metadata?.role === 'customer' 
+          ? 'approved' 
+          : 'pending';
+        
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert([{
+            id: data.user.id,
+            email: data.user.email,
+            full_name: data.user.user_metadata?.full_name || '',
+            phone: data.user.user_metadata?.phone || '',
+            role: data.user.user_metadata?.role || 'customer',
+            approval_status: approvalStatus,
+          }])
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        return newProfile;
+      }
+
+      return profile;
+    } catch (error: any) {
+      console.error('Login error:', error);
+      throw error;
+    }
+  },
+
+  async loginWithGoogle() {
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (error) throw error;
-
-    // Will redirect to Google, then back to callback
-    throw new Error('Redirecting to Google...');
-  },
-
-  async signup(
-    email: string,
-    password: string,
-    fullName: string,
-    phone: string,
-    role: string
-  ): Promise<User> {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          phone,
-          role,
+        redirectTo: `${getRedirectUrl()}/auth/callback`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
         },
       },
     });
 
     if (error) throw error;
-    if (!data.user) throw new Error('Signup failed');
-
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
-
-    if (profileError) throw profileError;
-    return profile as User;
+    return data;
   },
 
-  async logout(): Promise<void> {
+  async logout() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   },
 
-  async getCurrentUser(): Promise<User | null> {
+  async getCurrentUser() {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) return null;
@@ -82,32 +108,20 @@ export const authService = {
       .eq('id', user.id)
       .single();
 
-    return profile as User;
+    return profile;
   },
 
-  async updateProfile(userId: string, updates: Partial<User>): Promise<User> {
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', userId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data as User;
-  },
-
-  async updatePassword(newPassword: string): Promise<void> {
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
+  async resetPassword(email: string) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${getRedirectUrl()}/auth/reset-password`,
     });
 
     if (error) throw error;
   },
 
-  async setPasswordForOAuthUser(password: string): Promise<void> {
+  async updatePassword(newPassword: string) {
     const { error } = await supabase.auth.updateUser({
-      password,
+      password: newPassword,
     });
 
     if (error) throw error;
