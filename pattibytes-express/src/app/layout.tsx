@@ -16,7 +16,10 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://pbexpress.pattibytes.com';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
     default: 'PattiBytes Express - ਪੱਟੀ ਦੀ ਲੋੜ, ਹਾਢੇ ਕੋਲ ਤੋੜ',
     template: '%s | PattiBytes Express',
@@ -46,6 +49,19 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'PattiBytes Express',
     title: 'PattiBytes Express - Food Delivery',
+    description: 'Fast food delivery in Ludhiana, Punjab',
+    images: [
+      {
+        url: '/icon-192.png',
+        width: 192,
+        height: 192,
+        alt: 'PattiBytes Express Logo',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary',
+    title: 'PattiBytes Express',
     description: 'Fast food delivery in Ludhiana, Punjab',
     images: ['/icon-192.png'],
   },

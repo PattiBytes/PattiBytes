@@ -1,17 +1,19 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { authService } from '@/services/auth';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'react-toastify';
-import { Mail, Lock, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -22,46 +24,55 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const user = await authService.login(formData.email, formData.password);
+      const profile = await authService.login(formData.email, formData.password);
 
-      // Check approval status for merchant/driver
-      if (user.role === 'merchant' || user.role === 'driver') {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('approval_status')
-          .eq('id', user.id)
-          .single();
+      // Check if user is banned
+      if (!profile.is_active) {
+        toast.error('Your account has been suspended. Please contact support.');
+        await authService.logout();
+        return;
+      }
 
-        if (profile?.approval_status === 'pending') {
+      // Check approval status for merchant/driver/admin
+      if (['merchant', 'driver', 'admin', 'superadmin'].includes(profile.role)) {
+        if (profile.approval_status === 'pending') {
+          toast.warning('Your account is pending approval');
           router.push('/auth/pending-approval');
           return;
         }
 
-        if (profile?.approval_status === 'rejected') {
+        if (profile.approval_status === 'rejected') {
           toast.error('Your account application was rejected. Please contact support.');
           await authService.logout();
           return;
         }
       }
 
+      // Check if profile needs completion
+      if (!profile.profile_completed && profile.role !== 'customer') {
+        router.push(`/${profile.role}/profile/complete`);
+        return;
+      }
+
       toast.success('Login successful!');
 
+      // Redirect based on role
       setTimeout(() => {
-        if (user.role === 'customer') {
+        if (profile.role === 'customer') {
           router.push('/customer/dashboard');
-        } else if (user.role === 'merchant') {
+        } else if (profile.role === 'merchant') {
           router.push('/merchant/dashboard');
-        } else if (user.role === 'driver') {
+        } else if (profile.role === 'driver') {
           router.push('/driver/dashboard');
-        } else if (user.role === 'admin' || user.role === 'superadmin') {
+        } else if (profile.role === 'admin' || profile.role === 'superadmin') {
           router.push('/admin/dashboard');
         } else {
           router.push('/');
         }
       }, 500);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      toast.error(error.message || 'Login failed');
+      console.error('Login failed:', error);
+      toast.error(error.message || 'Invalid email or password');
     } finally {
       setLoading(false);
     }
@@ -71,9 +82,8 @@ export default function LoginPage() {
     setGoogleLoading(true);
     try {
       await authService.loginWithGoogle();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      if (!error.message.includes('Redirecting')) {
+      if (!error.message?.includes('Redirecting')) {
         toast.error('Google login failed');
         setGoogleLoading(false);
       }
@@ -93,12 +103,18 @@ export default function LoginPage() {
 
         <div className="bg-white rounded-2xl shadow-xl p-8 hover-lift">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg animate-scaleIn">
-              <span className="text-white font-bold text-2xl">PB</span>
+            <div className="relative w-20 h-20 mx-auto mb-4">
+              <Image
+                src="/icon-192.png"
+                alt="PattiBytes"
+                fill
+                className="object-contain animate-scaleIn"
+                priority
+              />
             </div>
             <h1 className="text-3xl font-bold text-gray-900">Welcome Back</h1>
             <p className="text-gray-600 mt-2">Sign in to PattiBytes Express</p>
-            <p className="text-sm text-primary font-semibold">ਪੱਟੀ ਦੀ ਲੋੜ, ਹਾਢੇ ਕੋਲ ਤੋੜ</p>
+            <p className="text-sm text-primary font-semibold mt-1">ਪੱਟੀ ਦੀ ਲੋੜ, ਹਾਢੇ ਕੋਲ ਤੋੜ</p>
           </div>
 
           {/* Google Sign-In */}
@@ -150,7 +166,7 @@ export default function LoginPage() {
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 text-gray-400" size={20} />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="email"
                   value={formData.email}
@@ -167,15 +183,22 @@ export default function LoginPage() {
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3 text-gray-400" size={20} />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                   placeholder="Enter your password"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
               </div>
             </div>
 
