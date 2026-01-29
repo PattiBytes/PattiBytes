@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
@@ -13,7 +14,7 @@ interface Profile {
   role: string;
   approval_status?: string;
   avatar_url?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   addresses?: any[];
   profile_completed?: boolean;
   is_active?: boolean;
@@ -68,7 +69,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const { data: { user: verifiedUser }, error } = await supabase.auth.getUser();
             
             if (error) {
-              console.error('Error verifying user:', error);
+              console.error('Error verifying user:', {
+                message: error.message,
+                status: error.status,
+                code: (error as any)?.code,
+              });
               setUser(null);
               setAuthUser(null);
               return;
@@ -79,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               await loadUserProfile(verifiedUser.id);
             }
           } catch (error) {
-            console.error('Error in auth state change:', error);
+            console.error('Error in auth state change:', error instanceof Error ? error.message : error);
             setUser(null);
             setAuthUser(null);
           }
@@ -114,7 +119,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: { user: authUser }, error } = await supabase.auth.getUser();
       
       if (error) {
-        console.error('Error getting user:', error);
+        console.error('Error getting user:', {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+        });
         setAuthUser(null);
         setUser(null);
         setLoading(false);
@@ -124,9 +133,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (authUser) {
         setAuthUser(authUser);
         await loadUserProfile(authUser.id);
+      } else {
+        // No authenticated user - this is normal for logged out state
+        setAuthUser(null);
+        setUser(null);
       }
     } catch (error) {
-      console.error('Error checking user:', error);
+      console.error('Error checking user:', error instanceof Error ? error.message : String(error));
       setAuthUser(null);
       setUser(null);
     } finally {
@@ -140,13 +153,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .maybeSingle(); // Changed from .single() to .maybeSingle()
+        .maybeSingle();
 
       if (error) {
-        console.error('Profile fetch error:', error);
+        console.error('Profile fetch error:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
         
-        // Don't throw on profile not found - user might not have profile yet
-        if (error.code === 'PGRST116') {
+        // Profile not found - user might need to complete signup
+        if (error.code === 'PGRST116' || error.message?.includes('no rows')) {
           console.warn('Profile not found for user:', userId);
           setUser(null);
           return;
@@ -161,8 +179,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.warn('No profile data returned for user:', userId);
         setUser(null);
       }
-    } catch (error) {
-      console.error('Error loading user profile:', error);
+    } catch (error: any) {
+      console.error('Error loading user profile:', {
+        message: error?.message || String(error),
+        code: error?.code,
+        userId,
+      });
       setUser(null);
     }
   };
@@ -184,7 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signOut();
       
       if (error) {
-        console.error('Logout error:', error);
+        console.error('Logout error:', error.message);
         // Still clear local state even if API call fails
       }
 
@@ -196,7 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       router.push('/');
       router.refresh();
     } catch (error) {
-      console.error('Error logging out:', error);
+      console.error('Error logging out:', error instanceof Error ? error.message : String(error));
       // Still clear state on error
       setUser(null);
       setAuthUser(null);

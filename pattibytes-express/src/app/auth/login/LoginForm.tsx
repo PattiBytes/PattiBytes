@@ -40,12 +40,14 @@ export default function LoginForm() {
     try {
       const profile = await authService.login(formData.email, formData.password);
 
+      // Check if account is active
       if (!profile.is_active) {
         toast.error('Your account has been suspended. Please contact support.');
         await authService.logout();
         return;
       }
 
+      // Check approval status for non-customer roles
       if (['merchant', 'driver', 'admin', 'superadmin'].includes(profile.role)) {
         if (profile.approval_status === 'pending') {
           toast.warning('Your account is pending approval');
@@ -60,14 +62,24 @@ export default function LoginForm() {
         }
       }
 
+      // Check profile completion
       if (!profile.profile_completed && profile.role !== 'customer') {
         toast.info('Please complete your profile');
         router.push(`/${profile.role}/profile/complete`);
         return;
       }
 
+      // Success message
       toast.success(`Welcome back, ${profile.full_name}!`);
-      router.push(`/${profile.role}/dashboard`);
+
+      // ✅ FIX: Handle superadmin redirect specially
+      if (profile.role === 'superadmin') {
+        console.log('Redirecting superadmin to /admin/superadmin');
+        router.push('/admin/superadmin');
+      } else {
+        console.log(`Redirecting ${profile.role} to /${profile.role}/dashboard`);
+        router.push(`/${profile.role}/dashboard`);
+      }
     } catch (error: any) {
       console.error('Login failed:', error);
       toast.error(error.message || 'Invalid email or password');
