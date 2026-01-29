@@ -20,7 +20,7 @@ export default function MerchantDashboardPage() {
     todayRevenue: 0,
   });
   const [loading, setLoading] = useState(true);
-  const [merchantId, setMerchantId] = useState<string>('');
+  const [, setMerchantId] = useState<string>('');
   const [hasMerchant, setHasMerchant] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -139,7 +139,7 @@ export default function MerchantDashboardPage() {
             <Store className="mx-auto text-primary mb-4" size={64} />
             <h1 className="text-3xl font-bold text-gray-900 mb-4">Create Your Restaurant</h1>
             <p className="text-gray-600 mb-8">
-              You don't have a restaurant profile yet. Create one to start managing your menu and orders.
+              You don&apos;t have a restaurant profile yet. Create one to start managing your menu and orders.
             </p>
             <button
               onClick={handleCreateMerchant}
