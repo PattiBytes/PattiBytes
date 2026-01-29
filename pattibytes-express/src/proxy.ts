@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   let response = NextResponse.next({
     request: {
       headers: req.headers,
@@ -122,15 +122,15 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(`/${profile.role}/dashboard`, req.url));
   }
 
-  if (path.startsWith('/merchant/') && profile.role !== 'merchant') {
+  if (path.startsWith('/merchant/') && profile.role !== 'merchant' && profile.role !== 'superadmin') {
     return NextResponse.redirect(new URL(`/${profile.role}/dashboard`, req.url));
   }
 
-  if (path.startsWith('/driver/') && profile.role !== 'driver') {
+  if (path.startsWith('/driver/') && profile.role !== 'driver' && profile.role !== 'superadmin') {
     return NextResponse.redirect(new URL(`/${profile.role}/dashboard`, req.url));
   }
 
-  if (path.startsWith('/customer/') && profile.role !== 'customer') {
+  if (path.startsWith('/customer/') && profile.role !== 'customer' && profile.role !== 'superadmin') {
     return NextResponse.redirect(new URL(`/${profile.role}/dashboard`, req.url));
   }
 
