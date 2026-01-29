@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -89,29 +90,34 @@ export default function MerchantDashboardPage() {
   const handleCreateMerchant = async () => {
     setCreating(true);
     try {
+      // Get the actual columns in merchants table
+      const merchantData: any = {
+        user_id: user!.id,
+      };
+
+      // Only add fields that exist in your table
+      if (user!.full_name) merchantData.name = user!.full_name + "'s Restaurant";
+      if (user!.email) merchantData.email = user!.email;
+      if (user!.phone) merchantData.phone = user!.phone;
+
       const { data, error } = await supabase
         .from('merchants')
-        .insert({
-          user_id: user!.id,
-          name: user!.full_name + "'s Restaurant",
-          email: user!.email,
-          phone: user!.phone || '',
-          address: '',
-          status: 'active',
-        })
+        .insert(merchantData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        logger.error('Error creating merchant', error);
+        throw error;
+      }
 
       toast.success('Restaurant profile created! Please complete your details.');
       setHasMerchant(true);
       setMerchantId(data.id);
       loadMerchantData();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       logger.error('Error creating merchant', error);
-      toast.error('Failed to create restaurant profile');
+      toast.error(error.message || 'Failed to create restaurant profile');
     } finally {
       setCreating(false);
     }
@@ -164,7 +170,7 @@ export default function MerchantDashboardPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 mb-8">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
