@@ -148,14 +148,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
+              {/* Hamburger Menu Button - Works on all devices */}
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="md:hidden p-2 rounded-md text-gray-600 hover:text-primary mr-2"
+                className="p-2 rounded-md text-gray-900 hover:bg-gray-100 mr-2 transition-colors"
+                aria-label="Toggle menu"
               >
                 {sidebarOpen ? <X size={24} /> : <MenuIcon size={24} />}
               </button>
               
-              <Link href={`/${user.role}/dashboard`} className="flex items-center">
+              <Link href={user.role === 'superadmin' ? '/admin/superadmin' : `/${user.role}/dashboard`} className="flex items-center">
                 <div className="relative w-10 h-10">
                   <Image
                     src="/icon-192.png"
@@ -171,6 +173,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   PattiBytes
                 </span>
               </Link>
+
 
               {/* Superadmin Panel Switcher */}
               {user.role === 'superadmin' && (

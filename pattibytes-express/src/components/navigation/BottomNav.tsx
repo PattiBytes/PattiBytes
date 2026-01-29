@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, ShoppingBag, User, Search, Store, Truck, BarChart3, Wallet } from 'lucide-react';
+import { Home, ShoppingBag, User, Search, Store, Truck, Wallet, Bell } from 'lucide-react';
 
 interface NavItem {
   name: string;
@@ -44,8 +44,8 @@ export default function BottomNav({ role }: BottomNavProps) {
       return [
         { name: 'Home', href: '/admin/dashboard', icon: Home },
         { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
-        { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
-        { name: 'Profile', href: '/admin/settings', icon: User },
+        { name: 'Requests', href: '/admin/access-requests', icon: Bell },
+        { name: 'Settings', href: '/admin/settings', icon: User },
       ];
     }
 
@@ -54,9 +54,10 @@ export default function BottomNav({ role }: BottomNavProps) {
 
   const navItems = getNavItems();
 
+  // Show on mobile and tablet (hide on desktop)
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">
-      <div className="flex justify-around items-center h-16">
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
+      <div className="flex justify-around items-center h-16 max-w-screen-xl mx-auto px-2">
         {navItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           const Icon = item.icon;
@@ -65,14 +66,14 @@ export default function BottomNav({ role }: BottomNavProps) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+              className={`flex flex-col items-center justify-center flex-1 h-full transition-colors px-1 ${
                 isActive
                   ? 'text-primary'
                   : 'text-gray-600 hover:text-primary'
               }`}
             >
-              <Icon size={24} className="mb-1" />
-              <span className="text-xs font-medium">{item.name}</span>
+              <Icon size={22} className="mb-0.5 flex-shrink-0" />
+              <span className="text-[10px] sm:text-xs font-medium truncate max-w-full">{item.name}</span>
             </Link>
           );
         })}
