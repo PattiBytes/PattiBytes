@@ -64,34 +64,22 @@ export const orderService = {
     if (error) throw error;
   },
 
-  async getOrders(userId: string, role: string, status?: string): Promise<Order[]> {
-    let query = supabase.from('orders').select('*');
-
-    if (role === 'customer') {
-      query = query.eq('customer_id', userId);
-    } else if (role === 'merchant') {
-      query = query.eq('merchant_id', userId);
-    } else if (role === 'driver') {
-      query = query.eq('driver_id', userId);
-    }
-
-    if (status) {
-      query = query.eq('status', status);
-    }
-
-    query = query.order('created_at', { ascending: false });
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    return data as Order[];
-  },
-
   async getMerchantOrders(merchantId: string): Promise<Order[]> {
     const { data, error } = await supabase
       .from('orders')
       .select('*')
       .eq('merchant_id', merchantId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data as Order[];
+  },
+
+  async getCustomerOrders(customerId: string): Promise<Order[]> {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('customer_id', customerId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;

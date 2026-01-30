@@ -13,8 +13,8 @@ import Image from 'next/image';
 interface Merchant {
   id: string;
   business_name: string;
-  business_address: string;
-  cuisine_type: string;
+  address: string;
+  cuisine_types: string[];
   description: string;
   logo_url: string;
   banner_url: string;
@@ -89,7 +89,7 @@ export default function CustomerDashboardPage() {
       setLoading(true);
 
       const { data, error } = await supabase
-        .from('merchant_profiles')
+        .from('merchants')
         .select('*')
         .eq('is_active', true)
         .eq('is_verified', true)
@@ -135,7 +135,7 @@ export default function CustomerDashboardPage() {
   const filteredRestaurants = restaurants.filter(
     (restaurant) =>
       restaurant.business_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      restaurant.cuisine_type?.toLowerCase().includes(searchQuery.toLowerCase())
+      restaurant.cuisine_types?.some(c => c.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
@@ -146,7 +146,7 @@ export default function CustomerDashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold mb-2">
-                Welcome back, {user?.full_name}! 👋
+                Welcome back, {user?.user_metadata?.full_name || 'Guest'}! 👋
               </h1>
               <p className="text-lg opacity-90">
                 What would you like to eat today?
@@ -281,7 +281,7 @@ export default function CustomerDashboardPage() {
                       {restaurant.business_name}
                     </h3>
                     <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                      {restaurant.description || restaurant.business_address}
+                      {restaurant.description || restaurant.address}
                     </p>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1">
@@ -289,7 +289,7 @@ export default function CustomerDashboardPage() {
                         <span className="text-sm font-medium">{restaurant.rating?.toFixed(1) || '4.5'}</span>
                       </div>
                       <span className="text-xs px-3 py-1 bg-orange-50 text-primary rounded-full font-semibold">
-                        {restaurant.cuisine_type || 'Food'}
+                        {restaurant.cuisine_types?.[0] || 'Food'}
                       </span>
                     </div>
                   </div>

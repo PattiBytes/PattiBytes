@@ -32,27 +32,44 @@ export default function MerchantOrdersPage() {
   }, [user, statusFilter]);
 
   const loadOrders = async () => {
-    try {
-      let query = supabase
-        .from('orders')
-        .select('*')
-        .eq('merchant_id', user!.id)
-        .order('created_at', { ascending: false });
+  try {
+    setLoading(true);
 
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
+    // First get merchant ID
+    const { data: merchantData } = await supabase
+      .from('merchants')
+      .select('id')
+      .eq('user_id', user!.id)
+      .single();
 
-      const { data, error } = await query;
-      if (error) throw error;
-      setOrders(data as Order[]);
-    } catch (error) {
-      console.error('Load orders error:', error);
-      toast.error('Failed to load orders');
-    } finally {
+    if (!merchantData) {
+      toast.error('Merchant profile not found');
       setLoading(false);
+      return;
     }
-  };
+
+    // Then get orders
+    let query = supabase
+      .from('orders')
+      .select('*')
+      .eq('merchant_id', merchantData.id)
+      .order('created_at', { ascending: false });
+
+    if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    setOrders(data as Order[]);
+  } catch (error) {
+    console.error('Load orders error:', error);
+    toast.error('Failed to load orders');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const updateOrderStatus = async (orderId: string, status: string) => {
     try {
