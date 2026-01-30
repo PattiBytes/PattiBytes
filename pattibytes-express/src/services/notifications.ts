@@ -2,6 +2,27 @@
 import { supabase } from '@/lib/supabase';
 
 class NotificationService {
+  // ✅ FIX: Properly implement getUnreadCount to return a Promise<number>
+  async getUnreadCount(userId: string): Promise<number> {
+    try {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('is_read', false);
+
+      if (error) {
+        console.error('Failed to get unread count:', error);
+        return 0;
+      }
+
+      return count || 0;
+    } catch (error) {
+      console.error('Failed to get unread count:', error);
+      return 0;
+    }
+  }
+
   async requestPermission() {
     if (!('Notification' in window)) {
       console.log('This browser does not support notifications');
@@ -32,10 +53,10 @@ class NotificationService {
         {
           user_id: userId,
           title,
-          message,
+          body: message, // Use 'body' instead of 'message' to match schema
           type,
           data,
-          read: false,
+          is_read: false, // Use 'is_read' instead of 'read' to match schema
           created_at: new Date().toISOString(),
         },
       ]);
@@ -76,7 +97,7 @@ class NotificationService {
     try {
       const { error } = await supabase
         .from('notifications')
-        .update({ read: true })
+        .update({ is_read: true }) // Use 'is_read' instead of 'read'
         .eq('id', notificationId);
 
       if (error) throw error;
@@ -90,9 +111,9 @@ class NotificationService {
     try {
       const { error } = await supabase
         .from('notifications')
-        .update({ read: true })
+        .update({ is_read: true }) // Use 'is_read' instead of 'read'
         .eq('user_id', userId)
-        .eq('read', false);
+        .eq('is_read', false);
 
       if (error) throw error;
     } catch (error) {
@@ -129,7 +150,7 @@ class NotificationService {
       // Get order details
       const { data: order, error: orderError } = await supabase
         .from('orders')
-        .select('*, profiles!orders_user_id_fkey(full_name), merchants:profiles!orders_merchant_id_fkey(full_name)')
+        .select('*, customer:profiles!orders_customer_id_fkey(full_name), restaurant:profiles!orders_restaurant_id_fkey(full_name)')
         .eq('id', orderId)
         .single();
 
@@ -138,11 +159,11 @@ class NotificationService {
       const statusMessages: any = {
         pending: {
           customer: 'Your order has been placed successfully!',
-          merchant: 'New order received! Please confirm.',
+          restaurant: 'New order received! Please confirm.',
         },
         confirmed: {
           customer: 'Your order has been confirmed by the restaurant.',
-          merchant: 'Order confirmed. Start preparing!',
+          restaurant: 'Order confirmed. Start preparing!',
         },
         preparing: {
           customer: 'Your order is being prepared.',
@@ -156,18 +177,18 @@ class NotificationService {
         },
         delivered: {
           customer: 'Your order has been delivered. Enjoy your meal!',
-          merchant: 'Order delivered successfully.',
+          restaurant: 'Order delivered successfully.',
         },
         cancelled: {
           customer: 'Your order has been cancelled.',
-          merchant: 'Order was cancelled.',
+          restaurant: 'Order was cancelled.',
         },
       };
 
       // Notify customer
-      if (statusMessages[status]?.customer) {
+      if (statusMessages[status]?.customer && order.customer_id) {
         await this.sendNotification(
-          order.user_id,
+          order.customer_id,
           `Order #${orderId.slice(0, 8)}`,
           statusMessages[status].customer,
           'order',
@@ -175,12 +196,12 @@ class NotificationService {
         );
       }
 
-      // Notify merchant
-      if (statusMessages[status]?.merchant) {
+      // Notify restaurant
+      if (statusMessages[status]?.restaurant && order.restaurant_id) {
         await this.sendNotification(
-          order.merchant_id,
+          order.restaurant_id,
           `Order #${orderId.slice(0, 8)}`,
-          statusMessages[status].merchant,
+          statusMessages[status].restaurant,
           'order',
           { order_id: orderId, status }
         );
@@ -208,6 +229,51 @@ class NotificationService {
       }
     } catch (error) {
       console.error('Failed to send order notification:', error);
+    }
+  }
+
+  // Additional helper methods
+  async getNotificationById(notificationId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('id', notificationId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Failed to get notification:', error);
+      return null;
+    }
+  }
+
+  async deleteNotification(notificationId: string) {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Failed to delete notification:', error);
+      throw error;
+    }
+  }
+
+  async deleteAllNotifications(userId: string) {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', userId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Failed to delete all notifications:', error);
+      throw error;
     }
   }
 }

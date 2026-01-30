@@ -43,7 +43,7 @@ export function useNotifications() {
 
     try {
       const [notifs, count] = await Promise.all([
-        notificationService.getNotifications(user.id),
+        notificationService.getUserNotifications(user.id),
         notificationService.getUnreadCount(user.id),
       ]);
       setNotifications(notifs);
