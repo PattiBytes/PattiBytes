@@ -1,18 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { geocodingService } from '@/services/geocoding';
 
+interface Location {
+  lat: number;
+  lon: number;
+  address?: string;
+}
+
 export function useLocation() {
-  const [location, setLocationState] = useState<{
-    lat: number;
-    lon: number;
-    address?: string;
-  } | null>(null);
+  const [location, setLocationState] = useState<Location | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const getCurrentLocation = async () => {
+  const getCurrentLocation = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -25,7 +27,9 @@ export function useLocation() {
         address: addressData.displayName,
       });
     } catch (err) {
-      setError((err as Error).message);
+      const errorMessage = (err as Error).message;
+      setError(errorMessage);
+      
       // Default to Ludhiana if location fails
       setLocationState({
         lat: 30.9010,
@@ -35,9 +39,9 @@ export function useLocation() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const searchLocation = async (query: string) => {
+  const searchLocation = useCallback(async (query: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -50,25 +54,23 @@ export function useLocation() {
         });
         return results;
       }
+      return [];
     } catch (err) {
       setError((err as Error).message);
+      return [];
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // ✅ ADD: Manual setLocation method
-  const setLocation = (newLocation: {
-    lat: number;
-    lon: number;
-    address?: string;
-  }) => {
+  const setLocation = useCallback((newLocation: Location) => {
     setLocationState(newLocation);
-  };
+  }, []);
 
   useEffect(() => {
+    // Auto-fetch location on mount
     getCurrentLocation();
-  }, []);
+  }, [getCurrentLocation]);
 
   return {
     location,
@@ -76,6 +78,6 @@ export function useLocation() {
     error,
     getCurrentLocation,
     searchLocation,
-    setLocation, // ✅ Export setLocation
+    setLocation,
   };
 }
