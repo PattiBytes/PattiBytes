@@ -33,11 +33,7 @@ export const restaurantService = {
       .from('merchants')
       .select(`
         *,
-        operating_hours (*),
-        menu_categories (
-          *,
-          menu_items (*)
-        )
+        menu_items (*)
       `)
       .eq('id', id)
       .single();
@@ -50,7 +46,7 @@ export const restaurantService = {
     const { data, error } = await supabase
       .from('merchants')
       .select('*')
-      .or(`business_name.ilike.%${query}%`)
+      .ilike('business_name', `%${query}%`)
       .eq('is_verified', true)
       .eq('is_active', true);
 
@@ -61,13 +57,10 @@ export const restaurantService = {
   async getMenuItems(merchantId: string) {
     const { data, error } = await supabase
       .from('menu_items')
-      .select(`
-        *,
-        menu_categories (name)
-      `)
+      .select('*')
       .eq('merchant_id', merchantId)
       .eq('is_available', true)
-      .order('created_at', { ascending: false });
+      .order('category', { ascending: true });
 
     if (error) throw error;
     return data as MenuItem[];

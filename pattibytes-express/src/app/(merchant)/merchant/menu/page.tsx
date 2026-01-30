@@ -12,6 +12,7 @@ import { toast } from 'react-toastify';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { MenuItem } from '@/types';
 import Image from 'next/image';
+import BulkMenuUpload from '@/components/merchant/BulkMenuUpload';
 
 export default function MerchantMenuPage() {
   const { user } = useAuth();
@@ -31,6 +32,7 @@ export default function MerchantMenuPage() {
     is_veg: true,
   });
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+const [showBulkUpload, setShowBulkUpload] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -248,29 +250,40 @@ export default function MerchantMenuPage() {
         </div>
 
         {/* Actions Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mb-6">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-3 text-gray-400" size={20} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search menu items..."
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
-          </div>
-          <button
-            onClick={() => {
-              setEditingItem(null);
-              resetForm();
-              setShowModal(true);
-            }}
-            className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium flex items-center justify-center gap-2 whitespace-nowrap"
-          >
-            <Plus size={20} />
-            Add Item
-          </button>
-        </div>
+      
+<div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mb-6">
+  <div className="flex-1 relative">
+    <Search className="absolute left-3 top-3 text-gray-400" size={20} />
+    <input
+      type="text"
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+      placeholder="Search menu items..."
+      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+    />
+  </div>
+  <div className="flex gap-2">
+    <button
+      onClick={() => setShowBulkUpload(true)}
+      className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2 whitespace-nowrap"
+    >
+      <Upload size={20} />
+      Bulk Upload
+    </button>
+    <button
+      onClick={() => {
+        setEditingItem(null);
+        resetForm();
+        setShowModal(true);
+      }}
+      className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium flex items-center gap-2 whitespace-nowrap"
+    >
+      <Plus size={20} />
+      Add Item
+    </button>
+  </div>
+</div>
+
 
         {/* Menu Items */}
         {loading ? (
@@ -579,6 +592,13 @@ export default function MerchantMenuPage() {
           </div>
         )}
       </div>
+      {showBulkUpload && (
+  <BulkMenuUpload
+    merchantId={merchantId}
+    onClose={() => setShowBulkUpload(false)}
+    onSuccess={loadMenuItems}
+  />
+)}
     </DashboardLayout>
   );
 }
