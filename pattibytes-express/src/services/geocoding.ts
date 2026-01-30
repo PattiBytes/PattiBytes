@@ -1,77 +1,26 @@
-const LOCATIONIQ_API_KEY = process.env.NEXT_PUBLIC_LOCATIONIQ_API_KEY;
+export interface GeocodingResult {
+  lat: number;
+  lon: number;
+  displayName: string;
+  address?: {
+    house_number?: string;
+    road?: string;
+    suburb?: string;
+    city?: string;
+    state?: string;
+    postcode?: string;
+    country?: string;
+  };
+}
 
-export const geocodingService = {
-  // Search address and get coordinates
-  async searchAddress(query: string) {
-    const response = await fetch(
-      `https://us1.locationiq.com/v1/search?key=${LOCATIONIQ_API_KEY}&q=${encodeURIComponent(query)}&format=json&limit=5`
-    );
-    
-    if (!response.ok) throw new Error('Geocoding failed');
-    
-    const data = await response.json();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return data.map((item: any) => ({
-      displayName: item.display_name,
-      lat: parseFloat(item.lat),
-      lon: parseFloat(item.lon),
-      address: {
-        city: item.address?.city,
-        state: item.address?.state,
-        country: item.address?.country,
-        postalCode: item.address?.postcode,
-      }
-    }));
-  },
+class GeocodingService {
+  private baseUrl = 'https://nominatim.openstreetmap.org';
+  private debounceTimeout: NodeJS.Timeout | null = null;
 
-  // Reverse geocoding - get address from coordinates
-  async reverseGeocode(lat: number, lon: number) {
-    const response = await fetch(
-      `https://us1.locationiq.com/v1/reverse?key=${LOCATIONIQ_API_KEY}&lat=${lat}&lon=${lon}&format=json`
-    );
-    
-    if (!response.ok) throw new Error('Reverse geocoding failed');
-    
-    const data = await response.json();
-    return {
-      displayName: data.display_name,
-      address: {
-        road: data.address?.road,
-        suburb: data.address?.suburb,
-        city: data.address?.city || data.address?.town,
-        state: data.address?.state,
-        country: data.address?.country,
-        postalCode: data.address?.postcode,
-      }
-    };
-  },
-
-  // Calculate distance between two points (in km)
-  calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371; // Earth's radius in km
-    const dLat = this.toRad(lat2 - lat1);
-    const dLon = this.toRad(lon2 - lon1);
-    
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRad(lat1)) *
-        Math.cos(this.toRad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  },
-
-  toRad(degrees: number): number {
-    return degrees * (Math.PI / 180);
-  },
-
-  // Get user's current location
   async getCurrentLocation(): Promise<{ lat: number; lon: number }> {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject(new Error('Geolocation not supported'));
+        reject(new Error('Geolocation is not supported by your browser'));
         return;
       }
 
@@ -83,9 +32,106 @@ export const geocodingService = {
           });
         },
         (error) => {
-          reject(error);
+          let errorMessage = 'Failed to get location';
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = 'Location permission denied. Please enable location access.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Location information unavailable.';
+              break;
+            case error.TIMEOUT:
+              errorMessage = 'Location request timed out.';
+              break;
+          }
+          reject(new Error(errorMessage));
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
         }
       );
     });
-  },
-};
+  }
+
+  async reverseGeocode(lat: number, lon: number): Promise<GeocodingResult> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`,
+        {
+          headers: {
+            'Accept-Language': 'en',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to reverse geocode');
+      }
+
+      const data = await response.json();
+
+      return {
+        lat,
+        lon,
+        displayName: data.display_name,
+        address: data.address,
+      };
+    } catch (error) {
+      console.error('Reverse geocoding error:', error);
+      return {
+        lat,
+        lon,
+        displayName: `${lat.toFixed(6)}, ${lon.toFixed(6)}`,
+      };
+    }
+  }
+
+  async searchAddress(query: string): Promise<GeocodingResult[]> {
+    if (!query || query.trim().length < 3) {
+      return [];
+    }
+
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5`,
+        {
+          headers: {
+            'Accept-Language': 'en',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to search address');
+      }
+
+      const data = await response.json();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return data.map((item: any) => ({
+        lat: parseFloat(item.lat),
+        lon: parseFloat(item.lon),
+        displayName: item.display_name,
+        address: item.address,
+      }));
+    } catch (error) {
+      console.error('Address search error:', error);
+      return [];
+    }
+  }
+
+  debouncedSearch(query: string, callback: (results: GeocodingResult[]) => void, delay = 500) {
+    if (this.debounceTimeout) {
+      clearTimeout(this.debounceTimeout);
+    }
+
+    this.debounceTimeout = setTimeout(async () => {
+      const results = await this.searchAddress(query);
+      callback(results);
+    }, delay);
+  }
+}
+
+export const geocodingService = new GeocodingService();

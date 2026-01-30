@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Search, Navigation } from 'lucide-react';
+import { Search, MapPin, Loader2, X, Navigation } from 'lucide-react';
 
 interface AddressSuggestion {
   display_name: string;
   lat: string;
   lon: string;
   address: {
+    town: string;
+    house_number?: string;
     road?: string;
     suburb?: string;
     city?: string;
@@ -39,11 +41,15 @@ export default function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null); // FIXED: Added null type
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (query.length < 3) {
       setSuggestions([]);
+      setShowDropdown(false);
       return;
     }
 
@@ -62,23 +68,40 @@ export default function AddressAutocomplete({
     };
   }, [query]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(event.target as Node)
+      ) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const searchAddress = async (searchQuery: string) => {
     setLoading(true);
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?` +
-        new URLSearchParams({
-          q: searchQuery,
-          format: 'json',
-          addressdetails: '1',
-          limit: '5',
-          countrycodes: 'in',
-        })
+          new URLSearchParams({
+            q: searchQuery,
+            format: 'json',
+            addressdetails: '1',
+            limit: '5',
+            countrycodes: 'in',
+          })
       );
 
       const data = await response.json();
       setSuggestions(data);
       setShowDropdown(true);
+      setSelectedIndex(-1);
     } catch (error) {
       console.error('Failed to search address:', error);
       setSuggestions([]);
@@ -92,7 +115,7 @@ export default function AddressAutocomplete({
       address: suggestion.display_name,
       lat: parseFloat(suggestion.lat),
       lon: parseFloat(suggestion.lon),
-      city: suggestion.address.city || suggestion.address.suburb,
+      city: suggestion.address.city || suggestion.address.suburb || suggestion.address.town,
       state: suggestion.address.state,
       postal_code: suggestion.address.postcode,
     };
@@ -106,19 +129,22 @@ export default function AddressAutocomplete({
     setLoading(true);
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject);
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+        });
       });
 
       const { latitude, longitude } = position.coords;
 
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?` +
-        new URLSearchParams({
-          lat: latitude.toString(),
-          lon: longitude.toString(),
-          format: 'json',
-          addressdetails: '1',
-        })
+          new URLSearchParams({
+            lat: latitude.toString(),
+            lon: longitude.toString(),
+            format: 'json',
+            addressdetails: '1',
+          })
       );
 
       const data = await response.json();
@@ -127,12 +153,13 @@ export default function AddressAutocomplete({
         address: data.display_name,
         lat: latitude,
         lon: longitude,
-        city: data.address.city || data.address.suburb,
+        city: data.address.city || data.address.suburb || data.address.town,
         state: data.address.state,
         postal_code: data.address.postcode,
       };
 
       setQuery(data.display_name);
+      setShowDropdown(false);
       onSelect(address);
     } catch (error) {
       console.error('Failed to get current location:', error);
@@ -142,81 +169,134 @@ export default function AddressAutocomplete({
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showDropdown || suggestions.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : prev));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+          handleSelect(suggestions[selectedIndex]);
+        }
+        break;
+      case 'Escape':
+        setShowDropdown(false);
+        setSelectedIndex(-1);
+        break;
+    }
+  };
+
+  const clearInput = () => {
+    setQuery('');
+    setSuggestions([]);
+    setShowDropdown(false);
+    inputRef.current?.focus();
+  };
+
+  const quickAddresses = [
+    { name: 'Ludhiana Railway Station', icon: '🚉' },
+    { name: 'Civil Lines, Ludhiana', icon: '🏙️' },
+    { name: 'Model Town, Ludhiana', icon: '🏘️' },
+  ];
+
   return (
     <div className="relative">
       <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+        <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
         <input
+          ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
+          onKeyDown={handleKeyDown}
+          onFocus={() => {
+            if (suggestions.length > 0) setShowDropdown(true);
+          }}
           placeholder={placeholder}
-          className="w-full pl-12 pr-12 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+          className="w-full pl-10 md:pl-12 pr-24 md:pr-28 py-2.5 md:py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-sm md:text-base transition-all"
         />
-        <button
-          type="button"
-          onClick={handleCurrentLocation}
-          disabled={loading}
-          className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-primary hover:bg-orange-50 rounded-lg disabled:opacity-50"
-          title="Use current location"
-        >
-          <Navigation size={18} />
-        </button>
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          {loading && <Loader2 className="text-primary animate-spin" size={18} />}
+          {query && !loading && (
+            <button
+              onClick={clearInput}
+              className="p-1.5 hover:bg-gray-100 rounded-full transition-all"
+              type="button"
+              title="Clear"
+            >
+              <X size={16} className="text-gray-400" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleCurrentLocation}
+            disabled={loading}
+            className="p-1.5 text-primary hover:bg-orange-50 rounded-lg disabled:opacity-50 transition-all"
+            title="Use current location"
+          >
+            <Navigation size={18} />
+          </button>
+        </div>
       </div>
 
       {query.length === 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
-          <span className="text-xs text-gray-500">Examples:</span>
-          {[
-            'Ludhiana Railway Station',
-            'Civil Lines, Ludhiana',
-            'Model Town, Ludhiana',
-          ].map((hint) => (
+          <span className="text-xs text-gray-500 flex items-center">💡 Quick:</span>
+          {quickAddresses.map((hint) => (
             <button
-              key={hint}
+              key={hint.name}
               type="button"
-              onClick={() => setQuery(hint)}
-              className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200"
+              onClick={() => setQuery(hint.name)}
+              className="px-2 py-1 bg-gradient-to-r from-orange-50 to-pink-50 text-primary rounded-lg text-xs hover:from-orange-100 hover:to-pink-100 font-medium transition-all flex items-center gap-1"
             >
-              {hint}
+              <span>{hint.icon}</span>
+              <span className="hidden sm:inline">{hint.name.split(',')[0]}</span>
+              <span className="sm:hidden">{hint.name.split(',')[0].slice(0, 10)}...</span>
             </button>
           ))}
         </div>
       )}
 
       {loading && query.length >= 3 && (
-        <div className="absolute z-10 w-full mt-2 bg-white border-2 border-gray-200 rounded-lg shadow-lg p-4">
+        <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl shadow-2xl p-4">
           <div className="flex items-center gap-3">
-            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-gray-600">Searching addresses...</span>
+            <Loader2 className="w-5 h-5 text-primary animate-spin" />
+            <span className="text-gray-600 text-sm">Searching addresses...</span>
           </div>
         </div>
       )}
 
       {showDropdown && suggestions.length > 0 && !loading && (
-        <div className="absolute z-10 w-full mt-2 bg-white border-2 border-gray-200 rounded-lg shadow-xl max-h-80 overflow-y-auto">
+        <div
+          ref={dropdownRef}
+          className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl shadow-2xl max-h-96 overflow-y-auto"
+        >
           {suggestions.map((suggestion, index) => (
             <button
-              key={index}
+              key={`${suggestion.lat}-${suggestion.lon}-${index}`}
               type="button"
               onClick={() => handleSelect(suggestion)}
-              className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b last:border-b-0 flex items-start gap-3"
+              onMouseEnter={() => setSelectedIndex(index)}
+              className={`w-full text-left px-3 md:px-4 py-3 hover:bg-gradient-to-r hover:from-orange-50 hover:to-pink-50 border-b last:border-b-0 flex items-start gap-3 transition-all ${
+                selectedIndex === index ? 'bg-gradient-to-r from-orange-50 to-pink-50' : ''
+              }`}
             >
-              <MapPin className="text-primary flex-shrink-0 mt-1" size={18} />
+              <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-pink-500 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                <MapPin size={18} className="text-white" />
+              </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 truncate">
+                <p className="font-semibold text-gray-900 text-sm mb-1 line-clamp-1">
                   {suggestion.address.road || suggestion.address.suburb || 'Unknown Road'}
                 </p>
-                <p className="text-sm text-gray-600 truncate">
-                  {[
-                    suggestion.address.city || suggestion.address.suburb,
-                    suggestion.address.state,
-                    suggestion.address.postcode,
-                  ]
-                    .filter(Boolean)
-                    .join(', ')}
-                </p>
+                <p className="text-xs text-gray-600 line-clamp-2">{suggestion.display_name}</p>
               </div>
             </button>
           ))}
@@ -224,13 +304,11 @@ export default function AddressAutocomplete({
       )}
 
       {query.length >= 3 && suggestions.length === 0 && !loading && (
-        <div className="absolute z-10 w-full mt-2 bg-white border-2 border-gray-200 rounded-lg shadow-lg p-4">
-          <div className="flex items-center gap-3 text-gray-600">
-            <MapPin size={20} />
-            <div>
-              <p className="font-medium">No addresses found</p>
-              <p className="text-sm">Try a different search term</p>
-            </div>
+        <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl shadow-2xl p-6 text-center">
+          <MapPin size={40} className="mx-auto text-gray-400 mb-3" />
+          <div>
+            <p className="font-semibold text-gray-900 mb-1">No addresses found</p>
+            <p className="text-sm text-gray-600">Try a different search term</p>
           </div>
         </div>
       )}
