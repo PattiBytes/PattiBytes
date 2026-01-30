@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
 import { cartService } from '@/services/cart';
+import { deliveryFeeService } from '@/services/deliveryFee';
+import { promoCodeService, type PromoCode } from '@/services/promoCodes';
+import { locationService } from '@/services/location';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import Image from 'next/image';
 import {
@@ -19,6 +22,9 @@ import {
   Loader2,
   Tag,
   IndianRupee,
+  MapPin,
+  X,
+  Check,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -28,13 +34,95 @@ export default function CartPage() {
   const { cart, updateQuantity, removeFromCart, clearCart } = useCart();
   const [validating, setValidating] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
+  const [deliveryFee, setDeliveryFee] = useState(0);
+  const [deliveryDistance, setDeliveryDistance] = useState(0);
+  const [deliveryBreakdown, setDeliveryBreakdown] = useState('');
+  const [promoCode, setPromoCode] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
+  const [promoDiscount, setPromoDiscount] = useState(0);
+  const [applyingPromo, setApplyingPromo] = useState(false);
+  const [showPromoList, setShowPromoList] = useState(false);
+  const [availablePromos, setAvailablePromos] = useState<PromoCode[]>([]);
 
   useEffect(() => {
     if (!user) {
       router.push('/login');
       return;
     }
+
+    loadDeliveryFee();
+    loadAvailablePromos();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, router]);
+
+  const loadDeliveryFee = async () => {
+    try {
+      await deliveryFeeService.loadConfig();
+
+      // Get user's default address or use current location
+      const addresses = await locationService.getSavedAddresses(user!.id);
+      let lat = 31.3260; // Default Patti coordinates
+      let lon = 74.8560;
+
+      if (addresses && addresses.length > 0) {
+        const defaultAddr = addresses.find((a) => a.is_default) || addresses[0];
+        lat = defaultAddr.latitude;
+        lon = defaultAddr.longitude;
+      }
+
+      const feeData = deliveryFeeService.calculateDeliveryFee(lat, lon);
+      setDeliveryFee(feeData.fee);
+      setDeliveryDistance(feeData.distance);
+      setDeliveryBreakdown(feeData.breakdown);
+    } catch (error) {
+      console.error('Failed to calculate delivery fee:', error);
+      setDeliveryFee(10); // Default fee
+    }
+  };
+
+  const loadAvailablePromos = async () => {
+    try {
+      const promos = await promoCodeService.getActivePromoCodes();
+      setAvailablePromos(promos);
+    } catch (error) {
+      console.error('Failed to load promo codes:', error);
+    }
+  };
+
+  const handleApplyPromo = async (code?: string) => {
+    const codeToApply = code || promoCode;
+    if (!codeToApply.trim() || !cart) return;
+
+    setApplyingPromo(true);
+    try {
+      const result = await promoCodeService.validatePromoCode(
+        codeToApply,
+        cart.subtotal,
+        user!.id
+      );
+
+      if (result.valid && result.promoCode) {
+        setAppliedPromo(result.promoCode);
+        setPromoDiscount(result.discount);
+        setPromoCode('');
+        setShowPromoList(false);
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      console.error('Promo code error:', error);
+      toast.error('Failed to apply promo code');
+    } finally {
+      setApplyingPromo(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoDiscount(0);
+    toast.info('Promo code removed');
+  };
 
   const handleUpdateQuantity = (itemId: string, currentQuantity: number, delta: number) => {
     const newQuantity = currentQuantity + delta;
@@ -50,6 +138,8 @@ export default function CartPage() {
   const handleClearCart = () => {
     clearCart();
     setShowClearModal(false);
+    setAppliedPromo(null);
+    setPromoDiscount(0);
     toast.success('Cart cleared');
   };
 
@@ -59,13 +149,26 @@ export default function CartPage() {
     setValidating(true);
     try {
       const validation = await cartService.validateCart();
-      
+
       if (!validation.valid) {
         toast.error(validation.message || 'Cart validation failed');
         return;
       }
 
-      // Navigate to checkout
+      // Store order details in session storage for checkout
+      sessionStorage.setItem(
+        'checkout_data',
+        JSON.stringify({
+          cart,
+          deliveryFee,
+          deliveryDistance,
+          tax,
+          promoCode: appliedPromo?.code,
+          promoDiscount,
+          finalTotal,
+        })
+      );
+
       router.push('/customer/checkout');
     } catch (error) {
       console.error('Checkout error:', error);
@@ -85,7 +188,6 @@ export default function CartPage() {
       <DashboardLayout>
         <div className="min-h-screen bg-gray-50">
           <div className="max-w-4xl mx-auto px-4 py-8">
-            {/* Header */}
             <div className="flex items-center gap-4 mb-6">
               <button
                 onClick={() => router.back()}
@@ -96,15 +198,12 @@ export default function CartPage() {
               <h1 className="text-2xl font-bold text-gray-900">Your Cart</h1>
             </div>
 
-            {/* Empty Cart */}
             <div className="bg-white rounded-2xl shadow-lg p-16 text-center">
               <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
                 <ShoppingCart className="w-12 h-12 text-gray-400" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Your cart is empty</h2>
-              <p className="text-gray-600 mb-8">
-                Add items from restaurants to get started
-              </p>
+              <p className="text-gray-600 mb-8">Add items from restaurants to get started</p>
               <button
                 onClick={() => router.push('/customer/dashboard')}
                 className="bg-primary text-white px-8 py-3 rounded-xl hover:bg-orange-600 font-semibold transition-colors"
@@ -118,9 +217,20 @@ export default function CartPage() {
     );
   }
 
-  const deliveryFee = 0; // You can calculate based on distance
-  const tax = cart.subtotal * 0.05; // 5% tax
-  const finalTotal = cart.subtotal + deliveryFee + tax;
+  const tax = cart.subtotal * 0.05;
+  const subtotalAfterDiscount = cart.subtotal - promoDiscount;
+  const finalTotal = subtotalAfterDiscount + deliveryFee + tax;
+
+  // Calculate total savings
+  const itemDiscountSavings = cart.items.reduce((total: number, item) => {
+    if (item.discount_percentage) {
+      const savings = (item.price * item.discount_percentage / 100) * item.quantity;
+      return total + savings;
+    }
+    return total;
+  }, 0);
+
+  const totalSavings = itemDiscountSavings + promoDiscount;
 
   return (
     <DashboardLayout>
@@ -174,7 +284,6 @@ export default function CartPage() {
                   return (
                     <div key={item.id} className="p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex gap-4">
-                        {/* Item Image */}
                         {item.image_url ? (
                           <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
                             <Image
@@ -191,7 +300,6 @@ export default function CartPage() {
                           </div>
                         )}
 
-                        {/* Item Details */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-2">
                             <div className="flex-1 min-w-0">
@@ -226,13 +334,12 @@ export default function CartPage() {
                             </button>
                           </div>
 
-                          {/* Price & Quantity */}
                           <div className="flex items-center justify-between gap-4">
                             <div>
                               {hasDiscount ? (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-gray-400 line-through">
-                                    ₹{item.price}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-sm text-gray-400 line-through">
+                                    ₹{item.price.toFixed(2)}
                                   </span>
                                   <span className="font-bold text-gray-900">
                                     ₹{itemPrice.toFixed(2)}
@@ -242,11 +349,10 @@ export default function CartPage() {
                                   </span>
                                 </div>
                               ) : (
-                                <span className="font-bold text-gray-900">₹{item.price}</span>
+                                <span className="font-bold text-gray-900">₹{item.price.toFixed(2)}</span>
                               )}
                             </div>
 
-                            {/* Quantity Controls */}
                             <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
                               <button
                                 onClick={() => handleUpdateQuantity(item.id, item.quantity, -1)}
@@ -268,10 +374,12 @@ export default function CartPage() {
                             </div>
                           </div>
 
-                          {/* Total Item Price */}
                           <div className="mt-2 text-right">
                             <p className="text-sm text-gray-600">
-                              Total: <span className="font-bold text-gray-900">₹{totalItemPrice.toFixed(2)}</span>
+                              Total:{' '}
+                              <span className="font-bold text-gray-900">
+                                ₹{totalItemPrice.toFixed(2)}
+                              </span>
                             </p>
                           </div>
                         </div>
@@ -281,7 +389,6 @@ export default function CartPage() {
                 })}
               </div>
 
-              {/* Add More Items */}
               <button
                 onClick={() => router.push(`/customer/restaurant/${cart.merchant_id}`)}
                 className="w-full bg-white border-2 border-dashed border-gray-300 rounded-xl p-4 hover:border-primary hover:bg-orange-50 transition-colors text-primary font-semibold"
@@ -292,23 +399,123 @@ export default function CartPage() {
 
             {/* Order Summary */}
             <div className="lg:col-span-1">
-              <div className="bg-white rounded-xl shadow-lg p-6 sticky top-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Bill Summary</h2>
+              <div className="bg-white rounded-xl shadow-lg p-6 sticky top-6 space-y-4">
+                <h2 className="text-xl font-bold text-gray-900">Bill Summary</h2>
 
-                <div className="space-y-3 mb-4 pb-4 border-b">
+                {/* Promo Code Section */}
+                <div className="border-b pb-4">
+                  {!appliedPromo ? (
+                    <>
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={promoCode}
+                          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                          placeholder="Enter promo code"
+                          className="flex-1 px-3 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-sm"
+                          disabled={applyingPromo}
+                        />
+                        <button
+                          onClick={() => handleApplyPromo()}
+                          disabled={!promoCode.trim() || applyingPromo}
+                          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-orange-600 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          {applyingPromo ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            'Apply'
+                          )}
+                        </button>
+                      </div>
+
+                      {availablePromos.length > 0 && (
+                        <button
+                          onClick={() => setShowPromoList(!showPromoList)}
+                          className="text-sm text-primary hover:underline flex items-center gap-1"
+                        >
+                          <Tag className="w-3 h-3" />
+                          View available offers ({availablePromos.length})
+                        </button>
+                      )}
+
+                      {showPromoList && (
+                        <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+                          {availablePromos.map((promo) => (
+                            <button
+                              key={promo.id}
+                              onClick={() => handleApplyPromo(promo.code)}
+                              className="w-full text-left p-3 border-2 border-gray-200 rounded-lg hover:border-primary transition-colors"
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-bold text-primary">{promo.code}</span>
+                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                                  {promo.discount_type === 'percentage'
+                                    ? `${promo.discount_value}% OFF`
+                                    : `₹${promo.discount_value} OFF`}
+                                </span>
+                              </div>
+                              {promo.description && (
+                                <p className="text-xs text-gray-600">{promo.description}</p>
+                              )}
+                              <p className="text-xs text-gray-500 mt-1">
+                                Min order: ₹{promo.min_order_amount}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="bg-green-50 border-2 border-green-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Check className="w-5 h-5 text-green-600" />
+                          <div>
+                            <p className="font-bold text-green-700">{appliedPromo.code}</p>
+                            <p className="text-xs text-green-600">
+                              Saved ₹{promoDiscount.toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleRemovePromo}
+                          className="p-1 hover:bg-green-100 rounded transition-colors"
+                        >
+                          <X className="w-4 h-4 text-green-700" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Price Breakdown */}
+                <div className="space-y-3 pb-4 border-b">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Subtotal ({cart.items.length} items)</span>
-                    <span className="font-semibold text-gray-900">₹{cart.subtotal.toFixed(2)}</span>
+                    <span className="text-gray-600">Item Total</span>
+                    <span className="font-semibold text-gray-900">
+                      ₹{cart.subtotal.toFixed(2)}
+                    </span>
                   </div>
 
+                  {promoDiscount > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-green-600">Promo Discount</span>
+                      <span className="font-semibold text-green-600">
+                        -₹{promoDiscount.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Delivery Fee</span>
-                    {deliveryFee === 0 ? (
-                      <span className="text-green-600 font-semibold">FREE</span>
-                    ) : (
-                      <span className="font-semibold text-gray-900">₹{deliveryFee.toFixed(2)}</span>
-                    )}
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-gray-600" />
+                      <span className="text-gray-600">Delivery Fee</span>
+                    </div>
+                    <span className="font-semibold text-gray-900">₹{deliveryFee.toFixed(2)}</span>
                   </div>
+                  {deliveryBreakdown && (
+                    <p className="text-xs text-gray-500 pl-4">{deliveryBreakdown}</p>
+                  )}
 
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600">Taxes & Fees (5%)</span>
@@ -316,7 +523,8 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between mb-6">
+                {/* Total */}
+                <div className="flex items-center justify-between pt-2">
                   <span className="text-lg font-bold text-gray-900">Total</span>
                   <div className="text-right">
                     <div className="flex items-center gap-1">
@@ -328,23 +536,13 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                {/* Savings */}
-                {cart.items.some(item => item.discount_percentage && item.discount_percentage > 0) && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                {/* Total Savings */}
+                {totalSavings > 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                     <div className="flex items-center gap-2 text-green-700">
                       <Tag className="w-4 h-4" />
                       <span className="text-sm font-semibold">
-                        You saved ₹
-                        {cart.items
-                          .reduce((total, item) => {
-                            if (item.discount_percentage) {
-                              const savings = (item.price * item.discount_percentage / 100) * item.quantity;
-                              return total + savings;
-                            }
-                            return total;
-                          }, 0)
-                          .toFixed(2)}{' '}
-                        on this order!
+                        Total Savings: ₹{totalSavings.toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -365,11 +563,9 @@ export default function CartPage() {
                   )}
                 </button>
 
-                <div className="mt-4 flex items-start gap-2 text-xs text-gray-600">
+                <div className="flex items-start gap-2 text-xs text-gray-600">
                   <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <p>
-                    Review your order carefully. Prices and availability are subject to change.
-                  </p>
+                  <p>Review your order carefully. Prices and availability are subject to change.</p>
                 </div>
               </div>
             </div>
@@ -378,10 +574,13 @@ export default function CartPage() {
 
         {/* Fixed Bottom Bar (Mobile) */}
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4 lg:hidden z-40">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-600">Total Amount</p>
               <p className="text-xl font-bold text-primary">₹{finalTotal.toFixed(2)}</p>
+              {totalSavings > 0 && (
+                <p className="text-xs text-green-600">Saved ₹{totalSavings.toFixed(2)}</p>
+              )}
             </div>
             <button
               onClick={handleCheckout}
@@ -405,7 +604,7 @@ export default function CartPage() {
       {showClearModal && (
         <>
           <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowClearModal(false)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-2xl shadow-2xl z-50 p-6">
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-2xl shadow-2xl z-50 p-6 mx-4">
             <div className="text-center mb-6">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Trash2 className="w-8 h-8 text-red-600" />
