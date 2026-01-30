@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext'; // ✅ Use AuthContext
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { User } from '@/types';
@@ -9,7 +9,8 @@ import { Search, Filter, Mail, Phone, Calendar } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function AdminUsersPage() {
-  const { user, userRole } = useAuth();
+  // ✅ FIX: Use user.role instead of userRole
+  const { user } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,9 +43,9 @@ export default function AdminUsersPage() {
     }
   };
 
-  const filteredUsers = users.filter(user =>
-    user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredUsers = users.filter(u =>
+    u.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const getRoleBadge = (role: string) => {
@@ -69,7 +70,7 @@ export default function AdminUsersPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 mb-6">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-3 text-gray-400" size={20} />
             <input
@@ -92,7 +93,8 @@ export default function AdminUsersPage() {
               <option value="merchant">Merchants</option>
               <option value="driver">Drivers</option>
               <option value="admin">Admins</option>
-              {userRole === 'superadmin' && <option value="superadmin">Super Admins</option>}
+              {/* ✅ FIX: Use user.role instead of userRole */}
+              {user?.role === 'superadmin' && <option value="superadmin">Super Admins</option>}
             </select>
           </div>
         </div>
@@ -144,68 +146,70 @@ export default function AdminUsersPage() {
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Contact
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Joined
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="h-10 w-10 flex-shrink-0">
-                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-white font-bold">
-                            {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{user.full_name || 'Unknown'}</div>
-                          <div className="text-sm text-gray-500">{user.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Mail size={14} />
-                          <span>{user.email}</span>
-                        </div>
-                        {user.phone && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Phone size={14} />
-                            <span>{user.phone}</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${getRoleBadge(user.role)}`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Calendar size={14} />
-                        <span>{formatDistanceToNow(new Date(user.created_at), { addSuffix: true })}</span>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      User
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Contact
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Role
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Joined
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredUsers.map((user) => (
+                    <tr key={user.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="h-10 w-10 flex-shrink-0">
+                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-white font-bold">
+                              {user.full_name?.charAt(0)?.toUpperCase() || 'U'}
+                            </div>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">{user.full_name || 'Unknown'}</div>
+                            <div className="text-sm text-gray-500">{user.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Mail size={14} />
+                            <span>{user.email}</span>
+                          </div>
+                          {user.phone && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Phone size={14} />
+                              <span>{user.phone}</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${getRoleBadge(user.role)}`}>
+                          {user.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Calendar size={14} />
+                          <span>{formatDistanceToNow(new Date(user.created_at), { addSuffix: true })}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

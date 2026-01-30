@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { geocodingService } from '@/services/geocoding';
 
 export function useLocation() {
-  const [location, setLocation] = useState<{
+  const [location, setLocationState] = useState<{
     lat: number;
     lon: number;
     address?: string;
@@ -19,7 +19,7 @@ export function useLocation() {
       const coords = await geocodingService.getCurrentLocation();
       const addressData = await geocodingService.reverseGeocode(coords.lat, coords.lon);
       
-      setLocation({
+      setLocationState({
         lat: coords.lat,
         lon: coords.lon,
         address: addressData.displayName,
@@ -27,7 +27,7 @@ export function useLocation() {
     } catch (err) {
       setError((err as Error).message);
       // Default to Ludhiana if location fails
-      setLocation({
+      setLocationState({
         lat: 30.9010,
         lon: 75.8573,
         address: 'Ludhiana, Punjab, India',
@@ -43,7 +43,7 @@ export function useLocation() {
     try {
       const results = await geocodingService.searchAddress(query);
       if (results.length > 0) {
-        setLocation({
+        setLocationState({
           lat: results[0].lat,
           lon: results[0].lon,
           address: results[0].displayName,
@@ -57,6 +57,15 @@ export function useLocation() {
     }
   };
 
+  // ✅ ADD: Manual setLocation method
+  const setLocation = (newLocation: {
+    lat: number;
+    lon: number;
+    address?: string;
+  }) => {
+    setLocationState(newLocation);
+  };
+
   useEffect(() => {
     getCurrentLocation();
   }, []);
@@ -67,5 +76,6 @@ export function useLocation() {
     error,
     getCurrentLocation,
     searchLocation,
+    setLocation, // ✅ Export setLocation
   };
 }
