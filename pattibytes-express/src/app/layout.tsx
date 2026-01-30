@@ -6,6 +6,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import PWAInstaller from '@/components/PWAInstaller';
 import Header from '@/components/common/Header';
+import { CartProvider } from '@/contexts/CartContext';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -58,7 +59,7 @@ export const metadata: Metadata = {
         height: 192,
         alt: 'PattiBytes Express Logo',
       },
-    ], 
+    ],
   },
   twitter: {
     card: 'summary',
@@ -90,21 +91,23 @@ export default function RootLayout({
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>
-           <Header />
-          <PWAInstaller />
-          {children}
-          <ToastContainer
-            position="top-right"
-            autoClose={3000}
-            hideProgressBar={false}
-            newestOnTop={true}
-            closeOnClick
-            rtl={false}
-            pauseOnFocusLoss
-            draggable
-            pauseOnHover
-            theme="light"
-          />
+          <CartProvider>
+            <Header />
+            <PWAInstaller />
+            {children}
+            <ToastContainer
+              position="top-right"
+              autoClose={3000}
+              hideProgressBar={false}
+              newestOnTop={true}
+              closeOnClick
+              rtl={false}
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
+              theme="light"
+            />
+          </CartProvider>
         </AuthProvider>
       </body>
     </html>
