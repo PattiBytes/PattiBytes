@@ -1,287 +1,415 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
+import { useLocation } from '@/hooks/useLocation';
 import { restaurantService } from '@/services/restaurants';
-import { Star, Clock, MapPin, ArrowLeft, ShoppingCart } from 'lucide-react';
-import Image from 'next/image';
-import { MenuItem } from '@/types';
+import { locationService } from '@/services/location';
+import DashboardLayout from '@/components/layouts/DashboardLayout';
+import { ArrowLeft, MapPin, Clock, Star, ShoppingCart, Plus, Minus, Search } from 'lucide-react';
 import { toast } from 'react-toastify';
+import Image from 'next/image';
 
-interface CartItem extends MenuItem {
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
   quantity: number;
+  image_url?: string;
 }
 
 export default function RestaurantDetailPage() {
   const params = useParams();
   const router = useRouter();
-   
+  const { user } = useAuth();
+  const { location } = useLocation();
   const [restaurant, setRestaurant] = useState<any>(null);
+  const [menuItems, setMenuItems] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
   useEffect(() => {
-    const loadRestaurant = async () => {
-      try {
-        const data = await restaurantService.getRestaurantById(params.id as string);
-        setRestaurant(data);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (error) {
-        toast.error('Failed to load restaurant');
-        router.push('/customer/dashboard');
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (params.id) {
+      loadRestaurant();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id]);
 
-    loadRestaurant();
-  }, [params.id, router]);
+  const loadRestaurant = async () => {
+    try {
+      const data = await restaurantService.getRestaurantById(params.id as string);
+      setRestaurant(data);
 
-  const addToCart = (item: MenuItem) => {
-    setCart((prevCart) => {
-      const existing = prevCart.find((i) => i.id === item.id);
-      if (existing) {
-        return prevCart.map((i) =>
-          i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
-        );
-      }
-      return [...prevCart, { ...item, quantity: 1 }];
-    });
-    toast.success('Added to cart!');
+      const items = await restaurantService.getMenuItemsByCategory(params.id as string);
+      setMenuItems(items);
+    } catch (error) {
+      console.error('Failed to load restaurant:', error);
+      toast.error('Failed to load restaurant');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getDistance = () => {
+    if (!location || !restaurant) return 0;
+    return locationService.calculateDistance(
+      location.lat,
+      location.lon,
+      restaurant.latitude,
+      restaurant.longitude
+    );
+  };
+
+  const getDeliveryCharge = () => {
+    return locationService.calculateDeliveryCharge(getDistance());
+  };
+
+  const addToCart = (item: any) => {
+    const existing = cart.find((i) => i.id === item.id);
+    if (existing) {
+      setCart(cart.map((i) => 
+        i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+      ));
+    } else {
+      setCart([...cart, {
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: 1,
+        image_url: item.image_url,
+      }]);
+    }
+    toast.success('Added to cart');
   };
 
   const removeFromCart = (itemId: string) => {
-    setCart((prevCart) => {
-      const existing = prevCart.find((i) => i.id === itemId);
-      if (existing && existing.quantity > 1) {
-        return prevCart.map((i) =>
-          i.id === itemId ? { ...i, quantity: i.quantity - 1 } : i
-        );
-      }
-      return prevCart.filter((i) => i.id !== itemId);
-    });
+    const existing = cart.find((i) => i.id === itemId);
+    if (existing && existing.quantity > 1) {
+      setCart(cart.map((i) => 
+        i.id === itemId ? { ...i, quantity: i.quantity - 1 } : i
+      ));
+    } else {
+      setCart(cart.filter((i) => i.id !== itemId));
+    }
   };
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const getCartQuantity = (itemId: string) => {
+    const item = cart.find((i) => i.id === itemId);
+    return item ? item.quantity : 0;
+  };
+
+  const getCartTotal = () => {
+    return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+  };
+
+  const getTotalWithDelivery = () => {
+    return getCartTotal() + getDeliveryCharge();
+  };
+
+  const handleCheckout = () => {
+    if (cart.length === 0) {
+      toast.error('Your cart is empty');
+      return;
+    }
+    
+    // Store cart in sessionStorage
+    sessionStorage.setItem('cart', JSON.stringify({
+      items: cart,
+      restaurant_id: restaurant.id,
+      restaurant_name: restaurant.business_name,
+      delivery_charge: getDeliveryCharge(),
+    }));
+
+    router.push('/customer/checkout');
+  };
+
+  const categories = ['All', ...Object.keys(menuItems)];
+
+  const filteredItems = () => {
+    let items: any[] = [];
+    
+    if (selectedCategory === 'All') {
+      items = Object.values(menuItems).flat() as any[];
+    } else {
+      items = menuItems[selectedCategory] || [];
+    }
+
+    if (searchQuery) {
+      items = items.filter((item: any) =>
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    return items;
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <DashboardLayout>
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="bg-gray-200 h-96 rounded-lg animate-pulse" />
+        </div>
+      </DashboardLayout>
     );
   }
 
   if (!restaurant) {
-    return <div>Restaurant not found</div>;
+    return (
+      <DashboardLayout>
+        <div className="max-w-7xl mx-auto px-4 py-8 text-center">
+          <p className="text-gray-600">Restaurant not found</p>
+        </div>
+      </DashboardLayout>
+    );
   }
 
-   
-   
-  const allItems = restaurant.menu_categories?.flatMap((c: any) => 
-     
-    c.menu_items?.map((item: any) => ({ ...item, category_name: c.name })) || []
-  ) || [];
-
-  const filteredItems = selectedCategory === 'all' 
-    ? allItems 
-     
-    : allItems.filter((item: any) => item.category_id === selectedCategory);
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => router.back()}
-              className="flex items-center gap-2 text-gray-700 hover:text-primary"
-            >
-              <ArrowLeft size={20} />
-              <span className="font-medium">Back</span>
-            </button>
+    <DashboardLayout>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-6">
+          <button
+            onClick={() => router.back()}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+          >
+            <ArrowLeft size={24} />
+          </button>
+          <h1 className="text-3xl font-bold text-gray-900">{restaurant.business_name}</h1>
+        </div>
 
-            {cartCount > 0 && (
-              <button
-                onClick={() => router.push(`/customer/cart?restaurant=${params.id}`)}
-                className="relative bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600 flex items-center gap-2"
-              >
-                <ShoppingCart size={20} />
-                <span className="font-medium">
-                  {cartCount} items • ₹{cartTotal.toFixed(0)}
-                </span>
-              </button>
-            )}
+        {/* Restaurant Banner */}
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
+          {restaurant.banner_url ? (
+            <div className="relative h-64">
+              <Image
+                src={restaurant.banner_url}
+                alt={restaurant.business_name}
+                fill
+                className="object-cover"
+              />
+            </div>
+          ) : (
+            <div className="h-64 bg-gradient-to-br from-orange-400 to-pink-500" />
+          )}
+
+          <div className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1">
+                <p className="text-gray-700 mb-3">{restaurant.description}</p>
+                
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {restaurant.cuisine_types?.map((cuisine: string, index: number) => (
+                    <span
+                      key={index}
+                      className="px-3 py-1 bg-orange-100 text-orange-800 text-sm rounded-full"
+                    >
+                      {cuisine}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-6 text-sm text-gray-600">
+                  <div className="flex items-center gap-2">
+                    <MapPin size={16} />
+                    <span>{getDistance().toFixed(1)} km away</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock size={16} />
+                    <span>30-40 min</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Star size={16} className="text-yellow-600" fill="currentColor" />
+                    <span>4.5</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <p className="text-sm text-gray-600 mb-1">Delivery Fee</p>
+                <p className="text-2xl font-bold text-primary">
+                  ₹{getDeliveryCharge()}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
-      </header>
 
-      {/* Restaurant Info */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex gap-6">
-            {restaurant.logo_url && (
-              <div className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0">
-                <Image
-                  src={restaurant.logo_url}
-                  alt={restaurant.business_name}
-                  width={96}
-                  height={96}
-                  className="object-cover"
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Menu Section */}
+          <div className="lg:col-span-2">
+            {/* Search & Categories */}
+            <div className="bg-white rounded-lg shadow p-4 mb-6">
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search menu items..."
+                  className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary"
                 />
               </div>
-            )}
-            
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900">
-                {restaurant.business_name}
-              </h1>
-              <p className="text-gray-600 mt-1">
-                {restaurant.cuisine_types?.join(', ') || 'Multi-cuisine'}
-              </p>
 
-              <div className="flex items-center gap-6 mt-4">
-                <div className="flex items-center gap-1">
-                  <Star className="fill-yellow-400 text-yellow-400" size={18} />
-                  <span className="font-semibold">{restaurant.average_rating.toFixed(1)}</span>
-                  <span className="text-gray-600">({restaurant.total_reviews} reviews)</span>
-                </div>
-
-                <div className="flex items-center gap-1 text-gray-600">
-                  <Clock size={18} />
-                  <span>{restaurant.estimated_prep_time} min</span>
-                </div>
-
-                <div className="flex items-center gap-1 text-gray-600">
-                  <MapPin size={18} />
-                  <span>{restaurant.delivery_radius_km}km radius</span>
-                </div>
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
+                    className={`px-4 py-2 rounded-lg whitespace-nowrap font-medium ${
+                      selectedCategory === category
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {restaurant.description && (
-                <p className="text-gray-700 mt-4">{restaurant.description}</p>
+            {/* Menu Items */}
+            <div className="space-y-4">
+              {filteredItems().map((item: any) => (
+                <div
+                  key={item.id}
+                  className="bg-white rounded-lg shadow p-4 flex gap-4"
+                >
+                  {item.image_url && (
+                    <div className="relative w-24 h-24 flex-shrink-0">
+                      <Image
+                        src={item.image_url}
+                        alt={item.name}
+                        fill
+                        className="object-cover rounded-lg"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex-1">
+                    <h3 className="font-bold text-lg text-gray-900 mb-1">{item.name}</h3>
+                    <p className="text-sm text-gray-600 mb-2">{item.description}</p>
+                    <p className="text-xl font-bold text-primary">₹{item.price}</p>
+                  </div>
+
+                  <div className="flex flex-col items-end justify-between">
+                    {item.is_available ? (
+                      getCartQuantity(item.id) > 0 ? (
+                        <div className="flex items-center gap-3 bg-primary rounded-lg">
+                          <button
+                            onClick={() => removeFromCart(item.id)}
+                            className="text-white px-3 py-2 hover:bg-orange-600 rounded-l-lg"
+                          >
+                            <Minus size={18} />
+                          </button>
+                          <span className="text-white font-bold">
+                            {getCartQuantity(item.id)}
+                          </span>
+                          <button
+                            onClick={() => addToCart(item)}
+                            className="text-white px-3 py-2 hover:bg-orange-600 rounded-r-lg"
+                          >
+                            <Plus size={18} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => addToCart(item)}
+                          className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600 font-medium flex items-center gap-2"
+                        >
+                          <Plus size={18} />
+                          Add
+                        </button>
+                      )
+                    ) : (
+                      <span className="text-red-600 font-medium">Not Available</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {filteredItems().length === 0 && (
+              <div className="text-center py-12 bg-white rounded-lg">
+                <p className="text-gray-600">No menu items found</p>
+              </div>
+            )}
+          </div>
+
+          {/* Cart Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg shadow p-6 sticky top-4">
+              <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <ShoppingCart size={24} />
+                Your Cart
+              </h3>
+
+              {cart.length > 0 ? (
+                <>
+                  <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
+                    {cart.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between py-2 border-b">
+                        <div className="flex-1">
+                          <p className="font-semibold text-gray-900">{item.name}</p>
+                          <p className="text-sm text-gray-600">₹{item.price} × {item.quantity}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => removeFromCart(item.id)}
+                            className="text-gray-600 hover:text-primary p-1"
+                          >
+                            <Minus size={16} />
+                          </button>
+                          <span className="font-bold">{item.quantity}</span>
+                          <button
+                            onClick={() => addToCart(item)}
+                            className="text-gray-600 hover:text-primary p-1"
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-2 mb-4 pt-4 border-t">
+                    <div className="flex justify-between text-gray-700">
+                      <span>Subtotal</span>
+                      <span>₹{getCartTotal()}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-700">
+                      <span>Delivery Fee</span>
+                      <span>₹{getDeliveryCharge()}</span>
+                    </div>
+                    <div className="flex justify-between text-xl font-bold text-gray-900 pt-2 border-t">
+                      <span>Total</span>
+                      <span>₹{getTotalWithDelivery()}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleCheckout}
+                    className="w-full bg-primary text-white px-6 py-4 rounded-lg hover:bg-orange-600 font-bold text-lg"
+                  >
+                    Proceed to Checkout
+                  </button>
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <ShoppingCart size={48} className="mx-auto text-gray-400 mb-3" />
+                  <p className="text-gray-600">Your cart is empty</p>
+                  <p className="text-sm text-gray-500 mt-1">Add items to get started</p>
+                </div>
               )}
             </div>
           </div>
         </div>
       </div>
-
-      {/* Menu */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Category Filter */}
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-          <button
-            onClick={() => setSelectedCategory('all')}
-            className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap ${
-              selectedCategory === 'all'
-                ? 'bg-primary text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            All Items
-          </button>
-          {restaurant.menu_categories?.map((category: any) => (
-            <button
-              key={category.id}
-              onClick={() => setSelectedCategory(category.id)}
-              className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap ${
-                selectedCategory === category.id
-                  ? 'bg-primary text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {category.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Menu Items */}
-        <div className="grid gap-4">
-          {filteredItems.map((item: any) => {
-            const cartItem = cart.find((i) => i.id === item.id);
-            const quantity = cartItem?.quantity || 0;
-
-            return (
-              <div
-                key={item.id}
-                className="bg-white rounded-lg shadow p-4 flex gap-4"
-              >
-                {item.image_url && (
-                  <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
-                    <Image
-                      src={item.image_url}
-                      alt={item.name}
-                      width={96}
-                      height={96}
-                      className="object-cover"
-                    />
-                  </div>
-                )}
-
-                <div className="flex-1">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-bold text-gray-900">{item.name}</h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {item.description}
-                      </p>
-                      <p className="text-lg font-bold text-primary mt-2">
-                        ₹{item.price}
-                      </p>
-                    </div>
-
-                    {quantity > 0 ? (
-                      <div className="flex items-center gap-3 bg-primary rounded-lg px-3 py-2">
-                        <button
-                          onClick={() => removeFromCart(item.id)}
-                          className="text-white font-bold text-xl"
-                        >
-                          −
-                        </button>
-                        <span className="text-white font-bold w-6 text-center">
-                          {quantity}
-                        </span>
-                        <button
-                          onClick={() => addToCart(item)}
-                          className="text-white font-bold text-xl"
-                        >
-                          +
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => addToCart(item)}
-                        className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600 font-medium"
-                      >
-                        Add
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Floating Cart Button (Mobile) */}
-      {cartCount > 0 && (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 lg:hidden z-50">
-          <button
-            onClick={() => router.push(`/customer/cart?restaurant=${params.id}`)}
-            className="bg-primary text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-3"
-          >
-            <ShoppingCart size={24} />
-            <span className="font-bold text-lg">
-              {cartCount} items • ₹{cartTotal.toFixed(0)}
-            </span>
-          </button>
-        </div>
-      )}
-    </div>
+    </DashboardLayout>
   );
 }

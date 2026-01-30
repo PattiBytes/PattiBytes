@@ -1,6 +1,11 @@
 import { supabase } from '@/lib/supabase';
 
 export interface SavedAddress {
+  city: string;
+  postal_code: string;
+  city: string;
+  postal_code: string;
+  state: string;
   id: string;
   user_id: string;
   label: string;

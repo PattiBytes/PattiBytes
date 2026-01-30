@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
 import { Merchant, MenuItem } from '@/types';
 
@@ -42,7 +43,7 @@ export const restaurantService = {
     return data;
   },
 
-  async searchRestaurants(query: string) {
+  async searchRestaurants(query: string, latitude?: number, longitude?: number, radiusKm: number = 20) {
     const { data, error } = await supabase
       .from('merchants')
       .select('*')
@@ -51,6 +52,24 @@ export const restaurantService = {
       .eq('is_active', true);
 
     if (error) throw error;
+
+    // If location provided, filter by distance
+    if (latitude && longitude) {
+      const filtered = data.filter((merchant) => {
+        if (!merchant.latitude || !merchant.longitude) return false;
+        
+        const distance = calculateDistance(
+          latitude,
+          longitude,
+          merchant.latitude,
+          merchant.longitude
+        );
+        
+        return distance <= radiusKm;
+      });
+      return filtered as Merchant[];
+    }
+
     return data as Merchant[];
   },
 
@@ -65,10 +84,26 @@ export const restaurantService = {
     if (error) throw error;
     return data as MenuItem[];
   },
+
+  async getMenuItemsByCategory(merchantId: string) {
+    const items = await this.getMenuItems(merchantId);
+    
+    // Group by category
+    const grouped = items.reduce((acc: any, item: any) => {
+      const category = item.category || 'Other';
+      if (!acc[category]) {
+        acc[category] = [];
+      }
+      acc[category].push(item);
+      return acc;
+    }, {});
+
+    return grouped;
+  },
 };
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
+  const R = 6371; // Earth's radius in km
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   

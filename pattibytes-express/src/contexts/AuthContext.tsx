@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
@@ -7,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 
 interface Profile {
+  user_metadata: any;
   id: string;
   email: string;
   full_name: string;
@@ -14,7 +16,7 @@ interface Profile {
   role: string;
   approval_status?: string;
   avatar_url?: string;
-   
+  logo_url?: string;
   addresses?: any[];
   profile_completed?: boolean;
   is_active?: boolean;
@@ -30,7 +32,7 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
+export const AuthContext = createContext<AuthContextType>({
   user: null,
   authUser: null,
   loading: true,
@@ -54,76 +56,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Initial auth check with secure getUser()
+    let mounted = true;
+
+    // Initial auth check
     checkUser();
     
-    // Listen for auth changes but ALWAYS verify with getUser()
+    // Listen for auth changes
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event: AuthChangeEvent) => {
+      async (event: AuthChangeEvent, session) => {
+        if (!mounted) return;
+
         console.log('Auth event:', event);
 
-        // ✅ SECURE: Always verify session with getUser()
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          try {
-            // Verify the session is authentic
-            const { data: { user: verifiedUser }, error } = await supabase.auth.getUser();
-            
-            if (error) {
-              console.error('Error verifying user:', {
-                message: error.message,
-                status: error.status,
-                code: (error as any)?.code,
-              });
-              setUser(null);
-              setAuthUser(null);
-              return;
-            }
-
-            if (verifiedUser) {
-              setAuthUser(verifiedUser);
-              await loadUserProfile(verifiedUser.id);
-            }
-          } catch (error) {
-            console.error('Error in auth state change:', error instanceof Error ? error.message : error);
-            setUser(null);
-            setAuthUser(null);
+          if (session?.user) {
+            setAuthUser(session.user);
+            await loadUserProfile(session.user.id);
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setAuthUser(null);
           
-          // Redirect to home if on protected route
           if (!pathname.startsWith('/auth') && pathname !== '/') {
             router.push('/');
           }
         } else if (event === 'USER_UPDATED') {
-          // Verify and refresh user data
-          const { data: { user: verifiedUser } } = await supabase.auth.getUser();
-          if (verifiedUser) {
-            setAuthUser(verifiedUser);
-            await loadUserProfile(verifiedUser.id);
+          if (session?.user) {
+            setAuthUser(session.user);
+            await loadUserProfile(session.user.id);
           }
         }
       }
     );
 
     return () => {
+      mounted = false;
       authListener.subscription.unsubscribe();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, router]);
 
   const checkUser = async () => {
     try {
-      // ✅ SECURE: Using getUser() instead of getSession()
+      // Use getUser() for secure verification
       const { data: { user: authUser }, error } = await supabase.auth.getUser();
       
       if (error) {
-        console.error('Error getting user:', {
-          message: error.message,
-          status: error.status,
-          name: error.name,
-        });
+        // Only log actual errors, not "no session" which is expected when logged out
+        if (error.message !== 'Auth session missing!' && error.status !== 400) {
+          console.error('Error getting user:', error.message);
+        }
         setAuthUser(null);
         setUser(null);
         setLoading(false);
@@ -134,12 +115,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthUser(authUser);
         await loadUserProfile(authUser.id);
       } else {
-        // No authenticated user - this is normal for logged out state
         setAuthUser(null);
         setUser(null);
       }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
-      console.error('Error checking user:', error instanceof Error ? error.message : String(error));
+      // Silently handle auth errors during initial check
       setAuthUser(null);
       setUser(null);
     } finally {
@@ -156,35 +137,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (error) {
-        console.error('Profile fetch error:', {
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint,
-        });
-        
-        // Profile not found - user might need to complete signup
-        if (error.code === 'PGRST116' || error.message?.includes('no rows')) {
-          console.warn('Profile not found for user:', userId);
-          setUser(null);
-          return;
+        if (error.code !== 'PGRST116') {
+          console.error('Profile fetch error:', error.message);
         }
-        
-        throw error;
+        setUser(null);
+        return;
       }
 
       if (data) {
+        console.log('Profile loaded successfully:', data.role);
         setUser(data);
       } else {
-        console.warn('No profile data returned for user:', userId);
         setUser(null);
       }
     } catch (error: any) {
-      console.error('Error loading user profile:', {
-        message: error?.message || String(error),
-        code: error?.code,
-        userId,
-      });
+      console.error('Error loading user profile:', error?.message || String(error));
       setUser(null);
     }
   };
@@ -193,7 +160,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (authUser) {
       await loadUserProfile(authUser.id);
     } else {
-      // If no authUser, check again
       await checkUser();
     }
   };
@@ -202,24 +168,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       
-      // Sign out from Supabase
       const { error } = await supabase.auth.signOut();
       
       if (error) {
         console.error('Logout error:', error.message);
-        // Still clear local state even if API call fails
       }
 
-      // Clear state
       setUser(null);
       setAuthUser(null);
       
-      // Redirect to home
       router.push('/');
       router.refresh();
     } catch (error) {
       console.error('Error logging out:', error instanceof Error ? error.message : String(error));
-      // Still clear state on error
       setUser(null);
       setAuthUser(null);
       router.push('/');
