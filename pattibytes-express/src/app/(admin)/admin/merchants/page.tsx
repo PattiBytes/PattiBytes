@@ -4,12 +4,15 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { Plus, Store, Mail, Phone, MapPin, Trash2, Key } from 'lucide-react';
+import LocationPicker from '@/components/LocationPicker';
+import { Plus, Store, Mail, Phone, MapPin, Trash2, Settings, LogOut, Key } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useRouter } from 'next/navigation';
 import { Merchant } from '@/types';
 
 export default function AdminMerchantsPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const router = useRouter();
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -18,16 +21,18 @@ export default function AdminMerchantsPage() {
     email: '',
     phone: '',
     address: '',
+    latitude: 30.9010,
+    longitude: 75.8573,
     city: '',
     state: 'Punjab',
     zipcode: '',
     cuisine_type: '',
     description: '',
+    delivery_radius_km: 10,
   });
 
   useEffect(() => {
     if (user) loadMerchants();
-     
   }, [user]);
 
   const loadMerchants = async () => {
@@ -51,11 +56,15 @@ export default function AdminMerchantsPage() {
     return Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
   };
 
+  const handleLogout = async () => {
+    await logout();
+    router.push('/');
+  };
+
   const handleAddMerchant = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      // Generate random password
       const tempPassword = generatePassword();
       const merchantEmail = formData.email;
 
@@ -100,6 +109,9 @@ export default function AdminMerchantsPage() {
               state: formData.state,
               zipcode: formData.zipcode,
             },
+            latitude: formData.latitude,
+            longitude: formData.longitude,
+            delivery_radius_km: formData.delivery_radius_km,
             cuisine_type: formData.cuisine_type,
             description: formData.description,
             is_active: true,
@@ -109,40 +121,19 @@ export default function AdminMerchantsPage() {
 
       if (merchantError) throw merchantError;
 
-      // Show credentials to admin
       toast.success(
         `Restaurant added! Credentials:\nEmail: ${merchantEmail}\nPassword: ${tempPassword}\n\n⚠️ Save these credentials!`,
         { autoClose: false }
       );
 
-      // Optional: Send email with credentials (if email service configured)
-      await sendCredentialsEmail(merchantEmail, tempPassword, formData.business_name);
-
       setShowAddModal(false);
-      setFormData({
-        business_name: '',
-        email: '',
-        phone: '',
-        address: '',
-        city: '',
-        state: 'Punjab',
-        zipcode: '',
-        cuisine_type: '',
-        description: '',
-      });
+      resetForm();
       loadMerchants();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       console.error('Failed to add merchant:', error);
       toast.error(error.message || 'Failed to add restaurant');
     }
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const sendCredentialsEmail = async (email: string, password: string, business_name?: string) => {
-    // Implement email sending logic here
-    console.log('Send email to:', email, 'Password:', password);
-    // You can use services like SendGrid, Resend, or nodemailer
   };
 
   const handleDelete = async (merchantId: string) => {
@@ -163,6 +154,23 @@ export default function AdminMerchantsPage() {
     }
   };
 
+  const resetForm = () => {
+    setFormData({
+      business_name: '',
+      email: '',
+      phone: '',
+      address: '',
+      latitude: 30.9010,
+      longitude: 75.8573,
+      city: '',
+      state: 'Punjab',
+      zipcode: '',
+      cuisine_type: '',
+      description: '',
+      delivery_radius_km: 10,
+    });
+  };
+
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -171,13 +179,25 @@ export default function AdminMerchantsPage() {
             <h1 className="text-3xl font-bold text-gray-900">Manage Restaurants</h1>
             <p className="text-gray-600 mt-1">Add and manage restaurant partners</p>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium flex items-center gap-2 shadow-lg"
-          >
-            <Plus size={20} />
-            Add Restaurant
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                resetForm();
+                setShowAddModal(true);
+              }}
+              className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium flex items-center gap-2 shadow-lg"
+            >
+              <Plus size={20} />
+              Add Restaurant
+            </button>
+            <button
+              onClick={handleLogout}
+              className="bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 font-medium flex items-center gap-2"
+            >
+              <LogOut size={20} />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -221,6 +241,13 @@ export default function AdminMerchantsPage() {
 
                 <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
                   <button
+                    onClick={() => router.push(`/admin/merchants/${merchant.id}`)}
+                    className="flex-1 bg-primary text-white px-4 py-2 rounded-lg hover:bg-orange-600 font-medium flex items-center justify-center gap-2"
+                  >
+                    <Settings size={16} />
+                    Manage
+                  </button>
+                  <button
                     onClick={() => handleDelete(merchant.id)}
                     className="flex-1 bg-red-50 text-red-600 px-4 py-2 rounded-lg hover:bg-red-100 font-medium flex items-center justify-center gap-2"
                   >
@@ -241,13 +268,13 @@ export default function AdminMerchantsPage() {
 
         {/* Add Restaurant Modal */}
         {showAddModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-lg max-w-4xl w-full my-8">
               <div className="p-6 border-b border-gray-200">
                 <h2 className="text-2xl font-bold text-gray-900">Add New Restaurant</h2>
               </div>
 
-              <form onSubmit={handleAddMerchant} className="p-6 space-y-4">
+              <form onSubmit={handleAddMerchant} className="p-6 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Business Name *
@@ -289,16 +316,22 @@ export default function AdminMerchantsPage() {
                   </div>
                 </div>
 
+                {/* Location Picker */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address *
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Restaurant Location * (Click on map to select)
                   </label>
-                  <input
-                    type="text"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    required
+                  <LocationPicker
+                    onLocationSelect={(location) => {
+                      setFormData({
+                        ...formData,
+                        latitude: location.lat,
+                        longitude: location.lon,
+                        address: location.address,
+                      });
+                    }}
+                    initialLat={formData.latitude}
+                    initialLon={formData.longitude}
                   />
                 </div>
 
@@ -346,6 +379,24 @@ export default function AdminMerchantsPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Delivery Radius (km) *
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.delivery_radius_km}
+                    onChange={(e) => setFormData({ ...formData, delivery_radius_km: Number(e.target.value) })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    min="1"
+                    max="50"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Restaurant will be visible to customers within this radius
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Cuisine Type
                   </label>
                   <input
@@ -382,10 +433,13 @@ export default function AdminMerchantsPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-3 pt-4">
+                <div className="flex gap-3 pt-4 sticky bottom-0 bg-white">
                   <button
                     type="button"
-                    onClick={() => setShowAddModal(false)}
+                    onClick={() => {
+                      setShowAddModal(false);
+                      resetForm();
+                    }}
                     className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
                   >
                     Cancel

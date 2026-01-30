@@ -2,11 +2,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { Plus, Tag, Edit, Trash2, Copy } from 'lucide-react';
+import { Plus, Tag, Edit, Trash2, Copy, LogOut } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useRouter } from 'next/navigation';
 
 interface PromoCode {
   id: string;
@@ -24,7 +25,8 @@ interface PromoCode {
 }
 
 export default function PromoCodesPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const router = useRouter();
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -33,9 +35,9 @@ export default function PromoCodesPage() {
     code: '',
     description: '',
     discount_type: 'percentage' as 'percentage' | 'fixed',
-    discount_value: 0,
-    min_order_amount: 0,
-    max_discount_amount: 0,
+    discount_value: '' as string | number,
+    min_order_amount: '' as string | number,
+    max_discount_amount: '' as string | number,
     usage_limit: 100,
     valid_until: '',
   });
@@ -61,14 +63,25 @@ export default function PromoCodesPage() {
     }
   };
 
+  const handleLogout = async () => {
+    await logout();
+    router.push('/');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       const promoData = {
-        ...formData,
         code: formData.code.toUpperCase(),
+        description: formData.description,
+        discount_type: formData.discount_type,
+        discount_value: Number(formData.discount_value) || 0,
+        min_order_amount: Number(formData.min_order_amount) || 0,
+        max_discount_amount: Number(formData.max_discount_amount) || 0,
+        usage_limit: formData.usage_limit,
+        valid_until: formData.valid_until,
         created_by: user?.id,
         is_active: true,
       };
@@ -146,9 +159,9 @@ export default function PromoCodesPage() {
       code: '',
       description: '',
       discount_type: 'percentage',
-      discount_value: 0,
-      min_order_amount: 0,
-      max_discount_amount: 0,
+      discount_value: '',
+      min_order_amount: '',
+      max_discount_amount: '',
       usage_limit: 100,
       valid_until: '',
     });
@@ -177,17 +190,26 @@ export default function PromoCodesPage() {
             <h1 className="text-3xl font-bold text-gray-900">Promo Codes</h1>
             <p className="text-gray-600 mt-1">Create and manage discount codes</p>
           </div>
-          <button
-            onClick={() => {
-              resetForm();
-              setEditingPromo(null);
-              setShowModal(true);
-            }}
-            className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium flex items-center gap-2"
-          >
-            <Plus size={20} />
-            Create Promo Code
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                resetForm();
+                setEditingPromo(null);
+                setShowModal(true);
+              }}
+              className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium flex items-center gap-2"
+            >
+              <Plus size={20} />
+              Create Promo Code
+            </button>
+            <button
+              onClick={handleLogout}
+              className="bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 font-medium flex items-center gap-2"
+            >
+              <LogOut size={20} />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+          </div>
         </div>
 
         {/* Promo Codes List */}
@@ -300,7 +322,7 @@ export default function PromoCodesPage() {
         {/* Create/Edit Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-8 animate-scaleIn">
+            <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-8">
               <h2 className="text-2xl font-bold mb-6">
                 {editingPromo ? 'Edit Promo Code' : 'Create Promo Code'}
               </h2>
@@ -350,11 +372,12 @@ export default function PromoCodesPage() {
                       type="number"
                       value={formData.discount_value}
                       onChange={(e) =>
-                        setFormData({ ...formData, discount_value: parseFloat(e.target.value) })
+                        setFormData({ ...formData, discount_value: e.target.value })
                       }
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                       placeholder={formData.discount_type === 'percentage' ? '10' : '50'}
                       required
+                      min="0"
                     />
                   </div>
 
@@ -366,10 +389,11 @@ export default function PromoCodesPage() {
                       type="number"
                       value={formData.min_order_amount}
                       onChange={(e) =>
-                        setFormData({ ...formData, min_order_amount: parseFloat(e.target.value) })
+                        setFormData({ ...formData, min_order_amount: e.target.value })
                       }
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                       placeholder="0"
+                      min="0"
                     />
                   </div>
 
@@ -381,13 +405,11 @@ export default function PromoCodesPage() {
                       type="number"
                       value={formData.max_discount_amount}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          max_discount_amount: parseFloat(e.target.value),
-                        })
+                        setFormData({ ...formData, max_discount_amount: e.target.value })
                       }
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                       placeholder="100"
+                      min="0"
                     />
                   </div>
 
@@ -399,11 +421,12 @@ export default function PromoCodesPage() {
                       type="number"
                       value={formData.usage_limit}
                       onChange={(e) =>
-                        setFormData({ ...formData, usage_limit: parseInt(e.target.value) })
+                        setFormData({ ...formData, usage_limit: parseInt(e.target.value) || 0 })
                       }
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                       placeholder="100"
                       required
+                      min="1"
                     />
                   </div>
 
@@ -449,7 +472,7 @@ export default function PromoCodesPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="flex-1 btn-primary py-3 rounded-lg font-medium disabled:opacity-50"
+                    className="flex-1 bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium disabled:opacity-50"
                   >
                     {loading
                       ? 'Saving...'
