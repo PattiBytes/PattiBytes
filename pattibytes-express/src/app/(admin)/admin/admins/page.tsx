@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Plus, Shield, Trash2, Mail, User as UserIcon, Calendar } from 'lucide-react';
@@ -19,7 +20,8 @@ interface Admin {
 }
 
 export default function ManageAdminsPage() {
-  const { user, userRole } = useAuth();
+  // ✅ FIX: Use user.role instead of userRole
+  const { user } = useAuth();
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -29,13 +31,13 @@ export default function ManageAdminsPage() {
     full_name: '',
     phone: '',
   });
-
+ 
   useEffect(() => {
-    if (userRole === 'superadmin') {
+    // ✅ FIX: Check user.role
+    if (user?.role === 'superadmin') {
       loadAdmins();
     }
-     
-  }, [userRole]);
+  }, [user]);
 
   const loadAdmins = async () => {
     setLoading(true);
@@ -48,7 +50,6 @@ export default function ManageAdminsPage() {
 
       if (error) throw error;
       setAdmins(data as Admin[]);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       toast.error('Failed to load admins');
     } finally {
@@ -61,7 +62,6 @@ export default function ManageAdminsPage() {
     setLoading(true);
 
     try {
-      // Create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -77,13 +77,14 @@ export default function ManageAdminsPage() {
       if (authError) throw authError;
 
       if (authData.user) {
-        // Update profile role
         const { error: profileError } = await supabase
           .from('profiles')
           .update({
             role: 'admin',
             full_name: formData.full_name,
             phone: formData.phone,
+            approval_status: 'approved',
+            is_active: true,
           })
           .eq('id', authData.user.id);
 
@@ -119,13 +120,13 @@ export default function ManageAdminsPage() {
 
       toast.success('Admin removed successfully');
       loadAdmins();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       toast.error('Failed to remove admin');
     }
   };
 
-  if (userRole !== 'superadmin') {
+  // ✅ FIX: Check user.role
+  if (user?.role !== 'superadmin') {
     return (
       <DashboardLayout>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -156,7 +157,6 @@ export default function ManageAdminsPage() {
           </button>
         </div>
 
-        {/* Admins List */}
         {loading ? (
           <div className="grid grid-cols-1 gap-4">
             {[...Array(3)].map((_, i) => (

@@ -4,7 +4,6 @@ import { supabase } from '@/lib/supabase';
 export const authService = {
   async signup(email: string, password: string, fullName: string, phone: string, role: string = 'customer') {
     try {
-      // Sign up user
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -17,14 +16,8 @@ export const authService = {
         },
       });
 
-      if (signUpError) {
-        console.error('Signup error:', signUpError);
-        throw signUpError;
-      }
-      
-      if (!authData.user) {
-        throw new Error('Signup failed - no user returned');
-      }
+      if (signUpError) throw signUpError;
+      if (!authData.user) throw new Error('Signup failed - no user returned');
 
       console.log('User created:', authData.user.id);
 
@@ -45,7 +38,6 @@ export const authService = {
       if (!profile) {
         console.log('Profile not created by trigger, creating manually...');
         
-        // Create profile manually
         const { data: newProfile, error: createError } = await supabase
           .from('profiles')
           .insert({
@@ -84,7 +76,11 @@ export const authService = {
         }
       }
 
-      return authData.user;
+      // ✅ FIX: Return object with userId property
+      return { 
+        user: authData.user,
+        userId: authData.user.id 
+      };
     } catch (error: any) {
       console.error('Signup failed:', error);
       
@@ -101,79 +97,76 @@ export const authService = {
   },
 
   async login(email: string, password: string) {
-  try {
-    console.log('Attempting login for:', email);
+    try {
+      console.log('Attempting login for:', email);
 
-    // Sign in
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      console.error('Login error:', error);
-      
-      if (error.message?.includes('Email not confirmed')) {
-        throw new Error('Please confirm your email first.');
+      if (error) {
+        console.error('Login error:', error);
+        
+        if (error.message?.includes('Email not confirmed')) {
+          throw new Error('Please confirm your email first.');
+        }
+        if (error.message?.includes('Invalid login credentials')) {
+          throw new Error('Invalid email or password');
+        }
+        throw new Error(error.message || 'Login failed');
       }
-      if (error.message?.includes('Invalid login credentials')) {
-        throw new Error('Invalid email or password');
-      }
-      throw new Error(error.message || 'Login failed');
-    }
-    
-    if (!data.user) {
-      throw new Error('Login failed - no user returned');
-    }
-
-    console.log('Login successful, user ID:', data.user.id);
-
-    // Get profile - simplified with single attempt
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      console.error('Profile fetch error:', profileError);
-      throw new Error('Failed to load profile. Please try again.');
-    }
-
-    if (!profile) {
-      console.log('Profile not found, creating...');
       
-      // Create profile
-      const { data: newProfile, error: createError } = await supabase
+      if (!data.user) {
+        throw new Error('Login failed - no user returned');
+      }
+
+      console.log('Login successful, user ID:', data.user.id);
+
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .insert({
-          id: data.user.id,
-          email: data.user.email!,
-          full_name: data.user.user_metadata?.full_name || '',
-          phone: data.user.user_metadata?.phone || '',
-          role: data.user.user_metadata?.role || 'customer',
-          approval_status: 'approved',
-          profile_completed: true,
-          is_active: true,
-        })
-        .select()
-        .single();
+        .select('*')
+        .eq('id', data.user.id)
+        .maybeSingle();
 
-      if (createError) {
-        console.error('Profile creation error:', createError);
-        throw new Error('Failed to create profile. Please contact support.');
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        throw new Error('Failed to load profile. Please try again.');
       }
 
-      return newProfile;
-    }
+      if (!profile) {
+        console.log('Profile not found, creating...');
+        
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            email: data.user.email!,
+            full_name: data.user.user_metadata?.full_name || '',
+            phone: data.user.user_metadata?.phone || '',
+            role: data.user.user_metadata?.role || 'customer',
+            approval_status: 'approved',
+            profile_completed: true,
+            is_active: true,
+          })
+          .select()
+          .single();
 
-    console.log('Profile loaded successfully:', profile.role);
-    return profile; // ✅ Just return the profile, don't redirect here
-  } catch (error: any) {
-    console.error('Login failed:', error);
-    throw error;
-  }
-},
+        if (createError) {
+          console.error('Profile creation error:', createError);
+          throw new Error('Failed to create profile. Please contact support.');
+        }
+
+        return newProfile;
+      }
+
+      console.log('Profile loaded successfully:', profile.role);
+      return profile;
+    } catch (error: any) {
+      console.error('Login failed:', error);
+      throw error;
+    }
+  },
 
   async loginWithGoogle() {
     const { data, error } = await supabase.auth.signInWithOAuth({

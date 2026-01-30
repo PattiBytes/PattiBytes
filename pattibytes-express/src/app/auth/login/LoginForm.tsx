@@ -49,6 +49,7 @@ export default function LoginForm() {
 
       // Check approval status for non-customer roles
       if (['merchant', 'driver', 'admin', 'superadmin'].includes(profile.role)) {
+        // ✅ FIX: Only redirect to pending if actually pending
         if (profile.approval_status === 'pending') {
           toast.warning('Your account is pending approval');
           router.push('/auth/pending-approval');
@@ -72,12 +73,12 @@ export default function LoginForm() {
       // Success message
       toast.success(`Welcome back, ${profile.full_name}!`);
 
-      // ✅ FIX: Handle superadmin redirect specially
+      // ✅ FIX: Handle all role redirects properly
       if (profile.role === 'superadmin') {
-        console.log('Redirecting superadmin to /admin/superadmin');
         router.push('/admin/superadmin');
+      } else if (profile.role === 'admin') {
+        router.push('/admin/dashboard');
       } else {
-        console.log(`Redirecting ${profile.role} to /${profile.role}/dashboard`);
         router.push(`/${profile.role}/dashboard`);
       }
     } catch (error: any) {
