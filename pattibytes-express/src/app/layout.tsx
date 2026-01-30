@@ -58,7 +58,7 @@ export const metadata: Metadata = {
         height: 192,
         alt: 'PattiBytes Express Logo',
       },
-    ],
+    ], 
   },
   twitter: {
     card: 'summary',

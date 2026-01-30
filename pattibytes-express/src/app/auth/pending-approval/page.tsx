@@ -1,29 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Clock, XCircle, LogOut, ShoppingBag } from 'lucide-react';
+import { Clock, XCircle, LogOut, ShoppingBag, CheckCircle } from 'lucide-react';
 
 export default function PendingApprovalPage() {
   const { user, logout } = useAuth();
   const router = useRouter();
-  const [status, setStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [approvalStatus, setApprovalStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [userRole, setUserRole] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      checkApprovalStatus();
-      
-      // Poll every 10 seconds
-      const interval = setInterval(checkApprovalStatus, 10000);
-      return () => clearInterval(interval);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  const checkApprovalStatus = async () => {
+  // ✅ FIX: Memoize the check function
+  const checkApprovalStatus = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -33,20 +24,114 @@ export default function PendingApprovalPage() {
         .eq('id', user.id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error checking approval status:', error);
+        setLoading(false);
+        return;
+      }
 
-      setStatus(data.approval_status);
+      console.log('Current approval status:', data.approval_status);
+      console.log('Current role:', data.role);
+
+      setApprovalStatus(data.approval_status);
+      setUserRole(data.role);
       setLoading(false);
 
+      // ✅ FIX: Redirect only if approved
       if (data.approval_status === 'approved') {
-        // Redirect to appropriate dashboard
-        router.push(`/${data.role}/dashboard`);
+        if (data.role === 'superadmin') {
+          router.push('/admin/superadmin');
+        } else if (data.role === 'admin') {
+          router.push('/admin/dashboard');
+        } else {
+          router.push(`/${data.role}/dashboard`);
+        }
       }
     } catch (error) {
       console.error('Failed to check approval status:', error);
       setLoading(false);
     }
-  };
+  }, [user, router]);
+
+  useEffect(() => {
+    if (!user) {
+      router.push('/auth/login');
+      return;
+    }
+
+    // Initial check
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    checkApprovalStatus();
+
+    // Real-time subscription for profile changes
+    const profileChannel = supabase
+      .channel(`profile-changes-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('Profile updated via realtime:', payload);
+          const newStatus = payload.new.approval_status;
+          const newRole = payload.new.role;
+
+          setApprovalStatus(newStatus);
+          setUserRole(newRole);
+
+          if (newStatus === 'approved') {
+            setTimeout(() => {
+              if (newRole === 'superadmin') {
+                router.push('/admin/superadmin');
+              } else if (newRole === 'admin') {
+                router.push('/admin/dashboard');
+              } else {
+                router.push(`/${newRole}/dashboard`);
+              }
+            }, 2000);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Profile subscription status:', status);
+      });
+
+    // Real-time subscription for access request changes
+    const requestChannel = supabase
+      .channel(`access-requests-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'access_requests',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('Access request updated via realtime:', payload);
+          if (payload.new.status === 'approved' || payload.new.status === 'rejected') {
+            checkApprovalStatus();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Access request subscription status:', status);
+      });
+
+    // Poll as fallback every 5 seconds
+    const pollInterval = setInterval(() => {
+      checkApprovalStatus();
+    }, 5000);
+
+    return () => {
+      supabase.removeChannel(profileChannel);
+      supabase.removeChannel(requestChannel);
+      clearInterval(pollInterval);
+    };
+  }, [user, router, checkApprovalStatus]);
 
   const handleLogout = async () => {
     await logout();
@@ -68,23 +153,24 @@ export default function PendingApprovalPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 animate-fadeIn">
-        {status === 'pending' && (
+        {approvalStatus === 'pending' && (
           <>
             <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
               <Clock className="text-yellow-600" size={40} />
             </div>
             <h1 className="text-2xl font-bold text-center mb-4">Approval Pending</h1>
             <p className="text-gray-600 text-center mb-6">
-              Your {user?.role === 'merchant' ? 'restaurant' : 'driver'} account is under review. 
-              You&apos;ll receive an email once approved by our admin team.
+              Your {userRole === 'merchant' ? 'restaurant' : userRole} account is under review.
+              You&apos;ll be notified once approved by our admin team.
             </p>
             <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
               <p className="text-sm text-blue-800 text-center">
-                ⏱️ Average approval time: 24-48 hours
+                ⏱️ Average approval time: 24-48 hours<br />
+                🔔 Real-time updates enabled<br />
+                🔄 Auto-checking every 5 seconds
               </p>
             </div>
 
-            {/* Browse as Customer Option */}
             <div className="bg-gradient-to-br from-orange-50 to-pink-50 border-2 border-primary rounded-lg p-4 mb-4">
               <p className="text-sm text-gray-700 text-center mb-3">
                 Meanwhile, you can browse and order as a customer!
@@ -100,7 +186,21 @@ export default function PendingApprovalPage() {
           </>
         )}
 
-        {status === 'rejected' && (
+        {approvalStatus === 'approved' && (
+          <>
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
+              <CheckCircle className="text-green-600" size={40} />
+            </div>
+            <h1 className="text-2xl font-bold text-center mb-4 text-green-600">
+              Approved! 🎉
+            </h1>
+            <p className="text-gray-600 text-center mb-6">
+              Your account has been approved! Redirecting to your {userRole} dashboard...
+            </p>
+          </>
+        )}
+
+        {approvalStatus === 'rejected' && (
           <>
             <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <XCircle className="text-red-600" size={40} />
@@ -111,7 +211,7 @@ export default function PendingApprovalPage() {
             </p>
             <div className="bg-gray-50 rounded-lg p-4 mb-4">
               <p className="text-sm text-gray-700 text-center">
-                📧 Email: support@pattibytes.com<br/>
+                📧 Email: support@pattibytes.com<br />
                 📞 Phone: +91 1234567890
               </p>
             </div>
@@ -130,9 +230,9 @@ export default function PendingApprovalPage() {
           <button
             onClick={checkApprovalStatus}
             disabled={loading}
-            className="text-sm text-primary hover:underline"
+            className="text-sm text-primary hover:underline disabled:opacity-50"
           >
-            🔄 Check Status Again
+            🔄 Check Status Now
           </button>
         </div>
       </div>

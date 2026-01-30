@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { notificationService } from '@/lib/notifications';
+import { notificationService } from '@/services/notifications';
+import { supabase } from '@/lib/supabase';
 import { Bell, Check, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -12,8 +14,10 @@ interface Notification {
   title: string;
   message: string;
   type: string;
-  is_read: boolean;
+  read: boolean;
   created_at: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data?: any;
 }
 
 export default function NotificationBell() {
@@ -26,10 +30,22 @@ export default function NotificationBell() {
   useEffect(() => {
     if (user) {
       loadNotifications();
-      // Request notification permission
       notificationService.requestPermission();
+
+      // Real-time subscription
+      const unsubscribe = notificationService.subscribeToNotifications(
+        user.id,
+        (newNotification) => {
+          setNotifications((prev) => [newNotification, ...prev]);
+          setUnreadCount((prev) => prev + 1);
+          toast.info(newNotification.title);
+        }
+      );
+
+      return () => {
+        unsubscribe();
+      };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const loadNotifications = async () => {
@@ -39,7 +55,7 @@ export default function NotificationBell() {
     try {
       const data = await notificationService.getUserNotifications(user.id);
       setNotifications(data);
-      setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
+      setUnreadCount(data.filter((n: Notification) => !n.read).length);
     } catch (error) {
       console.error('Failed to load notifications:', error);
     } finally {
@@ -50,7 +66,10 @@ export default function NotificationBell() {
   const handleMarkAsRead = async (notificationId: string) => {
     try {
       await notificationService.markAsRead(notificationId);
-      await loadNotifications();
+      setNotifications(notifications.map((n) =>
+        n.id === notificationId ? { ...n, read: true } : n
+      ));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (error) {
       toast.error('Failed to mark as read');
     }
@@ -61,7 +80,8 @@ export default function NotificationBell() {
 
     try {
       await notificationService.markAllAsRead(user.id);
-      await loadNotifications();
+      setNotifications(notifications.map((n) => ({ ...n, read: true })));
+      setUnreadCount(0);
       toast.success('All notifications marked as read');
     } catch (error) {
       toast.error('Failed to mark all as read');
@@ -70,8 +90,14 @@ export default function NotificationBell() {
 
   const handleDelete = async (notificationId: string) => {
     try {
-      await notificationService.deleteNotification(notificationId);
-      await loadNotifications();
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId);
+
+      if (error) throw error;
+
+      setNotifications(notifications.filter((n) => n.id !== notificationId));
       toast.success('Notification deleted');
     } catch (error) {
       toast.error('Failed to delete notification');
@@ -90,6 +116,8 @@ export default function NotificationBell() {
         return '🎉';
       case 'approval':
         return '✅';
+      case 'review':
+        return '⭐';
       default:
         return '📢';
     }
@@ -103,7 +131,7 @@ export default function NotificationBell() {
       >
         <Bell size={24} />
         {unreadCount > 0 && (
-          <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+          <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -117,7 +145,7 @@ export default function NotificationBell() {
           />
           <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl z-50 max-h-[500px] overflow-hidden flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center justify-between p-4 border-b bg-gray-50">
               <h3 className="font-bold text-lg">Notifications</h3>
               <div className="flex items-center gap-2">
                 {unreadCount > 0 && (
@@ -149,7 +177,7 @@ export default function NotificationBell() {
                     <div
                       key={notification.id}
                       className={`p-4 hover:bg-gray-50 transition-colors ${
-                        !notification.is_read ? 'bg-blue-50' : ''
+                        !notification.read ? 'bg-blue-50 border-l-4 border-primary' : ''
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -164,11 +192,16 @@ export default function NotificationBell() {
                             {notification.message}
                           </p>
                           <p className="text-xs text-gray-500 mt-2">
-                            {new Date(notification.created_at).toLocaleString('en-IN')}
+                            {new Date(notification.created_at).toLocaleString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
                           </p>
                         </div>
                         <div className="flex gap-1">
-                          {!notification.is_read && (
+                          {!notification.read && (
                             <button
                               onClick={() => handleMarkAsRead(notification.id)}
                               className="text-green-600 hover:text-green-700 p-1"
@@ -192,7 +225,8 @@ export default function NotificationBell() {
               ) : (
                 <div className="p-8 text-center">
                   <Bell size={48} className="mx-auto text-gray-400 mb-2" />
-                  <p className="text-gray-600">No notifications</p>
+                  <p className="text-gray-600 font-medium">No notifications</p>
+                  <p className="text-sm text-gray-500 mt-1">You&apos;re all caught up!</p>
                 </div>
               )}
             </div>

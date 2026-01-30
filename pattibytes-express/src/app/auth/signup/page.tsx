@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { authService } from '@/services/auth';
+import { notificationService } from '@/services/notifications';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'react-toastify';
 import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
@@ -24,6 +26,42 @@ function SignupForm() {
     role: roleParam,
   });
 
+  const notifyAdmins = async (userName: string, userRole: string, userId: string) => {
+    try {
+      // Get all admins and superadmins
+      const { data: admins, error } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('role', ['admin', 'superadmin']);
+
+      if (error) {
+        console.error('Error fetching admins:', error);
+        return;
+      }
+
+      if (!admins || admins.length === 0) {
+        console.log('No admins found to notify');
+        return;
+      }
+
+      // Send notification to each admin
+      const notifications = admins.map((admin) =>
+        notificationService.sendNotification(
+          admin.id,
+          'New Account Approval Required',
+          `${userName} has registered as a ${userRole} and needs approval.`,
+          'approval',
+          { user_id: userId, user_role: userRole }
+        )
+      );
+
+      await Promise.all(notifications);
+      console.log(`Notified ${admins.length} admins`);
+    } catch (error) {
+      console.error('Failed to notify admins:', error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -40,13 +78,21 @@ function SignupForm() {
     setLoading(true);
 
     try {
-      await authService.signup(
+      // Signup user
+      const { userId } = await authService.signup(
         formData.email,
         formData.password,
         formData.fullName,
         formData.phone,
         formData.role
       );
+
+      console.log('User created with ID:', userId);
+
+      // Notify admins if merchant/driver/admin
+      if (['merchant', 'driver', 'admin'].includes(formData.role)) {
+        await notifyAdmins(formData.fullName, formData.role, userId);
+      }
 
       toast.success('Account created successfully!');
       
@@ -58,17 +104,10 @@ function SignupForm() {
           // Check if needs approval
           if (['merchant', 'driver', 'admin'].includes(profile.role)) {
             if (profile.approval_status === 'pending') {
-              toast.info('Your account is pending approval');
+              toast.info('Your account is pending approval. Admins have been notified.');
               router.push('/auth/pending-approval');
               return;
             }
-          }
-
-          // Check if profile needs completion
-          if (!profile.profile_completed && profile.role !== 'customer') {
-            toast.info('Please complete your profile');
-            router.push(`/${profile.role}/profile/complete`);
-            return;
           }
 
           // Redirect to dashboard
@@ -213,7 +252,7 @@ function SignupForm() {
             {(formData.role === 'merchant' || formData.role === 'driver') && (
               <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3">
                 <p className="text-sm text-blue-800">
-                  ℹ️ Your account will be reviewed by our team before activation.
+                  ℹ️ Your account will be reviewed by our admin team. You&apos;ll receive a notification once approved.
                 </p>
               </div>
             )}
