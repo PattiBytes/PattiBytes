@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
@@ -33,6 +34,7 @@ import {
   Star,
   TrendingDown,
   Award,
+  RefreshCw,
 } from 'lucide-react';
 import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
 import { toast } from 'react-toastify';
@@ -114,8 +116,7 @@ export default function AdminOrderDetailPage() {
 
   useEffect(() => {
     if (!user) {
-      const currentPath = window.location.pathname;
-      router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
+      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
       return;
     }
     loadOrder();
@@ -131,9 +132,10 @@ export default function AdminOrderDetailPage() {
           table: 'orders',
           filter: `id=eq.${params.id}`,
         },
-        (payload) => {
-          console.log('📡 Order updated in real-time:', payload);
+        () => {
+          console.log('📡 Order updated - reloading...');
           loadOrder();
+          toast.info('Order updated!', { autoClose: 2000 });
         }
       )
       .subscribe();
@@ -141,8 +143,8 @@ export default function AdminOrderDetailPage() {
     return () => {
       subscription.unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, params.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, params.id, router]);
 
   const loadOrder = async () => {
     if (!user || !params.id) return;
@@ -156,7 +158,6 @@ export default function AdminOrderDetailPage() {
 
       if (orderError) throw orderError;
 
-      // Fetch customer profile with trust metrics
       const { data: customerProfile } = await supabase
         .from('profiles')
         .select('full_name, phone, email, total_orders, completed_orders, cancelled_orders, trust_score, is_trusted, account_status, last_order_date')
@@ -179,22 +180,18 @@ export default function AdminOrderDetailPage() {
         driverInfo = data;
       }
 
-      // Fetch full customer address
       let customerAddress = null;
       try {
-        const { data: addressData, error: addressError } = await supabase
+        const { data: addressData } = await supabase
           .from('saved_addresses')
           .select('*')
           .eq('customer_id', orderData.customer_id)
           .eq('is_default', true)
           .maybeSingle();
 
-        if (!addressError && addressData) {
-          customerAddress = addressData;
-        }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        if (addressData) customerAddress = addressData;
       } catch (error) {
-        console.log('No saved address found, using order delivery address');
+        console.log('No saved address found');
       }
 
       setOrder({
@@ -217,14 +214,14 @@ export default function AdminOrderDetailPage() {
 
   const loadAvailableDrivers = async () => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('profiles')
         .select('id, full_name, phone, email')
         .eq('role', 'driver')
         .eq('is_active', true);
 
-      if (error) throw error;
       setAvailableDrivers(data || []);
+      console.log(`✅ Loaded ${data?.length || 0} available drivers`);
     } catch (error) {
       console.error('❌ Failed to load drivers:', error);
     }
@@ -246,7 +243,7 @@ export default function AdminOrderDetailPage() {
         return false;
       }
 
-      console.log(`✅ Notification sent to user ${userId}`);
+      console.log(`✅ Notification sent to ${userId}`);
       return true;
     } catch (error) {
       console.error('❌ Failed to send notification:', error);
@@ -260,20 +257,21 @@ export default function AdminOrderDetailPage() {
   setUpdating(true);
 
   try {
-    const updateData: any = {
-      status: newStatus,
-    };
+    const updateData: any = { status: newStatus };
 
     if (newStatus === 'delivered') {
       updateData.actual_delivery_time = new Date().toISOString();
       updateData.payment_status = 'paid';
     }
 
-    console.log('📝 Updating order status to:', newStatus);
-    console.log('📝 Update data:', updateData);
-    console.log('📝 Order ID:', order.id);
+    console.log('📝 Updating order:', {
+      orderId: order.id,
+      newStatus,
+      updateData,
+      currentUser: user?.id
+    });
 
-    // FIX: Remove .select() and add better error handling
+    // ✅ CRITICAL: Use minimal update to avoid constraint issues
     const { data, error } = await supabase
       .from('orders')
       .update(updateData)
@@ -282,14 +280,17 @@ export default function AdminOrderDetailPage() {
       .single();
 
     if (error) {
-      console.error('❌ Update error:', error);
-      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      console.error('❌ Supabase error:', error);
+      console.error('❌ Error code:', error.code);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error details:', error.details);
+      console.error('❌ Error hint:', error.hint);
       throw error;
     }
 
     console.log('✅ Order updated successfully:', data);
 
-    // Send notification
+    // Send notifications
     await sendNotification(
       order.customer_id,
       'Order Status Updated',
@@ -298,83 +299,40 @@ export default function AdminOrderDetailPage() {
       { order_id: order.id, status: newStatus }
     );
 
-    // Notify drivers if order is ready
     if (newStatus === 'ready' && !order.driver_id) {
       await notifyAvailableDrivers();
     }
 
-    toast.success(`✅ Order status updated to ${newStatus.replace('_', ' ')}!`);
+    toast.success(`✅ Status updated to ${newStatus.replace('_', ' ')}!`);
 
-    // Reload order
-    setTimeout(() => {
-      loadOrder();
-    }, 500);
+    setTimeout(() => loadOrder(), 500);
   } catch (error: any) {
-    console.error('❌ Failed to update order:', error);
+    console.error('❌ Complete error object:', error);
     
-    // More detailed error message
-    if (error.code === 'PGRST301') {
-      toast.error('❌ Permission denied. Please check your account permissions.');
+    // Better error messages
+    if (error.code === '42703') {
+      toast.error('❌ Database schema error. A required column is missing. Contact support.');
+    } else if (error.code === '42501' || error.code === 'PGRST301') {
+      toast.error('❌ Permission denied. Check your account role.');
+    } else if (error.code === '23503') {
+      toast.error('❌ Foreign key constraint violation. Invalid reference.');
+    } else if (error.code === '23505') {
+      toast.error('❌ Duplicate entry. Order already exists.');
+    } else if (error.message?.includes('violates check constraint')) {
+      toast.error('❌ Invalid data format. Check order values.');
     } else if (error.message) {
       toast.error(`❌ ${error.message}`);
     } else {
-      toast.error('❌ Failed to update order status. Please try again.');
+      toast.error('❌ Failed to update order. Check console for details.');
     }
   } finally {
     setUpdating(false);
   }
 };
-const debugPermissions = async () => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    console.log('🔍 Current User:', user?.id);
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user?.id)
-      .single();
-    console.log('🔍 Profile:', profile);
-
-    if (profile?.role === 'merchant') {
-      const { data: merchant } = await supabase
-        .from('merchants')
-        .select('*')
-        .eq('user_id', user?.id)
-        .single();
-      console.log('🔍 Merchant:', merchant);
-    }
-
-    const { data: orderCheck } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', order?.id)
-      .single();
-    console.log('🔍 Order:', orderCheck);
-
-    // Try update with detailed logging
-    const { data: updateTest, error: updateError } = await supabase
-      .from('orders')
-      .update({ status: 'confirmed' })
-      .eq('id', order?.id)
-      .select();
-    
-    console.log('🔍 Update Test Result:', updateTest);
-    console.log('🔍 Update Test Error:', updateError);
-  } catch (error) {
-    console.error('🔍 Debug Error:', error);
-  }
-};
-
-// Add this button to your UI temporarily
-<button onClick={debugPermissions} className="px-4 py-2 bg-purple-600 text-white rounded">
-  Debug Permissions
-</button>
-
 
   const notifyAvailableDrivers = async () => {
     if (!order || availableDrivers.length === 0) {
-      toast.warning('No available drivers found');
+      toast.warning('No available drivers');
       return;
     }
 
@@ -386,32 +344,26 @@ const debugPermissions = async () => {
         status: 'pending',
       }));
 
-      const { error: assignError } = await supabase.from('driver_assignments').insert(assignments);
-
-      if (assignError && assignError.code !== '23505') {
-        console.error('❌ Assignment error:', assignError);
-      }
+      await supabase.from('driver_assignments').insert(assignments);
 
       let notifiedCount = 0;
       for (const driver of availableDrivers) {
         const success = await sendNotification(
           driver.id,
-          'New Delivery Request',
-          `Order #${order.order_number} is ready for pickup from ${order.merchants?.business_name}`,
+          '🚚 New Delivery Request',
+          `Order #${order.order_number} is ready for pickup`,
           'delivery',
           {
             order_id: order.id,
             order_number: order.order_number,
             merchant: order.merchants?.business_name,
             delivery_address: order.delivery_address,
-            total_amount: order.total_amount,
-            distance: order.delivery_distance_km,
           }
         );
         if (success) notifiedCount++;
       }
 
-      toast.success(`📢 Notified ${notifiedCount} available drivers!`);
+      toast.success(`📢 Notified ${notifiedCount} drivers!`);
     } catch (error) {
       console.error('❌ Failed to notify drivers:', error);
       toast.error('Failed to notify drivers');
@@ -425,46 +377,31 @@ const debugPermissions = async () => {
 
     setAssigningDriver(true);
     try {
-      const { error: updateError } = await supabase.from('orders').update({ driver_id: driverId }).eq('id', order.id);
+      await supabase.from('orders').update({ driver_id: driverId }).eq('id', order.id);
 
-      if (updateError) throw updateError;
-
-      const { error: assignError } = await supabase
+      await supabase
         .from('driver_assignments')
-        .update({
-          status: 'accepted',
-          responded_at: new Date().toISOString(),
-        })
+        .update({ status: 'accepted', responded_at: new Date().toISOString() })
         .eq('order_id', order.id)
         .eq('driver_id', driverId);
 
-      if (assignError) console.error('❌ Assignment update error:', assignError);
-
-      const driver = availableDrivers.find((d) => d.id === driverId);
-      if (driver) {
-        await sendNotification(
-          driverId,
-          'Order Assigned',
-          `You have been assigned to deliver order #${order.order_number}`,
-          'delivery',
-          {
-            order_id: order.id,
-            order_number: order.order_number,
-            merchant: order.merchants?.business_name,
-            delivery_address: order.delivery_address,
-          }
-        );
-      }
+      await sendNotification(
+        driverId,
+        'Order Assigned',
+        `You have been assigned order #${order.order_number}`,
+        'delivery',
+        { order_id: order.id }
+      );
 
       await sendNotification(
         order.customer_id,
         'Driver Assigned',
-        `A delivery partner has been assigned to your order #${order.order_number}`,
+        `A driver has been assigned to your order`,
         'order',
         { order_id: order.id }
       );
 
-      toast.success('✅ Driver assigned successfully!');
+      toast.success('✅ Driver assigned!');
       loadOrder();
     } catch (error) {
       console.error('❌ Failed to assign driver:', error);
@@ -474,100 +411,15 @@ const debugPermissions = async () => {
     }
   };
 
-  const printOrder = () => {
-    window.print();
-  };
-
-  const downloadReceipt = () => {
-    if (!order) return;
-
-    const receipt = `
-ORDER RECEIPT
-=============
-Order #: ${order.order_number}
-Date: ${new Date(order.created_at).toLocaleString()}
-Status: ${order.status}
-
-CUSTOMER:
-${order.profiles?.full_name}
-${order.profiles?.phone}
-${order.delivery_address}
-
-ITEMS:
-${order.items.map((item: any) => `${item.name} x${item.quantity} - ₹${(item.price * item.quantity).toFixed(2)}`).join('\n')}
-
-SUMMARY:
-Subtotal: ₹${order.subtotal.toFixed(2)}
-Delivery: ₹${order.delivery_fee.toFixed(2)}
-Tax: ₹${order.tax.toFixed(2)}
-Discount: -₹${order.discount.toFixed(2)}
-TOTAL: ₹${order.total_amount.toFixed(2)}
-
-Payment: ${order.payment_method} (${order.payment_status})
-    `;
-
-    const blob = new Blob([receipt], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `order-${order.order_number}-receipt.txt`;
-    a.click();
-    toast.success('Receipt downloaded!');
-  };
-
-  const sendEmailToCustomer = () => {
-    if (!order?.profiles?.email) {
-      toast.error('Customer email not available');
-      return;
-    }
-
-    window.location.href = `mailto:${order.profiles.email}?subject=Order Update - #${order.order_number}&body=Dear ${order.profiles.full_name},%0D%0A%0D%0AYour order #${order.order_number} status: ${order.status}`;
-    toast.success('Email client opened');
-  };
-
-  const calculateDeliveryMetrics = () => {
-    if (!order) return null;
-
-    const orderTime = new Date(order.created_at).getTime();
-    const currentTime = new Date().getTime();
-    const elapsedMinutes = Math.floor((currentTime - orderTime) / 60000);
-
-    const estimatedTime = order.estimated_delivery_time
-      ? Math.floor((new Date(order.estimated_delivery_time).getTime() - orderTime) / 60000)
-      : 30;
-
-    const actualTime = order.actual_delivery_time
-      ? Math.floor((new Date(order.actual_delivery_time).getTime() - orderTime) / 60000)
-      : null;
-
-    return { elapsedMinutes, estimatedTime, actualTime };
-  };
-
   const getTrustBadge = (trustScore: number, accountStatus: string) => {
     if (accountStatus === 'flagged' || trustScore < 2.0) {
-      return {
-        icon: AlertTriangle,
-        color: 'bg-red-100 text-red-800 border-red-200',
-        text: 'High Risk',
-      };
+      return { icon: AlertTriangle, color: 'bg-red-100 text-red-800 border-red-200', text: 'High Risk' };
     } else if (accountStatus === 'warning' || trustScore < 3.5) {
-      return {
-        icon: TrendingDown,
-        color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-        text: 'Caution',
-      };
+      return { icon: TrendingDown, color: 'bg-yellow-100 text-yellow-800 border-yellow-200', text: 'Caution' };
     } else if (trustScore >= 4.5) {
-      return {
-        icon: Award,
-        color: 'bg-green-100 text-green-800 border-green-200',
-        text: 'Trusted',
-      };
+      return { icon: Award, color: 'bg-green-100 text-green-800 border-green-200', text: 'Trusted' };
     } else {
-      return {
-        icon: Shield,
-        color: 'bg-blue-100 text-blue-800 border-blue-200',
-        text: 'Verified',
-      };
+      return { icon: Shield, color: 'bg-blue-100 text-blue-800 border-blue-200', text: 'Verified' };
     }
   };
 
@@ -584,7 +436,7 @@ Payment: ${order.payment_method} (${order.payment_status})
   }
 
   const getStatusConfig = (status: string) => {
-    const configs: any = {
+    const configs: Record<string, any> = {
       pending: { color: 'bg-yellow-100 text-yellow-800', icon: Clock },
       confirmed: { color: 'bg-blue-100 text-blue-800', icon: ChefHat },
       preparing: { color: 'bg-purple-100 text-purple-800', icon: ChefHat },
@@ -598,7 +450,6 @@ Payment: ${order.payment_method} (${order.payment_status})
 
   const statusConfig = getStatusConfig(order.status);
   const StatusIcon = statusConfig.icon;
-  const metrics = calculateDeliveryMetrics();
 
   const trustScore = order.profiles?.trust_score || 5.0;
   const accountStatus = order.profiles?.account_status || 'active';
@@ -608,63 +459,53 @@ Payment: ${order.payment_method} (${order.payment_status})
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header Actions */}
-        <div className="flex justify-between items-center mb-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <button
             onClick={() => router.push('/admin/orders')}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
           >
             <ArrowLeft size={20} />
-            <span>Back to Orders</span>
+            Back to Orders
           </button>
 
           <div className="flex gap-2">
-            {order.status === 'ready' && !order.driver_id && (
+            {order.status === 'ready' && !order.driver_id && availableDrivers.length > 0 && (
               <button
                 onClick={notifyAvailableDrivers}
-                disabled={notifyingDriver || availableDrivers.length === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+                disabled={notifyingDriver}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
               >
                 <Bell size={16} />
-                <span className="hidden sm:inline">
-                  {notifyingDriver ? 'Notifying...' : `Notify ${availableDrivers.length} Drivers`}
-                </span>
+                {notifyingDriver ? 'Notifying...' : `Notify ${availableDrivers.length} Drivers`}
               </button>
             )}
             <button
-              onClick={sendEmailToCustomer}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={() => loadOrder()}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-orange-600"
             >
-              <Mail size={16} />
-              <span className="hidden sm:inline">Email</span>
+              <RefreshCw size={16} />
+              Refresh
             </button>
             <button
-              onClick={downloadReceipt}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-            >
-              <Download size={16} />
-              <span className="hidden sm:inline">Receipt</span>
-            </button>
-            <button
-              onClick={printOrder}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
             >
               <Printer size={16} />
-              <span className="hidden sm:inline">Print</span>
+              Print
             </button>
           </div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            {/* Order Header with Metrics */}
+            {/* Order Header */}
             <div className="bg-white rounded-xl shadow-md p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">Order #{order.order_number}</h2>
-                  <p className="text-sm text-gray-600 mt-1">ID: {order.id.slice(0, 8)}</p>
-                  <p className="text-sm text-gray-600">
-                    <Calendar className="w-4 h-4 inline mr-1" />
+                  <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
+                    <Calendar className="w-4 h-4" />
                     {new Date(order.created_at).toLocaleString()}
                   </p>
                 </div>
@@ -674,32 +515,12 @@ Payment: ${order.payment_method} (${order.payment_status})
                 </div>
               </div>
 
-              {/* Time Metrics */}
-              {metrics && (
-                <div className="grid grid-cols-3 gap-4 mt-4 p-4 bg-gray-50 rounded-lg">
-                  <div className="text-center">
-                    <Timer className="w-5 h-5 mx-auto text-blue-600 mb-1" />
-                    <p className="text-xs text-gray-600">Elapsed</p>
-                    <p className="text-lg font-bold text-gray-900">{metrics.elapsedMinutes} min</p>
-                  </div>
-                  <div className="text-center">
-                    <TrendingUp className="w-5 h-5 mx-auto text-orange-600 mb-1" />
-                    <p className="text-xs text-gray-600">Estimated</p>
-                    <p className="text-lg font-bold text-gray-900">{metrics.estimatedTime} min</p>
-                  </div>
-                  <div className="text-center">
-                    <CheckCircle className="w-5 h-5 mx-auto text-green-600 mb-1" />
-                    <p className="text-xs text-gray-600">Actual</p>
-                    <p className="text-lg font-bold text-gray-900">
-                      {metrics.actualTime ? `${metrics.actualTime} min` : '-'}
-                    </p>
-                  </div>
-                </div>
-              )}
-
               {/* Status Management */}
               <div className="border-t pt-4 mt-4">
-                <h3 className="font-bold mb-3">Change Status:</h3>
+                <h3 className="font-bold mb-3 flex items-center gap-2">
+                  <Package size={18} />
+                  Update Status:
+                </h3>
                 <div className="flex flex-wrap gap-2">
                   {['pending', 'confirmed', 'preparing', 'ready', 'picked_up', 'delivered', 'cancelled'].map(
                     (status) => (
@@ -707,9 +528,9 @@ Payment: ${order.payment_method} (${order.payment_status})
                         key={status}
                         onClick={() => updateOrderStatus(status)}
                         disabled={updating || order.status === status}
-                        className={`px-4 py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        className={`px-4 py-2 rounded-lg font-semibold transition-colors disabled:opacity-50 ${
                           order.status === status
-                            ? 'bg-gray-200 text-gray-700'
+                            ? 'bg-gray-200 text-gray-700 cursor-not-allowed'
                             : 'bg-primary text-white hover:bg-orange-600'
                         }`}
                       >
@@ -718,6 +539,12 @@ Payment: ${order.payment_method} (${order.payment_status})
                     )
                   )}
                 </div>
+                {updating && (
+                  <div className="mt-3 flex items-center gap-2 text-blue-600">
+                    <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-sm">Updating order...</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -726,12 +553,12 @@ Payment: ${order.payment_method} (${order.payment_status})
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
                 <h3 className="font-bold mb-3 flex items-center gap-2">
                   <Truck className="text-blue-600" size={20} />
-                  Assign Driver Manually
+                  Assign Driver
                 </h3>
                 <select
                   onChange={(e) => assignDriver(e.target.value)}
                   disabled={assigningDriver}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent disabled:opacity-50"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary disabled:opacity-50"
                   defaultValue=""
                 >
                   <option value="">Select a driver...</option>
@@ -741,22 +568,18 @@ Payment: ${order.payment_method} (${order.payment_status})
                     </option>
                   ))}
                 </select>
-                <p className="text-sm text-gray-600 mt-2">
-                  💡 Or click &ldquo;Notify Drivers&quot; button above to let them accept automatically
-                </p>
               </div>
             )}
 
-            {/* 🆕 CUSTOMER TRUST & RELIABILITY */}
+            {/* Customer Details */}
             {order.profiles && (
               <div className="bg-white rounded-xl shadow-md p-6">
                 <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                   <User className="text-primary" size={20} />
-                  Customer Details & Trust Score
+                  Customer Details
                 </h3>
 
                 <div className="space-y-4">
-                  {/* Customer Basic Info */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <p className="font-semibold text-gray-900 text-lg">{order.profiles.full_name}</p>
@@ -785,26 +608,23 @@ Payment: ${order.payment_method} (${order.payment_status})
                     )}
                   </div>
 
-                  {/* 🆕 Trust Score & Order History */}
+                  {/* Trust Score */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
                     <div className="text-center">
                       <Star className="w-5 h-5 mx-auto text-yellow-600 mb-1" />
                       <p className="text-xs text-gray-600">Trust Score</p>
                       <p className="text-xl font-bold text-gray-900">{trustScore.toFixed(1)}/5.0</p>
                     </div>
-
                     <div className="text-center">
                       <Package className="w-5 h-5 mx-auto text-blue-600 mb-1" />
-                      <p className="text-xs text-gray-600">Total Orders</p>
+                      <p className="text-xs text-gray-600">Total</p>
                       <p className="text-xl font-bold text-gray-900">{order.profiles.total_orders || 0}</p>
                     </div>
-
                     <div className="text-center">
                       <CheckCircle className="w-5 h-5 mx-auto text-green-600 mb-1" />
                       <p className="text-xs text-gray-600">Completed</p>
                       <p className="text-xl font-bold text-green-700">{order.profiles.completed_orders || 0}</p>
                     </div>
-
                     <div className="text-center">
                       <XCircle className="w-5 h-5 mx-auto text-red-600 mb-1" />
                       <p className="text-xs text-gray-600">Cancelled</p>
@@ -812,16 +632,15 @@ Payment: ${order.payment_method} (${order.payment_status})
                     </div>
                   </div>
 
-                  {/* 🆕 Account Status Warning */}
+                  {/* Trust Warnings */}
                   {accountStatus === 'flagged' && (
                     <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded">
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
+                      <div className="flex gap-3">
+                        <AlertTriangle className="text-red-600 flex-shrink-0" size={20} />
                         <div>
                           <p className="font-bold text-red-900">⚠️ High Risk Customer</p>
                           <p className="text-sm text-red-700 mt-1">
-                            This customer has been flagged due to high cancellation rate. Exercise caution and consider
-                            requiring advance payment.
+                            High cancellation rate. Consider advance payment.
                           </p>
                         </div>
                       </div>
@@ -830,13 +649,11 @@ Payment: ${order.payment_method} (${order.payment_status})
 
                   {accountStatus === 'warning' && (
                     <div className="p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded">
-                      <div className="flex items-start gap-3">
-                        <AlertTriangle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
+                      <div className="flex gap-3">
+                        <AlertTriangle className="text-yellow-600 flex-shrink-0" size={20} />
                         <div>
                           <p className="font-bold text-yellow-900">⚠️ Customer on Warning</p>
-                          <p className="text-sm text-yellow-700 mt-1">
-                            This customer has a moderate cancellation rate. Monitor order carefully.
-                          </p>
+                          <p className="text-sm text-yellow-700 mt-1">Moderate cancellation rate.</p>
                         </div>
                       </div>
                     </div>
@@ -844,119 +661,83 @@ Payment: ${order.payment_method} (${order.payment_status})
 
                   {order.profiles.is_trusted && trustScore >= 4.5 && (
                     <div className="p-4 bg-green-50 border-l-4 border-green-500 rounded">
-                      <div className="flex items-start gap-3">
-                        <Award className="text-green-600 flex-shrink-0 mt-0.5" size={20} />
+                      <div className="flex gap-3">
+                        <Award className="text-green-600 flex-shrink-0" size={20} />
                         <div>
                           <p className="font-bold text-green-900">✅ Trusted Customer</p>
-                          <p className="text-sm text-green-700 mt-1">
-                            This customer has excellent order history with minimal cancellations. Priority service
-                            recommended.
-                          </p>
+                          <p className="text-sm text-green-700 mt-1">Excellent order history.</p>
                         </div>
                       </div>
                     </div>
                   )}
-                </div>
 
-                {/* 🆕 FULL DELIVERY ADDRESS */}
-                <div className="mt-6 pt-4 border-t">
-                  <h4 className="font-bold mb-3 flex items-center gap-2">
-                    <MapPin className="text-primary" size={16} />
-                    Full Delivery Address
-                  </h4>
+                  {/* Delivery Address */}
+                  <div className="pt-4 border-t">
+                    <h4 className="font-bold mb-3 flex items-center gap-2">
+                      <MapPin className="text-primary" size={16} />
+                      Delivery Address
+                    </h4>
 
-                  {order.customerAddress ? (
-                    <div className="space-y-3">
-                      {/* Address Label */}
-                      <div className="inline-flex items-center gap-2 px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-semibold">
-                        {order.customerAddress.label === 'Home' && '🏠'}
-                        {order.customerAddress.label === 'Work' && '💼'}
-                        {order.customerAddress.label === 'Other' && '📍'}
-                        <span>{order.customerAddress.label}</span>
-                      </div>
+                    {order.customerAddress ? (
+                      <div className="space-y-3">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-semibold">
+                          {order.customerAddress.label === 'Home' && '🏠'}
+                          {order.customerAddress.label === 'Work' && '💼'}
+                          {order.customerAddress.label === 'Other' && '📍'}
+                          <span>{order.customerAddress.label}</span>
+                        </div>
 
-                      {/* Recipient Details */}
-                      {order.customerAddress.recipient_name && (
-                        <div className="p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center gap-2 mb-1">
-                            <User size={14} className="text-gray-500" />
-                            <p className="font-semibold text-sm text-gray-900">
-                              {order.customerAddress.recipient_name}
+                        {order.customerAddress.recipient_name && (
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-2 mb-1">
+                              <User size={14} className="text-gray-500" />
+                              <p className="font-semibold text-sm">{order.customerAddress.recipient_name}</p>
+                            </div>
+                            {order.customerAddress.recipient_phone && (
+                              <div className="flex items-center gap-2">
+                                <Phone size={14} className="text-gray-500" />
+                                <a href={`tel:${order.customerAddress.recipient_phone}`} className="text-sm text-primary hover:underline">
+                                  {order.customerAddress.recipient_phone}
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <p className="text-gray-700 font-medium">{order.customerAddress.address}</p>
+
+                        {order.customerAddress.apartment_floor && (
+                          <div className="flex items-start gap-2">
+                            <Building2 size={16} className="text-gray-500 mt-0.5" />
+                            <p className="text-sm text-gray-600">{order.customerAddress.apartment_floor}</p>
+                          </div>
+                        )}
+
+                        {order.customerAddress.landmark && (
+                          <div className="flex items-start gap-2">
+                            <MapPinned size={16} className="text-gray-500 mt-0.5" />
+                            <p className="text-sm text-gray-600">
+                              <span className="font-semibold">Landmark:</span> {order.customerAddress.landmark}
                             </p>
                           </div>
-                          {order.customerAddress.recipient_phone && (
-                            <div className="flex items-center gap-2">
-                              <Phone size={14} className="text-gray-500" />
-                              <a
-                                href={`tel:${order.customerAddress.recipient_phone}`}
-                                className="text-sm text-primary hover:underline"
-                              >
-                                {order.customerAddress.recipient_phone}
-                              </a>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                        )}
 
-                      {/* Full Address */}
-                      <p className="text-gray-700 font-medium">{order.customerAddress.address}</p>
+                        {order.customerAddress.delivery_instructions && (
+                          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                            <p className="text-xs font-semibold text-blue-900 mb-1 flex items-center gap-1">
+                              <Bell size={12} />
+                              Delivery Instructions:
+                            </p>
+                            <p className="text-sm text-blue-800">{order.customerAddress.delivery_instructions}</p>
+                          </div>
+                        )}
 
-                      {/* Apartment/Floor */}
-                      {order.customerAddress.apartment_floor && (
-                        <div className="flex items-start gap-2">
-                          <Building2 size={16} className="text-gray-500 mt-0.5" />
-                          <p className="text-sm text-gray-600">{order.customerAddress.apartment_floor}</p>
-                        </div>
-                      )}
-
-                      {/* Landmark */}
-                      {order.customerAddress.landmark && (
-                        <div className="flex items-start gap-2">
-                          <MapPinned size={16} className="text-gray-500 mt-0.5" />
-                          <p className="text-sm text-gray-600">
-                            <span className="font-semibold">Landmark:</span> {order.customerAddress.landmark}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* City, State, Postal Code */}
-                      {(order.customerAddress.city ||
-                        order.customerAddress.state ||
-                        order.customerAddress.postal_code) && (
-                        <p className="text-sm text-gray-600">
-                          📮{' '}
-                          {[
-                            order.customerAddress.city,
-                            order.customerAddress.state,
-                            order.customerAddress.postal_code,
-                          ]
-                            .filter(Boolean)
-                            .join(', ')}
-                        </p>
-                      )}
-
-                      {/* Delivery Instructions */}
-                      {order.customerAddress.delivery_instructions && (
-                        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                          <p className="text-xs font-semibold text-blue-900 mb-1 flex items-center gap-1">
-                            <Bell size={12} />
-                            Delivery Instructions:
-                          </p>
-                          <p className="text-sm text-blue-800">{order.customerAddress.delivery_instructions}</p>
-                        </div>
-                      )}
-
-                      <p className="text-sm text-gray-500 mt-2 flex items-center gap-1">
-                        <MapPin size={14} />
-                        Distance: {order.delivery_distance_km.toFixed(1)} km
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
+                        <p className="text-sm text-gray-500">Distance: {order.delivery_distance_km.toFixed(1)} km</p>
+                      </div>
+                    ) : (
                       <p className="text-gray-700">{order.delivery_address}</p>
-                      <p className="text-sm text-gray-500 mt-1">Distance: {order.delivery_distance_km.toFixed(1)} km</p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -968,7 +749,7 @@ Payment: ${order.payment_method} (${order.payment_status})
                 Restaurant Details
               </h3>
               <div className="space-y-2">
-                <p className="font-semibold text-gray-900">{order.merchants?.business_name}</p>
+                <p className="font-semibold text-gray-900 text-lg">{order.merchants?.business_name}</p>
                 {order.merchants?.phone && (
                   <div className="flex items-center gap-2">
                     <Phone size={16} className="text-gray-600" />
@@ -984,7 +765,7 @@ Payment: ${order.payment_method} (${order.payment_status})
                 <div className="mt-4 pt-4 border-t">
                   <h4 className="font-bold mb-2 flex items-center gap-2">
                     <Truck className="text-primary" size={16} />
-                    Delivery Partner
+                    Driver
                   </h4>
                   <p className="font-medium">{order.driver.full_name}</p>
                   {order.driver.phone && (
@@ -998,41 +779,27 @@ Payment: ${order.payment_method} (${order.payment_status})
 
             {/* Order Items */}
             <div className="bg-white rounded-xl shadow-md p-6">
-              <h3 className="text-lg font-bold mb-4">Order Items</h3>
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <Package size={20} className="text-primary" />
+                Order Items ({order.items.length})
+              </h3>
               <div className="space-y-3">
                 {order.items.map((item: any, index: number) => (
                   <div key={index} className="flex justify-between items-center py-3 border-b last:border-0">
-                    <div className="flex-1">
+                    <div>
                       <p className="font-semibold text-gray-900">{item.name}</p>
                       <p className="text-sm text-gray-600">
                         ₹{item.price} × {item.quantity}
                       </p>
                     </div>
-                    <p className="text-lg font-bold text-gray-900">₹{(item.price * item.quantity).toFixed(2)}</p>
+                    <p className="text-lg font-bold">₹{(item.price * item.quantity).toFixed(2)}</p>
                   </div>
                 ))}
               </div>
             </div>
-
-            {/* Customer Review */}
-            {order.rating && (
-              <div className="bg-white rounded-xl shadow-md p-6">
-                <h3 className="text-lg font-bold mb-4">Customer Review</h3>
-                <div className="flex items-center gap-2 mb-2">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star
-                      key={star}
-                      className={`w-6 h-6 ${star <= order.rating! ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
-                    />
-                  ))}
-                  <span className="font-bold text-lg">{order.rating}/5</span>
-                </div>
-                {order.review && <p className="text-gray-700 mt-2">{order.review}</p>}
-              </div>
-            )}
           </div>
 
-          {/* Order Summary Sidebar */}
+          {/* Order Summary */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-lg p-6 sticky top-6">
               <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -1048,7 +815,7 @@ Payment: ${order.payment_method} (${order.payment_status})
 
                 {order.discount > 0 && (
                   <div className="flex justify-between text-green-600">
-                    <span>Discount {order.promo_code && `(${order.promo_code})`}</span>
+                    <span>Discount</span>
                     <span className="font-semibold">-₹{order.discount.toFixed(2)}</span>
                   </div>
                 )}
@@ -1084,22 +851,6 @@ Payment: ${order.payment_method} (${order.payment_status})
                     </span>
                   </div>
                 </div>
-
-                {order.estimated_delivery_time && (
-                  <div className="pt-3 border-t">
-                    <p className="text-xs text-gray-600 mb-1">Estimated Delivery</p>
-                    <p className="font-semibold text-sm">{new Date(order.estimated_delivery_time).toLocaleString()}</p>
-                  </div>
-                )}
-
-                {order.actual_delivery_time && (
-                  <div className="pt-3 border-t">
-                    <p className="text-xs text-gray-600 mb-1">Actual Delivery</p>
-                    <p className="font-semibold text-sm text-green-600">
-                      {new Date(order.actual_delivery_time).toLocaleString()}
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           </div>

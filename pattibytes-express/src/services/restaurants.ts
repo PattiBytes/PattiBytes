@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
-import { locationService } from './location';
 
 export interface Restaurant {
   id: string;
@@ -23,7 +22,7 @@ export interface Restaurant {
   average_rating?: number;
   total_reviews?: number;
   created_at: string;
-  distance?: number;
+  distance?: number; // km
 }
 
 export interface MenuItem {
@@ -44,115 +43,170 @@ export interface MenuByCategory {
   [category: string]: MenuItem[];
 }
 
+/** ---------- helpers (no dependency on locationService) ---------- */
+function toNumber(v: any, fallback = 0): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeString(v: any): string {
+  return typeof v === 'string' ? v : v == null ? '' : String(v);
+}
+
+function toArrayOfStrings(v: any): string[] {
+  if (Array.isArray(v)) return v.map((x) => normalizeString(x)).filter(Boolean);
+  if (typeof v === 'string') {
+    // allow comma separated
+    return v
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function degreesToRadians(deg: number): number {
+  return (deg * Math.PI) / 180;
+}
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = degreesToRadians(lat2 - lat1);
+  const dLon = degreesToRadians(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(degreesToRadians(lat1)) *
+      Math.cos(degreesToRadians(lat2)) *
+      Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function isValidCoord(n: any): boolean {
+  const v = toNumber(n, Number.NaN);
+  return Number.isFinite(v);
+}
+
+function normalizeRestaurantRow(row: any): Restaurant {
+  // support both snake_case and camelCase columns (your repo has mixed usage)
+  const id = normalizeString(row.id);
+  const user_id = normalizeString(row.user_id ?? row.userid ?? row.owner_id ?? row.ownerid);
+
+  const business_name = normalizeString(row.business_name ?? row.businessname);
+  const business_type = normalizeString(row.business_type ?? row.businesstype ?? 'Restaurant');
+
+  const latitude = toNumber(row.latitude, 0);
+  const longitude = toNumber(row.longitude, 0);
+
+  return {
+    id,
+    user_id,
+    business_name,
+    business_type,
+    logo_url: row.logo_url ?? row.logourl ?? undefined,
+    banner_url: row.banner_url ?? row.bannerurl ?? undefined,
+    description: row.description ?? undefined,
+    cuisine_types: toArrayOfStrings(row.cuisine_types ?? row.cuisinetypes ?? row.cuisine_type ?? row.cuisinetype),
+    phone: normalizeString(row.phone),
+    email: row.email ?? undefined,
+    address: row.address ?? undefined,
+    latitude,
+    longitude,
+    min_order_amount: toNumber(row.min_order_amount ?? row.minorderamount, 0),
+    delivery_radius_km: toNumber(row.delivery_radius_km ?? row.deliveryradiuskm ?? row.delivery_radius ?? row.deliveryradius, 5),
+    estimated_prep_time: toNumber(row.estimated_prep_time ?? row.estimatedpreptime ?? row.avg_delivery_time ?? row.avgdeliverytime, 30),
+    is_active: Boolean(row.is_active ?? row.isactive ?? true),
+    average_rating: row.average_rating ?? row.averagerating ?? row.rating ?? undefined,
+    total_reviews: row.total_reviews ?? row.totalreviews ?? undefined,
+    created_at: normalizeString(row.created_at ?? row.createdat ?? new Date(0).toISOString()),
+  };
+}
+
+function normalizeMenuItemRow(row: any): MenuItem {
+  return {
+    id: normalizeString(row.id),
+    merchant_id: normalizeString(row.merchant_id ?? row.merchantid),
+    name: normalizeString(row.name),
+    description: row.description ?? undefined,
+    price: toNumber(row.price, 0),
+    category: normalizeString(row.category ?? 'Uncategorized') || 'Uncategorized',
+    image_url: row.image_url ?? row.imageurl ?? undefined,
+    is_available: row.is_available !== false && row.isavailable !== false,
+    is_veg: row.is_veg ?? row.isveg ?? undefined,
+    discount_percentage: row.discount_percentage ?? row.discountpercentage ?? undefined,
+    created_at: row.created_at ?? row.createdat ?? undefined,
+  };
+}
+
+function withDistance<T extends { latitude: number; longitude: number }>(
+  items: T[],
+  lat: number,
+  lon: number
+): Array<T & { distance: number }> {
+  return items.map((r) => ({
+    ...r,
+    distance: haversineKm(lat, lon, r.latitude, r.longitude),
+  }));
+}
+
+function filterByRadius<T extends { latitude: number; longitude: number }>(
+  items: T[],
+  lat: number,
+  lon: number,
+  radiusKm: number
+): T[] {
+  const r = toNumber(radiusKm, 0);
+  if (!Number.isFinite(r) || r <= 0) return items;
+  return items.filter((x) => haversineKm(lat, lon, x.latitude, x.longitude) <= r);
+}
+
+/** ---------- service ---------- */
 class RestaurantService {
   async getNearbyRestaurants(lat: number, lon: number, radiusKm: number = 100): Promise<Restaurant[]> {
     try {
-      const { data, error } = await supabase
-        .from('merchants')
-        .select('*')
-        .eq('is_active', true);
+      const { data, error } = await supabase.from('merchants').select('*').eq('is_active', true);
 
       if (error) {
         console.error('Supabase error:', error);
         return [];
       }
+      if (!data || data.length === 0) return [];
 
-      if (!data || data.length === 0) {
-        console.log('No active merchants found');
-        return [];
-      }
+      // keep only rows with usable coordinates
+      const normalized = data
+        .filter((r: any) => isValidCoord(r.latitude) && isValidCoord(r.longitude))
+        .map(normalizeRestaurantRow)
+        .filter((r) => isValidCoord(r.latitude) && isValidCoord(r.longitude));
 
-      console.log(`Found ${data.length} active merchants in database`);
+      if (normalized.length === 0) return [];
 
-      const validRestaurants = data.filter(r => r.latitude != null && r.longitude != null);
-      console.log(`${validRestaurants.length} merchants have valid coordinates`);
+      const filtered = filterByRadius(normalized, lat, lon, radiusKm);
+      const sorted = withDistance(filtered, lat, lon).sort((a, b) => a.distance - b.distance);
 
-      if (validRestaurants.length === 0) {
-        console.warn('No merchants have latitude/longitude set');
-        return [];
-      }
-
-      const normalizedData = validRestaurants.map((restaurant: any) => ({
-        id: restaurant.id,
-        user_id: restaurant.user_id,
-        business_name: restaurant.business_name,
-        business_type: restaurant.business_type || 'Restaurant',
-        logo_url: restaurant.logo_url,
-        banner_url: restaurant.banner_url,
-        description: restaurant.description,
-        cuisine_types: Array.isArray(restaurant.cuisine_types) ? restaurant.cuisine_types : [],
-        phone: restaurant.phone,
-        email: restaurant.email,
-        address: restaurant.address,
-        latitude: restaurant.latitude,
-        longitude: restaurant.longitude,
-        min_order_amount: restaurant.min_order_amount || 0,
-        delivery_radius_km: restaurant.delivery_radius_km || restaurant.delivery_radius || 5,
-        estimated_prep_time: restaurant.estimated_prep_time || restaurant.avg_delivery_time || 30,
-        is_active: restaurant.is_active,
-        average_rating: restaurant.average_rating || restaurant.rating,
-        total_reviews: restaurant.total_reviews,
-        created_at: restaurant.created_at,
-      }));
-
-      const nearbyRestaurants = locationService.filterByRadius(
-        normalizedData as Restaurant[],
-        lat,
-        lon,
-        radiusKm
-      );
-
-      console.log(`${nearbyRestaurants.length} merchants within ${radiusKm}km of location`);
-
-      const withDistance = locationService.sortByDistance(nearbyRestaurants, lat, lon);
-
-      return withDistance;
-    } catch (error) {
-      console.error('Exception in getNearbyRestaurants:', error);
+      return sorted;
+    } catch (e) {
+      console.error('Exception in getNearbyRestaurants:', e);
       return [];
     }
   }
 
   async getRestaurantById(id: string): Promise<Restaurant | null> {
     try {
-      const { data, error } = await supabase
-        .from('merchants')
-        .select('*')
-        .eq('id', id)
-        .single();
-
+      const { data, error } = await supabase.from('merchants').select('*').eq('id', id).single();
       if (error) throw error;
+      const restaurant = normalizeRestaurantRow(data);
 
-      return {
-        id: data.id,
-        user_id: data.user_id,
-        business_name: data.business_name,
-        business_type: data.business_type || 'Restaurant',
-        logo_url: data.logo_url,
-        banner_url: data.banner_url,
-        description: data.description,
-        cuisine_types: Array.isArray(data.cuisine_types) ? data.cuisine_types : [],
-        phone: data.phone,
-        email: data.email,
-        address: data.address,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        min_order_amount: data.min_order_amount || 0,
-        delivery_radius_km: data.delivery_radius_km || data.delivery_radius || 5,
-        estimated_prep_time: data.estimated_prep_time || data.avg_delivery_time || 30,
-        is_active: data.is_active,
-        average_rating: data.average_rating || data.rating,
-        total_reviews: data.total_reviews,
-        created_at: data.created_at,
-      } as Restaurant;
-    } catch (error) {
-      console.error('Failed to get restaurant:', error);
+      // if DB row has missing coords, keep it but do not crash
+      return restaurant;
+    } catch (e) {
+      console.error('Failed to get restaurant:', e);
       return null;
     }
   }
 
   async getMenuItems(merchantId: string): Promise<MenuItem[]> {
     try {
+      // Try full select first (keeps compatibility if schema has extra columns)
       let { data, error } = await supabase
         .from('menu_items')
         .select('*')
@@ -162,36 +216,23 @@ class RestaurantService {
         .order('name');
 
       if (error) {
-        console.warn('Full select failed, trying minimal columns:', error.message);
+        // fallback minimal column list (prevents failures if RLS/permissions hide fields)
         const result = await supabase
           .from('menu_items')
-          .select('id, merchant_id, name, description, price, category, image_url, is_available')
+          .select('id, merchant_id, name, description, price, category, image_url, is_available, is_veg, discount_percentage, created_at')
           .eq('merchant_id', merchantId)
           .eq('is_available', true)
           .order('category')
           .order('name');
-        
+
         data = result.data;
         error = result.error;
       }
 
       if (error) throw error;
-
-      return (data || []).map((item: any) => ({
-        id: item.id,
-        merchant_id: item.merchant_id,
-        name: item.name,
-        description: item.description,
-        price: item.price,
-        category: item.category,
-        image_url: item.image_url,
-        is_available: item.is_available !== false,
-        is_veg: item.is_veg,
-        discount_percentage: item.discount_percentage,
-        created_at: item.created_at,
-      }));
-    } catch (error) {
-      console.error('Failed to get menu items:', error);
+      return (data || []).map(normalizeMenuItemRow);
+    } catch (e) {
+      console.error('Failed to get menu items:', e);
       return [];
     }
   }
@@ -199,26 +240,23 @@ class RestaurantService {
   async getMenuItemsByCategory(merchantId: string): Promise<MenuByCategory> {
     try {
       const menuItems = await this.getMenuItems(merchantId);
-      
       const grouped: MenuByCategory = {};
-      menuItems.forEach((item) => {
+
+      for (const item of menuItems) {
         const category = item.category || 'Uncategorized';
-        if (!grouped[category]) {
-          grouped[category] = [];
-        }
+        if (!grouped[category]) grouped[category] = [];
         grouped[category].push(item);
-      });
+      }
 
       return grouped;
-    } catch (error) {
-      console.error('Failed to get menu items by category:', error);
+    } catch (e) {
+      console.error('Failed to get menu items by category:', e);
       return {};
     }
   }
 
   async getActivePromoCodes(merchantId: string) {
     try {
-      // Promo codes don't have merchant_id, they have applicable_merchants array
       const { data, error } = await supabase
         .from('promo_codes')
         .select('*')
@@ -226,22 +264,20 @@ class RestaurantService {
         .eq('is_active', true)
         .gte('valid_until', new Date().toISOString());
 
-      if (error) {
-        console.warn('Promo codes not available:', error.message);
-        return [];
-      }
+      if (error) return [];
       return data || [];
-    } catch (error) {
-      console.error('Failed to get promo codes:', error);
+    } catch (e) {
+      console.error('Failed to get promo codes:', e);
       return [];
     }
   }
 
   async search(query: string, lat?: number, lon?: number, radiusKm: number = 100) {
     try {
-      const lowerQuery = query.toLowerCase();
+      const q = normalizeString(query).trim();
+      const lowerQuery = q.toLowerCase();
 
-      const { data: restaurants, error: restaurantError } = await supabase
+      const { data: restaurantRows, error: restaurantError } = await supabase
         .from('merchants')
         .select('*')
         .eq('is_active', true);
@@ -251,109 +287,63 @@ class RestaurantService {
         return { restaurants: [], menuItems: [] };
       }
 
-      const validRestaurants = (restaurants || []).filter(r => r.latitude != null && r.longitude != null);
+      const restaurantsAll = (restaurantRows || [])
+        .filter((r: any) => isValidCoord(r.latitude) && isValidCoord(r.longitude))
+        .map(normalizeRestaurantRow);
 
-      const normalizedRestaurants = validRestaurants.map((r: any) => ({
-        id: r.id,
-        user_id: r.user_id,
-        business_name: r.business_name,
-        business_type: r.business_type || 'Restaurant',
-        logo_url: r.logo_url,
-        banner_url: r.banner_url,
-        description: r.description,
-        cuisine_types: Array.isArray(r.cuisine_types) ? r.cuisine_types : [],
-        phone: r.phone,
-        email: r.email,
-        address: r.address,
-        latitude: r.latitude,
-        longitude: r.longitude,
-        min_order_amount: r.min_order_amount || 0,
-        delivery_radius_km: r.delivery_radius_km || r.delivery_radius || 5,
-        estimated_prep_time: r.estimated_prep_time || r.avg_delivery_time || 30,
-        is_active: r.is_active,
-        average_rating: r.average_rating || r.rating,
-        total_reviews: r.total_reviews,
-        created_at: r.created_at,
-      }));
+      let restaurants = restaurantsAll.filter((r) => {
+        const nameMatch = r.business_name.toLowerCase().includes(lowerQuery);
+        const cuisineMatch = r.cuisine_types?.some((c) => c.toLowerCase().includes(lowerQuery));
+        return nameMatch || cuisineMatch;
+      });
 
-      let filteredRestaurants = normalizedRestaurants.filter(
-        (r: any) =>
-          r.business_name.toLowerCase().includes(lowerQuery) ||
-          r.cuisine_types?.some((c: string) => c.toLowerCase().includes(lowerQuery))
-      );
-
-      if (lat && lon) {
-        filteredRestaurants = locationService.filterByRadius(
-          filteredRestaurants,
-          lat,
-          lon,
-          radiusKm
-        );
+      // optional geo-filter
+      if (typeof lat === 'number' && typeof lon === 'number' && Number.isFinite(lat) && Number.isFinite(lon)) {
+        restaurants = filterByRadius(restaurants, lat, lon, radiusKm);
+        restaurants = withDistance(restaurants, lat, lon).sort((a, b) => a.distance - b.distance);
       }
 
       const { data: menuItems } = await supabase
         .from('menu_items')
-        .select('id, merchant_id, name, description, price, category, image_url, is_available')
+        .select('id, merchant_id, name, description, price, category, image_url, is_available, is_veg, discount_percentage, created_at')
         .eq('is_available', true)
-        .or(`name.ilike.%${query}%,description.ilike.%${query}%,category.ilike.%${query}%`);
+        .or(`name.ilike.%${q}%,description.ilike.%${q}%,category.ilike.%${q}%`);
 
       return {
-        restaurants: filteredRestaurants,
-        menuItems: menuItems || [],
+        restaurants,
+        menuItems: (menuItems || []).map(normalizeMenuItemRow),
       };
-    } catch (error) {
-      console.error('Search error:', error);
+    } catch (e) {
+      console.error('Search error:', e);
       return { restaurants: [], menuItems: [] };
     }
   }
 
-  async getRestaurantsByCuisine(
-    cuisine: string,
-    lat: number,
-    lon: number,
-    radiusKm: number = 100
-  ): Promise<Restaurant[]> {
+  async getRestaurantsByCuisine(cuisine: string, lat: number, lon: number, radiusKm: number = 100): Promise<Restaurant[]> {
     try {
+      const cuisineValue = normalizeString(cuisine).trim();
+      if (!cuisineValue) return [];
+
       const { data, error } = await supabase
         .from('merchants')
         .select('*')
         .eq('is_active', true)
-        .contains('cuisine_types', [cuisine]);
+        .contains('cuisine_types', [cuisineValue]);
 
       if (error) throw error;
 
-      const validData = (data || []).filter(r => r.latitude != null && r.longitude != null);
+      const restaurants = (data || [])
+        .filter((r: any) => isValidCoord(r.latitude) && isValidCoord(r.longitude))
+        .map(normalizeRestaurantRow);
 
-      const normalizedData = validData.map((r: any) => ({
-        id: r.id,
-        user_id: r.user_id,
-        business_name: r.business_name,
-        business_type: r.business_type || 'Restaurant',
-        logo_url: r.logo_url,
-        banner_url: r.banner_url,
-        description: r.description,
-        cuisine_types: Array.isArray(r.cuisine_types) ? r.cuisine_types : [],
-        phone: r.phone,
-        email: r.email,
-        address: r.address,
-        latitude: r.latitude,
-        longitude: r.longitude,
-        min_order_amount: r.min_order_amount || 0,
-        delivery_radius_km: r.delivery_radius_km || r.delivery_radius || 5,
-        estimated_prep_time: r.estimated_prep_time || r.avg_delivery_time || 30,
-        is_active: r.is_active,
-        average_rating: r.average_rating || r.rating,
-        total_reviews: r.total_reviews,
-        created_at: r.created_at,
-      }));
-
-      const filtered = locationService.filterByRadius(normalizedData as Restaurant[], lat, lon, radiusKm);
-      return locationService.sortByDistance(filtered, lat, lon);
-    } catch (error) {
-      console.error('Failed to get restaurants by cuisine:', error);
+      const filtered = filterByRadius(restaurants, lat, lon, radiusKm);
+      return withDistance(filtered, lat, lon).sort((a, b) => a.distance - b.distance);
+    } catch (e) {
+      console.error('Failed to get restaurants by cuisine:', e);
       return [];
     }
   }
 }
 
 export const restaurantService = new RestaurantService();
+export default restaurantService;
