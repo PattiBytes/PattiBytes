@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
@@ -9,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { locationService, type SavedAddress } from '@/services/location';
 import { deliveryFeeService } from '@/services/deliveryFee';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import AddressAutocomplete, { type AddressPick } from '@/components/AddressAutocomplete';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 import {
   MapPin,
   ShoppingBag,
@@ -28,38 +27,24 @@ import {
 import { toast } from 'react-toastify';
 import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
 
-type NewAddress = {
-  label: string;
-  address: string;
-  latitude: number;
-  longitude: number;
-  isdefault: boolean;
-};
-
 export default function CheckoutPage() {
   const { user } = useAuth();
   const router = useRouter();
-
   const [cartData, setCartData] = useState<any>(null);
-
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<SavedAddress | null>(null);
-
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'online'>('cod');
-
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
-
   const [deliveryFee, setDeliveryFee] = useState(10);
   const [deliveryDistance, setDeliveryDistance] = useState(0);
-
-  const [newAddress, setNewAddress] = useState<NewAddress>({
+  const [newAddress, setNewAddress] = useState({
     label: 'Home',
     address: '',
     latitude: 0,
     longitude: 0,
-    isdefault: false,
+    is_default: false,
   });
 
   useEffect(() => {
@@ -68,11 +53,12 @@ export default function CheckoutPage() {
       return;
     }
     loadCheckoutData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const loadCheckoutData = async () => {
     try {
-      const stored = sessionStorage.getItem('checkoutdata');
+      const stored = sessionStorage.getItem('checkout_data');
       if (!stored) {
         toast.error('No items in cart');
         router.push('/customer/cart');
@@ -80,16 +66,20 @@ export default function CheckoutPage() {
       }
 
       const data = JSON.parse(stored);
+      console.log('📦 Cart data loaded:', data);
       setCartData(data);
 
       const addresses = await locationService.getSavedAddresses(user!.id);
       setSavedAddresses(addresses);
 
       const defaultAddr = addresses.find((a) => a.isdefault);
-      if (defaultAddr) await handleAddressSelection(defaultAddr);
-      else if (addresses.length > 0) await handleAddressSelection(addresses[0]);
+      if (defaultAddr) {
+        await handleAddressSelection(defaultAddr);
+      } else if (addresses.length > 0) {
+        await handleAddressSelection(addresses[0]);
+      }
     } catch (error) {
-      console.error('Failed to load checkout data', error);
+      console.error('Failed to load checkout data:', error);
       toast.error('Failed to load checkout data');
     } finally {
       setLoading(false);
@@ -99,19 +89,23 @@ export default function CheckoutPage() {
   const handleAddressSelection = async (address: SavedAddress) => {
     setSelectedAddress(address);
 
+    // Calculate delivery fee using service
     await deliveryFeeService.loadConfig();
-    const feeData = deliveryFeeService.calculateDeliveryFee(address.latitude, address.longitude);
+    const feeData = deliveryFeeService.calculateDeliveryFee(
+      address.latitude,
+      address.longitude
+    );
     setDeliveryFee(feeData.fee);
     setDeliveryDistance(feeData.distance);
   };
 
-  const handleAddressSelect = (addressData: AddressPick) => {
-    setNewAddress((prev) => ({
-      ...prev,
+  const handleAddressSelect = (addressData: any) => {
+    setNewAddress({
+      ...newAddress,
       address: addressData.address,
       latitude: addressData.lat,
       longitude: addressData.lon,
-    }));
+    });
   };
 
   const handleSaveAddress = async () => {
@@ -121,23 +115,26 @@ export default function CheckoutPage() {
     }
 
     try {
-      // ✅ FIX: your DB/service uses customerid (not user_id)
       const savedAddr = await locationService.saveAddress({
-        customerid: user.id,
+        user_id: user.id,
         ...newAddress,
       });
 
       if (savedAddr) {
-        setSavedAddresses((prev) => [savedAddr, ...prev]);
+        setSavedAddresses([...savedAddresses, savedAddr]);
         await handleAddressSelection(savedAddr);
-
         setShowAddressModal(false);
-        setNewAddress({ label: 'Home', address: '', latitude: 0, longitude: 0, isdefault: false });
-
+        setNewAddress({
+          label: 'Home',
+          address: '',
+          latitude: 0,
+          longitude: 0,
+          is_default: false,
+        });
         toast.success('Address saved successfully!');
       }
     } catch (error) {
-      console.error('Failed to save address', error);
+      console.error('Failed to save address:', error);
       toast.error('Failed to save address');
     }
   };
@@ -146,7 +143,7 @@ export default function CheckoutPage() {
     try {
       const success = await locationService.deleteAddress(addressId);
       if (success) {
-        setSavedAddresses((prev) => prev.filter((a) => a.id !== addressId));
+        setSavedAddresses(savedAddresses.filter((a) => a.id !== addressId));
         if (selectedAddress?.id === addressId) {
           setSelectedAddress(null);
           setDeliveryFee(10);
@@ -154,7 +151,7 @@ export default function CheckoutPage() {
         toast.success('Address deleted');
       }
     } catch (error) {
-      console.error('Failed to delete address', error);
+      console.error('Failed to delete address:', error);
       toast.error('Failed to delete address');
     }
   };
@@ -171,79 +168,98 @@ export default function CheckoutPage() {
     }
 
     setPlacing(true);
-    try {
-      const merchantId = cartData.cart.merchantid || cartData.cart.merchant_id;
 
+    try {
+      // VERIFY MERCHANT EXISTS
+      console.log('🔍 Verifying merchant ID:', cartData.cart.merchant_id);
+      
       const { data: merchantCheck, error: merchantError } = await supabase
         .from('merchants')
-        .select('id, businessname')
-        .eq('id', merchantId)
+        .select('id, business_name')
+        .eq('id', cartData.cart.merchant_id)
         .single();
 
       if (merchantError || !merchantCheck) {
+        console.error('❌ Merchant not found:', merchantError);
         throw new Error('Restaurant not found. Please clear your cart and try again.');
       }
 
-      const subtotal = Number(cartData.cart.subtotal || 0);
-      const promoDiscount = Number(cartData.promoDiscount || 0);
-      const tax = (subtotal - promoDiscount) * 0.05;
-      const finalTotal = subtotal - promoDiscount + deliveryFee + tax;
+      console.log('✅ Merchant verified:', merchantCheck);
 
-      const estimatedMinutes = 30 + Math.ceil(deliveryDistance) * 5;
-      const estimatedDeliveryTime = new Date(Date.now() + estimatedMinutes * 60_000);
+      const tax = (cartData.cart.subtotal - (cartData.promoDiscount || 0)) * 0.05;
+      const finalTotal = cartData.cart.subtotal - (cartData.promoDiscount || 0) + deliveryFee + tax;
+
+      // Calculate estimated delivery time (30 min prep + 5 min per km)
+      const estimatedMinutes = 30 + Math.ceil(deliveryDistance * 5);
+      const estimatedDeliveryTime = new Date(Date.now() + estimatedMinutes * 60000);
 
       const orderData = {
-        customerid: user.id,
-        merchantid: merchantCheck.id,
-
+        customer_id: user.id,
+        merchant_id: merchantCheck.id, // Use verified merchant ID
         items: cartData.cart.items,
-        subtotal: Number(subtotal.toFixed(2)),
-        discount: Number(promoDiscount.toFixed(2)),
-        deliveryfee: Number(deliveryFee.toFixed(2)),
+        subtotal: Number(cartData.cart.subtotal.toFixed(2)),
+        discount: Number((cartData.promoDiscount || 0).toFixed(2)),
+        delivery_fee: Number(deliveryFee.toFixed(2)),
         tax: Number(tax.toFixed(2)),
-        totalamount: Number(finalTotal.toFixed(2)),
-
-        paymentmethod: paymentMethod,
-        paymentstatus: 'pending',
-
-        promocode: cartData.promoCode || null,
-
-        deliveryaddress: selectedAddress.address,
-        deliverylatitude: selectedAddress.latitude,
-        deliverylongitude: selectedAddress.longitude,
-        deliverydistancekm: Number(deliveryDistance.toFixed(2)),
-
+        total_amount: Number(finalTotal.toFixed(2)),
+        payment_method: paymentMethod,
+        payment_status: 'pending',
+        promo_code: cartData.promoCode || null,
+        delivery_address: selectedAddress.address,
+        delivery_latitude: selectedAddress.latitude,
+        delivery_longitude: selectedAddress.longitude,
+        delivery_distance_km: Number(deliveryDistance.toFixed(2)),
         status: 'pending',
-        preparationtime: 30,
-        estimateddeliverytime: estimatedDeliveryTime.toISOString(),
+        preparation_time: 30,
+        estimated_delivery_time: estimatedDeliveryTime.toISOString(),
       };
 
-      const { data: order, error: orderError } = await supabase.from('orders').insert(orderData).select().single();
+      console.log('📝 Creating order with data:', orderData);
 
-      if (orderError) throw new Error(orderError.message || 'Failed to create order');
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert([orderData])
+        .select()
+        .single();
 
-      sessionStorage.removeItem('checkoutdata');
-      localStorage.removeItem('pattibytescart');
+      if (orderError) {
+        console.error('❌ Order creation error:', orderError);
+        throw new Error(orderError.message || 'Failed to create order');
+      }
+
+      console.log('✅ Order created successfully:', order);
+
+      // Update promo code usage
+      if (cartData.promoCode) {
+        try {
+          const { data: promoCode } = await supabase
+            .from('promo_codes')
+            .select('id, used_count')
+            .eq('code', cartData.promoCode)
+            .single();
+
+          if (promoCode) {
+            await supabase
+              .from('promo_codes')
+              .update({ used_count: (promoCode.used_count || 0) + 1 })
+              .eq('id', promoCode.id);
+          }
+        } catch (promoError) {
+          console.warn('Failed to update promo code:', promoError);
+        }
+      }
+
+      sessionStorage.removeItem('checkout_data');
+      localStorage.removeItem('pattibytes_cart');
       window.dispatchEvent(new CustomEvent('cartUpdated', { detail: null }));
 
-      toast.success('Order placed successfully!');
+      toast.success('🎉 Order placed successfully!');
       router.push(`/customer/orders/${order.id}`);
     } catch (error: any) {
-      console.error('Failed to place order', error);
-      toast.error(error?.message || 'Failed to place order. Please try again.');
+      console.error('❌ Failed to place order:', error);
+      toast.error(error.message || 'Failed to place order. Please try again.');
     } finally {
       setPlacing(false);
-    }
-  };
-
-  const getAddressIcon = (label: string) => {
-    switch ((label || '').toLowerCase()) {
-      case 'home':
-        return <Home className="w-5 h-5" />;
-      case 'work':
-        return <Briefcase className="w-5 h-5" />;
-      default:
-        return <MapPinned className="w-5 h-5" />;
     }
   };
 
@@ -268,10 +284,19 @@ export default function CheckoutPage() {
     );
   }
 
-  const subtotal = Number(cartData.cart.subtotal || 0);
-  const promoDiscount = Number(cartData.promoDiscount || 0);
-  const tax = (subtotal - promoDiscount) * 0.05;
-  const finalTotal = subtotal - promoDiscount + deliveryFee + tax;
+  const tax = (cartData.cart.subtotal - (cartData.promoDiscount || 0)) * 0.05;
+  const finalTotal = cartData.cart.subtotal - (cartData.promoDiscount || 0) + deliveryFee + tax;
+
+  const getAddressIcon = (label: string) => {
+    switch (label.toLowerCase()) {
+      case 'home':
+        return <Home className="w-5 h-5" />;
+      case 'work':
+        return <Briefcase className="w-5 h-5" />;
+      default:
+        return <MapPinned className="w-5 h-5" />;
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -288,13 +313,13 @@ export default function CheckoutPage() {
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
+            {/* Delivery Address */}
             <div className="bg-white rounded-xl shadow-md p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold flex items-center gap-2">
                   <MapPin className="text-primary" size={24} />
                   Delivery Address
                 </h2>
-
                 <button
                   onClick={() => setShowAddressModal(true)}
                   className="text-primary hover:bg-orange-50 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors font-semibold"
@@ -318,17 +343,17 @@ export default function CheckoutPage() {
                     >
                       <div className="flex items-start gap-3">
                         <div className="text-primary mt-1">{getAddressIcon(address.label)}</div>
-
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <p className="font-bold text-gray-900">{address.label}</p>
                             {address.isdefault && (
-                              <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full">Default</span>
+                              <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full">
+                                Default
+                              </span>
                             )}
                           </div>
                           <p className="text-sm text-gray-600">{address.address}</p>
                         </div>
-
                         {selectedAddress?.id === address.id && (
                           <Check className="text-primary flex-shrink-0" size={20} />
                         )}
@@ -362,6 +387,7 @@ export default function CheckoutPage() {
               )}
             </div>
 
+            {/* Payment Method */}
             <div className="bg-white rounded-xl shadow-md p-6">
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <CreditCard className="text-primary" size={24} />
@@ -372,7 +398,9 @@ export default function CheckoutPage() {
                 <button
                   onClick={() => setPaymentMethod('cod')}
                   className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                    paymentMethod === 'cod' ? 'border-primary bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+                    paymentMethod === 'cod'
+                      ? 'border-primary bg-orange-50'
+                      : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -394,13 +422,15 @@ export default function CheckoutPage() {
                   disabled
                   className="w-full text-left p-4 rounded-lg border-2 border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                      <CreditCard className="text-blue-600" size={24} />
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-900">Online Payment</p>
-                      <p className="text-sm text-gray-600">UPI, Cards, Wallets Coming Soon</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <CreditCard className="text-blue-600" size={24} />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900">Online Payment</p>
+                        <p className="text-sm text-gray-600">UPI, Cards, Wallets (Coming Soon)</p>
+                      </div>
                     </div>
                   </div>
                 </button>
@@ -408,30 +438,45 @@ export default function CheckoutPage() {
             </div>
           </div>
 
+          {/* Order Summary */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-lg p-6 sticky top-6">
               <h2 className="text-xl font-bold mb-4">Order Summary</h2>
 
+              <div className="space-y-3 mb-4 pb-4 border-b max-h-48 overflow-y-auto">
+                {cartData.cart.items.map((item: any) => (
+                  <div key={item.id} className="flex justify-between text-sm">
+                    <span className="text-gray-600 flex-1">
+                      {item.name} × {item.quantity}
+                    </span>
+                    <span className="font-semibold">₹{(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
               <div className="space-y-2 mb-4 pb-4 border-b">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Item Total</span>
-                  <span className="font-semibold">₹{subtotal.toFixed(2)}</span>
+                  <span className="font-semibold">₹{cartData.cart.subtotal.toFixed(2)}</span>
                 </div>
 
-                {promoDiscount > 0 && (
+                {cartData.promoDiscount > 0 && (
                   <div className="flex justify-between text-sm text-green-600">
-                    <span>Promo Discount</span>
-                    <span className="font-semibold">-₹{promoDiscount.toFixed(2)}</span>
+                    <span>Promo Discount ({cartData.promoCode})</span>
+                    <span className="font-semibold">-₹{cartData.promoDiscount.toFixed(2)}</span>
                   </div>
                 )}
 
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Delivery Fee</span>
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-gray-600" />
+                    <span className="text-gray-600">Delivery Fee</span>
+                  </div>
                   <span className="font-semibold">₹{deliveryFee.toFixed(2)}</span>
                 </div>
 
                 {deliveryDistance > 0 && (
-                  <p className="text-xs text-gray-500">{deliveryDistance.toFixed(1)} km away</p>
+                  <p className="text-xs text-gray-500 pl-4">{deliveryDistance.toFixed(1)} km away</p>
                 )}
 
                 <div className="flex justify-between text-sm">
@@ -459,90 +504,118 @@ export default function CheckoutPage() {
                 disabled={placing || !selectedAddress}
                 className="w-full bg-primary text-white py-4 rounded-xl hover:bg-orange-600 font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
               >
-                {placing ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                {placing ? 'Placing Order...' : `Place Order • ₹${finalTotal.toFixed(2)}`}
+                {placing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Placing Order...
+                  </>
+                ) : (
+                  <>Place Order • ₹{finalTotal.toFixed(2)}</>
+                )}
               </button>
+
+              <p className="text-xs text-gray-500 text-center mt-4">
+                By placing this order, you agree to our terms
+              </p>
             </div>
           </div>
         </div>
+      </div>
 
-        {showAddressModal && (
-          <>
-            <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowAddressModal(false)} />
-            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-2xl shadow-2xl z-50 p-6 mx-4 max-h-[90vh] overflow-y-auto">
-              <h2 className="text-2xl font-bold mb-6">Add Delivery Address</h2>
+      {/* Add Address Modal */}
+      {showAddressModal && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-50"
+            onClick={() => setShowAddressModal(false)}
+          />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-2xl shadow-2xl z-50 p-6 mx-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-2xl font-bold mb-6">Add Delivery Address</h2>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Address Label</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['Home', 'Work', 'Other'].map((label) => (
-                      <button
-                        key={label}
-                        onClick={() => setNewAddress((prev) => ({ ...prev, label }))}
-                        className={`p-3 rounded-lg border-2 font-medium transition-all ${
-                          newAddress.label === label
-                            ? 'border-primary bg-orange-50 text-primary'
-                            : 'border-gray-200 text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Search & Select Address</label>
-                  <AddressAutocomplete onSelect={handleAddressSelect} />
-                </div>
-
-                {!!newAddress.address && (
-                  <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
-                    <div className="flex items-start gap-2">
-                      <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold text-green-900 mb-1">Selected Address</p>
-                        <p className="text-sm text-green-800">{newAddress.address}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={newAddress.isdefault}
-                    onChange={(e) => setNewAddress((prev) => ({ ...prev, isdefault: e.target.checked }))}
-                    className="w-4 h-4 text-primary focus:ring-primary border-gray-300 rounded"
-                  />
-                  <span className="text-sm text-gray-700">Set as default address</span>
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={() => {
-                      setShowAddressModal(false);
-                      setNewAddress({ label: 'Home', address: '', latitude: 0, longitude: 0, isdefault: false });
-                    }}
-                    className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-xl hover:bg-gray-300 font-semibold transition-colors"
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    onClick={handleSaveAddress}
-                    disabled={!newAddress.address}
-                    className="flex-1 bg-primary text-white px-6 py-3 rounded-xl hover:bg-orange-600 font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Save & Select
-                  </button>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Address Label
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['Home', 'Work', 'Other'].map((label) => (
+                    <button
+                      key={label}
+                      onClick={() => setNewAddress({ ...newAddress, label })}
+                      className={`p-3 rounded-lg border-2 font-medium transition-all ${
+                        newAddress.label === label
+                          ? 'border-primary bg-orange-50 text-primary'
+                          : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Search & Select Address
+                </label>
+                <AddressAutocomplete onSelect={handleAddressSelect} />
+              </div>
+
+              {newAddress.address && (
+                <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-green-900 mb-1">Selected Address:</p>
+                      <p className="text-sm text-green-800">{newAddress.address}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="setDefault"
+                  checked={newAddress.is_default}
+                  onChange={(e) =>
+                    setNewAddress({ ...newAddress, is_default: e.target.checked })
+                  }
+                  className="w-4 h-4 text-primary focus:ring-primary border-gray-300 rounded"
+                />
+                <label htmlFor="setDefault" className="text-sm text-gray-700">
+                  Set as default address
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowAddressModal(false);
+                    setNewAddress({
+                      label: 'Home',
+                      address: '',
+                      latitude: 0,
+                      longitude: 0,
+                      is_default: false,
+                    });
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-xl hover:bg-gray-300 font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveAddress}
+                  disabled={!newAddress.address}
+                  className="flex-1 bg-primary text-white px-6 py-3 rounded-xl hover:bg-orange-600 font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Save & Select
+                </button>
+              </div>
             </div>
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </DashboardLayout>
   );
 }
