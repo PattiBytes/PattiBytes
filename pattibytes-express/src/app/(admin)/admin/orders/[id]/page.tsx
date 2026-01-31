@@ -26,9 +26,43 @@ import {
   Timer,
   TrendingUp,
   Bell,
+  Building2,
+  MapPinned,
+  Shield,
+  AlertTriangle,
+  Star,
+  TrendingDown,
+  Award,
 } from 'lucide-react';
 import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
 import { toast } from 'react-toastify';
+
+interface SavedAddress {
+  id: string;
+  label: string;
+  recipient_name?: string;
+  recipient_phone?: string;
+  address: string;
+  apartment_floor?: string;
+  landmark?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  delivery_instructions?: string;
+}
+
+interface CustomerProfile {
+  full_name: string;
+  phone?: string;
+  email?: string;
+  total_orders?: number;
+  completed_orders?: number;
+  cancelled_orders?: number;
+  trust_score?: number;
+  is_trusted?: boolean;
+  account_status?: string;
+  last_order_date?: string;
+}
 
 interface OrderDetail {
   id: string;
@@ -53,11 +87,7 @@ interface OrderDetail {
   promo_code?: string;
   rating?: number;
   review?: string;
-  profiles?: {
-    full_name: string;
-    phone?: string;
-    email?: string;
-  };
+  profiles?: CustomerProfile;
   merchants?: {
     business_name: string;
     phone?: string;
@@ -68,6 +98,7 @@ interface OrderDetail {
     full_name: string;
     phone?: string;
   };
+  customerAddress?: SavedAddress;
 }
 
 export default function AdminOrderDetailPage() {
@@ -90,7 +121,6 @@ export default function AdminOrderDetailPage() {
     loadOrder();
     loadAvailableDrivers();
 
-    // Real-time updates
     const subscription = supabase
       .channel(`admin-order-${params.id}`)
       .on(
@@ -102,7 +132,7 @@ export default function AdminOrderDetailPage() {
           filter: `id=eq.${params.id}`,
         },
         (payload) => {
-          console.log('Order updated in real-time:', payload);
+          console.log('📡 Order updated in real-time:', payload);
           loadOrder();
         }
       )
@@ -126,9 +156,10 @@ export default function AdminOrderDetailPage() {
 
       if (orderError) throw orderError;
 
+      // Fetch customer profile with trust metrics
       const { data: customerProfile } = await supabase
         .from('profiles')
-        .select('full_name, phone, email')
+        .select('full_name, phone, email, total_orders, completed_orders, cancelled_orders, trust_score, is_trusted, account_status, last_order_date')
         .eq('id', orderData.customer_id)
         .single();
 
@@ -148,14 +179,35 @@ export default function AdminOrderDetailPage() {
         driverInfo = data;
       }
 
+      // Fetch full customer address
+      let customerAddress = null;
+      try {
+        const { data: addressData, error: addressError } = await supabase
+          .from('saved_addresses')
+          .select('*')
+          .eq('customer_id', orderData.customer_id)
+          .eq('is_default', true)
+          .maybeSingle();
+
+        if (!addressError && addressData) {
+          customerAddress = addressData;
+        }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (error) {
+        console.log('No saved address found, using order delivery address');
+      }
+
       setOrder({
         ...orderData,
         profiles: customerProfile,
         merchants: merchantInfo,
         driver: driverInfo,
+        customerAddress: customerAddress,
       });
+
+      console.log('✅ Order loaded successfully');
     } catch (error) {
-      console.error('Failed to load order:', error);
+      console.error('❌ Failed to load order:', error);
       toast.error('Failed to load order details');
       router.push('/admin/orders');
     } finally {
@@ -174,7 +226,7 @@ export default function AdminOrderDetailPage() {
       if (error) throw error;
       setAvailableDrivers(data || []);
     } catch (error) {
-      console.error('Failed to load drivers:', error);
+      console.error('❌ Failed to load drivers:', error);
     }
   };
 
@@ -186,72 +238,139 @@ export default function AdminOrderDetailPage() {
         message,
         type,
         data,
+        is_read: false,
       });
 
       if (error) {
-        console.error('Notification error:', error);
-        return;
+        console.error('❌ Notification error:', error);
+        return false;
       }
-      console.log(`Notification sent to user ${userId}`);
+
+      console.log(`✅ Notification sent to user ${userId}`);
+      return true;
     } catch (error) {
-      console.error('Failed to send notification:', error);
+      console.error('❌ Failed to send notification:', error);
+      return false;
     }
   };
 
   const updateOrderStatus = async (newStatus: string) => {
-    if (!order) return;
+  if (!order) return;
 
-    setUpdating(true);
+  setUpdating(true);
 
-    try {
-      const updateData: any = {
-        status: newStatus,
-      };
+  try {
+    const updateData: any = {
+      status: newStatus,
+    };
 
-      if (newStatus === 'delivered') {
-        updateData.actual_delivery_time = new Date().toISOString();
-        updateData.payment_status = 'paid';
-      }
-
-      console.log('Updating order with data:', updateData);
-
-      // Update order in database - REMOVED .select().single() to avoid 406 error
-      const { error } = await supabase.from('orders').update(updateData).eq('id', order.id);
-
-      if (error) {
-        console.error('Update error:', error);
-        throw error;
-      }
-
-      console.log('Order updated successfully in database');
-
-      // Send notification to customer
-      await sendNotification(
-        order.customer_id,
-        'Order Status Updated',
-        `Your order #${order.order_number} is now ${newStatus}`,
-        'order',
-        { order_id: order.id, status: newStatus }
-      );
-
-      // If status is ready, notify available drivers
-      if (newStatus === 'ready' && !order.driver_id) {
-        await notifyAvailableDrivers();
-      }
-
-      toast.success(`✅ Order status updated to ${newStatus}!`);
-      
-      // Reload order to get fresh data
-      setTimeout(() => {
-        loadOrder();
-      }, 500);
-    } catch (error: any) {
-      console.error('Failed to update order:', error);
-      toast.error(error.message || 'Failed to update order status');
-    } finally {
-      setUpdating(false);
+    if (newStatus === 'delivered') {
+      updateData.actual_delivery_time = new Date().toISOString();
+      updateData.payment_status = 'paid';
     }
-  };
+
+    console.log('📝 Updating order status to:', newStatus);
+    console.log('📝 Update data:', updateData);
+    console.log('📝 Order ID:', order.id);
+
+    // FIX: Remove .select() and add better error handling
+    const { data, error } = await supabase
+      .from('orders')
+      .update(updateData)
+      .eq('id', order.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Update error:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      throw error;
+    }
+
+    console.log('✅ Order updated successfully:', data);
+
+    // Send notification
+    await sendNotification(
+      order.customer_id,
+      'Order Status Updated',
+      `Your order #${order.order_number} is now ${newStatus.replace('_', ' ')}`,
+      'order',
+      { order_id: order.id, status: newStatus }
+    );
+
+    // Notify drivers if order is ready
+    if (newStatus === 'ready' && !order.driver_id) {
+      await notifyAvailableDrivers();
+    }
+
+    toast.success(`✅ Order status updated to ${newStatus.replace('_', ' ')}!`);
+
+    // Reload order
+    setTimeout(() => {
+      loadOrder();
+    }, 500);
+  } catch (error: any) {
+    console.error('❌ Failed to update order:', error);
+    
+    // More detailed error message
+    if (error.code === 'PGRST301') {
+      toast.error('❌ Permission denied. Please check your account permissions.');
+    } else if (error.message) {
+      toast.error(`❌ ${error.message}`);
+    } else {
+      toast.error('❌ Failed to update order status. Please try again.');
+    }
+  } finally {
+    setUpdating(false);
+  }
+};
+const debugPermissions = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log('🔍 Current User:', user?.id);
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user?.id)
+      .single();
+    console.log('🔍 Profile:', profile);
+
+    if (profile?.role === 'merchant') {
+      const { data: merchant } = await supabase
+        .from('merchants')
+        .select('*')
+        .eq('user_id', user?.id)
+        .single();
+      console.log('🔍 Merchant:', merchant);
+    }
+
+    const { data: orderCheck } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', order?.id)
+      .single();
+    console.log('🔍 Order:', orderCheck);
+
+    // Try update with detailed logging
+    const { data: updateTest, error: updateError } = await supabase
+      .from('orders')
+      .update({ status: 'confirmed' })
+      .eq('id', order?.id)
+      .select();
+    
+    console.log('🔍 Update Test Result:', updateTest);
+    console.log('🔍 Update Test Error:', updateError);
+  } catch (error) {
+    console.error('🔍 Debug Error:', error);
+  }
+};
+
+// Add this button to your UI temporarily
+<button onClick={debugPermissions} className="px-4 py-2 bg-purple-600 text-white rounded">
+  Debug Permissions
+</button>
+
 
   const notifyAvailableDrivers = async () => {
     if (!order || availableDrivers.length === 0) {
@@ -261,7 +380,6 @@ export default function AdminOrderDetailPage() {
 
     setNotifyingDriver(true);
     try {
-      // Create assignment records for all available drivers
       const assignments = availableDrivers.map((driver) => ({
         order_id: order.id,
         driver_id: driver.id,
@@ -271,12 +389,12 @@ export default function AdminOrderDetailPage() {
       const { error: assignError } = await supabase.from('driver_assignments').insert(assignments);
 
       if (assignError && assignError.code !== '23505') {
-        console.error('Assignment error:', assignError);
+        console.error('❌ Assignment error:', assignError);
       }
 
-      // Send notifications to all available drivers
+      let notifiedCount = 0;
       for (const driver of availableDrivers) {
-        await sendNotification(
+        const success = await sendNotification(
           driver.id,
           'New Delivery Request',
           `Order #${order.order_number} is ready for pickup from ${order.merchants?.business_name}`,
@@ -290,11 +408,12 @@ export default function AdminOrderDetailPage() {
             distance: order.delivery_distance_km,
           }
         );
+        if (success) notifiedCount++;
       }
 
-      toast.success(`📢 Notified ${availableDrivers.length} available drivers!`);
+      toast.success(`📢 Notified ${notifiedCount} available drivers!`);
     } catch (error) {
-      console.error('Failed to notify drivers:', error);
+      console.error('❌ Failed to notify drivers:', error);
       toast.error('Failed to notify drivers');
     } finally {
       setNotifyingDriver(false);
@@ -306,12 +425,10 @@ export default function AdminOrderDetailPage() {
 
     setAssigningDriver(true);
     try {
-      // Update order with driver
       const { error: updateError } = await supabase.from('orders').update({ driver_id: driverId }).eq('id', order.id);
 
       if (updateError) throw updateError;
 
-      // Update assignment status
       const { error: assignError } = await supabase
         .from('driver_assignments')
         .update({
@@ -321,9 +438,8 @@ export default function AdminOrderDetailPage() {
         .eq('order_id', order.id)
         .eq('driver_id', driverId);
 
-      if (assignError) console.error('Assignment update error:', assignError);
+      if (assignError) console.error('❌ Assignment update error:', assignError);
 
-      // Send notification to driver
       const driver = availableDrivers.find((d) => d.id === driverId);
       if (driver) {
         await sendNotification(
@@ -340,7 +456,6 @@ export default function AdminOrderDetailPage() {
         );
       }
 
-      // Send notification to customer
       await sendNotification(
         order.customer_id,
         'Driver Assigned',
@@ -352,7 +467,7 @@ export default function AdminOrderDetailPage() {
       toast.success('✅ Driver assigned successfully!');
       loadOrder();
     } catch (error) {
-      console.error('Failed to assign driver:', error);
+      console.error('❌ Failed to assign driver:', error);
       toast.error('Failed to assign driver');
     } finally {
       setAssigningDriver(false);
@@ -428,6 +543,34 @@ Payment: ${order.payment_method} (${order.payment_status})
     return { elapsedMinutes, estimatedTime, actualTime };
   };
 
+  const getTrustBadge = (trustScore: number, accountStatus: string) => {
+    if (accountStatus === 'flagged' || trustScore < 2.0) {
+      return {
+        icon: AlertTriangle,
+        color: 'bg-red-100 text-red-800 border-red-200',
+        text: 'High Risk',
+      };
+    } else if (accountStatus === 'warning' || trustScore < 3.5) {
+      return {
+        icon: TrendingDown,
+        color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+        text: 'Caution',
+      };
+    } else if (trustScore >= 4.5) {
+      return {
+        icon: Award,
+        color: 'bg-green-100 text-green-800 border-green-200',
+        text: 'Trusted',
+      };
+    } else {
+      return {
+        icon: Shield,
+        color: 'bg-blue-100 text-blue-800 border-blue-200',
+        text: 'Verified',
+      };
+    }
+  };
+
   if (loading) return <PageLoadingSpinner />;
 
   if (!order) {
@@ -456,6 +599,11 @@ Payment: ${order.payment_method} (${order.payment_status})
   const statusConfig = getStatusConfig(order.status);
   const StatusIcon = statusConfig.icon;
   const metrics = calculateDeliveryMetrics();
+
+  const trustScore = order.profiles?.trust_score || 5.0;
+  const accountStatus = order.profiles?.account_status || 'active';
+  const trustBadge = getTrustBadge(trustScore, accountStatus);
+  const TrustIcon = trustBadge.icon;
 
   return (
     <DashboardLayout>
@@ -565,14 +713,7 @@ Payment: ${order.payment_method} (${order.payment_status})
                             : 'bg-primary text-white hover:bg-orange-600'
                         }`}
                       >
-                        {updating && order.status !== status ? (
-                          <span className="flex items-center gap-2">
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            Updating...
-                          </span>
-                        ) : (
-                          status.replace('_', ' ')
-                        )}
+                        {status.replace('_', ' ')}
                       </button>
                     )
                   )}
@@ -606,45 +747,219 @@ Payment: ${order.payment_method} (${order.payment_status})
               </div>
             )}
 
-            {/* Rest of the component remains the same... */}
-            {/* Customer Info, Restaurant Info, Order Items, etc. */}
-            {/* (keeping the same code from before to save space) */}
+            {/* 🆕 CUSTOMER TRUST & RELIABILITY */}
+            {order.profiles && (
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <User className="text-primary" size={20} />
+                  Customer Details & Trust Score
+                </h3>
 
-            {/* Customer Info */}
-            <div className="bg-white rounded-xl shadow-md p-6">
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <User className="text-primary" size={20} />
-                Customer Details
-              </h3>
-              <div className="space-y-2">
-                <p className="font-semibold text-gray-900">{order.profiles?.full_name}</p>
-                {order.profiles?.phone && (
-                  <div className="flex items-center gap-2">
-                    <Phone size={16} className="text-gray-600" />
-                    <a href={`tel:${order.profiles.phone}`} className="text-primary hover:underline">
-                      {order.profiles.phone}
-                    </a>
-                  </div>
-                )}
-                {order.profiles?.email && (
-                  <div className="flex items-center gap-2">
-                    <Mail size={16} className="text-gray-600" />
-                    <a href={`mailto:${order.profiles.email}`} className="text-primary hover:underline">
-                      {order.profiles.email}
-                    </a>
-                  </div>
-                )}
-              </div>
+                <div className="space-y-4">
+                  {/* Customer Basic Info */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-semibold text-gray-900 text-lg">{order.profiles.full_name}</p>
+                      <div className={`flex items-center gap-1 px-3 py-1 rounded-full border ${trustBadge.color}`}>
+                        <TrustIcon size={14} />
+                        <span className="text-xs font-bold">{trustBadge.text}</span>
+                      </div>
+                    </div>
 
-              <div className="mt-4 pt-4 border-t">
-                <h4 className="font-bold mb-2 flex items-center gap-2">
-                  <MapPin className="text-primary" size={16} />
-                  Delivery Address
-                </h4>
-                <p className="text-gray-700">{order.delivery_address}</p>
-                <p className="text-sm text-gray-500 mt-1">Distance: {order.delivery_distance_km.toFixed(1)} km</p>
+                    {order.profiles.phone && (
+                      <div className="flex items-center gap-2 mb-1">
+                        <Phone size={16} className="text-gray-600" />
+                        <a href={`tel:${order.profiles.phone}`} className="text-primary hover:underline">
+                          {order.profiles.phone}
+                        </a>
+                      </div>
+                    )}
+
+                    {order.profiles.email && (
+                      <div className="flex items-center gap-2">
+                        <Mail size={16} className="text-gray-600" />
+                        <a href={`mailto:${order.profiles.email}`} className="text-primary hover:underline text-sm">
+                          {order.profiles.email}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 🆕 Trust Score & Order History */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                    <div className="text-center">
+                      <Star className="w-5 h-5 mx-auto text-yellow-600 mb-1" />
+                      <p className="text-xs text-gray-600">Trust Score</p>
+                      <p className="text-xl font-bold text-gray-900">{trustScore.toFixed(1)}/5.0</p>
+                    </div>
+
+                    <div className="text-center">
+                      <Package className="w-5 h-5 mx-auto text-blue-600 mb-1" />
+                      <p className="text-xs text-gray-600">Total Orders</p>
+                      <p className="text-xl font-bold text-gray-900">{order.profiles.total_orders || 0}</p>
+                    </div>
+
+                    <div className="text-center">
+                      <CheckCircle className="w-5 h-5 mx-auto text-green-600 mb-1" />
+                      <p className="text-xs text-gray-600">Completed</p>
+                      <p className="text-xl font-bold text-green-700">{order.profiles.completed_orders || 0}</p>
+                    </div>
+
+                    <div className="text-center">
+                      <XCircle className="w-5 h-5 mx-auto text-red-600 mb-1" />
+                      <p className="text-xs text-gray-600">Cancelled</p>
+                      <p className="text-xl font-bold text-red-700">{order.profiles.cancelled_orders || 0}</p>
+                    </div>
+                  </div>
+
+                  {/* 🆕 Account Status Warning */}
+                  {accountStatus === 'flagged' && (
+                    <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
+                        <div>
+                          <p className="font-bold text-red-900">⚠️ High Risk Customer</p>
+                          <p className="text-sm text-red-700 mt-1">
+                            This customer has been flagged due to high cancellation rate. Exercise caution and consider
+                            requiring advance payment.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {accountStatus === 'warning' && (
+                    <div className="p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
+                        <div>
+                          <p className="font-bold text-yellow-900">⚠️ Customer on Warning</p>
+                          <p className="text-sm text-yellow-700 mt-1">
+                            This customer has a moderate cancellation rate. Monitor order carefully.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {order.profiles.is_trusted && trustScore >= 4.5 && (
+                    <div className="p-4 bg-green-50 border-l-4 border-green-500 rounded">
+                      <div className="flex items-start gap-3">
+                        <Award className="text-green-600 flex-shrink-0 mt-0.5" size={20} />
+                        <div>
+                          <p className="font-bold text-green-900">✅ Trusted Customer</p>
+                          <p className="text-sm text-green-700 mt-1">
+                            This customer has excellent order history with minimal cancellations. Priority service
+                            recommended.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 🆕 FULL DELIVERY ADDRESS */}
+                <div className="mt-6 pt-4 border-t">
+                  <h4 className="font-bold mb-3 flex items-center gap-2">
+                    <MapPin className="text-primary" size={16} />
+                    Full Delivery Address
+                  </h4>
+
+                  {order.customerAddress ? (
+                    <div className="space-y-3">
+                      {/* Address Label */}
+                      <div className="inline-flex items-center gap-2 px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-semibold">
+                        {order.customerAddress.label === 'Home' && '🏠'}
+                        {order.customerAddress.label === 'Work' && '💼'}
+                        {order.customerAddress.label === 'Other' && '📍'}
+                        <span>{order.customerAddress.label}</span>
+                      </div>
+
+                      {/* Recipient Details */}
+                      {order.customerAddress.recipient_name && (
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <User size={14} className="text-gray-500" />
+                            <p className="font-semibold text-sm text-gray-900">
+                              {order.customerAddress.recipient_name}
+                            </p>
+                          </div>
+                          {order.customerAddress.recipient_phone && (
+                            <div className="flex items-center gap-2">
+                              <Phone size={14} className="text-gray-500" />
+                              <a
+                                href={`tel:${order.customerAddress.recipient_phone}`}
+                                className="text-sm text-primary hover:underline"
+                              >
+                                {order.customerAddress.recipient_phone}
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Full Address */}
+                      <p className="text-gray-700 font-medium">{order.customerAddress.address}</p>
+
+                      {/* Apartment/Floor */}
+                      {order.customerAddress.apartment_floor && (
+                        <div className="flex items-start gap-2">
+                          <Building2 size={16} className="text-gray-500 mt-0.5" />
+                          <p className="text-sm text-gray-600">{order.customerAddress.apartment_floor}</p>
+                        </div>
+                      )}
+
+                      {/* Landmark */}
+                      {order.customerAddress.landmark && (
+                        <div className="flex items-start gap-2">
+                          <MapPinned size={16} className="text-gray-500 mt-0.5" />
+                          <p className="text-sm text-gray-600">
+                            <span className="font-semibold">Landmark:</span> {order.customerAddress.landmark}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* City, State, Postal Code */}
+                      {(order.customerAddress.city ||
+                        order.customerAddress.state ||
+                        order.customerAddress.postal_code) && (
+                        <p className="text-sm text-gray-600">
+                          📮{' '}
+                          {[
+                            order.customerAddress.city,
+                            order.customerAddress.state,
+                            order.customerAddress.postal_code,
+                          ]
+                            .filter(Boolean)
+                            .join(', ')}
+                        </p>
+                      )}
+
+                      {/* Delivery Instructions */}
+                      {order.customerAddress.delivery_instructions && (
+                        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                          <p className="text-xs font-semibold text-blue-900 mb-1 flex items-center gap-1">
+                            <Bell size={12} />
+                            Delivery Instructions:
+                          </p>
+                          <p className="text-sm text-blue-800">{order.customerAddress.delivery_instructions}</p>
+                        </div>
+                      )}
+
+                      <p className="text-sm text-gray-500 mt-2 flex items-center gap-1">
+                        <MapPin size={14} />
+                        Distance: {order.delivery_distance_km.toFixed(1)} km
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-gray-700">{order.delivery_address}</p>
+                      <p className="text-sm text-gray-500 mt-1">Distance: {order.delivery_distance_km.toFixed(1)} km</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Restaurant Info */}
             <div className="bg-white rounded-xl shadow-md p-6">
@@ -705,7 +1020,7 @@ Payment: ${order.payment_method} (${order.payment_status})
                 <h3 className="text-lg font-bold mb-4">Customer Review</h3>
                 <div className="flex items-center gap-2 mb-2">
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <CheckCircle
+                    <Star
                       key={star}
                       className={`w-6 h-6 ${star <= order.rating! ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
                     />
