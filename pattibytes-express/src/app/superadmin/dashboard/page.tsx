@@ -115,7 +115,7 @@ export default function SuperAdminDashboard() {
             </div>
             <p className="text-sm opacity-90">Platform wide</p>
           </div>
-
+ 
           {/* Pending Approvals */}
           <Link
             href="/superadmin/users"

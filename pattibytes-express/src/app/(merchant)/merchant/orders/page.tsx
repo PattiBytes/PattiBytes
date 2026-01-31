@@ -1,334 +1,306 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { Order } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { 
-  Clock, CheckCircle, XCircle, Package, 
-  Phone, MessageSquare, Navigation, Filter 
+import {
+  Package,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Truck,
+  ChefHat,
+  Filter,
+  Search,
+  Eye,
+  Check,
+  X,
 } from 'lucide-react';
+import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
 import { toast } from 'react-toastify';
-import { formatDistanceToNow } from 'date-fns';
 
-interface OrderItem {
+interface Order {
   id: string;
-  name: string;
-  price: number;
-  quantity: number;
-  image_url?: string;
+  customer_id: string;
+  items: any[];
+  subtotal: number;
+  delivery_fee: number;
+  tax: number;
+  total_amount: number;
+  status: string;
+  payment_method: string;
+  payment_status: string;
+  delivery_address: string;
+  created_at: string;
+  preparation_time?: number;
+  profiles?: {
+    full_name: string;
+    phone?: string;
+  };
 }
 
 export default function MerchantOrdersPage() {
   const { user } = useAuth();
+  const router = useRouter();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [merchantId, setMerchantId] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    if (user) loadOrders();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, statusFilter]);
-
-  const loadOrders = async () => {
-  try {
-    setLoading(true);
-
-    // First get merchant ID
-    const { data: merchantData } = await supabase
-      .from('merchants')
-      .select('id')
-      .eq('user_id', user!.id)
-      .single();
-
-    if (!merchantData) {
-      toast.error('Merchant profile not found');
-      setLoading(false);
+    if (!user) {
+      router.push('/login');
       return;
     }
+    loadMerchantAndOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
-    // Then get orders
-    let query = supabase
-      .from('orders')
-      .select('*')
-      .eq('merchant_id', merchantData.id)
-      .order('created_at', { ascending: false });
+  useEffect(() => {
+    applyFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, statusFilter, searchQuery]);
+
+  const loadMerchantAndOrders = async () => {
+    if (!user) return;
+
+    try {
+      // Get merchant ID
+      const { data: merchant, error: merchantError } = await supabase
+        .from('merchants')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (merchantError) throw merchantError;
+
+      setMerchantId(merchant.id);
+
+      // Load orders
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          profiles:customer_id (
+            full_name,
+            phone
+          )
+        `)
+        .eq('merchant_id', merchant.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setOrders(data || []);
+    } catch (error) {
+      console.error('Failed to load orders:', error);
+      toast.error('Failed to load orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const applyFilters = () => {
+    let filtered = [...orders];
 
     if (statusFilter !== 'all') {
-      query = query.eq('status', statusFilter);
+      filtered = filtered.filter((order) => order.status === statusFilter);
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
-    setOrders(data as Order[]);
-  } catch (error) {
-    console.error('Load orders error:', error);
-    toast.error('Failed to load orders');
-  } finally {
-    setLoading(false);
-  }
-};
+    if (searchQuery) {
+      filtered = filtered.filter(
+        (order) =>
+          order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          order.profiles?.full_name
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase())
+      );
+    }
 
+    setFilteredOrders(filtered);
+  };
 
-  const updateOrderStatus = async (orderId: string, status: string) => {
+  const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
       const { error } = await supabase
         .from('orders')
-        .update({ status })
+        .update({ status: newStatus })
         .eq('id', orderId);
 
       if (error) throw error;
 
-      const order = orders.find(o => o.id === orderId);
-      if (order) {
-        await supabase.from('notifications').insert([{
-          user_id: order.customer_id,
-          title: 'Order Update',
-          body: `Your order is now ${status}`,
-          type: 'order_update',
-          data: { order_id: orderId, status },
-        }]);
-      }
-
-      toast.success(`Order ${status}`);
-      loadOrders();
+      toast.success(`Order ${newStatus}!`);
+      loadMerchantAndOrders();
     } catch (error) {
-      console.error('Update order error:', error);
-      toast.error('Failed to update order');
+      console.error('Failed to update order:', error);
+      toast.error('Failed to update order status');
     }
   };
 
-  const handleAcceptOrder = (orderId: string) => {
-    updateOrderStatus(orderId, 'confirmed');
-  };
-
-  const handleRejectOrder = async (orderId: string) => {
-    if (!confirm('Are you sure you want to reject this order?')) return;
-    updateOrderStatus(orderId, 'cancelled');
-  };
-
-  const handleMarkReady = (orderId: string) => {
-    updateOrderStatus(orderId, 'ready');
-  };
-
-  const handleContactCustomer = (phone: string) => {
-    window.open(`tel:${phone}`);
-  };
-
-  const handleChatCustomer = () => {
-    toast.info('Chat feature coming soon!');
-  };
-
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      confirmed: 'bg-blue-100 text-blue-800',
-      preparing: 'bg-purple-100 text-purple-800',
-      ready: 'bg-green-100 text-green-800',
-      delivered: 'bg-gray-100 text-gray-800',
-      cancelled: 'bg-red-100 text-red-800',
+  const getStatusBadge = (status: string) => {
+    const statusConfig: any = {
+      pending: { color: 'bg-yellow-100 text-yellow-800', icon: Clock, label: 'New Order' },
+      confirmed: { color: 'bg-blue-100 text-blue-800', icon: ChefHat, label: 'Confirmed' },
+      preparing: { color: 'bg-purple-100 text-purple-800', icon: ChefHat, label: 'Preparing' },
+      ready: { color: 'bg-orange-100 text-orange-800', icon: Package, label: 'Ready' },
+      picked_up: { color: 'bg-indigo-100 text-indigo-800', icon: Truck, label: 'Picked Up' },
+      delivered: { color: 'bg-green-100 text-green-800', icon: CheckCircle, label: 'Delivered' },
+      cancelled: { color: 'bg-red-100 text-red-800', icon: XCircle, label: 'Cancelled' },
     };
-    return colors[status] || 'bg-gray-100 text-gray-800';
+
+    const config = statusConfig[status] || statusConfig.pending;
+    const Icon = config.icon;
+
+    return (
+      <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${config.color}`}>
+        <Icon size={14} />
+        {config.label}
+      </span>
+    );
   };
+
+  if (loading) return <PageLoadingSpinner />;
 
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Orders</h1>
-            <p className="text-gray-600 mt-1">Manage your incoming orders</p>
-          </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-8">Orders</h1>
 
-          {/* Filter */}
-          <div className="flex items-center gap-2">
-            <Filter size={20} className="text-gray-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            >
-              <option value="all">All Orders</option>
-              <option value="pending">Pending</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="preparing">Preparing</option>
-              <option value="ready">Ready</option>
-              <option value="delivered">Delivered</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-yellow-50 rounded-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-yellow-600 font-medium">Pending</p>
-                <p className="text-2xl font-bold text-yellow-900 mt-1">
-                  {orders.filter(o => o.status === 'pending').length}
-                </p>
-              </div>
-              <Clock className="text-yellow-600" size={32} />
+        {/* Filters */}
+        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="Search orders..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
             </div>
-          </div>
 
-          <div className="bg-blue-50 rounded-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-600 font-medium">Confirmed</p>
-                <p className="text-2xl font-bold text-blue-900 mt-1">
-                  {orders.filter(o => o.status === 'confirmed').length}
-                </p>
-              </div>
-              <CheckCircle className="text-blue-600" size={32} />
-            </div>
-          </div>
-
-          <div className="bg-green-50 rounded-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-600 font-medium">Ready</p>
-                <p className="text-2xl font-bold text-green-900 mt-1">
-                  {orders.filter(o => o.status === 'ready').length}
-                </p>
-              </div>
-              <Package className="text-green-600" size={32} />
-            </div>
-          </div>
-
-          <div className="bg-gray-50 rounded-lg p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 font-medium">Delivered</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">
-                  {orders.filter(o => o.status === 'delivered').length}
-                </p>
-              </div>
-              <CheckCircle className="text-gray-600" size={32} />
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent appearance-none"
+              >
+                <option value="all">All Orders</option>
+                <option value="pending">New Orders</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="preparing">Preparing</option>
+                <option value="ready">Ready for Pickup</option>
+                <option value="picked_up">Out for Delivery</option>
+                <option value="delivered">Delivered</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
             </div>
           </div>
         </div>
 
         {/* Orders List */}
-        {loading ? (
-          <div className="grid grid-cols-1 gap-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-gray-200 h-48 rounded-lg animate-pulse" />
-            ))}
-          </div>
-        ) : orders.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg">
+        {filteredOrders.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-md p-12 text-center">
             <Package size={64} className="mx-auto text-gray-400 mb-4" />
-            <h2 className="text-xl font-bold text-gray-900 mb-2">No orders found</h2>
-            <p className="text-gray-600">Orders will appear here when customers place them</p>
+            <p className="text-gray-600">No orders found</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {orders.map((order) => (
+            {filteredOrders.map((order) => (
               <div
                 key={order.id}
-                className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow"
+                className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow"
               >
-                {/* Order Header */}
                 <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-bold text-gray-900">Order #{order.id.slice(0, 8)}</h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
-                        {order.status}
-                      </span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-bold text-gray-900">
+                        {order.profiles?.full_name || 'Customer'}
+                      </h3>
+                      {getStatusBadge(order.status)}
                     </div>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
+                    <p className="text-sm text-gray-600">Order #{order.id.slice(0, 8)}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(order.created_at).toLocaleString()}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-primary">₹{order.total}</p>
-                    <p className="text-sm text-gray-600">{order.items.length} items</p>
+                    <p className="text-2xl font-bold text-primary">
+                      ₹{order.total_amount?.toFixed(2) || '0.00'}
+                    </p>
+                    <p className="text-sm text-gray-600">{order.items?.length || 0} items</p>
                   </div>
                 </div>
 
-                {/* Order Items */}
-                <div className="border-t border-b border-gray-200 py-4 mb-4">
-                  <div className="space-y-2">
-                    {order.items.map((item: OrderItem, idx: number) => (
-                      <div key={idx} className="flex justify-between text-sm">
-                        <span className="text-gray-700">
-                          {item.quantity}x {item.name}
-                        </span>
-                        <span className="text-gray-900 font-medium">
-                          ₹{(Number(item.price) * Number(item.quantity || 1)).toFixed(2)}
-                        </span>
-                      </div>
+                <div className="border-t pt-4 mb-4">
+                  <h4 className="font-semibold mb-2">Items:</h4>
+                  <div className="space-y-1">
+                    {order.items?.map((item: any, index: number) => (
+                      <p key={index} className="text-sm text-gray-700">
+                        {item.name} × {item.quantity}
+                      </p>
                     ))}
                   </div>
                 </div>
 
-                {/* Delivery Address */}
-                <div className="mb-4">
-                  <p className="text-sm font-medium text-gray-700 mb-1">Delivery Address:</p>
-                  <p className="text-sm text-gray-600 flex items-start gap-2">
-                    <Navigation size={16} className="mt-0.5 flex-shrink-0" />
-                    {order.delivery_address.address}
-                  </p>
-                </div>
-
-                {/* Special Instructions */}
-                {order.special_instructions && (
-                  <div className="mb-4 bg-yellow-50 rounded-lg p-3">
-                    <p className="text-sm font-medium text-yellow-900 mb-1">Special Instructions:</p>
-                    <p className="text-sm text-yellow-800">{order.special_instructions}</p>
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-2">
                   {order.status === 'pending' && (
                     <>
                       <button
-                        onClick={() => handleAcceptOrder(order.id)}
-                        className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 font-medium flex items-center justify-center gap-2"
+                        onClick={() => updateOrderStatus(order.id, 'confirmed')}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                       >
-                        <CheckCircle size={18} />
+                        <Check size={16} />
                         Accept Order
                       </button>
                       <button
-                        onClick={() => handleRejectOrder(order.id)}
-                        className="flex-1 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 font-medium flex items-center justify-center gap-2"
+                        onClick={() => {
+                          if (confirm('Are you sure you want to reject this order?')) {
+                            updateOrderStatus(order.id, 'cancelled');
+                          }
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                       >
-                        <XCircle size={18} />
+                        <X size={16} />
                         Reject
                       </button>
                     </>
                   )}
 
-                  {(order.status === 'confirmed' || order.status === 'preparing') && (
+                  {order.status === 'confirmed' && (
                     <button
-                      onClick={() => handleMarkReady(order.id)}
-                      className="flex-1 bg-primary text-white px-4 py-2 rounded-lg hover:bg-orange-600 font-medium flex items-center justify-center gap-2"
+                      onClick={() => updateOrderStatus(order.id, 'preparing')}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
                     >
-                      <Package size={18} />
+                      <ChefHat size={16} />
+                      Start Preparing
+                    </button>
+                  )}
+
+                  {order.status === 'preparing' && (
+                    <button
+                      onClick={() => updateOrderStatus(order.id, 'ready')}
+                      className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                    >
+                      <Package size={16} />
                       Mark as Ready
                     </button>
                   )}
 
-                  {/* Contact Actions - Always visible */}
                   <button
-                    onClick={() => handleContactCustomer('+91 9876543210')}
-                    className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100 font-medium flex items-center gap-2"
+                    onClick={() => router.push(`/merchant/orders/${order.id}`)}
+                    className="ml-auto flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-orange-600 transition-colors"
                   >
-                    <Phone size={18} />
-                    Call
-                  </button>
-                  <button
-                    onClick={handleChatCustomer}
-                    className="bg-purple-50 text-purple-600 px-4 py-2 rounded-lg hover:bg-purple-100 font-medium flex items-center gap-2"
-                  >
-                    <MessageSquare size={18} />
-                    Chat
+                    <Eye size={16} />
+                    View Details
                   </button>
                 </div>
               </div>

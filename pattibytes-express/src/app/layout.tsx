@@ -8,6 +8,7 @@ import PWAInstaller from '@/components/PWAInstaller';
 import Header from '@/components/common/Header';
 import { CartProvider } from '@/contexts/CartContext';
 
+
 const geistSans = Geist({
   variable: '--font-geist-sans',
   subsets: ['latin'],

@@ -1,24 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable react-hooks/exhaustive-deps */
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { notificationService } from '@/services/notifications';
+import { notificationService, type Notification } from '@/services/notifications';
 import { supabase } from '@/lib/supabase';
 import { Bell, Check, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: string;
-  read: boolean;
-  created_at: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data?: any;
-}
 
 export default function NotificationBell() {
   const { user } = useAuth();
@@ -46,6 +34,7 @@ export default function NotificationBell() {
         unsubscribe();
       };
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const loadNotifications = async () => {
@@ -55,7 +44,7 @@ export default function NotificationBell() {
     try {
       const data = await notificationService.getUserNotifications(user.id);
       setNotifications(data);
-      setUnreadCount(data.filter((n: Notification) => !n.read).length);
+      setUnreadCount(data.filter((n) => !n.is_read).length);
     } catch (error) {
       console.error('Failed to load notifications:', error);
     } finally {
@@ -66,9 +55,11 @@ export default function NotificationBell() {
   const handleMarkAsRead = async (notificationId: string) => {
     try {
       await notificationService.markAsRead(notificationId);
-      setNotifications(notifications.map((n) =>
-        n.id === notificationId ? { ...n, read: true } : n
-      ));
+      setNotifications(
+        notifications.map((n) =>
+          n.id === notificationId ? { ...n, is_read: true } : n
+        )
+      );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (error) {
       toast.error('Failed to mark as read');
@@ -80,7 +71,7 @@ export default function NotificationBell() {
 
     try {
       await notificationService.markAllAsRead(user.id);
-      setNotifications(notifications.map((n) => ({ ...n, read: true })));
+      setNotifications(notifications.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
       toast.success('All notifications marked as read');
     } catch (error) {
@@ -97,7 +88,11 @@ export default function NotificationBell() {
 
       if (error) throw error;
 
+      const deletedNotif = notifications.find((n) => n.id === notificationId);
       setNotifications(notifications.filter((n) => n.id !== notificationId));
+      if (deletedNotif && !deletedNotif.is_read) {
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      }
       toast.success('Notification deleted');
     } catch (error) {
       toast.error('Failed to delete notification');
@@ -127,7 +122,8 @@ export default function NotificationBell() {
     <div className="relative">
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className="relative p-2 text-gray-600 hover:text-primary transition-colors"
+        className="relative p-2 text-gray-600 hover:text-primary transition-colors rounded-lg hover:bg-gray-100"
+        aria-label="Notifications"
       >
         <Bell size={24} />
         {unreadCount > 0 && (
@@ -143,24 +139,24 @@ export default function NotificationBell() {
             className="fixed inset-0 z-40"
             onClick={() => setShowDropdown(false)}
           />
-          <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl z-50 max-h-[500px] overflow-hidden flex flex-col">
+          <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-2xl z-50 max-h-[500px] overflow-hidden flex flex-col border-2 border-gray-100">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-              <h3 className="font-bold text-lg">Notifications</h3>
+            <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-orange-50 to-pink-50">
+              <h3 className="font-bold text-lg text-gray-900">Notifications</h3>
               <div className="flex items-center gap-2">
                 {unreadCount > 0 && (
                   <button
                     onClick={handleMarkAllAsRead}
-                    className="text-sm text-primary hover:underline"
+                    className="text-xs text-primary hover:underline font-medium"
                   >
                     Mark all read
                   </button>
                 )}
                 <button
                   onClick={() => setShowDropdown(false)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="text-gray-500 hover:text-gray-700 p-1 hover:bg-white rounded-lg"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               </div>
             </div>
@@ -176,22 +172,24 @@ export default function NotificationBell() {
                   {notifications.map((notification) => (
                     <div
                       key={notification.id}
-                      className={`p-4 hover:bg-gray-50 transition-colors ${
-                        !notification.read ? 'bg-blue-50 border-l-4 border-primary' : ''
+                      className={`p-3 hover:bg-gray-50 transition-colors ${
+                        !notification.is_read
+                          ? 'bg-blue-50 border-l-4 border-primary'
+                          : ''
                       }`}
                     >
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl flex-shrink-0">
+                      <div className="flex items-start gap-2">
+                        <span className="text-xl flex-shrink-0 mt-0.5">
                           {getNotificationIcon(notification.type)}
                         </span>
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-gray-900 text-sm">
                             {notification.title}
                           </h4>
-                          <p className="text-sm text-gray-600 mt-1">
-                            {notification.message}
+                          <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                            {notification.body}
                           </p>
-                          <p className="text-xs text-gray-500 mt-2">
+                          <p className="text-[10px] text-gray-500 mt-1.5">
                             {new Date(notification.created_at).toLocaleString('en-IN', {
                               day: 'numeric',
                               month: 'short',
@@ -200,22 +198,22 @@ export default function NotificationBell() {
                             })}
                           </p>
                         </div>
-                        <div className="flex gap-1">
-                          {!notification.read && (
+                        <div className="flex gap-1 flex-shrink-0">
+                          {!notification.is_read && (
                             <button
                               onClick={() => handleMarkAsRead(notification.id)}
-                              className="text-green-600 hover:text-green-700 p-1"
+                              className="text-green-600 hover:text-green-700 p-1 hover:bg-green-50 rounded"
                               title="Mark as read"
                             >
-                              <Check size={16} />
+                              <Check size={14} />
                             </button>
                           )}
                           <button
                             onClick={() => handleDelete(notification.id)}
-                            className="text-red-600 hover:text-red-700 p-1"
+                            className="text-red-600 hover:text-red-700 p-1 hover:bg-red-50 rounded"
                             title="Delete"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </div>
@@ -224,7 +222,7 @@ export default function NotificationBell() {
                 </div>
               ) : (
                 <div className="p-8 text-center">
-                  <Bell size={48} className="mx-auto text-gray-400 mb-2" />
+                  <Bell size={48} className="mx-auto text-gray-400 mb-3" />
                   <p className="text-gray-600 font-medium">No notifications</p>
                   <p className="text-sm text-gray-500 mt-1">You&apos;re all caught up!</p>
                 </div>

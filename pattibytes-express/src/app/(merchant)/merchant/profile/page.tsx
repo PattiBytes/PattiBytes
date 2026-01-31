@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { Save, Store, AlertCircle, MapPin, Clock } from 'lucide-react';
+import AddressSelector from '@/components/common/AddressSelector';
+import { Save, Store, Clock } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { logger } from '@/lib/logger';
+import { SavedAddress } from '@/services/location';
 import ImageUpload from '@/components/common/ImageUpload';
 
 export default function MerchantProfilePage() {
@@ -14,6 +15,7 @@ export default function MerchantProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [merchantId, setMerchantId] = useState<string>('');
+  const [selectedAddress, setSelectedAddress] = useState<SavedAddress | null>(null);
   const [formData, setFormData] = useState({
     business_name: '',
     business_type: 'Restaurant',
@@ -23,8 +25,6 @@ export default function MerchantProfilePage() {
     cuisine_types: [] as string[],
     phone: '',
     email: '',
-    latitude: null as number | null,
-    longitude: null as number | null,
     min_order_amount: 100,
     delivery_radius_km: 5,
     estimated_prep_time: 30,
@@ -32,7 +32,7 @@ export default function MerchantProfilePage() {
   });
 
   const cuisineOptions = [
-    'Punjabi', 'North Indian', 'South Indian', 'Chinese', 
+    'Punjabi', 'North Indian', 'South Indian', 'Chinese',
     'Fast Food', 'Street Food', 'Desserts', 'Beverages',
     'Continental', 'Italian', 'Mexican',
   ];
@@ -45,7 +45,7 @@ export default function MerchantProfilePage() {
     if (user) {
       loadProfile();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const loadProfile = async () => {
@@ -58,11 +58,7 @@ export default function MerchantProfilePage() {
         .eq('user_id', user!.id)
         .maybeSingle();
 
-      if (error) {
-        logger.error('Failed to load profile', error);
-        toast.error('Failed to load profile');
-        return;
-      }
+      if (error) throw error;
 
       if (data) {
         setMerchantId(data.id);
@@ -75,16 +71,31 @@ export default function MerchantProfilePage() {
           cuisine_types: data.cuisine_types || [],
           phone: data.phone || '',
           email: data.email || '',
-          latitude: data.latitude,
-          longitude: data.longitude,
           min_order_amount: data.min_order_amount || 100,
           delivery_radius_km: data.delivery_radius_km || 5,
           estimated_prep_time: data.estimated_prep_time || 30,
           is_active: data.is_active ?? true,
         });
+
+        // Set address if exists
+        if (data.address && data.latitude && data.longitude) {
+          setSelectedAddress({
+            id: data.id,
+            user_id: data.user_id,
+            label: 'Business Address',
+            address: data.address,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            city: data.city || '',
+            state: data.state || '',
+            postal_code: data.postal_code || '',
+            is_default: true,
+            created_at: data.created_at,
+          });
+        }
       }
     } catch (error) {
-      logger.error('Error loading profile', error);
+      console.error('Error loading profile:', error);
       toast.error('Error loading profile');
     } finally {
       setLoading(false);
@@ -119,6 +130,11 @@ export default function MerchantProfilePage() {
         return;
       }
 
+      if (!selectedAddress) {
+        toast.error('Please select a business address');
+        return;
+      }
+
       const { error } = await supabase
         .from('merchants')
         .update({
@@ -130,8 +146,12 @@ export default function MerchantProfilePage() {
           cuisine_types: formData.cuisine_types,
           phone: formData.phone,
           email: formData.email,
-          latitude: formData.latitude,
-          longitude: formData.longitude,
+          address: selectedAddress.address,
+          latitude: selectedAddress.latitude,
+          longitude: selectedAddress.longitude,
+          city: selectedAddress.city,
+          state: selectedAddress.state,
+          postal_code: selectedAddress.postal_code,
           min_order_amount: formData.min_order_amount,
           delivery_radius_km: formData.delivery_radius_km,
           estimated_prep_time: formData.estimated_prep_time,
@@ -140,16 +160,13 @@ export default function MerchantProfilePage() {
         })
         .eq('id', merchantId);
 
-      if (error) {
-        logger.error('Failed to update profile', error);
-        throw error;
-      }
+      if (error) throw error;
 
       toast.success('Profile updated successfully!');
       loadProfile();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      logger.error('Error saving profile', error);
+      console.error('Error saving profile:', error);
       toast.error(error.message || 'Failed to save profile');
     } finally {
       setSaving(false);
@@ -231,7 +248,7 @@ export default function MerchantProfilePage() {
                     type="text"
                     value={formData.business_name}
                     onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
                     required
                   />
                 </div>
@@ -241,7 +258,7 @@ export default function MerchantProfilePage() {
                   <select
                     value={formData.business_type}
                     onChange={(e) => setFormData({ ...formData, business_type: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
                   >
                     {businessTypes.map((type) => (
                       <option key={type} value={type}>{type}</option>
@@ -255,7 +272,7 @@ export default function MerchantProfilePage() {
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
                     required
                   />
                 </div>
@@ -266,7 +283,7 @@ export default function MerchantProfilePage() {
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
                   />
                 </div>
 
@@ -276,7 +293,7 @@ export default function MerchantProfilePage() {
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
                   />
                 </div>
               </div>
@@ -303,34 +320,14 @@ export default function MerchantProfilePage() {
               </div>
             </div>
 
-            {/* Location */}
+            {/* Business Address */}
             <div>
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <MapPin size={20} className="text-primary" />
-                Location
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Latitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={formData.latitude || ''}
-                    onChange={(e) => setFormData({ ...formData, latitude: e.target.value ? parseFloat(e.target.value) : null })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Longitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={formData.longitude || ''}
-                    onChange={(e) => setFormData({ ...formData, longitude: e.target.value ? parseFloat(e.target.value) : null })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Business Address *</h3>
+              <AddressSelector
+                userId={user!.id}
+                selectedAddress={selectedAddress}
+                onAddressSelect={setSelectedAddress}
+              />
             </div>
 
             {/* Delivery Settings */}
@@ -348,7 +345,7 @@ export default function MerchantProfilePage() {
                     type="number"
                     value={formData.min_order_amount}
                     onChange={(e) => setFormData({ ...formData, min_order_amount: parseFloat(e.target.value) })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
                     min="0"
                   />
                 </div>
@@ -362,11 +359,10 @@ export default function MerchantProfilePage() {
                     step="0.1"
                     value={formData.delivery_radius_km}
                     onChange={(e) => setFormData({ ...formData, delivery_radius_km: parseFloat(e.target.value) })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
                     min="1"
                     max="50"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Shown to customers</p>
                 </div>
 
                 <div>
@@ -377,7 +373,7 @@ export default function MerchantProfilePage() {
                     type="number"
                     value={formData.estimated_prep_time}
                     onChange={(e) => setFormData({ ...formData, estimated_prep_time: parseInt(e.target.value) })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
                     min="10"
                     max="120"
                   />
@@ -392,22 +388,11 @@ export default function MerchantProfilePage() {
                 id="is_active"
                 checked={formData.is_active}
                 onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                className="w-5 h-5 text-primary focus:ring-primary rounded"
+                className="w-5 h-5 text-primary rounded"
               />
               <label htmlFor="is_active" className="font-medium text-gray-900">
                 Restaurant is currently accepting orders
               </label>
-            </div>
-
-            {/* Warning */}
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
-                <div className="text-sm text-yellow-800">
-                  <p className="font-semibold mb-1">Delivery Radius Visibility</p>
-                  <p>Customers will see your delivery radius of {formData.delivery_radius_km} km when browsing restaurants.</p>
-                </div>
-              </div>
             </div>
 
             {/* Save Button */}

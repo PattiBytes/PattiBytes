@@ -8,7 +8,7 @@ interface AddressSuggestion {
   lat: string;
   lon: string;
   address: {
-    town: string;
+    town?: string;
     house_number?: string;
     road?: string;
     suburb?: string;
@@ -95,12 +95,17 @@ export default function AddressAutocomplete({
             addressdetails: '1',
             limit: '5',
             countrycodes: 'in',
-          })
+          }),
+        {
+          headers: {
+            'User-Agent': 'PattiBytes Express App'
+          }
+        }
       );
 
       const data = await response.json();
       setSuggestions(data);
-      setShowDropdown(true);
+      setShowDropdown(data.length > 0);
       setSelectedIndex(-1);
     } catch (error) {
       console.error('Failed to search address:', error);
@@ -144,7 +149,12 @@ export default function AddressAutocomplete({
             lon: longitude.toString(),
             format: 'json',
             addressdetails: '1',
-          })
+          }),
+        {
+          headers: {
+            'User-Agent': 'PattiBytes Express App'
+          }
+        }
       );
 
       const data = await response.json();

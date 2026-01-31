@@ -1,211 +1,210 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { Package, Clock, CheckCircle, XCircle, Search, Filter } from 'lucide-react';
-import { toast } from 'react-toastify';
+import {
+  Package,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Truck,
+  ChefHat,
+  Eye,
+  Calendar,
+  MapPin,
+} from 'lucide-react';
+import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
+
+interface Order {
+  id: string;
+  order_number: number;
+  merchant_id: string;
+  items: any[];
+  total_amount: number;
+  status: string;
+  created_at: string;
+  delivery_address: string;
+  merchant_name?: string;
+}
 
 export default function CustomerOrdersPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    if (user) {
-      loadOrders();
+    if (!user) {
+      router.push('/login');
+      return;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, filterStatus]);
+    loadOrders();
+
+    // Real-time updates
+    const subscription = supabase
+      .channel('customer-orders')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `customer_id=eq.${user.id}`,
+        },
+        () => {
+          loadOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const loadOrders = async () => {
     if (!user) return;
 
-    setLoading(true);
     try {
-      let query = supabase
+      // Get orders
+      const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('customer_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (filterStatus !== 'all') {
-        query = query.eq('status', filterStatus);
-      }
+      if (ordersError) throw ordersError;
 
-      const { data, error } = await query;
+      // Get merchant names for each order
+      const ordersWithMerchants = await Promise.all(
+        (ordersData || []).map(async (order) => {
+          const { data: merchant } = await supabase
+            .from('merchants')
+            .select('business_name')
+            .eq('id', order.merchant_id)
+            .single();
 
-      if (error) throw error;
-      setOrders(data || []);
+          return {
+            ...order,
+            merchant_name: merchant?.business_name || 'Restaurant',
+          };
+        })
+      );
+
+      setOrders(ordersWithMerchants);
     } catch (error) {
       console.error('Failed to load orders:', error);
-      toast.error('Failed to load orders');
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    const colors: any = {
-      pending: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-      confirmed: 'bg-blue-100 text-blue-800 border-blue-300',
-      preparing: 'bg-purple-100 text-purple-800 border-purple-300',
-      on_the_way: 'bg-orange-100 text-orange-800 border-orange-300',
-      delivered: 'bg-green-100 text-green-800 border-green-300',
-      cancelled: 'bg-red-100 text-red-800 border-red-300',
+  const getStatusConfig = (status: string) => {
+    const configs: any = {
+      pending: { color: 'bg-yellow-100 text-yellow-800 border-yellow-300', icon: Clock, label: 'Pending' },
+      confirmed: { color: 'bg-blue-100 text-blue-800 border-blue-300', icon: ChefHat, label: 'Confirmed' },
+      preparing: { color: 'bg-purple-100 text-purple-800 border-purple-300', icon: ChefHat, label: 'Preparing' },
+      ready: { color: 'bg-orange-100 text-orange-800 border-orange-300', icon: Package, label: 'Ready' },
+      picked_up: { color: 'bg-indigo-100 text-indigo-800 border-indigo-300', icon: Truck, label: 'Out for Delivery' },
+      delivered: { color: 'bg-green-100 text-green-800 border-green-300', icon: CheckCircle, label: 'Delivered' },
+      cancelled: { color: 'bg-red-100 text-red-800 border-red-300', icon: XCircle, label: 'Cancelled' },
     };
-    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
+    return configs[status] || configs.pending;
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return <CheckCircle size={20} />;
-      case 'cancelled':
-        return <XCircle size={20} />;
-      case 'on_the_way':
-        return <Package size={20} />;
-      default:
-        return <Clock size={20} />;
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    const texts: any = {
-      pending: 'Pending',
-      confirmed: 'Confirmed',
-      preparing: 'Preparing',
-      on_the_way: 'On the Way',
-      delivered: 'Delivered',
-      cancelled: 'Cancelled',
-    };
-    return texts[status] || status;
-  };
-
-  const filteredOrders = orders.filter((order) =>
-    order.id.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  if (loading) return <PageLoadingSpinner />;
 
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">My Orders</h1>
-          <p className="text-gray-600 mt-1">Track and manage your orders</p>
-        </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-8">My Orders</h1>
 
-        {/* Filters */}
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by order ID..."
-                className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary"
-              />
-            </div>
-
-            <div className="flex gap-2 overflow-x-auto">
-              {[
-                { value: 'all', label: 'All' },
-                { value: 'pending', label: 'Pending' },
-                { value: 'confirmed', label: 'Confirmed' },
-                { value: 'on_the_way', label: 'On the Way' },
-                { value: 'delivered', label: 'Delivered' },
-                { value: 'cancelled', label: 'Cancelled' },
-              ].map((filter) => (
-                <button
-                  key={filter.value}
-                  onClick={() => setFilterStatus(filter.value)}
-                  className={`px-4 py-2 rounded-lg whitespace-nowrap font-medium ${
-                    filterStatus === filter.value
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Orders List */}
-        {loading ? (
-          <div className="grid gap-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-gray-200 h-32 rounded-lg animate-pulse" />
-            ))}
-          </div>
-        ) : filteredOrders.length > 0 ? (
-          <div className="grid gap-4">
-            {filteredOrders.map((order) => (
-              <div
-                key={order.id}
-                onClick={() => router.push(`/customer/orders/${order.id}`)}
-                className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6 cursor-pointer"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-900 mb-1">
-                      Order #{order.id.slice(0, 8).toUpperCase()}
-                    </h3>
-                    <p className="text-sm text-gray-600">
-                      {new Date(order.created_at).toLocaleDateString('en-IN', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                  </div>
-                  <span
-                    className={`px-4 py-2 rounded-full text-sm font-semibold border-2 flex items-center gap-2 ${getStatusColor(
-                      order.status
-                    )}`}
-                  >
-                    {getStatusIcon(order.status)}
-                    {getStatusText(order.status)}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between pt-4 border-t">
-                  <div>
-                    <p className="text-sm text-gray-600">
-                      {order.items?.length || 0} item(s) • {order.payment_method === 'cod' ? 'Cash on Delivery' : 'Online Payment'}
-                    </p>
-                  </div>
-                  <p className="text-2xl font-bold text-primary">₹{order.total}</p>
-                </div>
-              </div>
-            ))}
+        {orders.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-md p-16 text-center">
+            <Package size={64} className="mx-auto text-gray-400 mb-4" />
+            <p className="text-gray-600 text-lg mb-4">No orders yet</p>
+            <button
+              onClick={() => router.push('/customer/dashboard')}
+              className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-semibold"
+            >
+              Start Ordering
+            </button>
           </div>
         ) : (
-          <div className="text-center py-12 bg-white rounded-lg">
-            <Package size={64} className="mx-auto text-gray-400 mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">No orders found</h3>
-            <p className="text-gray-600 mb-6">
-              {filterStatus !== 'all'
-                ? `You have no ${getStatusText(filterStatus).toLowerCase()} orders`
-                : 'Start ordering delicious food now!'}
-            </p>
-            <button
-              onClick={() => router.push('/customer/home')}
-              className="bg-primary text-white px-8 py-3 rounded-lg hover:bg-orange-600 font-medium"
-            >
-              Browse Restaurants
-            </button>
+          <div className="space-y-4">
+            {orders.map((order) => {
+              const statusConfig = getStatusConfig(order.status);
+              const StatusIcon = statusConfig.icon;
+
+              return (
+                <div
+                  key={order.id}
+                  className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow overflow-hidden"
+                >
+                  <div className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-lg font-bold text-gray-900">
+                            {order.merchant_name}
+                          </h3>
+                          <div className={`px-3 py-1 rounded-full border-2 flex items-center gap-1 text-xs font-semibold ${statusConfig.color}`}>
+                            <StatusIcon size={14} />
+                            {statusConfig.label}
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-600 flex items-center gap-1">
+                          <Calendar className="w-4 h-4" />
+                          Order #{order.order_number} • {new Date(order.created_at).toLocaleString()}
+                        </p>
+                        <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
+                          <MapPin className="w-4 h-4" />
+                          {order.delivery_address}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-primary">
+                          ₹{order.total_amount.toFixed(2)}
+                        </p>
+                        <p className="text-sm text-gray-600">{order.items?.length || 0} items</p>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap gap-2">
+                          {order.items?.slice(0, 3).map((item: any, index: number) => (
+                            <span
+                              key={index}
+                              className="text-sm text-gray-700 bg-gray-100 px-3 py-1 rounded-full"
+                            >
+                              {item.name} × {item.quantity}
+                            </span>
+                          ))}
+                          {order.items?.length > 3 && (
+                            <span className="text-sm text-gray-600 px-3 py-1">
+                              +{order.items.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => router.push(`/customer/orders/${order.id}`)}
+                          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-orange-600 font-semibold transition-colors"
+                        >
+                          <Eye size={16} />
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
