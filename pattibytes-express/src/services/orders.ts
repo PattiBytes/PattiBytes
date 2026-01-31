@@ -1,108 +1,181 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
-import { Order } from '@/types';
-import { RealtimeChannel } from '@supabase/supabase-js';
+import { notificationService } from './notifications';
 
-export const orderService = {
-  async createOrder(
-    customerId: string,
-    merchantId: string,
-    items: any[],
-    deliveryAddress: any,
-    paymentMethod: string,
-    specialInstructions?: string
-  ): Promise<Order> {
-    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const deliveryFee = 40;
-    const tax = subtotal * 0.05;
-    const total = subtotal + deliveryFee + tax;
+export interface OrderItem {
+  menu_item_id: string;
+  name: string;
+  quantity: number;
+  price: number;
+  special_instructions?: string;
+}
 
-    const { data, error } = await supabase
-      .from('orders')
-      .insert([
-        {
-          customer_id: customerId,
-          merchant_id: merchantId,
-          items,
-          subtotal,
-          delivery_fee: deliveryFee,
-          tax,
-          total,
-          status: 'pending',
-          delivery_address: deliveryAddress,
-          payment_method: paymentMethod,
-          special_instructions: specialInstructions,
-        },
-      ])
-      .select()
-      .single();
+export interface CreateOrderData {
+  customer_id: string;
+  merchant_id: string;
+  items: OrderItem[];
+  subtotal: number;
+  discount: number;
+  delivery_fee: number;
+  tax: number;
+  total_amount: number;
+  payment_method: string;
+  payment_status: string;
+  delivery_address: string;
+  delivery_latitude?: number;
+  delivery_longitude?: number;
+  delivery_distance_km?: number;
+  customer_phone?: string;
+  special_instructions?: string;
+  promo_code?: string;
+  status?: string;
+}
 
-    if (error) throw error;
-    return data as Order;
-  },
+export interface Order extends CreateOrderData {
+  id: string;
+  created_at: string;
+  updated_at: string;
+}
 
-  async getOrder(orderId: string): Promise<Order> {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', orderId)
-      .single();
+class OrderService {
+  subscribeToOrder: any;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  getOrder(arg0: string) {
+    throw new Error('Method not implemented.');
+  }
+  async createOrder(orderData: CreateOrderData): Promise<Order> {
+    try {
+      console.log('📝 Creating order with data:', orderData);
 
-    if (error) throw error;
-    return data as Order;
-  },
+      // Prepare the order data - ensure all required fields
+      const insertData = {
+        customer_id: orderData.customer_id,
+        merchant_id: orderData.merchant_id,
+        items: orderData.items,
+        subtotal: orderData.subtotal,
+        discount: orderData.discount || 0,
+        delivery_fee: orderData.delivery_fee,
+        tax: orderData.tax,
+        total_amount: orderData.total_amount,
+        payment_method: orderData.payment_method,
+        payment_status: orderData.payment_status || 'pending',
+        delivery_address: orderData.delivery_address,
+        delivery_latitude: orderData.delivery_latitude,
+        delivery_longitude: orderData.delivery_longitude,
+        delivery_distance_km: orderData.delivery_distance_km,
+        customer_phone: orderData.customer_phone,
+        special_instructions: orderData.special_instructions,
+        promo_code: orderData.promo_code || null,
+        status: orderData.status || 'pending',
+      };
 
-  async updateOrderStatus(orderId: string, status: string, driverId?: string): Promise<void> {
-    const updateData: any = { status };
-    if (driverId) updateData.driver_id = driverId;
+      console.log('📤 Sending to database:', insertData);
 
-    const { error } = await supabase
-      .from('orders')
-      .update(updateData)
-      .eq('id', orderId);
+      const { data, error } = await supabase
+        .from('orders')
+        .insert([insertData])
+        .select()
+        .single();
 
-    if (error) throw error;
-  },
+      if (error) {
+        console.error('❌ Database error:', error);
+        throw new Error(error.message || 'Failed to create order');
+      }
 
-  async getMerchantOrders(merchantId: string): Promise<Order[]> {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('merchant_id', merchantId)
-      .order('created_at', { ascending: false });
+      if (!data) {
+        throw new Error('No data returned from order creation');
+      }
 
-    if (error) throw error;
-    return data as Order[];
-  },
+      console.log('✅ Order created:', data);
+
+      // Send notifications
+      try {
+        await notificationService.sendOrderNotification(data.id, 'pending');
+      } catch (notifError) {
+        console.warn('Failed to send notification:', notifError);
+      }
+
+      return data as Order;
+    } catch (error: any) {
+      console.error('❌ Failed to create order:', error);
+      throw error;
+    }
+  }
+
+  async getOrderById(orderId: string): Promise<Order | null> {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+
+      if (error) throw error;
+      return data as Order;
+    } catch (error) {
+      console.error('Failed to get order:', error);
+      return null;
+    }
+  }
 
   async getCustomerOrders(customerId: string): Promise<Order[]> {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('customer_id', customerId)
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return data as Order[];
-  },
+      if (error) throw error;
+      return (data as Order[]) || [];
+    } catch (error) {
+      console.error('Failed to get customer orders:', error);
+      return [];
+    }
+  }
 
-  subscribeToOrder(orderId: string, callback: (order: Order) => void): RealtimeChannel {
-    const channel = supabase
-      .channel(`order-${orderId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'orders',
-          filter: `id=eq.${orderId}`,
-        },
-        (payload) => {
-          callback(payload.new as Order);
-        }
-      )
-      .subscribe();
+  async updateOrderStatus(orderId: string, status: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', orderId);
 
-    return channel;
-  },
-};
+      if (error) throw error;
+
+      // Send notification
+      await notificationService.sendOrderNotification(orderId, status);
+
+      return true;
+    } catch (error) {
+      console.error('Failed to update order status:', error);
+      return false;
+    }
+  }
+
+  async cancelOrder(orderId: string, reason?: string): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          status: 'cancelled',
+          special_instructions: reason
+            ? `Cancelled: ${reason}`
+            : 'Cancelled by customer',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+
+      if (error) throw error;
+
+      await notificationService.sendOrderNotification(orderId, 'cancelled');
+
+      return true;
+    } catch (error) {
+      console.error('Failed to cancel order:', error);
+      return false;
+    }
+  }
+}
+
+export const orderService = new OrderService();

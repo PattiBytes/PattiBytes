@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
 
 export interface Coordinates {
@@ -11,7 +12,7 @@ export interface LocationData extends Coordinates {
 
 export interface SavedAddress {
   id: string;
-  customer_id: string;
+  user_id: string;
   label: string;
   address: string;
   latitude: number;
@@ -43,7 +44,7 @@ class LocationService {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c;
 
-    return Math.round(distance * 100) / 100; // Round to 2 decimal places
+    return Math.round(distance * 100) / 100;
   }
 
   private toRad(degrees: number): number {
@@ -68,9 +69,9 @@ class LocationService {
    * Calculate delivery charge based on distance
    */
   calculateDeliveryCharge(distanceKm: number): number {
-    const baseCharge = 20; // ₹20 base charge
-    const perKmCharge = 8; // ₹8 per km
-    const freeDeliveryDistance = 2; // Free up to 2km
+    const baseCharge = 20;
+    const perKmCharge = 8;
+    const freeDeliveryDistance = 2;
 
     if (distanceKm <= freeDeliveryDistance) {
       return 0;
@@ -127,7 +128,12 @@ class LocationService {
   async reverseGeocode(lat: number, lon: number): Promise<string> {
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'PattiBytes Express App'
+          }
+        }
       );
 
       if (!response.ok) {
@@ -139,6 +145,38 @@ class LocationService {
     } catch (error) {
       console.error('Reverse geocoding error:', error);
       return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    }
+  }
+
+  /**
+   * Forward geocode address to coordinates
+   */
+  async geocodeAddress(address: string): Promise<Coordinates | null> {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'PattiBytes Express App'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to geocode address');
+      }
+
+      const data = await response.json();
+      if (data && data.length > 0) {
+        return {
+          lat: parseFloat(data[0].lat),
+          lon: parseFloat(data[0].lon),
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      return null;
     }
   }
 
@@ -179,7 +217,7 @@ class LocationService {
     const { data, error } = await supabase
       .from('saved_addresses')
       .select('*')
-      .eq('customer_id', userId)
+      .eq('user_id', userId)
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: false });
 
@@ -195,12 +233,11 @@ class LocationService {
    */
   async saveAddress(address: Omit<SavedAddress, 'id' | 'created_at'>): Promise<SavedAddress | null> {
     try {
-      // If this is set as default, unset all others
       if (address.is_default) {
         await supabase
           .from('saved_addresses')
           .update({ is_default: false })
-          .eq('customer_id', address.customer_id);
+          .eq('user_id', address.user_id);
       }
 
       const { data, error } = await supabase
@@ -214,6 +251,24 @@ class LocationService {
     } catch (error) {
       console.error('Error saving address:', error);
       return null;
+    }
+  }
+
+  /**
+   * Update an address
+   */
+  async updateAddress(addressId: string, updates: Partial<SavedAddress>): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('saved_addresses')
+        .update(updates)
+        .eq('id', addressId);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error updating address:', error);
+      return false;
     }
   }
 
@@ -236,18 +291,76 @@ class LocationService {
   }
 
   /**
+   * Set default address
+   */
+  async setDefaultAddress(userId: string, addressId: string): Promise<boolean> {
+    try {
+      await supabase
+        .from('saved_addresses')
+        .update({ is_default: false })
+        .eq('user_id', userId);
+
+      const { error } = await supabase
+        .from('saved_addresses')
+        .update({ is_default: true })
+        .eq('id', addressId);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error setting default address:', error);
+      return false;
+    }
+  }
+
+  /**
    * Get default address
    */
   async getDefaultAddress(userId: string): Promise<SavedAddress | null> {
     const { data, error } = await supabase
       .from('saved_addresses')
       .select('*')
-      .eq('customer_id', userId)
+      .eq('user_id', userId)
       .eq('is_default', true)
       .single();
 
     if (error) return null;
     return data as SavedAddress;
+  }
+
+  /**
+   * Get nearby merchants based on user location
+   */
+  async getNearbyMerchants(userLat: number, userLon: number, radiusKm: number = 10): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('merchants')
+        .select('*')
+        .eq('is_active', true)
+        .eq('is_verified', true)
+        .not('latitude', 'is', null)
+        .not('longitude', 'is', null);
+
+      if (error) throw error;
+
+      const merchantsWithDistance = (data || [])
+        .map((merchant: any) => ({
+          ...merchant,
+          distance: this.calculateDistance(
+            userLat,
+            userLon,
+            merchant.latitude,
+            merchant.longitude
+          ),
+        }))
+        .filter((merchant: any) => merchant.distance <= radiusKm)
+        .sort((a: any, b: any) => a.distance - b.distance);
+
+      return merchantsWithDistance;
+    } catch (error) {
+      console.error('Error getting nearby merchants:', error);
+      return [];
+    }
   }
 }
 

@@ -2,108 +2,157 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { notificationService } from '@/services/notifications';
+import { locationService, type SavedAddress } from '@/services/location';
+import { deliveryFeeService } from '@/services/deliveryFee';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
-import { 
-  MapPin, 
-  ShoppingBag, 
-  CreditCard, 
+import {
+  MapPin,
+  ShoppingBag,
+  CreditCard,
   Wallet,
   ArrowLeft,
-  Plus
+  Plus,
+  Trash2,
+  Check,
+  Loader2,
+  AlertCircle,
+  Home,
+  Briefcase,
+  MapPinned,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
 
 export default function CheckoutPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [cartData, setCartData] = useState<any>(null);
-  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
-  const [selectedAddress, setSelectedAddress] = useState<any>(null);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<SavedAddress | null>(null);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'online'>('cod');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [placing, setPlacing] = useState(false);
+  const [deliveryFee, setDeliveryFee] = useState(10);
+  const [deliveryDistance, setDeliveryDistance] = useState(0);
   const [newAddress, setNewAddress] = useState({
     label: 'Home',
     address: '',
     latitude: 0,
     longitude: 0,
+    is_default: false,
   });
 
   useEffect(() => {
-    const stored = localStorage.getItem('checkout_cart');
-    if (stored) {
-      setCartData(JSON.parse(stored));
-    } else {
-      toast.error('No items in cart');
-      router.push('/customer/dashboard');
+    if (!user) {
+      router.push('/login');
+      return;
     }
+    loadCheckoutData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
-    if (user) {
-      loadSavedAddresses();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, router]);
-
-  const loadSavedAddresses = async () => {
-    if (!user) return;
-
+  const loadCheckoutData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('saved_addresses')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('is_default', { ascending: false });
+      const stored = sessionStorage.getItem('checkout_data');
+      if (!stored) {
+        toast.error('No items in cart');
+        router.push('/customer/cart');
+        return;
+      }
 
-      if (error && error.code !== 'PGRST116') throw error;
+      const data = JSON.parse(stored);
+      console.log('📦 Cart data loaded:', data);
+      setCartData(data);
 
-      setSavedAddresses(data || []);
-      
-      // Auto-select default address
-      const defaultAddr = data?.find((a) => a.is_default);
+      const addresses = await locationService.getSavedAddresses(user!.id);
+      setSavedAddresses(addresses);
+
+      const defaultAddr = addresses.find((a) => a.is_default);
       if (defaultAddr) {
-        setSelectedAddress(defaultAddr);
+        await handleAddressSelection(defaultAddr);
+      } else if (addresses.length > 0) {
+        await handleAddressSelection(addresses[0]);
       }
     } catch (error) {
-      console.error('Failed to load addresses:', error);
+      console.error('Failed to load checkout data:', error);
+      toast.error('Failed to load checkout data');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleAddressSelection = async (address: SavedAddress) => {
+    setSelectedAddress(address);
+
+    // Calculate delivery fee using service
+    await deliveryFeeService.loadConfig();
+    const feeData = deliveryFeeService.calculateDeliveryFee(
+      address.latitude,
+      address.longitude
+    );
+    setDeliveryFee(feeData.fee);
+    setDeliveryDistance(feeData.distance);
   };
 
   const handleAddressSelect = (addressData: any) => {
     setNewAddress({
-      label: 'New Address',
+      ...newAddress,
       address: addressData.address,
       latitude: addressData.lat,
       longitude: addressData.lon,
     });
   };
 
-  const handleSaveAndSelectAddress = async () => {
-    if (!user || !newAddress.address) return;
+  const handleSaveAddress = async () => {
+    if (!user || !newAddress.address) {
+      toast.error('Please select an address');
+      return;
+    }
 
     try {
-      const { data, error } = await supabase
-        .from('saved_addresses')
-        .insert([{
-          user_id: user.id,
-          ...newAddress,
-        }])
-        .select()
-        .single();
+      const savedAddr = await locationService.saveAddress({
+        user_id: user.id,
+        ...newAddress,
+      });
 
-      if (error) throw error;
-
-      setSavedAddresses([...savedAddresses, data]);
-      setSelectedAddress(data);
-      setShowAddressModal(false);
-      toast.success('Address saved!');
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      if (savedAddr) {
+        setSavedAddresses([...savedAddresses, savedAddr]);
+        await handleAddressSelection(savedAddr);
+        setShowAddressModal(false);
+        setNewAddress({
+          label: 'Home',
+          address: '',
+          latitude: 0,
+          longitude: 0,
+          is_default: false,
+        });
+        toast.success('Address saved successfully!');
+      }
     } catch (error) {
+      console.error('Failed to save address:', error);
       toast.error('Failed to save address');
+    }
+  };
+
+  const handleDeleteAddress = async (addressId: string) => {
+    try {
+      const success = await locationService.deleteAddress(addressId);
+      if (success) {
+        setSavedAddresses(savedAddresses.filter((a) => a.id !== addressId));
+        if (selectedAddress?.id === addressId) {
+          setSelectedAddress(null);
+          setDeliveryFee(10);
+        }
+        toast.success('Address deleted');
+      }
+    } catch (error) {
+      console.error('Failed to delete address:', error);
+      toast.error('Failed to delete address');
     }
   };
 
@@ -113,73 +162,151 @@ export default function CheckoutPage() {
       return;
     }
 
-    setLoading(true);
+    if (paymentMethod === 'online') {
+      toast.info('Online payment will be available soon');
+      return;
+    }
+
+    setPlacing(true);
 
     try {
-      // Create order
-      const { data: order, error } = await supabase
+      // VERIFY MERCHANT EXISTS
+      console.log('🔍 Verifying merchant ID:', cartData.cart.merchant_id);
+      
+      const { data: merchantCheck, error: merchantError } = await supabase
+        .from('merchants')
+        .select('id, business_name')
+        .eq('id', cartData.cart.merchant_id)
+        .single();
+
+      if (merchantError || !merchantCheck) {
+        console.error('❌ Merchant not found:', merchantError);
+        throw new Error('Restaurant not found. Please clear your cart and try again.');
+      }
+
+      console.log('✅ Merchant verified:', merchantCheck);
+
+      const tax = (cartData.cart.subtotal - (cartData.promoDiscount || 0)) * 0.05;
+      const finalTotal = cartData.cart.subtotal - (cartData.promoDiscount || 0) + deliveryFee + tax;
+
+      // Calculate estimated delivery time (30 min prep + 5 min per km)
+      const estimatedMinutes = 30 + Math.ceil(deliveryDistance * 5);
+      const estimatedDeliveryTime = new Date(Date.now() + estimatedMinutes * 60000);
+
+      const orderData = {
+        customer_id: user.id,
+        merchant_id: merchantCheck.id, // Use verified merchant ID
+        items: cartData.cart.items,
+        subtotal: Number(cartData.cart.subtotal.toFixed(2)),
+        discount: Number((cartData.promoDiscount || 0).toFixed(2)),
+        delivery_fee: Number(deliveryFee.toFixed(2)),
+        tax: Number(tax.toFixed(2)),
+        total_amount: Number(finalTotal.toFixed(2)),
+        payment_method: paymentMethod,
+        payment_status: 'pending',
+        promo_code: cartData.promoCode || null,
+        delivery_address: selectedAddress.address,
+        delivery_latitude: selectedAddress.latitude,
+        delivery_longitude: selectedAddress.longitude,
+        delivery_distance_km: Number(deliveryDistance.toFixed(2)),
+        status: 'pending',
+        preparation_time: 30,
+        estimated_delivery_time: estimatedDeliveryTime.toISOString(),
+      };
+
+      console.log('📝 Creating order with data:', orderData);
+
+      const { data: order, error: orderError } = await supabase
         .from('orders')
-        .insert([{
-          user_id: user.id,
-          merchant_id: cartData.restaurant_id,
-          items: cartData.items,
-          subtotal: cartData.subtotal,
-          discount: cartData.discount,
-          delivery_fee: 30,
-          gst: (cartData.subtotal - cartData.discount) * 0.05,
-          total: cartData.total,
-          payment_method: paymentMethod,
-          promo_code: cartData.promo?.code,
-          delivery_address: {
-            address: selectedAddress.address,
-            latitude: selectedAddress.latitude,
-            longitude: selectedAddress.longitude,
-          },
-          status: 'pending',
-        }])
+        .insert([orderData])
         .select()
         .single();
 
-      if (error) throw error;
+      if (orderError) {
+        console.error('❌ Order creation error:', orderError);
+        throw new Error(orderError.message || 'Failed to create order');
+      }
 
-      // Send notifications to all parties
-      await notificationService.sendOrderNotification(order.id, 'pending');
+      console.log('✅ Order created successfully:', order);
 
-      // Clear cart
-      localStorage.removeItem('checkout_cart');
+      // Update promo code usage
+      if (cartData.promoCode) {
+        try {
+          const { data: promoCode } = await supabase
+            .from('promo_codes')
+            .select('id, used_count')
+            .eq('code', cartData.promoCode)
+            .single();
 
-      toast.success('Order placed successfully!');
+          if (promoCode) {
+            await supabase
+              .from('promo_codes')
+              .update({ used_count: (promoCode.used_count || 0) + 1 })
+              .eq('id', promoCode.id);
+          }
+        } catch (promoError) {
+          console.warn('Failed to update promo code:', promoError);
+        }
+      }
+
+      sessionStorage.removeItem('checkout_data');
+      localStorage.removeItem('pattibytes_cart');
+      window.dispatchEvent(new CustomEvent('cartUpdated', { detail: null }));
+
+      toast.success('🎉 Order placed successfully!');
       router.push(`/customer/orders/${order.id}`);
     } catch (error: any) {
-      console.error('Failed to place order:', error);
-      toast.error(error.message || 'Failed to place order');
+      console.error('❌ Failed to place order:', error);
+      toast.error(error.message || 'Failed to place order. Please try again.');
     } finally {
-      setLoading(false);
+      setPlacing(false);
     }
   };
+
+  if (loading) return <PageLoadingSpinner />;
 
   if (!cartData) {
     return (
       <DashboardLayout>
         <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="text-center">
+          <div className="text-center py-16">
             <ShoppingBag size={64} className="mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-600">Loading checkout...</p>
+            <p className="text-gray-600">No items in checkout</p>
+            <button
+              onClick={() => router.push('/customer/dashboard')}
+              className="mt-4 bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600"
+            >
+              Browse Restaurants
+            </button>
           </div>
         </div>
       </DashboardLayout>
     );
   }
 
+  const tax = (cartData.cart.subtotal - (cartData.promoDiscount || 0)) * 0.05;
+  const finalTotal = cartData.cart.subtotal - (cartData.promoDiscount || 0) + deliveryFee + tax;
+
+  const getAddressIcon = (label: string) => {
+    switch (label.toLowerCase()) {
+      case 'home':
+        return <Home className="w-5 h-5" />;
+      case 'work':
+        return <Briefcase className="w-5 h-5" />;
+      default:
+        return <MapPinned className="w-5 h-5" />;
+    }
+  };
+
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-32 md:pb-8">
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
         >
           <ArrowLeft size={20} />
-          <span>Back to Restaurant</span>
+          <span>Back to Cart</span>
         </button>
 
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>
@@ -187,7 +314,7 @@ export default function CheckoutPage() {
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             {/* Delivery Address */}
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-white rounded-xl shadow-md p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold flex items-center gap-2">
                   <MapPin className="text-primary" size={24} />
@@ -195,7 +322,7 @@ export default function CheckoutPage() {
                 </h2>
                 <button
                   onClick={() => setShowAddressModal(true)}
-                  className="text-primary hover:underline flex items-center gap-1"
+                  className="text-primary hover:bg-orange-50 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors font-semibold"
                 >
                   <Plus size={16} />
                   Add New
@@ -205,45 +332,63 @@ export default function CheckoutPage() {
               {savedAddresses.length > 0 ? (
                 <div className="space-y-3">
                   {savedAddresses.map((address) => (
-                    <button
+                    <div
                       key={address.id}
-                      onClick={() => setSelectedAddress(address)}
-                      className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                      className={`relative p-4 rounded-lg border-2 transition-all cursor-pointer ${
                         selectedAddress?.id === address.id
                           ? 'border-primary bg-orange-50'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
+                      onClick={() => handleAddressSelection(address)}
                     >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-bold text-gray-900">{address.label}</p>
-                          <p className="text-sm text-gray-600 mt-1">{address.address}</p>
+                      <div className="flex items-start gap-3">
+                        <div className="text-primary mt-1">{getAddressIcon(address.label)}</div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-bold text-gray-900">{address.label}</p>
+                            {address.is_default && (
+                              <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600">{address.address}</p>
                         </div>
-                        {address.is_default && (
-                          <span className="text-xs bg-primary text-white px-2 py-1 rounded">
-                            Default
-                          </span>
+                        {selectedAddress?.id === address.id && (
+                          <Check className="text-primary flex-shrink-0" size={20} />
                         )}
                       </div>
-                    </button>
+
+                      {!address.is_default && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteAddress(address.id);
+                          }}
+                          className="absolute top-4 right-4 p-1.5 hover:bg-red-50 text-red-600 rounded transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8">
+                <div className="text-center py-12 bg-gray-50 rounded-lg">
                   <MapPin size={48} className="mx-auto text-gray-400 mb-3" />
                   <p className="text-gray-600 mb-4">No saved addresses</p>
                   <button
                     onClick={() => setShowAddressModal(true)}
-                    className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600"
+                    className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600 font-semibold"
                   >
-                    Add Address
+                    Add Your First Address
                   </button>
                 </div>
               )}
             </div>
 
             {/* Payment Method */}
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-white rounded-xl shadow-md p-6">
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <CreditCard className="text-primary" size={24} />
                 Payment Method
@@ -258,28 +403,34 @@ export default function CheckoutPage() {
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <Wallet className="text-green-600" size={24} />
-                    <div>
-                      <p className="font-bold text-gray-900">Cash on Delivery</p>
-                      <p className="text-sm text-gray-600">Pay when you receive</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <Wallet className="text-green-600" size={24} />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900">Cash on Delivery</p>
+                        <p className="text-sm text-gray-600">Pay when you receive your order</p>
+                      </div>
                     </div>
+                    {paymentMethod === 'cod' && <Check className="text-primary" size={24} />}
                   </div>
                 </button>
 
                 <button
-                  onClick={() => setPaymentMethod('online')}
-                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                    paymentMethod === 'online'
-                      ? 'border-primary bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                  onClick={() => toast.info('Online payment coming soon!')}
+                  disabled
+                  className="w-full text-left p-4 rounded-lg border-2 border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
                 >
-                  <div className="flex items-center gap-3">
-                    <CreditCard className="text-blue-600" size={24} />
-                    <div>
-                      <p className="font-bold text-gray-900">Online Payment</p>
-                      <p className="text-sm text-gray-600">UPI, Cards, Wallets</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <CreditCard className="text-blue-600" size={24} />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900">Online Payment</p>
+                        <p className="text-sm text-gray-600">UPI, Cards, Wallets (Coming Soon)</p>
+                      </div>
                     </div>
                   </div>
                 </button>
@@ -289,115 +440,182 @@ export default function CheckoutPage() {
 
           {/* Order Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow p-6 sticky top-8">
+            <div className="bg-white rounded-xl shadow-lg p-6 sticky top-6">
               <h2 className="text-xl font-bold mb-4">Order Summary</h2>
 
-              <div className="space-y-3 mb-4 pb-4 border-b">
-                {cartData.items.map((item: any) => (
+              <div className="space-y-3 mb-4 pb-4 border-b max-h-48 overflow-y-auto">
+                {cartData.cart.items.map((item: any) => (
                   <div key={item.id} className="flex justify-between text-sm">
-                    <span className="text-gray-600">
+                    <span className="text-gray-600 flex-1">
                       {item.name} × {item.quantity}
                     </span>
-                    <span className="font-semibold">₹{item.price * item.quantity}</span>
+                    <span className="font-semibold">₹{(item.price * item.quantity).toFixed(2)}</span>
                   </div>
                 ))}
               </div>
 
               <div className="space-y-2 mb-4 pb-4 border-b">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span className="font-semibold">₹{cartData.subtotal}</span>
+                  <span className="text-gray-600">Item Total</span>
+                  <span className="font-semibold">₹{cartData.cart.subtotal.toFixed(2)}</span>
                 </div>
-                {cartData.discount > 0 && (
+
+                {cartData.promoDiscount > 0 && (
                   <div className="flex justify-between text-sm text-green-600">
-                    <span>Discount</span>
-                    <span className="font-semibold">-₹{cartData.discount}</span>
+                    <span>Promo Discount ({cartData.promoCode})</span>
+                    <span className="font-semibold">-₹{cartData.promoDiscount.toFixed(2)}</span>
                   </div>
                 )}
+
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Delivery Fee</span>
-                  <span className="font-semibold">₹30</span>
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-gray-600" />
+                    <span className="text-gray-600">Delivery Fee</span>
+                  </div>
+                  <span className="font-semibold">₹{deliveryFee.toFixed(2)}</span>
                 </div>
+
+                {deliveryDistance > 0 && (
+                  <p className="text-xs text-gray-500 pl-4">{deliveryDistance.toFixed(1)} km away</p>
+                )}
+
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">GST (5%)</span>
-                  <span className="font-semibold">
-                    ₹{((cartData.subtotal - cartData.discount) * 0.05).toFixed(2)}
-                  </span>
+                  <span className="font-semibold">₹{tax.toFixed(2)}</span>
                 </div>
               </div>
 
-              <div className="flex justify-between mb-6">
+              <div className="flex justify-between mb-6 pt-2">
                 <span className="text-lg font-bold">Total</span>
-                <span className="text-2xl font-bold text-primary">₹{cartData.total.toFixed(2)}</span>
+                <span className="text-2xl font-bold text-primary">₹{finalTotal.toFixed(2)}</span>
               </div>
+
+              {!selectedAddress && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-yellow-800">Please select a delivery address to continue</p>
+                  </div>
+                </div>
+              )}
 
               <button
                 onClick={handlePlaceOrder}
-                disabled={loading || !selectedAddress}
-                className="w-full bg-primary text-white py-4 rounded-lg hover:bg-orange-600 font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={placing || !selectedAddress}
+                className="w-full bg-primary text-white py-4 rounded-xl hover:bg-orange-600 font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
               >
-                {loading ? 'Placing Order...' : 'Place Order'}
+                {placing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Placing Order...
+                  </>
+                ) : (
+                  <>Place Order • ₹{finalTotal.toFixed(2)}</>
+                )}
               </button>
+
+              <p className="text-xs text-gray-500 text-center mt-4">
+                By placing this order, you agree to our terms
+              </p>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Add Address Modal */}
-        {showAddressModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-2xl w-full p-6">
-              <h2 className="text-2xl font-bold mb-4">Add Delivery Address</h2>
+      {/* Add Address Modal */}
+      {showAddressModal && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-50"
+            onClick={() => setShowAddressModal(false)}
+          />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-2xl shadow-2xl z-50 p-6 mx-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-2xl font-bold mb-6">Add Delivery Address</h2>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Address Label
-                  </label>
-                  <select
-                    value={newAddress.label}
-                    onChange={(e) => setNewAddress({ ...newAddress, label: e.target.value })}
-                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="Home">Home</option>
-                    <option value="Work">Work</option>
-                    <option value="Other">Other</option>
-                  </select>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Address Label
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['Home', 'Work', 'Other'].map((label) => (
+                    <button
+                      key={label}
+                      onClick={() => setNewAddress({ ...newAddress, label })}
+                      className={`p-3 rounded-lg border-2 font-medium transition-all ${
+                        newAddress.label === label
+                          ? 'border-primary bg-orange-50 text-primary'
+                          : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Search Address
-                  </label>
-                  <AddressAutocomplete onSelect={handleAddressSelect} />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Search & Select Address
+                </label>
+                <AddressAutocomplete onSelect={handleAddressSelect} />
+              </div>
 
-                {newAddress.address && (
-                  <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
-                    <p className="text-sm font-medium text-green-900">Selected:</p>
-                    <p className="text-sm text-green-800 mt-1">{newAddress.address}</p>
+              {newAddress.address && (
+                <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <Check className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-green-900 mb-1">Selected Address:</p>
+                      <p className="text-sm text-green-800">{newAddress.address}</p>
+                    </div>
                   </div>
-                )}
-
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={() => setShowAddressModal(false)}
-                    className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveAndSelectAddress}
-                    disabled={!newAddress.address}
-                    className="flex-1 bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium disabled:opacity-50"
-                  >
-                    Save & Select
-                  </button>
                 </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="setDefault"
+                  checked={newAddress.is_default}
+                  onChange={(e) =>
+                    setNewAddress({ ...newAddress, is_default: e.target.checked })
+                  }
+                  className="w-4 h-4 text-primary focus:ring-primary border-gray-300 rounded"
+                />
+                <label htmlFor="setDefault" className="text-sm text-gray-700">
+                  Set as default address
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowAddressModal(false);
+                    setNewAddress({
+                      label: 'Home',
+                      address: '',
+                      latitude: 0,
+                      longitude: 0,
+                      is_default: false,
+                    });
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-xl hover:bg-gray-300 font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveAddress}
+                  disabled={!newAddress.address}
+                  className="flex-1 bg-primary text-white px-6 py-3 rounded-xl hover:bg-orange-600 font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Save & Select
+                </button>
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </>
+      )}
     </DashboardLayout>
   );
 }

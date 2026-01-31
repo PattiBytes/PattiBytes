@@ -1,8 +1,22 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
 
+export interface Notification {
+  id: string;
+  user_id: string;
+  title: string;
+  body: string;
+  type: string;
+  data?: any;
+  is_read: boolean;
+  created_at: string;
+}
+
 class NotificationService {
-  // ✅ FIX: Properly implement getUnreadCount to return a Promise<number>
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  sendOrderNotifications(id: any, merchant_id: any, id1: string) {
+    throw new Error('Method not implemented.');
+  }
   async getUnreadCount(userId: string): Promise<number> {
     try {
       const { count, error } = await supabase
@@ -53,17 +67,17 @@ class NotificationService {
         {
           user_id: userId,
           title,
-          body: message, // Use 'body' instead of 'message' to match schema
+          body: message,
           type,
           data,
-          is_read: false, // Use 'is_read' instead of 'read' to match schema
+          is_read: false,
           created_at: new Date().toISOString(),
         },
       ]);
 
       if (error) throw error;
 
-      // Send browser notification if permission granted
+      // Browser notification if permission granted
       if (Notification.permission === 'granted') {
         new Notification(title, {
           body: message,
@@ -76,7 +90,7 @@ class NotificationService {
     }
   }
 
-  async getUserNotifications(userId: string) {
+  async getUserNotifications(userId: string): Promise<Notification[]> {
     try {
       const { data, error } = await supabase
         .from('notifications')
@@ -86,7 +100,7 @@ class NotificationService {
         .limit(50);
 
       if (error) throw error;
-      return data || [];
+      return (data as Notification[]) || [];
     } catch (error) {
       console.error('Failed to get notifications:', error);
       return [];
@@ -97,7 +111,7 @@ class NotificationService {
     try {
       const { error } = await supabase
         .from('notifications')
-        .update({ is_read: true }) // Use 'is_read' instead of 'read'
+        .update({ is_read: true })
         .eq('id', notificationId);
 
       if (error) throw error;
@@ -111,7 +125,7 @@ class NotificationService {
     try {
       const { error } = await supabase
         .from('notifications')
-        .update({ is_read: true }) // Use 'is_read' instead of 'read'
+        .update({ is_read: true })
         .eq('user_id', userId)
         .eq('is_read', false);
 
@@ -147,10 +161,9 @@ class NotificationService {
 
   async sendOrderNotification(orderId: string, status: string) {
     try {
-      // Get order details
       const { data: order, error: orderError } = await supabase
         .from('orders')
-        .select('*, customer:profiles!orders_customer_id_fkey(full_name), restaurant:profiles!orders_restaurant_id_fkey(full_name)')
+        .select('*, customer:profiles!orders_customer_id_fkey(full_name), merchant:merchants!orders_merchant_id_fkey(business_name)')
         .eq('id', orderId)
         .single();
 
@@ -159,11 +172,11 @@ class NotificationService {
       const statusMessages: any = {
         pending: {
           customer: 'Your order has been placed successfully!',
-          restaurant: 'New order received! Please confirm.',
+          merchant: 'New order received! Please confirm.',
         },
         confirmed: {
           customer: 'Your order has been confirmed by the restaurant.',
-          restaurant: 'Order confirmed. Start preparing!',
+          merchant: 'Order confirmed. Start preparing!',
         },
         preparing: {
           customer: 'Your order is being prepared.',
@@ -177,11 +190,11 @@ class NotificationService {
         },
         delivered: {
           customer: 'Your order has been delivered. Enjoy your meal!',
-          restaurant: 'Order delivered successfully.',
+          merchant: 'Order delivered successfully.',
         },
         cancelled: {
           customer: 'Your order has been cancelled.',
-          restaurant: 'Order was cancelled.',
+          merchant: 'Order was cancelled.',
         },
       };
 
@@ -196,15 +209,23 @@ class NotificationService {
         );
       }
 
-      // Notify restaurant
-      if (statusMessages[status]?.restaurant && order.restaurant_id) {
-        await this.sendNotification(
-          order.restaurant_id,
-          `Order #${orderId.slice(0, 8)}`,
-          statusMessages[status].restaurant,
-          'order',
-          { order_id: orderId, status }
-        );
+      // Notify merchant
+      if (statusMessages[status]?.merchant && order.merchant_id) {
+        const { data: merchant } = await supabase
+          .from('merchants')
+          .select('user_id')
+          .eq('id', order.merchant_id)
+          .single();
+
+        if (merchant) {
+          await this.sendNotification(
+            merchant.user_id,
+            `Order #${orderId.slice(0, 8)}`,
+            statusMessages[status].merchant,
+            'order',
+            { order_id: orderId, status }
+          );
+        }
       }
 
       // Notify driver for ready status
@@ -232,7 +253,6 @@ class NotificationService {
     }
   }
 
-  // Additional helper methods
   async getNotificationById(notificationId: string) {
     try {
       const { data, error } = await supabase
