@@ -1,21 +1,23 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import AddressSelector from '@/components/common/AddressSelector';
 import { Save, Store, Clock } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { SavedAddress } from '@/services/location';
 import ImageUpload from '@/components/common/ImageUpload';
+import LocationPicker from '@/components/common/LocationPicker';
+import { LocationData } from '@/services/location';
 
 export default function MerchantProfilePage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [merchantId, setMerchantId] = useState<string>('');
-  const [selectedAddress, setSelectedAddress] = useState<SavedAddress | null>(null);
+  const [location, setLocation] = useState<LocationData | null>(null);
+
   const [formData, setFormData] = useState({
     business_name: '',
     business_type: 'Restaurant',
@@ -37,15 +39,11 @@ export default function MerchantProfilePage() {
     'Continental', 'Italian', 'Mexican',
   ];
 
-  const businessTypes = [
-    'Restaurant', 'Cloud Kitchen', 'Cafe', 'Bakery', 'Sweet Shop', 'Dhaba',
-  ];
+  const businessTypes = ['Restaurant', 'Cloud Kitchen', 'Cafe', 'Bakery', 'Sweet Shop', 'Dhaba'];
 
   useEffect(() => {
-    if (user) {
-      loadProfile();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (user) loadProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const loadProfile = async () => {
@@ -62,6 +60,7 @@ export default function MerchantProfilePage() {
 
       if (data) {
         setMerchantId(data.id);
+
         setFormData({
           business_name: data.business_name || '',
           business_type: data.business_type || 'Restaurant',
@@ -77,62 +76,46 @@ export default function MerchantProfilePage() {
           is_active: data.is_active ?? true,
         });
 
-        // Set address if exists
         if (data.address && data.latitude && data.longitude) {
-          setSelectedAddress({
-            id: data.id,
-            user_id: data.user_id,
-            label: 'Business Address',
+          setLocation({
             address: data.address,
-            latitude: data.latitude,
-            longitude: data.longitude,
-            city: data.city || '',
-            state: data.state || '',
-            postal_code: data.postal_code || '',
-            is_default: true,
-            created_at: data.created_at,
+            lat: data.latitude,
+            lon: data.longitude,
+            city: data.city || undefined,
+            state: data.state || undefined,
+            postalcode: data.postal_code || undefined,
           });
         }
       }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-      toast.error('Error loading profile');
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || 'Error loading profile');
     } finally {
       setLoading(false);
     }
   };
 
   const toggleCuisine = (cuisine: string) => {
-    if (formData.cuisine_types.includes(cuisine)) {
-      setFormData({
-        ...formData,
-        cuisine_types: formData.cuisine_types.filter((c) => c !== cuisine),
-      });
-    } else {
-      setFormData({
-        ...formData,
-        cuisine_types: [...formData.cuisine_types, cuisine],
-      });
-    }
+    setFormData((prev) => ({
+      ...prev,
+      cuisine_types: prev.cuisine_types.includes(cuisine)
+        ? prev.cuisine_types.filter((c) => c !== cuisine)
+        : [...prev.cuisine_types, cuisine],
+    }));
   };
 
   const handleSave = async () => {
     try {
       setSaving(true);
 
-      if (!merchantId) {
-        toast.error('No merchant profile found');
-        return;
-      }
+      if (!merchantId) return toast.error('No merchant profile found');
 
       if (!formData.business_name || !formData.phone || formData.cuisine_types.length === 0) {
-        toast.error('Please fill all required fields');
-        return;
+        return toast.error('Please fill all required fields');
       }
 
-      if (!selectedAddress) {
-        toast.error('Please select a business address');
-        return;
+      if (!location?.address || !location.lat || !location.lon) {
+        return toast.error('Please select a business location');
       }
 
       const { error } = await supabase
@@ -146,16 +129,19 @@ export default function MerchantProfilePage() {
           cuisine_types: formData.cuisine_types,
           phone: formData.phone,
           email: formData.email,
-          address: selectedAddress.address,
-          latitude: selectedAddress.latitude,
-          longitude: selectedAddress.longitude,
-          city: selectedAddress.city,
-          state: selectedAddress.state,
-          postal_code: selectedAddress.postal_code,
+
+          address: location.address,
+          latitude: location.lat,
+          longitude: location.lon,
+          city: location.city || null,
+          state: location.state || null,
+          postal_code: location.postalcode || null,
+
           min_order_amount: formData.min_order_amount,
           delivery_radius_km: formData.delivery_radius_km,
           estimated_prep_time: formData.estimated_prep_time,
           is_active: formData.is_active,
+
           updated_at: new Date().toISOString(),
         })
         .eq('id', merchantId);
@@ -164,10 +150,9 @@ export default function MerchantProfilePage() {
 
       toast.success('Profile updated successfully!');
       loadProfile();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      console.error('Error saving profile:', error);
-      toast.error(error.message || 'Failed to save profile');
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || 'Failed to save profile');
     } finally {
       setSaving(false);
     }
@@ -190,9 +175,7 @@ export default function MerchantProfilePage() {
           <div className="bg-white rounded-lg shadow-lg p-8 text-center">
             <Store className="mx-auto text-primary mb-4" size={64} />
             <h1 className="text-3xl font-bold text-gray-900 mb-4">No Merchant Profile</h1>
-            <p className="text-gray-600 mb-8">
-              Please contact an administrator to set up your merchant account.
-            </p>
+            <p className="text-gray-600 mb-8">Please contact an administrator to set up your merchant account.</p>
           </div>
         </div>
       </DashboardLayout>
@@ -241,15 +224,11 @@ export default function MerchantProfilePage() {
               <h3 className="text-lg font-bold text-gray-900 mb-4">Basic Information</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Restaurant Name *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Restaurant Name *</label>
                   <input
-                    type="text"
                     value={formData.business_name}
                     onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
-                    required
                   />
                 </div>
 
@@ -260,8 +239,10 @@ export default function MerchantProfilePage() {
                     onChange={(e) => setFormData({ ...formData, business_type: e.target.value })}
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
                   >
-                    {businessTypes.map((type) => (
-                      <option key={type} value={type}>{type}</option>
+                    {businessTypes.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -269,18 +250,15 @@ export default function MerchantProfilePage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Phone *</label>
                   <input
-                    type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
-                    required
                   />
                 </div>
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                   <input
-                    type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
@@ -320,14 +298,10 @@ export default function MerchantProfilePage() {
               </div>
             </div>
 
-            {/* Business Address */}
+            {/* Business Location */}
             <div>
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Business Address *</h3>
-              <AddressSelector
-                userId={user!.id}
-                selectedAddress={selectedAddress}
-                onAddressSelect={setSelectedAddress}
-              />
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Business Location *</h3>
+              <LocationPicker value={location} onChange={setLocation} />
             </div>
 
             {/* Delivery Settings */}
@@ -336,52 +310,47 @@ export default function MerchantProfilePage() {
                 <Clock size={20} className="text-primary" />
                 Delivery Settings
               </h3>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Min Order (₹)
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Min Order (₹)</label>
                   <input
                     type="number"
                     value={formData.min_order_amount}
-                    onChange={(e) => setFormData({ ...formData, min_order_amount: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, min_order_amount: Number(e.target.value) })}
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
-                    min="0"
+                    min={0}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Delivery Radius (km)
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Radius (km)</label>
                   <input
                     type="number"
                     step="0.1"
                     value={formData.delivery_radius_km}
-                    onChange={(e) => setFormData({ ...formData, delivery_radius_km: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, delivery_radius_km: Number(e.target.value) })}
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
-                    min="1"
-                    max="50"
+                    min={1}
+                    max={50}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Prep Time (min)
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Prep Time (min)</label>
                   <input
                     type="number"
                     value={formData.estimated_prep_time}
-                    onChange={(e) => setFormData({ ...formData, estimated_prep_time: parseInt(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, estimated_prep_time: Number(e.target.value) })}
                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
-                    min="10"
-                    max="120"
+                    min={10}
+                    max={120}
                   />
                 </div>
               </div>
             </div>
 
-            {/* Active Status */}
+            {/* Active */}
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
@@ -395,11 +364,10 @@ export default function MerchantProfilePage() {
               </label>
             </div>
 
-            {/* Save Button */}
             <button
               onClick={handleSave}
               disabled={saving}
-              className="w-full bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Save size={20} />
               {saving ? 'Saving...' : 'Save Changes'}

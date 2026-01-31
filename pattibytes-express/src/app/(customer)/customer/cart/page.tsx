@@ -65,7 +65,7 @@ export default function CartPage() {
       let lon = 74.8560;
 
       if (addresses && addresses.length > 0) {
-        const defaultAddr = addresses.find((a) => a.is_default) || addresses[0];
+        const defaultAddr = addresses.find((a) => a.isdefault) || addresses[0];
         lat = defaultAddr.latitude;
         lon = defaultAddr.longitude;
       }
