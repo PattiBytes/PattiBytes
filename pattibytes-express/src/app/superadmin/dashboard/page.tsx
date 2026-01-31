@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { Users, Store, ShoppingBag, TrendingUp, Shield, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import Link from 'next/link';
 
-export default function SuperAdminDashboard() {
+export default function AdminDashboard() {
+  useAuth();
   const [stats, setStats] = useState({
     totalUsers: 0,
     pendingUsers: 0,
@@ -15,7 +17,7 @@ export default function SuperAdminDashboard() {
     totalOrders: 0,
     totalRevenue: 0,
   });
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadStats();
@@ -26,12 +28,12 @@ export default function SuperAdminDashboard() {
       const [users, merchants, orders] = await Promise.all([
         supabase.from('profiles').select('*'),
         supabase.from('merchants').select('*'),
-        supabase.from('orders').select('total, status'),
+        supabase.from('orders').select('total_amount, status'),
       ]);
 
-      const totalRevenue = orders.data?.reduce((sum, order) => sum + (order.total || 0), 0) || 0;
-      const pendingUsers = users.data?.filter(u => u.approval_status === 'pending').length || 0;
-      const activeMerchants = merchants.data?.filter(m => m.is_active).length || 0;
+      const totalRevenue = orders.data?.reduce((sum, order) => sum + (order.total_amount || 0), 0) || 0;
+      const pendingUsers = users.data?.filter((u) => u.approval_status === 'pending').length || 0;
+      const activeMerchants = merchants.data?.filter((m) => m.is_active).length || 0;
 
       setStats({
         totalUsers: users.data?.length || 0,
@@ -48,6 +50,16 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -55,7 +67,7 @@ export default function SuperAdminDashboard() {
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <Shield className="text-purple-600" size={32} />
-            <h1 className="text-3xl font-bold text-gray-900">SuperAdmin Dashboard</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
           </div>
           <p className="text-gray-600">Complete system overview and management</p>
         </div>
@@ -87,9 +99,7 @@ export default function SuperAdminDashboard() {
               </div>
               <Store size={40} className="opacity-80" />
             </div>
-            <p className="text-sm opacity-90">
-              {stats.activeMerchants} active
-            </p>
+            <p className="text-sm opacity-90">{stats.activeMerchants} active</p>
           </div>
 
           {/* Orders */}
@@ -115,10 +125,10 @@ export default function SuperAdminDashboard() {
             </div>
             <p className="text-sm opacity-90">Platform wide</p>
           </div>
- 
+
           {/* Pending Approvals */}
           <Link
-            href="/superadmin/users"
+            href="/admin/users"
             className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-lg shadow-lg p-6 text-white hover:shadow-xl transition-shadow cursor-pointer"
           >
             <div className="flex items-center justify-between mb-4">
@@ -149,7 +159,7 @@ export default function SuperAdminDashboard() {
           <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link
-              href="/superadmin/users"
+              href="/admin/users"
               className="bg-blue-50 hover:bg-blue-100 p-4 rounded-lg transition-colors"
             >
               <Users className="text-blue-600 mb-2" size={24} />
@@ -158,7 +168,7 @@ export default function SuperAdminDashboard() {
             </Link>
 
             <Link
-              href="/superadmin/merchants"
+              href="/admin/merchants"
               className="bg-orange-50 hover:bg-orange-100 p-4 rounded-lg transition-colors"
             >
               <Store className="text-orange-600 mb-2" size={24} />
@@ -167,7 +177,7 @@ export default function SuperAdminDashboard() {
             </Link>
 
             <Link
-              href="/superadmin/orders"
+              href="/admin/orders"
               className="bg-green-50 hover:bg-green-100 p-4 rounded-lg transition-colors"
             >
               <ShoppingBag className="text-green-600 mb-2" size={24} />
@@ -176,12 +186,12 @@ export default function SuperAdminDashboard() {
             </Link>
 
             <Link
-              href="/superadmin/settings"
+              href="/admin/profile"
               className="bg-purple-50 hover:bg-purple-100 p-4 rounded-lg transition-colors"
             >
               <Shield className="text-purple-600 mb-2" size={24} />
-              <h3 className="font-semibold text-gray-900">System Settings</h3>
-              <p className="text-sm text-gray-600 mt-1">Configure platform settings</p>
+              <h3 className="font-semibold text-gray-900">Profile Settings</h3>
+              <p className="text-sm text-gray-600 mt-1">Manage your profile</p>
             </Link>
           </div>
         </div>
@@ -199,7 +209,7 @@ export default function SuperAdminDashboard() {
                   Review pending user applications to grant them access to the platform.
                 </p>
                 <Link
-                  href="/superadmin/users"
+                  href="/admin/users"
                   className="inline-block mt-3 bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 text-sm font-medium"
                 >
                   Review Now →
