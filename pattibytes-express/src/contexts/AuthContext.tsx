@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Initial auth check
     checkUser();
-    
+
     // Listen for auth changes
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session) => {
@@ -76,8 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setAuthUser(null);
-          
-          if (!pathname.startsWith('/auth') && pathname !== '/') {
+
+          // Redirect to login with current path for protected routes
+          if (pathname && !pathname.startsWith('/login') && !pathname.startsWith('/signup') && pathname !== '/') {
+            router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+          } else {
             router.push('/');
           }
         } else if (event === 'USER_UPDATED') {
@@ -98,8 +101,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const checkUser = async () => {
     try {
       // Use getUser() for secure verification
-      const { data: { user: authUser }, error } = await supabase.auth.getUser();
-      
+      const {
+        data: { user: authUser },
+        error,
+      } = await supabase.auth.getUser();
+
       if (error) {
         // Only log actual errors, not "no session" which is expected when logged out
         if (error.message !== 'Auth session missing!' && error.status !== 400) {
@@ -118,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthUser(null);
         setUser(null);
       }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       // Silently handle auth errors during initial check
       setAuthUser(null);
@@ -130,11 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadUserProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
 
       if (error) {
         if (error.code !== 'PGRST116') {
@@ -167,16 +169,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       setLoading(true);
-      
+
       const { error } = await supabase.auth.signOut();
-      
+
       if (error) {
         console.error('Logout error:', error.message);
       }
 
       setUser(null);
       setAuthUser(null);
-      
+
       router.push('/');
       router.refresh();
     } catch (error) {
@@ -189,9 +191,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  return (
-    <AuthContext.Provider value={{ user, authUser, loading, logout, refreshUser }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, authUser, loading, logout, refreshUser }}>{children}</AuthContext.Provider>;
 }

@@ -17,8 +17,8 @@ import {
   Search,
   Eye,
   DollarSign,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  TrendingUp,
+  RefreshCw,
+  Download,
 } from 'lucide-react';
 import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
 import { toast } from 'react-toastify';
@@ -124,6 +124,28 @@ export default function AdminOrdersPage() {
     setFilteredOrders(filtered);
   };
 
+  const exportToCSV = () => {
+    const headers = ['Order ID', 'Customer', 'Restaurant', 'Amount', 'Status', 'Payment', 'Date'];
+    const csvData = filteredOrders.map((order) => [
+      order.id,
+      order.profiles?.full_name || 'N/A',
+      order.merchants?.business_name || 'N/A',
+      order.total_amount,
+      order.status,
+      order.payment_status,
+      new Date(order.created_at).toLocaleString(),
+    ]);
+
+    const csv = [headers.join(','), ...csvData.map((row) => row.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `orders-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    toast.success('Orders exported successfully!');
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig: any = {
       pending: { color: 'bg-yellow-100 text-yellow-800', icon: Clock },
@@ -151,7 +173,26 @@ export default function AdminOrdersPage() {
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">All Orders</h1>
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">All Orders</h1>
+          <div className="flex gap-3">
+            <button
+              onClick={loadOrders}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-semibold transition-colors"
+            >
+              <RefreshCw size={16} />
+              Refresh
+            </button>
+            <button
+              onClick={exportToCSV}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-semibold transition-colors"
+            >
+              <Download size={16} />
+              Export CSV
+            </button>
+          </div>
+        </div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
