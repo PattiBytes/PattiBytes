@@ -2,972 +2,1048 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { notificationService } from '@/services/notifications';
-import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { 
-  ArrowLeft, 
-  Save, 
-  Store, 
-  Package, 
-  ShoppingBag, 
-  Upload,
-  Plus,
-  Edit,
-  Trash2,
-  FileSpreadsheet,
-  User
-} from 'lucide-react';
 import { toast } from 'react-toastify';
-import Image from 'next/image';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+import {
+  ArrowLeft,
+  Save,
+  RefreshCw,
+  Store,
+  UtensilsCrossed,
+  Package,
+  Plus,
+  Trash2,
+  Pencil,
+  Loader2,
+  MapPin,
+  X,
+} from 'lucide-react';
 
-interface Merchant {
+import { useAuth } from '@/contexts/AuthContext';
+import BulkMenuUpload from '@/components/merchant/BulkMenuUpload';
+import ImageUpload from '@/components/common/ImageUpload';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
+
+type MerchantRow = {
   id: string;
   business_name: string;
-  email: string;
-  phone: string;
-  address: any;
-  cuisine_types: string[];
-  description: string;
-  logo_url: string;
-  banner_url: string;
-  is_active: boolean;
-  is_verified: boolean;
-  latitude: number;
-  longitude: number;
-}
+  description?: string | null;
+  phone?: string | null;
+  email?: string | null;
 
-interface MenuItem {
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+
+  latitude?: number | null;
+  longitude?: number | null;
+
+  cuisine_types?: any;
+  logo_url?: string | null;
+  banner_url?: string | null;
+
+  is_active?: boolean | null;
+  is_verified?: boolean | null;
+
+  delivery_radius_km?: number | null;
+  min_order_amount?: number | null;
+  estimated_prep_time?: number | null;
+
+  created_at?: string;
+  updated_at?: string;
+};
+
+type MenuItemRow = {
   id: string;
+  merchant_id: string;
   name: string;
-  description: string;
+  description?: string | null;
   price: number;
-  category: string;
-  is_available: boolean;
-  image_url?: string;
-}
+  category?: string | null;
+  is_veg?: boolean | null;
+  is_available?: boolean | null;
+  image_url?: string | null;
+  discount_percentage?: number | null;
+  preparation_time?: number | null;
+  created_at?: string;
+};
 
-interface Order {
+type OrderRow = {
   id: string;
-  created_at: string;
-  status: string;
-  total: number;
-  items: any[];
-  delivery_address: any;
-  driver_id?: string;
+  status?: string | null;
+  paymentmethod?: string | null;
+  paymentstatus?: string | null;
+  totalamount?: number | null;
+  deliveryaddress?: string | null;
+  createdat?: string | null;
+
+  payment_method?: string | null;
+  payment_status?: string | null;
+  total_amount?: number | null;
+  delivery_address?: string | null;
+  created_at?: string | null;
+
+  items?: any;
+};
+
+const ORDER_STATUSES = ['pending', 'confirmed', 'preparing', 'on_the_way', 'delivered', 'cancelled'] as const;
+
+function parseCuisineToText(v: any) {
+  if (!v) return '';
+  if (Array.isArray(v)) return v.join(', ');
+  if (typeof v === 'string') {
+    const s = v.trim();
+    try {
+      const j = JSON.parse(s);
+      if (Array.isArray(j)) return j.join(', ');
+    } catch {}
+    return s;
+  }
+  return '';
 }
 
-export default function AdminMerchantDetailPage() {
-  const params = useParams();
+function cuisineTextToArray(text: string): string[] {
+  return text
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function money(n: any) {
+  const v = Number(n || 0);
+  try {
+    return v.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+  } catch {
+    return `₹${Math.round(v)}`;
+  }
+}
+
+export default function AdminMerchantPage() {
+  const { user, loading } = useAuth();
   const router = useRouter();
-  useAuth();
-  const [merchant, setMerchant] = useState<Merchant | null>(null);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [drivers, setDrivers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'menu' | 'orders'>('profile');
-  const [uploading, setUploading] = useState(false);
-  const [showMenuModal, setShowMenuModal] = useState(false);
-  const [showBulkModal, setShowBulkModal] = useState(false);
-  const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | null>(null);
-  const [menuFormData, setMenuFormData] = useState({
-    name: '',
-    description: '',
-    price: 0,
-    category: '',
-    is_available: true,
-  });
-  const [bulkMenuText, setBulkMenuText] = useState('');
+  const pathname = usePathname();
+
+  const params = useParams<{ id: string }>();
+  const merchantId = params?.id;
+
+  const [tab, setTab] = useState<'profile' | 'menu' | 'orders'>('profile');
+
+  const [merchant, setMerchant] = useState<MerchantRow | null>(null);
+  const [merchantForm, setMerchantForm] = useState<MerchantRow | null>(null);
+
+  const [savingMerchant, setSavingMerchant] = useState(false);
+  const [loadingMerchant, setLoadingMerchant] = useState(true);
+
+  const [menu, setMenu] = useState<MenuItemRow[]>([]);
+  const [loadingMenu, setLoadingMenu] = useState(false);
+
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+
+  const [editingItem, setEditingItem] = useState<MenuItemRow | null>(null);
+  const [itemDraft, setItemDraft] = useState<Partial<MenuItemRow>>({});
+  const [savingItem, setSavingItem] = useState(false);
+
+  const [showLocationModal, setShowLocationModal] = useState(false);
+
+  const isAdmin = useMemo(() => user?.role === 'admin' || user?.role === 'superadmin', [user?.role]);
 
   useEffect(() => {
-    if (params.id) {
-      loadAll();
+    if (loading) return;
+    if (!isAdmin) {
+      const redirectTo = pathname || '/admin';
+      router.replace(`/login?redirect=${encodeURIComponent(redirectTo)}`);
     }
-  }, [params.id]);
+  }, [loading, isAdmin, pathname, router]);
+
+  useEffect(() => {
+    if (!merchantId) return;
+    if (!loading && isAdmin) loadAll();
+  }, [merchantId, loading, isAdmin]);
 
   const loadAll = async () => {
-    await Promise.all([
-      loadMerchant(),
-      loadMenuItems(),
-      loadOrders(),
-      loadDrivers(),
-    ]);
-    setLoading(false);
+    await Promise.all([loadMerchant(), loadMenu(), loadOrders()]);
   };
 
   const loadMerchant = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('merchants')
-        .select('*')
-        .eq('id', params.id)
-        .single();
+    if (!merchantId) return;
 
+    setLoadingMerchant(true);
+    try {
+      const { data, error } = await supabase.from('merchants').select('*').eq('id', merchantId).maybeSingle();
       if (error) throw error;
-      setMerchant(data);
-    } catch (error) {
-      console.error('Failed to load merchant:', error);
-      toast.error('Failed to load merchant');
+      if (!data) throw new Error('Merchant not found');
+
+      setMerchant(data as MerchantRow);
+      setMerchantForm(data as MerchantRow);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to load merchant');
+      setMerchant(null);
+      setMerchantForm(null);
+    } finally {
+      setLoadingMerchant(false);
     }
   };
 
-  const loadMenuItems = async () => {
+  const loadMenu = async () => {
+    if (!merchantId) return;
+
+    setLoadingMenu(true);
     try {
       const { data, error } = await supabase
         .from('menu_items')
         .select('*')
-        .eq('merchant_id', params.id)
-        .order('category', { ascending: true });
+        .eq('merchant_id', merchantId)
+        .order('category', { ascending: true })
+        .order('name', { ascending: true });
 
       if (error) throw error;
-      setMenuItems(data || []);
-    } catch (error) {
-      console.error('Failed to load menu:', error);
+      setMenu((data || []) as MenuItemRow[]);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to load menu');
+      setMenu([]);
+    } finally {
+      setLoadingMenu(false);
     }
   };
 
   const loadOrders = async () => {
+  if (!merchantId) return;
+
+  setLoadingOrders(true);
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('id,status,payment_method,payment_status,total_amount,delivery_address,items,created_at')
+      .eq('merchant_id', merchantId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+    setOrders((data || []) as OrderRow[]);
+  } catch (e: any) {
+    toast.error(e?.message || 'Failed to load orders');
+    setOrders([]);
+  } finally {
+    setLoadingOrders(false);
+  }
+};
+
+  const saveMerchant = async () => {
+    if (!merchantForm || !merchantId) return;
+
+    setSavingMerchant(true);
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('merchant_id', params.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
+      const payload: Partial<MerchantRow> = {
+        business_name: merchantForm.business_name,
+        description: merchantForm.description || null,
+        phone: merchantForm.phone || null,
+        email: merchantForm.email || null,
 
-      if (error) throw error;
-      setOrders(data || []);
-    } catch (error) {
-      console.error('Failed to load orders:', error);
-    }
-  };
+        address: merchantForm.address || null,
+        city: merchantForm.city || null,
+        state: merchantForm.state || null,
+        postal_code: merchantForm.postal_code || null,
 
-  const loadDrivers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, phone')
-        .eq('role', 'driver');
+        latitude: merchantForm.latitude ?? null,
+        longitude: merchantForm.longitude ?? null,
 
-      if (error) throw error;
-      setDrivers(data || []);
-    } catch (error) {
-      console.error('Failed to load drivers:', error);
-    }
-  };
+        cuisine_types: Array.isArray(merchantForm.cuisine_types)
+          ? merchantForm.cuisine_types
+          : cuisineTextToArray(parseCuisineToText(merchantForm.cuisine_types)),
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'banner') => {
-    const file = e.target.files?.[0];
-    if (!file || !merchant) return;
+        logo_url: merchantForm.logo_url || null,
+        banner_url: merchantForm.banner_url || null,
 
-    setUploading(true);
-    try {
-      const url = await uploadToCloudinary(file, `merchants/${type}`);
-      
-      const updateData = type === 'logo' ? { logo_url: url } : { banner_url: url };
-      
-      const { error } = await supabase
-        .from('merchants')
-        .update(updateData)
-        .eq('id', merchant.id);
+        is_active: !!merchantForm.is_active,
+        is_verified: !!merchantForm.is_verified,
 
+        delivery_radius_km: merchantForm.delivery_radius_km ?? null,
+        min_order_amount: merchantForm.min_order_amount ?? null,
+        estimated_prep_time: merchantForm.estimated_prep_time ?? null,
+      };
+
+      const { error } = await supabase.from('merchants').update(payload).eq('id', merchantId);
       if (error) throw error;
 
-      setMerchant({ ...merchant, ...updateData as any });
-      toast.success(`${type === 'logo' ? 'Logo' : 'Banner'} updated successfully`);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to upload image');
+      toast.success('Merchant updated');
+      await loadMerchant();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update merchant');
     } finally {
-      setUploading(false);
+      setSavingMerchant(false);
     }
   };
 
-  const handleSave = async () => {
-    if (!merchant) return;
-
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from('merchants')
-        .update({
-          business_name: merchant.business_name,
-          email: merchant.email,
-          phone: merchant.phone,
-          description: merchant.description,
-          cuisine_types: merchant.cuisine_types,
-          is_active: merchant.is_active,
-          is_verified: merchant.is_verified,
-        })
-        .eq('id', merchant.id);
-
-      if (error) throw error;
-      toast.success('Merchant updated successfully');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update merchant');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleMenuSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      if (editingMenuItem) {
-        const { error } = await supabase
-          .from('menu_items')
-          .update(menuFormData)
-          .eq('id', editingMenuItem.id);
-
-        if (error) throw error;
-        toast.success('Menu item updated!');
-      } else {
-        const { error } = await supabase
-          .from('menu_items')
-          .insert([{
-            ...menuFormData,
-            merchant_id: params.id,
-          }]);
-
-        if (error) throw error;
-        toast.success('Menu item added!');
-      }
-
-      setShowMenuModal(false);
-      setEditingMenuItem(null);
-      resetMenuForm();
-      loadMenuItems();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save menu item');
-    }
-  };
-
-  const handleBulkMenuUpload = async () => {
-    try {
-      const lines = bulkMenuText.trim().split('\n');
-      const menuItems = lines.map((line) => {
-        const [name, price, category, description] = line.split(',').map((s) => s.trim());
-        return {
-          name,
-          price: parseFloat(price) || 0,
-          category: category || 'Other',
-          description: description || '',
-          merchant_id: params.id,
-          is_available: true,
-        };
-      }).filter((item) => item.name && item.price > 0);
-
-      if (menuItems.length === 0) {
-        toast.error('No valid menu items found');
-        return;
-      }
-
-      const { error } = await supabase
-        .from('menu_items')
-        .insert(menuItems);
-
-      if (error) throw error;
-
-      toast.success(`${menuItems.length} menu items added!`);
-      setShowBulkModal(false);
-      setBulkMenuText('');
-      loadMenuItems();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to upload bulk menu');
-    }
-  };
-
-  const handleDeleteMenuItem = async (itemId: string) => {
-    if (!confirm('Delete this menu item?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('menu_items')
-        .delete()
-        .eq('id', itemId);
-
-      if (error) throw error;
-      toast.success('Menu item deleted');
-      loadMenuItems();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (error) {
-      toast.error('Failed to delete menu item');
-    }
-  };
-
-  const handleAssignDriver = async (orderId: string, driverId: string) => {
-    try {
-      const { error } = await supabase
-        .from('orders')
-        .update({ 
-          driver_id: driverId,
-          status: 'on_the_way'
-        })
-        .eq('id', orderId);
-
-      if (error) throw error;
-
-      // Send notification to driver
-      await notificationService.sendNotification(
-        driverId,
-        'New Delivery Assignment',
-        `You have been assigned a new delivery order`,
-        'order',
-        { order_id: orderId }
-      );
-
-      toast.success('Driver assigned!');
-      loadOrders();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to assign driver');
-    }
-  };
-
-  const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
-    try {
-      const { data: order, error: fetchError } = await supabase
-        .from('orders')
-        .select('user_id, merchant_id, driver_id')
-        .eq('id', orderId)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      const { error } = await supabase
-        .from('orders')
-        .update({ status: newStatus })
-        .eq('id', orderId);
-
-      if (error) throw error;
-
-      // Send notifications to all relevant parties
-      const notifications = [];
-
-      // Customer
-      notifications.push(
-        notificationService.sendNotification(
-          order.user_id,
-          'Order Status Updated',
-          `Your order is now ${newStatus}`,
-          'order',
-          { order_id: orderId }
-        )
-      );
-
-      // Merchant
-      if (order.merchant_id) {
-        notifications.push(
-          notificationService.sendNotification(
-            order.merchant_id,
-            'Order Status Updated',
-            `Order status changed to ${newStatus}`,
-            'order',
-            { order_id: orderId }
-          )
-        );
-      }
-
-      // Driver
-      if (order.driver_id) {
-        notifications.push(
-          notificationService.sendNotification(
-            order.driver_id,
-            'Order Status Updated',
-            `Order status changed to ${newStatus}`,
-            'order',
-            { order_id: orderId }
-          )
-        );
-      }
-
-      await Promise.all(notifications);
-
-      toast.success('Order status updated!');
-      loadOrders();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update order status');
-    }
-  };
-
-  const resetMenuForm = () => {
-    setMenuFormData({
+  const openNewItem = () => {
+    setEditingItem(null);
+    setItemDraft({
       name: '',
       description: '',
       price: 0,
-      category: '',
+      category: 'Main Course',
+      is_veg: false,
       is_available: true,
     });
   };
 
-  const openEditMenu = (item: MenuItem) => {
-    setEditingMenuItem(item);
-    setMenuFormData({
-      name: item.name,
-      description: item.description,
-      price: item.price,
-      category: item.category,
-      is_available: item.is_available,
-    });
-    setShowMenuModal(true);
+  const openEditItem = (item: MenuItemRow) => {
+    setEditingItem(item);
+    setItemDraft({ ...item });
   };
 
-  const getStatusColor = (status: string) => {
-    const colors: any = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      confirmed: 'bg-blue-100 text-blue-800',
-      preparing: 'bg-purple-100 text-purple-800',
-      on_the_way: 'bg-orange-100 text-orange-800',
-      delivered: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800',
-    };
-    return colors[status] || 'bg-gray-100 text-gray-800';
+  const saveMenuItem = async () => {
+    if (!merchantId) return;
+    const name = String(itemDraft.name || '').trim();
+    const price = Number(itemDraft.price || 0);
+
+    if (!name) return toast.error('Name is required');
+    if (!Number.isFinite(price) || price <= 0) return toast.error('Price must be > 0');
+
+    setSavingItem(true);
+    try {
+      if (editingItem?.id) {
+        const { error } = await supabase
+          .from('menu_items')
+          .update({
+            name,
+            description: itemDraft.description || null,
+            price,
+            category: itemDraft.category || 'Main Course',
+            is_veg: !!itemDraft.is_veg,
+            is_available: itemDraft.is_available !== false,
+            image_url: itemDraft.image_url || null,
+            discount_percentage: itemDraft.discount_percentage ?? null,
+            preparation_time: itemDraft.preparation_time ?? null,
+          })
+          .eq('id', editingItem.id);
+
+        if (error) throw error;
+        toast.success('Menu item updated');
+      } else {
+        const { error } = await supabase.from('menu_items').insert({
+          merchant_id: merchantId,
+          name,
+          description: itemDraft.description || null,
+          price,
+          category: itemDraft.category || 'Main Course',
+          is_veg: !!itemDraft.is_veg,
+          is_available: itemDraft.is_available !== false,
+          image_url: itemDraft.image_url || null,
+          discount_percentage: itemDraft.discount_percentage ?? null,
+          preparation_time: itemDraft.preparation_time ?? null,
+        });
+
+        if (error) throw error;
+        toast.success('Menu item created');
+      }
+
+      setEditingItem(null);
+      setItemDraft({});
+      await loadMenu();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save item');
+    } finally {
+      setSavingItem(false);
+    }
   };
 
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="bg-gray-200 h-96 rounded-lg animate-pulse" />
-        </div>
-      </DashboardLayout>
-    );
+  const deleteMenuItem = async (id: string) => {
+    if (!confirm('Delete this menu item?')) return;
+
+    try {
+      const { error } = await supabase.from('menu_items').delete().eq('id', id);
+      if (error) throw error;
+      toast.success('Deleted');
+      await loadMenu();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to delete');
+    }
+  };
+
+  const updateOrder = async (orderId: string, patch: any) => {
+  try {
+    const { error } = await supabase.from('orders').update(patch).eq('id', orderId);
+    if (error) throw error;
+
+    toast.success('Order updated');
+    await loadOrders();
+  } catch (e: any) {
+    toast.error(e?.message || 'Failed to update order');
   }
+};
 
-  if (!merchant) {
+  if (loading || !isAdmin) {
     return (
-      <DashboardLayout>
-        <div className="max-w-7xl mx-auto px-4 py-8 text-center">
-          <p className="text-gray-600">Merchant not found</p>
-        </div>
-      </DashboardLayout>
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+      </div>
     );
   }
 
   return (
-    <DashboardLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-24">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
+        <div className="flex items-center gap-3 min-w-0">
           <button
+            type="button"
             onClick={() => router.back()}
-            className="p-2 hover:bg-gray-100 rounded-lg"
+            className="p-2 rounded-lg hover:bg-gray-100"
+            aria-label="Back"
           >
-            <ArrowLeft size={24} />
+            <ArrowLeft className="w-5 h-5" />
           </button>
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-900">{merchant.business_name}</h1>
-            <p className="text-gray-600 mt-1">Manage merchant account</p>
+
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">
+              Admin • Merchant {merchant?.business_name ? `• ${merchant.business_name}` : ''}
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-600 truncate">{merchantId}</p>
           </div>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium flex items-center gap-2 disabled:opacity-50"
-          >
-            <Save size={20} />
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b">
+        <div className="sm:ml-auto flex gap-2">
           <button
-            onClick={() => setActiveTab('profile')}
-            className={`px-4 py-2 font-medium flex items-center gap-2 ${
-              activeTab === 'profile'
-                ? 'border-b-2 border-primary text-primary'
-                : 'text-gray-600'
-            }`}
+            type="button"
+            onClick={loadAll}
+            className="px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center gap-2"
           >
-            <Store size={20} />
-            Profile
+            <RefreshCw className="w-4 h-4" />
+            Refresh
           </button>
+
           <button
-            onClick={() => setActiveTab('menu')}
-            className={`px-4 py-2 font-medium flex items-center gap-2 ${
-              activeTab === 'menu'
-                ? 'border-b-2 border-primary text-primary'
-                : 'text-gray-600'
-            }`}
+            type="button"
+            onClick={saveMerchant}
+            disabled={savingMerchant || !merchantForm}
+            className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-orange-600 disabled:opacity-50 flex items-center gap-2"
           >
-            <Package size={20} />
-            Menu ({menuItems.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('orders')}
-            className={`px-4 py-2 font-medium flex items-center gap-2 ${
-              activeTab === 'orders'
-                ? 'border-b-2 border-primary text-primary'
-                : 'text-gray-600'
-            }`}
-          >
-            <ShoppingBag size={20} />
-            Orders ({orders.length})
+            <Save className="w-4 h-4" />
+            {savingMerchant ? 'Saving…' : 'Save'}
           </button>
         </div>
+      </div>
 
-        {/* Profile Tab */}
-        {activeTab === 'profile' && (
-          <div className="bg-white rounded-lg shadow p-6 space-y-6">
-            {/* Images */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Logo
-                </label>
-                <div className="relative w-32 h-32 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden">
-                  {merchant.logo_url ? (
-                    <Image
-                      src={merchant.logo_url}
-                      alt="Logo"
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <Upload className="text-gray-400" size={32} />
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, 'logo')}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    disabled={uploading}
-                  />
-                </div>
-              </div>
+      {/* Tabs */}
+      <div className="bg-white rounded-xl shadow p-2 flex gap-2 mb-5">
+        <button
+          type="button"
+          onClick={() => setTab('profile')}
+          className={`flex-1 px-3 sm:px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 ${
+            tab === 'profile' ? 'bg-orange-50 text-primary' : 'hover:bg-gray-50 text-gray-700'
+          }`}
+        >
+          <Store className="w-4 h-4" />
+          Profile
+        </button>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Banner
-                </label>
-                <div className="relative w-full h-32 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden">
-                  {merchant.banner_url ? (
-                    <Image
-                      src={merchant.banner_url}
-                      alt="Banner"
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <Upload className="text-gray-400" size={32} />
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleImageUpload(e, 'banner')}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    disabled={uploading}
-                  />
-                </div>
-              </div>
+        <button
+          type="button"
+          onClick={() => setTab('menu')}
+          className={`flex-1 px-3 sm:px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 ${
+            tab === 'menu' ? 'bg-orange-50 text-primary' : 'hover:bg-gray-50 text-gray-700'
+          }`}
+        >
+          <UtensilsCrossed className="w-4 h-4" />
+          Menu
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTab('orders')}
+          className={`flex-1 px-3 sm:px-4 py-2 rounded-lg font-semibold flex items-center justify-center gap-2 ${
+            tab === 'orders' ? 'bg-orange-50 text-primary' : 'hover:bg-gray-50 text-gray-700'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          Orders
+        </button>
+      </div>
+
+      {/* PROFILE */}
+      {tab === 'profile' && (
+        <div className="bg-white rounded-xl shadow p-4 sm:p-6">
+          {loadingMerchant || !merchantForm ? (
+            <div className="py-10 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
             </div>
-
-            {/* Basic Info */}
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Business Name *
-                </label>
-                <input
-                  type="text"
-                  value={merchant.business_name}
-                  onChange={(e) => setMerchant({ ...merchant, business_name: e.target.value })}
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  value={merchant.email}
-                  onChange={(e) => setMerchant({ ...merchant, email: e.target.value })}
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone *
-                </label>
-                <input
-                  type="tel"
-                  value={merchant.phone}
-                  onChange={(e) => setMerchant({ ...merchant, phone: e.target.value })}
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cuisine Types
-                </label>
-                <input
-                  type="text"
-                  value={merchant.cuisine_types?.join(', ') || ''}
-                  onChange={(e) => setMerchant({ ...merchant, cuisine_types: e.target.value.split(',').map(s => s.trim()) })}
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary"
-                  placeholder="Punjabi, Chinese, Italian"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description
-              </label>
-              <textarea
-                value={merchant.description}
-                onChange={(e) => setMerchant({ ...merchant, description: e.target.value })}
-                rows={4}
-                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary"
-              />
-            </div>
-
-            {/* Status Toggles */}
-            <div className="flex gap-6">
-              <label className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={merchant.is_active}
-                  onChange={(e) => setMerchant({ ...merchant, is_active: e.target.checked })}
-                  className="w-5 h-5 text-primary"
-                />
-                <span className="font-medium">Active</span>
-              </label>
-
-              <label className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={merchant.is_verified}
-                  onChange={(e) => setMerchant({ ...merchant, is_verified: e.target.checked })}
-                  className="w-5 h-5 text-primary"
-                />
-                <span className="font-medium">Verified</span>
-              </label>
-            </div>
-          </div>
-        )}
-
-        {/* Menu Tab */}
-        {activeTab === 'menu' && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold">Menu Items ({menuItems.length})</h3>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowBulkModal(true)}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium flex items-center gap-2"
-                >
-                  <FileSpreadsheet size={18} />
-                  Bulk Upload
-                </button>
-                <button
-                  onClick={() => {
-                    setEditingMenuItem(null);
-                    resetMenuForm();
-                    setShowMenuModal(true);
-                  }}
-                  className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-orange-600 font-medium flex items-center gap-2"
-                >
-                  <Plus size={18} />
-                  Add Item
-                </button>
-              </div>
-            </div>
-
-            {menuItems.length > 0 ? (
-              <div className="grid md:grid-cols-3 gap-4">
-                {menuItems.map((item) => (
-                  <div key={item.id} className="border rounded-lg p-4">
-                    {item.image_url && (
-                      <div className="relative w-full h-32 mb-3 rounded overflow-hidden">
-                        <Image
-                          src={item.image_url}
-                          alt={item.name}
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-                    )}
-                    <h4 className="font-semibold text-lg mb-1">{item.name}</h4>
-                    <p className="text-sm text-gray-600 mb-2">{item.description}</p>
-                    <p className="text-primary font-bold text-xl mb-2">₹{item.price}</p>
-                    <p className="text-xs text-gray-500 mb-3">{item.category}</p>
-                    
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => openEditMenu(item)}
-                        className="flex-1 bg-blue-100 text-blue-800 px-3 py-2 rounded hover:bg-blue-200 flex items-center justify-center gap-1"
-                      >
-                        <Edit size={14} />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteMenuItem(item.id)}
-                        className="flex-1 bg-red-100 text-red-800 px-3 py-2 rounded hover:bg-red-200 flex items-center justify-center gap-1"
-                      >
-                        <Trash2 size={14} />
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <Package size={64} className="mx-auto text-gray-400 mb-4" />
-                <p className="text-gray-600">No menu items yet</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Orders Tab */}
-        {activeTab === 'orders' && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-xl font-bold mb-6">Recent Orders ({orders.length})</h3>
-            
-            {orders.length > 0 ? (
-              <div className="space-y-4">
-                {orders.map((order) => (
-                  <div key={order.id} className="border rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h4 className="font-bold">Order #{order.id.slice(0, 8).toUpperCase()}</h4>
-                        <p className="text-sm text-gray-600">
-                          {new Date(order.created_at).toLocaleString('en-IN')}
-                        </p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(order.status)}`}>
-                        {order.status}
-                      </span>
-                    </div>
-
-                    <div className="grid md:grid-cols-3 gap-4 mb-4">
-                      <div>
-                        <p className="text-sm text-gray-600">Total Amount</p>
-                        <p className="font-bold text-lg text-primary">₹{order.total}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Items</p>
-                        <p className="font-semibold">{order.items?.length || 0} items</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Delivery Address</p>
-                        <p className="font-semibold text-sm">{order.delivery_address?.address?.slice(0, 30) || 'N/A'}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                      <select
-                        value={order.status}
-                        onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
-                        className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="preparing">Preparing</option>
-                        <option value="on_the_way">On the Way</option>
-                        <option value="delivered">Delivered</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
-
-                      {!order.driver_id && (
-                        <select
-                          onChange={(e) => handleAssignDriver(order.id, e.target.value)}
-                          className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
-                        >
-                          <option value="">Assign Driver</option>
-                          {drivers.map((driver) => (
-                            <option key={driver.id} value={driver.id}>
-                              {driver.full_name} - {driver.phone}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-
-                      {order.driver_id && (
-                        <div className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-800 rounded-lg">
-                          <User size={16} />
-                          <span className="text-sm font-medium">Driver Assigned</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <ShoppingBag size={64} className="mx-auto text-gray-400 mb-4" />
-                <p className="text-gray-600">No orders yet</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Add/Edit Menu Modal */}
-        {showMenuModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-2xl w-full">
-              <div className="p-6 border-b">
-                <h2 className="text-2xl font-bold">
-                  {editingMenuItem ? 'Edit Menu Item' : 'Add Menu Item'}
-                </h2>
-              </div>
-
-              <form onSubmit={handleMenuSubmit} className="p-6 space-y-4">
+          ) : (
+            <>
+              {/* Uploads */}
+              <div className="grid md:grid-cols-2 gap-4 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Item Name *
-                  </label>
+                  <label className="text-sm font-semibold text-gray-700">Logo</label>
+                  <div className="mt-2 h-32">
+                    <ImageUpload
+                      type="profile"
+                      folder={`merchants/${merchantId}/logo`}
+                      currentImage={merchantForm.logo_url || ''}
+                      onUpload={(url) => setMerchantForm({ ...merchantForm, logo_url: url })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Banner</label>
+                  <div className="mt-2 h-32">
+                    <ImageUpload
+                      type="banner"
+                      folder={`merchants/${merchantId}/banner`}
+                      currentImage={merchantForm.banner_url || ''}
+                      onUpload={(url) => setMerchantForm({ ...merchantForm, banner_url: url })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-5">
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Business name</label>
                   <input
-                    type="text"
-                    value={menuFormData.name}
-                    onChange={(e) => setMenuFormData({ ...menuFormData, name: e.target.value })}
-                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary"
-                    required
+                    className="mt-2 w-full border rounded-lg px-3 py-2"
+                    value={merchantForm.business_name || ''}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, business_name: e.target.value })}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description
-                  </label>
+                  <label className="text-sm font-semibold text-gray-700">Phone</label>
+                  <input
+                    className="mt-2 w-full border rounded-lg px-3 py-2"
+                    value={merchantForm.phone || ''}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, phone: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Email</label>
+                  <input
+                    className="mt-2 w-full border rounded-lg px-3 py-2"
+                    value={merchantForm.email || ''}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, email: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Cuisine types (comma separated)</label>
+                  <input
+                    className="mt-2 w-full border rounded-lg px-3 py-2"
+                    value={parseCuisineToText(merchantForm.cuisine_types)}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, cuisine_types: e.target.value })}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-sm font-semibold text-gray-700">Description</label>
                   <textarea
-                    value={menuFormData.description}
-                    onChange={(e) => setMenuFormData({ ...menuFormData, description: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary"
+                    className="mt-2 w-full border rounded-lg px-3 py-2 min-h-[90px]"
+                    value={merchantForm.description || ''}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, description: e.target.value })}
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="md:col-span-2 flex items-end justify-between gap-3">
+                  <div className="flex-1">
+                    <label className="text-sm font-semibold text-gray-700">Address</label>
+                    <input
+                      className="mt-2 w-full border rounded-lg px-3 py-2"
+                      value={merchantForm.address || ''}
+                      onChange={(e) => setMerchantForm({ ...merchantForm, address: e.target.value })}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowLocationModal(true)}
+                    className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 font-semibold flex items-center gap-2"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Update location
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">City</label>
+                  <input
+                    className="mt-2 w-full border rounded-lg px-3 py-2"
+                    value={merchantForm.city || ''}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, city: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">State</label>
+                  <input
+                    className="mt-2 w-full border rounded-lg px-3 py-2"
+                    value={merchantForm.state || ''}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, state: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Postal code</label>
+                  <input
+                    className="mt-2 w-full border rounded-lg px-3 py-2"
+                    value={merchantForm.postal_code || ''}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, postal_code: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Estimated prep time (min)</label>
+                  <input
+                    type="number"
+                    className="mt-2 w-full border rounded-lg px-3 py-2"
+                    value={merchantForm.estimated_prep_time ?? 30}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, estimated_prep_time: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Min order amount</label>
+                  <input
+                    type="number"
+                    className="mt-2 w-full border rounded-lg px-3 py-2"
+                    value={merchantForm.min_order_amount ?? 0}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, min_order_amount: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Delivery radius (km)</label>
+                  <input
+                    type="number"
+                    className="mt-2 w-full border rounded-lg px-3 py-2"
+                    value={merchantForm.delivery_radius_km ?? 0}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, delivery_radius_km: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Latitude</label>
+                  <input
+                    type="number"
+                    className="mt-2 w-full border rounded-lg px-3 py-2"
+                    value={merchantForm.latitude ?? 0}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, latitude: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Longitude</label>
+                  <input
+                    type="number"
+                    className="mt-2 w-full border rounded-lg px-3 py-2"
+                    value={merchantForm.longitude ?? 0}
+                    onChange={(e) => setMerchantForm({ ...merchantForm, longitude: Number(e.target.value) })}
+                  />
+                </div>
+
+                <div className="md:col-span-2 flex flex-wrap gap-4 pt-2">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={!!merchantForm.is_active}
+                      onChange={(e) => setMerchantForm({ ...merchantForm, is_active: e.target.checked })}
+                    />
+                    Active
+                  </label>
+
+                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={!!merchantForm.is_verified}
+                      onChange={(e) => setMerchantForm({ ...merchantForm, is_verified: e.target.checked })}
+                    />
+                    Verified
+                  </label>
+                </div>
+              </div>
+
+              {/* Location modal */}
+              {showLocationModal && (
+                <>
+                  <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowLocationModal(false)} />
+                  <div className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="p-4 border-b flex items-center justify-between">
+                      <h3 className="font-bold text-gray-900">Update merchant location</h3>
+                      <button
+                        type="button"
+                        className="p-2 rounded-lg hover:bg-gray-100"
+                        onClick={() => setShowLocationModal(false)}
+                        aria-label="Close"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="p-4">
+                      <p className="text-sm text-gray-600 mb-3">Search and select the correct address.</p>
+                      <AddressAutocomplete
+                        onSelect={(loc: any) => {
+                          setMerchantForm({
+                            ...merchantForm,
+                            address: loc.address,
+                            latitude: loc.lat,
+                            longitude: loc.lon,
+                          });
+                          toast.success('Location selected');
+                          setShowLocationModal(false);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* MENU */}
+      {tab === 'menu' && (
+        <div className="bg-white rounded-xl shadow p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Menu</h2>
+              <p className="text-sm text-gray-600">{menu.length} items</p>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowBulkUpload(true)}
+                className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 font-semibold"
+              >
+                Bulk upload
+              </button>
+
+              <button
+                type="button"
+                onClick={openNewItem}
+                className="px-4 py-2 rounded-lg bg-primary text-white hover:bg-orange-600 font-semibold flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add item
+              </button>
+            </div>
+          </div>
+
+          {loadingMenu ? (
+            <div className="py-10 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+            </div>
+          ) : menu.length === 0 ? (
+            <div className="py-10 text-center text-gray-600">No items yet. Add or bulk upload.</div>
+          ) : (
+            <div className="overflow-x-auto border rounded-lg">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Category</th>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-700">Price</th>
+                    <th className="px-4 py-3 text-center font-semibold text-gray-700">Available</th>
+                    <th className="px-4 py-3 text-center font-semibold text-gray-700">Veg</th>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {menu.map((m) => (
+                    <tr key={m.id} className="border-t">
+                      <td className="px-4 py-3 font-semibold">{m.name}</td>
+                      <td className="px-4 py-3">{m.category || '—'}</td>
+                      <td className="px-4 py-3 text-right">{money(m.price)}</td>
+                      <td className="px-4 py-3 text-center">{m.is_available ? 'Yes' : 'No'}</td>
+                      <td className="px-4 py-3 text-center">{m.is_veg ? 'Yes' : 'No'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditItem(m)}
+                            className="p-2 rounded-lg hover:bg-gray-100"
+                            aria-label="Edit"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteMenuItem(m.id)}
+                            className="p-2 rounded-lg hover:bg-red-50 text-red-600"
+                            aria-label="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {(editingItem || Object.keys(itemDraft).length > 0) && (
+            <>
+              <div
+                className="fixed inset-0 bg-black/50 z-50"
+                onClick={() => {
+                  setEditingItem(null);
+                  setItemDraft({});
+                }}
+              />
+              <div className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] max-w-2xl bg-white rounded-xl shadow-2xl p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">
+                  {editingItem ? 'Edit menu item' : 'Add menu item'}
+                </h3>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="text-sm font-semibold text-gray-700">Name</label>
+                    <input
+                      className="mt-2 w-full border rounded-lg px-3 py-2"
+                      value={String(itemDraft.name || '')}
+                      onChange={(e) => setItemDraft({ ...itemDraft, name: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="text-sm font-semibold text-gray-700">Description</label>
+                    <textarea
+                      className="mt-2 w-full border rounded-lg px-3 py-2 min-h-[80px]"
+                      value={String(itemDraft.description || '')}
+                      onChange={(e) => setItemDraft({ ...itemDraft, description: e.target.value })}
+                    />
+                  </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Price (₹) *
-                    </label>
+                    <label className="text-sm font-semibold text-gray-700">Price</label>
                     <input
                       type="number"
-                      value={menuFormData.price}
-                      onChange={(e) => setMenuFormData({ ...menuFormData, price: Number(e.target.value) })}
-                      className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary"
-                      min="0"
-                      required
+                      className="mt-2 w-full border rounded-lg px-3 py-2"
+                      value={Number(itemDraft.price || 0)}
+                      onChange={(e) => setItemDraft({ ...itemDraft, price: Number(e.target.value) })}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Category *
-                    </label>
+                    <label className="text-sm font-semibold text-gray-700">Category</label>
                     <input
-                      type="text"
-                      value={menuFormData.category}
-                      onChange={(e) => setMenuFormData({ ...menuFormData, category: e.target.value })}
-                      className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary"
-                      placeholder="e.g., Starters, Main Course"
-                      required
+                      className="mt-2 w-full border rounded-lg px-3 py-2"
+                      value={String(itemDraft.category || '')}
+                      onChange={(e) => setItemDraft({ ...itemDraft, category: e.target.value })}
                     />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700">Image URL</label>
+                    <input
+                      className="mt-2 w-full border rounded-lg px-3 py-2"
+                      value={String(itemDraft.image_url || '')}
+                      onChange={(e) => setItemDraft({ ...itemDraft, image_url: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700">Discount %</label>
+                    <input
+                      type="number"
+                      className="mt-2 w-full border rounded-lg px-3 py-2"
+                      value={Number(itemDraft.discount_percentage || 0)}
+                      onChange={(e) => setItemDraft({ ...itemDraft, discount_percentage: Number(e.target.value) })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700">Prep time (min)</label>
+                    <input
+                      type="number"
+                      className="mt-2 w-full border rounded-lg px-3 py-2"
+                      value={Number(itemDraft.preparation_time || 0)}
+                      onChange={(e) => setItemDraft({ ...itemDraft, preparation_time: Number(e.target.value) })}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-4 pt-6">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={itemDraft.is_available !== false}
+                        onChange={(e) => setItemDraft({ ...itemDraft, is_available: e.target.checked })}
+                      />
+                      Available
+                    </label>
+
+                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={!!itemDraft.is_veg}
+                        onChange={(e) => setItemDraft({ ...itemDraft, is_veg: e.target.checked })}
+                      />
+                      Veg
+                    </label>
                   </div>
                 </div>
 
-                <label className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={menuFormData.is_available}
-                    onChange={(e) => setMenuFormData({ ...menuFormData, is_available: e.target.checked })}
-                    className="w-5 h-5 text-primary"
-                  />
-                  <span className="font-medium">Available</span>
-                </label>
-
-                <div className="flex gap-3 pt-4">
+                <div className="mt-6 flex gap-3">
                   <button
                     type="button"
                     onClick={() => {
-                      setShowMenuModal(false);
-                      setEditingMenuItem(null);
-                      resetMenuForm();
+                      setEditingItem(null);
+                      setItemDraft({});
                     }}
-                    className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
+                    className="flex-1 px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 font-semibold"
                   >
                     Cancel
                   </button>
                   <button
-                    type="submit"
-                    className="flex-1 bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium"
+                    type="button"
+                    onClick={saveMenuItem}
+                    disabled={savingItem}
+                    className="flex-1 px-4 py-3 rounded-lg bg-primary text-white hover:bg-orange-600 font-semibold disabled:opacity-50"
                   >
-                    {editingMenuItem ? 'Update Item' : 'Add Item'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Bulk Upload Modal */}
-        {showBulkModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-3xl w-full">
-              <div className="p-6 border-b">
-                <h2 className="text-2xl font-bold">Bulk Menu Upload</h2>
-              </div>
-
-              <div className="p-6 space-y-4">
-                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-                  <p className="text-sm text-blue-900 font-semibold mb-2">Format:</p>
-                  <p className="text-sm text-blue-800 font-mono">
-                    Item Name, Price, Category, Description
-                  </p>
-                  <p className="text-xs text-blue-700 mt-2">
-                    Example: Paneer Tikka, 250, Starters, Marinated cottage cheese cubes
-                  </p>
-                </div>
-
-                <textarea
-                  value={bulkMenuText}
-                  onChange={(e) => setBulkMenuText(e.target.value)}
-                  placeholder="Paneer Tikka, 250, Starters, Marinated cottage cheese cubes
-Butter Chicken, 350, Main Course, Creamy chicken curry
-Gulab Jamun, 80, Desserts, Sweet milk dumplings"
-                  rows={10}
-                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-primary font-mono text-sm"
-                />
-
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={() => {
-                      setShowBulkModal(false);
-                      setBulkMenuText('');
-                    }}
-                    className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleBulkMenuUpload}
-                    className="flex-1 bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium"
-                  >
-                    Upload Menu Items
+                    {savingItem ? 'Saving…' : 'Save item'}
                   </button>
                 </div>
               </div>
+            </>
+          )}
+
+          {showBulkUpload && merchantId && (
+            <BulkMenuUpload merchantId={merchantId} onClose={() => setShowBulkUpload(false)} onSuccess={() => loadMenu()} />
+          )}
+        </div>
+      )}
+
+      {/* ORDERS */}
+      {tab === 'orders' && (
+        <div className="bg-white rounded-xl shadow p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Orders</h2>
+              <p className="text-sm text-gray-600">Latest 50 orders for this merchant</p>
             </div>
+
+            <button
+              type="button"
+              onClick={loadOrders}
+              className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 font-semibold"
+            >
+              Refresh
+            </button>
           </div>
-        )}
-      </div>
-    </DashboardLayout>
+
+          {loadingOrders ? (
+            <div className="py-10 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+            </div>
+          ) : orders.length === 0 ? (
+            <div className="py-10 text-center text-gray-600">No orders found.</div>
+          ) : (
+            <div className="space-y-4">
+              {orders.map((o) => {
+               const total = o.total_amount ?? 0;
+const paymentMethod = o.payment_method || '—';
+const paymentStatus = o.payment_status || '—';
+const address = o.delivery_address || '—';
+const created = o.created_at || '';
+
+
+                return (
+                  <div key={o.id} className="border rounded-xl p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-bold text-gray-900 truncate">Order #{String(o.id).slice(0, 8)}</p>
+                        <p className="text-xs text-gray-500 mt-1">{created ? `Created: ${created}` : 'Created: —'}</p>
+                        <p className="text-sm text-gray-700 mt-2 line-clamp-2">Address: {address}</p>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="font-bold text-primary">{money(total)}</p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {paymentMethod} • {paymentStatus}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600">Status</label>
+                        <select
+                          className="mt-1 w-full border rounded-lg px-3 py-2"
+                          value={String(o.status || 'pending')}
+                          onChange={(e) => updateOrder(o.id, { status: e.target.value })}
+                        >
+                          {ORDER_STATUSES.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600">Payment status</label>
+                        <select
+                          className="mt-1 w-full border rounded-lg px-3 py-2"
+                          value={String(paymentStatus)}
+                          onChange={(e) => updateOrder(o.id, { paymentstatus: e.target.value })}
+                        >
+                          <option value="pending">pending</option>
+                          <option value="paid">paid</option>
+                          <option value="failed">failed</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-gray-600">Quick actions</label>
+                        <div className="mt-1 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => updateOrder(o.id, { status: 'confirmed' })}
+                            className="flex-1 px-3 py-2 rounded-lg bg-blue-50 text-blue-700 font-semibold hover:bg-blue-100"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateOrder(o.id, { status: 'delivered' })}
+                            className="flex-1 px-3 py-2 rounded-lg bg-green-50 text-green-700 font-semibold hover:bg-green-100"
+                          >
+                            Delivered
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {Array.isArray(o.items) && o.items.length > 0 && (
+                      <div className="mt-4 bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs font-semibold text-gray-700 mb-2">Items</p>
+                        <div className="text-sm text-gray-700 space-y-1">
+                          {o.items.slice(0, 8).map((it: any, idx: number) => (
+                            <div key={idx} className="flex justify-between gap-3">
+                              <span className="truncate">
+                                {it?.name || 'Item'} × {it?.quantity ?? 1}
+                              </span>
+                              <span className="font-semibold">{money((it?.price ?? 0) * (it?.quantity ?? 1))}</span>
+                            </div>
+                          ))}
+                          {o.items.length > 8 && <p className="text-xs text-gray-500">+ more…</p>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

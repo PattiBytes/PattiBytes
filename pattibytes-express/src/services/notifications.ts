@@ -160,98 +160,77 @@ class NotificationService {
   }
 
   async sendOrderNotification(orderId: string, status: string) {
-    try {
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .select('*, customer:profiles!orders_customer_id_fkey(full_name), merchant:merchants!orders_merchant_id_fkey(business_name)')
-        .eq('id', orderId)
+  try {
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .select(
+        'id, customer_id, merchant_id, delivery_address, created_at, customer:profiles!orders_customer_id_fkey(full_name), merchant:merchants!orders_merchant_id_fkey(business_name)'
+      )
+      .eq('id', orderId)
+      .single();
+
+    if (orderError) throw orderError;
+
+    const statusMessages: any = {
+      pending: { customer: 'Your order has been placed successfully!', merchant: 'New order received! Please confirm.' },
+      confirmed: { customer: 'Your order has been confirmed by the restaurant.', merchant: 'Order confirmed. Start preparing!' },
+      preparing: { customer: 'Your order is being prepared.' },
+      ready: { customer: 'Your order is ready for pickup!', driver: 'New delivery available!' },
+      on_the_way: { customer: 'Your order is on the way!' },
+      delivered: { customer: 'Your order has been delivered. Enjoy your meal!', merchant: 'Order delivered successfully.' },
+      cancelled: { customer: 'Your order has been cancelled.', merchant: 'Order was cancelled.' },
+    };
+
+    const title = `Order #${orderId.slice(0, 8)}`;
+
+    // Customer
+    if (statusMessages[status]?.customer && order.customer_id) {
+      await this.sendNotification(order.customer_id, title, statusMessages[status].customer, 'order', { order_id: orderId, status });
+    }
+
+    // Merchant (lookup merchant user_id)
+    if (statusMessages[status]?.merchant && order.merchant_id) {
+      const { data: merchant } = await supabase
+        .from('merchants')
+        .select('user_id')
+        .eq('id', order.merchant_id)
         .single();
 
-      if (orderError) throw orderError;
-
-      const statusMessages: any = {
-        pending: {
-          customer: 'Your order has been placed successfully!',
-          merchant: 'New order received! Please confirm.',
-        },
-        confirmed: {
-          customer: 'Your order has been confirmed by the restaurant.',
-          merchant: 'Order confirmed. Start preparing!',
-        },
-        preparing: {
-          customer: 'Your order is being prepared.',
-        },
-        ready: {
-          customer: 'Your order is ready for pickup!',
-          driver: 'New delivery available!',
-        },
-        on_the_way: {
-          customer: 'Your order is on the way!',
-        },
-        delivered: {
-          customer: 'Your order has been delivered. Enjoy your meal!',
-          merchant: 'Order delivered successfully.',
-        },
-        cancelled: {
-          customer: 'Your order has been cancelled.',
-          merchant: 'Order was cancelled.',
-        },
-      };
-
-      // Notify customer
-      if (statusMessages[status]?.customer && order.customer_id) {
-        await this.sendNotification(
-          order.customer_id,
-          `Order #${orderId.slice(0, 8)}`,
-          statusMessages[status].customer,
-          'order',
-          { order_id: orderId, status }
-        );
+      if (merchant?.user_id) {
+        await this.sendNotification(merchant.user_id, title, statusMessages[status].merchant, 'order', { order_id: orderId, status });
       }
-
-      // Notify merchant
-      if (statusMessages[status]?.merchant && order.merchant_id) {
-        const { data: merchant } = await supabase
-          .from('merchants')
-          .select('user_id')
-          .eq('id', order.merchant_id)
-          .single();
-
-        if (merchant) {
-          await this.sendNotification(
-            merchant.user_id,
-            `Order #${orderId.slice(0, 8)}`,
-            statusMessages[status].merchant,
-            'order',
-            { order_id: orderId, status }
-          );
-        }
-      }
-
-      // Notify driver for ready status
-      if (status === 'ready' && statusMessages[status]?.driver) {
-        const { data: drivers } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('role', 'driver')
-          .eq('approval_status', 'approved');
-
-        if (drivers) {
-          for (const driver of drivers) {
-            await this.sendNotification(
-              driver.id,
-              'New Delivery Available',
-              statusMessages[status].driver,
-              'delivery',
-              { order_id: orderId }
-            );
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to send order notification:', error);
     }
+
+    // Drivers on ready
+   // ✅ Superadmins on every status change
+const { data: superadmins, error: saErr } = await supabase
+  .from('profiles')
+  .select('id')
+  .eq('role', 'superadmin')
+  .eq('approval_status', 'approved');
+
+if (!saErr) {
+ const merchantObj = Array.isArray(order.merchant) ? order.merchant[0] : order.merchant;
+const merchantName = merchantObj?.business_name;
+
+
+  const msg = `Order ${orderId.slice(0, 8)} status → ${status}${merchantName ? ` (${merchantName})` : ''}`;
+
+  for (const sa of superadmins || []) {
+    await this.sendNotification(sa.id, `Order #${orderId.slice(0, 8)}`, msg, 'order_admin', {
+      order_id: orderId,
+      status,
+      merchant_id: order.merchant_id,
+      customer_id: order.customer_id,
+    });
   }
+}
+
+  } catch (error) {
+    console.error('Failed to send order notification:', error);
+  }
+}
+
 
   async getNotificationById(notificationId: string) {
     try {

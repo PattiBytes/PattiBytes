@@ -32,11 +32,12 @@ export async function GET(request: NextRequest) {
     if (!sessionError && session) {
       // Get or create profile
       let profile = null;
-      const { data: existingProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
+     const { data: existingProfile, error: profileError } = await supabase
+  .from('profiles')
+  .select('*')
+  .eq('id', session.user.id)
+  .maybeSingle();
+
 
       if (profileError || !existingProfile) {
         // Create profile for Google OAuth users
