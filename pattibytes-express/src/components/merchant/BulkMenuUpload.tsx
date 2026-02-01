@@ -87,10 +87,16 @@ export default function BulkMenuUpload({ merchantId, onClose, onSuccess }: BulkM
 
     setUploading(true);
     try {
-      const items = preview.map(item => ({
-        ...item,
-        merchant_id: merchantId,
-      }));
+     const items = preview.map((item) => ({
+  merchant_id: merchantId,
+  name: String(item.name).trim(),
+  description: String(item.description || ''),
+  price: Number(item.price),
+  category: String(item.category || 'Main Course'),
+  is_veg: !!item.is_veg,
+  is_available: item.is_available !== false,
+}));
+
 
       const { error } = await supabase.from('menu_items').insert(items);
 

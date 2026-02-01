@@ -1,6 +1,8 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -8,15 +10,32 @@ import { toast } from 'react-toastify';
 import { Truck, Save, FileText } from 'lucide-react';
 import ImageUpload from '@/components/common/ImageUpload';
 
+type DriverProfileRow = {
+  user_id: string;
+  vehicle_type: string | null;
+  vehicle_number: string | null;
+  license_number: string | null;
+  license_expiry: string | null;
+  profile_photo: string | null;
+  vehicle_photo: string | null;
+  license_photo: string | null;
+  profile_completed: boolean | null;
+  updated_at: string | null;
+};
+
 export default function DriverCompleteProfilePage() {
   const { user } = useAuth();
   const router = useRouter();
+
   const [loading, setLoading] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
   const [formData, setFormData] = useState({
     vehicle_type: 'bike',
     vehicle_number: '',
     license_number: '',
     license_expiry: '',
+    // UI-only for now (NOT stored in driver_profiles until you add DB columns)
     aadhar_number: '',
     profile_photo: '',
     vehicle_photo: '',
@@ -24,69 +43,106 @@ export default function DriverCompleteProfilePage() {
     aadhar_photo: '',
   });
 
+  const canSubmit = useMemo(() => {
+    if (!formData.profile_photo) return false;
+    if (!formData.vehicle_number) return false;
+    if (!formData.license_number) return false;
+    if (!formData.license_expiry) return false;
+    if (!formData.vehicle_photo) return false;
+    if (!formData.license_photo) return false;
+    return true;
+  }, [formData]);
+
   useEffect(() => {
-    if (user) {
-      loadProfile();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+    if (!user) return;
+    loadProfile();
+  }, [user?.id]);
 
   const loadProfile = async () => {
     if (!user) return;
 
+    setLoadingProfile(true);
     try {
       const { data, error } = await supabase
         .from('driver_profiles')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
 
-      if (data) {
-        setFormData({
-          vehicle_type: data.vehicle_type || 'bike',
-          vehicle_number: data.vehicle_number || '',
-          license_number: data.license_number || '',
-          license_expiry: data.license_expiry || '',
-          aadhar_number: data.aadhar_number || '',
-          profile_photo: data.profile_photo || '',
-          vehicle_photo: data.vehicle_photo || '',
-          license_photo: data.license_photo || '',
-          aadhar_photo: data.aadhar_photo || '',
-        });
+      const row = data as DriverProfileRow | null;
+      if (row) {
+        setFormData((p) => ({
+          ...p,
+          vehicle_type: row.vehicle_type || 'bike',
+          vehicle_number: row.vehicle_number || '',
+          license_number: row.license_number || '',
+          license_expiry: row.license_expiry || '',
+          profile_photo: row.profile_photo || '',
+          vehicle_photo: row.vehicle_photo || '',
+          license_photo: row.license_photo || '',
+        }));
       }
-    } catch (error) {
-      console.error('Failed to load driver profile:', error);
+    } catch (e: any) {
+      console.error('Failed to load driver profile:', {
+        message: e?.message,
+        code: e?.code,
+        details: e?.details,
+        hint: e?.hint,
+        raw: e,
+      });
+      toast.error(e?.message || 'Failed to load profile');
+    } finally {
+      setLoadingProfile(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.vehicle_number || !formData.license_number) {
-      toast.error('Please fill all required fields');
+    if (!user) {
+      toast.error('Please login again');
+      return;
+    }
+
+    if (!canSubmit) {
+      toast.error('Please fill all required fields and upload required images');
       return;
     }
 
     setLoading(true);
-
     try {
-      // Create/update driver profile
-      const { error: driverError } = await supabase
+      // Check existence (avoids upsert complexities) [web:44][web:45]
+      const { data: existing, error: exErr } = await supabase
         .from('driver_profiles')
-        .upsert([
-          {
-            user_id: user?.id,
-            ...formData,
-            profile_completed: true,
-            updated_at: new Date().toISOString(),
-          },
-        ]);
+        .select('user_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
 
+      if (exErr) throw exErr;
+
+      // IMPORTANT: do NOT send aadhar_* until DB columns exist
+      const payload = {
+        user_id: user.id,
+        vehicle_type: formData.vehicle_type,
+        vehicle_number: formData.vehicle_number,
+        license_number: formData.license_number,
+        license_expiry: formData.license_expiry,
+        profile_photo: formData.profile_photo,
+        vehicle_photo: formData.vehicle_photo,
+        license_photo: formData.license_photo,
+        profile_completed: true,
+        updated_at: new Date().toISOString(),
+      };
+
+      const q = existing
+        ? supabase.from('driver_profiles').update(payload).eq('user_id', user.id)
+        : supabase.from('driver_profiles').insert(payload);
+
+      const { error: driverError } = await q.select('user_id').single();
       if (driverError) throw driverError;
 
-      // Update main profile
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -94,52 +150,69 @@ export default function DriverCompleteProfilePage() {
           profile_completed: true,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', user?.id);
+        .eq('id', user.id);
 
       if (profileError) throw profileError;
 
       toast.success('Driver profile completed successfully!');
       router.push('/driver/dashboard');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      console.error('Failed to update profile:', error);
-      toast.error(error.message || 'Failed to update profile');
+    } catch (err: any) {
+      console.error('Failed to update profile:', {
+        message: err?.message,
+        code: err?.code,
+        details: err?.details,
+        hint: err?.hint,
+        raw: err,
+      });
+      toast.error(err?.message || 'Failed to update profile');
     } finally {
       setLoading(false);
     }
   };
 
+  if (loadingProfile) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center text-gray-600">
+        Loading profile…
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50 py-6 px-3 sm:py-12 sm:px-4">
       <div className="max-w-3xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Truck className="text-white" size={40} />
+        <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-8">
+          <div className="text-center mb-6 sm:mb-8">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Truck className="text-white" size={32} />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">Complete Driver Profile</h1>
-            <p className="text-gray-600 mt-2">Provide your details to start delivering</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+              Complete Driver Profile
+            </h1>
+            <p className="text-gray-600 mt-2 text-sm sm:text-base">
+              Provide your details to start delivering
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Profile Photo */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Profile Photo *
               </label>
-              <div className="w-32 h-32 mx-auto">
+              <div className="w-28 h-28 sm:w-32 sm:h-32 mx-auto">
                 <ImageUpload
                   type="profile"
+                  folder={`drivers/${user?.id}/profile`}
                   currentImage={formData.profile_photo}
-                  onUpload={(url) => setFormData({ ...formData, profile_photo: url })}
+                  onUpload={(url) => setFormData((p) => ({ ...p, profile_photo: url }))}
+                  className="w-full h-full"
                 />
               </div>
             </div>
 
-            {/* Vehicle Info */}
             <div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Truck size={24} className="text-primary" />
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Truck size={22} className="text-primary" />
                 Vehicle Information
               </h3>
 
@@ -150,13 +223,13 @@ export default function DriverCompleteProfilePage() {
                   </label>
                   <select
                     value={formData.vehicle_type}
-                    onChange={(e) => setFormData({ ...formData, vehicle_type: e.target.value })}
+                    onChange={(e) => setFormData((p) => ({ ...p, vehicle_type: e.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     required
                   >
-                    <option value="bike">🏍️ Bike/Scooter</option>
-                    <option value="car">🚗 Car</option>
-                    <option value="van">🚐 Van</option>
+                    <option value="bike">Bike/Scooter</option>
+                    <option value="car">Car</option>
+                    <option value="van">Van</option>
                   </select>
                 </div>
 
@@ -167,7 +240,9 @@ export default function DriverCompleteProfilePage() {
                   <input
                     type="text"
                     value={formData.vehicle_number}
-                    onChange={(e) => setFormData({ ...formData, vehicle_number: e.target.value.toUpperCase() })}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, vehicle_number: e.target.value.toUpperCase() }))
+                    }
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     placeholder="PB03AA1234"
                     required
@@ -178,21 +253,22 @@ export default function DriverCompleteProfilePage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Vehicle Photo *
                   </label>
-                  <div className="w-full h-48">
+                  <div className="w-full h-44 sm:h-48">
                     <ImageUpload
                       type="document"
+                      folder={`drivers/${user?.id}/documents`}
                       currentImage={formData.vehicle_photo}
-                      onUpload={(url) => setFormData({ ...formData, vehicle_photo: url })}
+                      onUpload={(url) => setFormData((p) => ({ ...p, vehicle_photo: url }))}
+                      className="w-full h-full"
                     />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* License Info */}
             <div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <FileText size={24} className="text-primary" />
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <FileText size={22} className="text-primary" />
                 License Information
               </h3>
 
@@ -204,7 +280,9 @@ export default function DriverCompleteProfilePage() {
                   <input
                     type="text"
                     value={formData.license_number}
-                    onChange={(e) => setFormData({ ...formData, license_number: e.target.value.toUpperCase() })}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, license_number: e.target.value.toUpperCase() }))
+                    }
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     placeholder="PB0320210012345"
                     required
@@ -218,7 +296,7 @@ export default function DriverCompleteProfilePage() {
                   <input
                     type="date"
                     value={formData.license_expiry}
-                    onChange={(e) => setFormData({ ...formData, license_expiry: e.target.value })}
+                    onChange={(e) => setFormData((p) => ({ ...p, license_expiry: e.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     required
                   />
@@ -228,20 +306,22 @@ export default function DriverCompleteProfilePage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     License Photo *
                   </label>
-                  <div className="w-full h-48">
+                  <div className="w-full h-44 sm:h-48">
                     <ImageUpload
                       type="document"
+                      folder={`drivers/${user?.id}/documents`}
                       currentImage={formData.license_photo}
-                      onUpload={(url) => setFormData({ ...formData, license_photo: url })}
+                      onUpload={(url) => setFormData((p) => ({ ...p, license_photo: url }))}
+                      className="w-full h-full"
                     />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Aadhar Info */}
+            {/* UI-only Aadhaar (kept, but not saved to driver_profiles) */}
             <div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Identity Verification</h3>
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Identity Verification</h3>
 
               <div className="space-y-4">
                 <div>
@@ -251,23 +331,25 @@ export default function DriverCompleteProfilePage() {
                   <input
                     type="text"
                     value={formData.aadhar_number}
-                    onChange={(e) => setFormData({ ...formData, aadhar_number: e.target.value })}
+                    onChange={(e) => setFormData((p) => ({ ...p, aadhar_number: e.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     placeholder="1234 5678 9012"
                     maxLength={14}
                   />
                 </div>
 
-                {formData.aadhar_number && (
+                {!!formData.aadhar_number && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Aadhar Photo (Optional)
                     </label>
-                    <div className="w-full h-48">
+                    <div className="w-full h-44 sm:h-48">
                       <ImageUpload
                         type="document"
+                        folder={`drivers/${user?.id}/documents`}
                         currentImage={formData.aadhar_photo}
-                        onUpload={(url) => setFormData({ ...formData, aadhar_photo: url })}
+                        onUpload={(url) => setFormData((p) => ({ ...p, aadhar_photo: url }))}
+                        className="w-full h-full"
                       />
                     </div>
                   </div>
@@ -275,23 +357,13 @@ export default function DriverCompleteProfilePage() {
               </div>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !canSubmit}
               className="w-full btn-primary py-4 rounded-lg font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? (
-                <>
-                  <div className="spinner"></div>
-                  Saving Profile...
-                </>
-              ) : (
-                <>
-                  <Save size={24} />
-                  Complete Driver Setup
-                </>
-              )}
+              <Save size={22} />
+              {loading ? 'Saving Profile...' : 'Complete Driver Setup'}
             </button>
 
             <p className="text-center text-sm text-gray-600">

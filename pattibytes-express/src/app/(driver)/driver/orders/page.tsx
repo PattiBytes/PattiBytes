@@ -1,222 +1,89 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { toast } from 'react-toastify';
+import { Package, Truck, CheckCircle, XCircle, RefreshCcw } from 'lucide-react';
+
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { Package, MapPin, DollarSign, Clock, CheckCircle, XCircle, Truck } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { logger } from '@/lib/logger';
 
-interface DriverAssignment {
+type Order = {
   id: string;
-  order_id: string;
-  status: string;
-  assigned_at: string;
-  orders: {
-    id: string;
-    order_number: number;
-    total_amount: number;
-    delivery_address: string;
-    delivery_distance_km: number;
-    status: string;
-    created_at: string;
-    merchants: {
-      business_name: string;
-      address: string;
-      phone: string;
-    };
-    profiles: {
-      full_name: string;
-      phone: string;
-    };
-  };
-}
+  order_number: number | null;
+  status: string | null;
+  total_amount: number | null;
+  delivery_address: string | null;
+  created_at: string;
+  driver_id: string | null;
+};
+
+const ACTIVE = ['assigned', 'picked_up', 'on_the_way', 'out_for_delivery', 'ready'];
+const DONE = ['delivered', 'cancelled'];
 
 export default function DriverOrdersPage() {
   const { user } = useAuth();
-  const router = useRouter();
-  const [pendingAssignments, setPendingAssignments] = useState<DriverAssignment[]>([]);
-  const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [tab, setTab] = useState<'active' | 'history'>('active');
 
   useEffect(() => {
-    if (!user) {
-      router.push('/');
-      return;
-    }
+    if (!user?.id) return;
 
-    if (user.role !== 'driver') {
-      router.push('/');
-      return;
-    }
+    load();
 
-    loadAssignments();
-    loadActiveOrders();
+    const t = setInterval(load, 5000);
 
-    // Real-time subscription
-    const subscription = supabase
-      .channel('driver-assignments')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'driver_assignments',
-          filter: `driver_id=eq.${user.id}`,
-        },
-        () => {
-          loadAssignments();
-        }
-      )
+    const ch = supabase
+      .channel(`driver-orders-page-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `driver_id=eq.${user.id}` }, load)
       .subscribe();
 
     return () => {
-      subscription.unsubscribe();
+      clearInterval(t);
+      supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user?.id, tab]);
 
-  const loadAssignments = async () => {
-    if (!user) return;
+  const load = async () => {
+    if (!user?.id) return;
 
+    setLoading(true);
     try {
+      const statuses = tab === 'active' ? ACTIVE : DONE;
+
       const { data, error } = await supabase
-        .from('driver_assignments')
-        .select(`
-          *,
-          orders (
-            *,
-            merchants (business_name, address, phone),
-            profiles (full_name, phone)
-          )
-        `)
+        .from('orders')
+        .select('id,order_number,status,total_amount,delivery_address,created_at,driver_id')
         .eq('driver_id', user.id)
-        .eq('status', 'pending')
-        .order('assigned_at', { ascending: false });
+        .in('status', statuses as any)
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (error) throw error;
-      setPendingAssignments(data || []);
-    } catch (error) {
-      console.error('Failed to load assignments:', error);
+      setOrders((data as any) || []);
+    } catch (e: any) {
+      logger.error('DriverOrders load failed', e);
+      toast.error(e?.message || 'Failed to load orders');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadActiveOrders = async () => {
-    if (!user) return;
+  const stats = useMemo(() => {
+    const a = orders.filter((o) => ACTIVE.includes(String(o.status || ''))).length;
+    const h = orders.filter((o) => DONE.includes(String(o.status || ''))).length;
+    return { a, h };
+  }, [orders]);
 
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          merchants (business_name, address, phone),
-          profiles (full_name, phone)
-        `)
-        .eq('driver_id', user.id)
-        .in('status', ['picked_up', 'ready'])
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setActiveOrders(data || []);
-    } catch (error) {
-      console.error('Failed to load active orders:', error);
-    }
-  };
-
-  const acceptOrder = async (assignmentId: string, orderId: string) => {
-    try {
-      // Update assignment
-      const { error: assignError } = await supabase
-        .from('driver_assignments')
-        .update({ status: 'accepted', responded_at: new Date().toISOString() })
-        .eq('id', assignmentId);
-
-      if (assignError) throw assignError;
-
-      // Update order
-      const { error: orderError } = await supabase
-        .from('orders')
-        .update({ driver_id: user?.id, updated_at: new Date().toISOString() })
-        .eq('id', orderId);
-
-      if (orderError) throw orderError;
-
-      toast.success('Order accepted successfully!');
-      loadAssignments();
-      loadActiveOrders();
-    } catch (error) {
-      console.error('Failed to accept order:', error);
-      toast.error('Failed to accept order');
-    }
-  };
-
-  const rejectOrder = async (assignmentId: string) => {
-    try {
-      const { error } = await supabase
-        .from('driver_assignments')
-        .update({ status: 'rejected', responded_at: new Date().toISOString() })
-        .eq('id', assignmentId);
-
-      if (error) throw error;
-
-      toast.success('Order rejected');
-      loadAssignments();
-    } catch (error) {
-      console.error('Failed to reject order:', error);
-      toast.error('Failed to reject order');
-    }
-  };
-
-  const markAsPickedUp = async (orderId: string) => {
-    try {
-      const { error } = await supabase
-        .from('orders')
-        .update({ status: 'picked_up', updated_at: new Date().toISOString() })
-        .eq('id', orderId);
-
-      if (error) throw error;
-
-      toast.success('Order marked as picked up!');
-      loadActiveOrders();
-    } catch (error) {
-      console.error('Failed to update order:', error);
-      toast.error('Failed to update order');
-    }
-  };
-
-  const markAsDelivered = async (orderId: string) => {
-    try {
-      const { error } = await supabase
-        .from('orders')
-        .update({
-          status: 'delivered',
-          actual_delivery_time: new Date().toISOString(),
-          payment_status: 'paid',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', orderId);
-
-      if (error) throw error;
-
-      toast.success('Order marked as delivered!');
-      loadActiveOrders();
-    } catch (error) {
-      console.error('Failed to update order:', error);
-      toast.error('Failed to update order');
-    }
-  };
-
-  if (loading) {
+  if (!user) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
+        <div className="p-8 text-gray-700">Please login.</div>
       </DashboardLayout>
     );
   }
@@ -224,149 +91,76 @@ export default function DriverOrdersPage() {
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Delivery Orders</h1>
+        <div className="flex items-start sm:items-center justify-between gap-3 flex-col sm:flex-row mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">My Orders</h1>
+            <p className="text-sm text-gray-600">Auto refresh every 5 seconds.</p>
+          </div>
+          <button onClick={load} className="px-4 py-2 rounded-lg bg-gray-900 text-white flex items-center gap-2">
+            <RefreshCcw size={16} />
+            Refresh
+          </button>
+        </div>
 
-        {/* Pending Assignments */}
-        {pendingAssignments.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">New Order Requests</h2>
-            <div className="grid gap-4">
-              {pendingAssignments.map((assignment) => (
-                <div key={assignment.id} className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="font-bold text-xl text-gray-900">
-                        Order #{assignment.orders.order_number}
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        {new Date(assignment.assigned_at).toLocaleString()}
-                      </p>
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setTab('active')}
+            className={`px-4 py-2 rounded-lg font-semibold ${tab === 'active' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'}`}
+          >
+            Active ({stats.a})
+          </button>
+          <button
+            onClick={() => setTab('history')}
+            className={`px-4 py-2 rounded-lg font-semibold ${tab === 'history' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'}`}
+          >
+            History ({stats.h})
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="bg-white rounded-xl shadow p-12 text-center">
+            <Truck size={64} className="mx-auto text-gray-400 mb-4" />
+            <p className="text-gray-600">No orders found.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {orders.map((o) => (
+              <Link
+                key={o.id}
+                href={`/driver/orders/${o.id}`}
+                className="block bg-white rounded-xl shadow p-4 hover:shadow-lg transition"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-bold text-gray-900">
+                      Order #{o.order_number ?? String(o.id).slice(0, 8)}
                     </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-primary">
-                        ₹{assignment.orders.total_amount.toFixed(2)}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        {assignment.orders.delivery_distance_km.toFixed(1)} km
-                      </p>
+                    <div className="text-sm text-gray-600 line-clamp-1">
+                      {o.delivery_address || 'No address provided'}
                     </div>
+                    <div className="text-xs text-gray-500 mt-1">{new Date(o.created_at).toLocaleString()}</div>
                   </div>
 
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-start gap-2">
-                      <Package className="text-gray-600 flex-shrink-0 mt-0.5" size={18} />
-                      <div>
-                        <p className="font-semibold text-gray-900">
-                          {assignment.orders.merchants.business_name}
-                        </p>
-                        <p className="text-sm text-gray-600">{assignment.orders.merchants.address}</p>
-                      </div>
+                  <div className="text-right">
+                    <div className="font-bold text-primary">₹{Number(o.total_amount || 0).toFixed(2)}</div>
+                    <div className="text-xs mt-1 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+                      {String(o.status || '—')}
+                      {String(o.status) === 'delivered' ? <CheckCircle size={14} /> : null}
+                      {String(o.status) === 'cancelled' ? <XCircle size={14} /> : null}
+                      {ACTIVE.includes(String(o.status || '')) ? <Package size={14} /> : null}
                     </div>
-
-                    <div className="flex items-start gap-2">
-                      <MapPin className="text-gray-600 flex-shrink-0 mt-0.5" size={18} />
-                      <div>
-                        <p className="font-semibold text-gray-900">{assignment.orders.profiles.full_name}</p>
-                        <p className="text-sm text-gray-600">{assignment.orders.delivery_address}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => acceptOrder(assignment.id, assignment.order_id)}
-                      className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <CheckCircle size={20} />
-                      Accept Order
-                    </button>
-                    <button
-                      onClick={() => rejectOrder(assignment.id)}
-                      className="flex-1 bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <XCircle size={20} />
-                      Reject
-                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
+              </Link>
+            ))}
           </div>
         )}
-
-        {/* Active Orders */}
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Active Deliveries</h2>
-          {activeOrders.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-md p-12 text-center">
-              <Truck size={64} className="mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-600">No active deliveries</p>
-            </div>
-          ) : (
-            <div className="grid gap-4">
-              {activeOrders.map((order) => (
-                <div key={order.id} className="bg-white rounded-xl shadow-md p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="font-bold text-xl text-gray-900">Order #{order.order_number}</h3>
-                      <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold mt-2">
-                        {order.status}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-primary">₹{order.total_amount.toFixed(2)}</p>
-                      <p className="text-sm text-gray-600">{order.delivery_distance_km.toFixed(1)} km</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-start gap-2">
-                      <Package className="text-gray-600 flex-shrink-0 mt-0.5" size={18} />
-                      <div>
-                        <p className="font-semibold text-gray-900">{order.merchants.business_name}</p>
-                        <p className="text-sm text-gray-600">{order.merchants.address}</p>
-                        <a href={`tel:${order.merchants.phone}`} className="text-sm text-primary">
-                          {order.merchants.phone}
-                        </a>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2">
-                      <MapPin className="text-gray-600 flex-shrink-0 mt-0.5" size={18} />
-                      <div>
-                        <p className="font-semibold text-gray-900">{order.profiles.full_name}</p>
-                        <p className="text-sm text-gray-600">{order.delivery_address}</p>
-                        <a href={`tel:${order.profiles.phone}`} className="text-sm text-primary">
-                          {order.profiles.phone}
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-
-                  {order.status === 'ready' && (
-                    <button
-                      onClick={() => markAsPickedUp(order.id)}
-                      className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Truck size={20} />
-                      Mark as Picked Up
-                    </button>
-                  )}
-
-                  {order.status === 'picked_up' && (
-                    <button
-                      onClick={() => markAsDelivered(order.id)}
-                      className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <CheckCircle size={20} />
-                      Mark as Delivered
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
     </DashboardLayout>
   );
