@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'react-toastify';
-import { Package, Truck, CheckCircle, XCircle, RefreshCcw } from 'lucide-react';
+import { RefreshCcw } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
@@ -18,17 +18,27 @@ type Order = {
   total_amount: number | null;
   delivery_address: string | null;
   created_at: string;
-  driver_id: string | null;
 };
 
-const ACTIVE = ['assigned', 'picked_up', 'on_the_way', 'out_for_delivery', 'ready'];
-const DONE = ['delivered', 'cancelled'];
+type DriverAssignment = {
+  id: string;
+  order_id: string;
+  status: string;
+  assigned_at: string;
+  responded_at: string | null;
+};
+
+const ACTIVE = ['assigned', 'picked_up', 'on_the_way', 'out_for_delivery'];
+const HISTORY = ['delivered', 'cancelled'];
 
 export default function DriverOrdersPage() {
   const { user } = useAuth();
+
+  const [tab, setTab] = useState<'requests' | 'active' | 'history'>('active');
   const [loading, setLoading] = useState(true);
+
+  const [requests, setRequests] = useState<DriverAssignment[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [tab, setTab] = useState<'active' | 'history'>('active');
 
   useEffect(() => {
     if (!user?.id) return;
@@ -37,14 +47,24 @@ export default function DriverOrdersPage() {
 
     const t = setInterval(load, 5000);
 
-    const ch = supabase
-      .channel(`driver-orders-page-${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `driver_id=eq.${user.id}` }, load)
+    const ch1 = supabase
+      .channel(`driver-orders-${user.id}-${tab}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, load)
+      .subscribe();
+
+    const ch2 = supabase
+      .channel(`driver-assign-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'driver_assignments', filter: `driver_id=eq.${user.id}` },
+        load
+      )
       .subscribe();
 
     return () => {
       clearInterval(t);
-      supabase.removeChannel(ch);
+      supabase.removeChannel(ch1);
+      supabase.removeChannel(ch2);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, tab]);
@@ -54,47 +74,56 @@ export default function DriverOrdersPage() {
 
     setLoading(true);
     try {
-      const statuses = tab === 'active' ? ACTIVE : DONE;
+      if (tab === 'requests') {
+        const { data, error } = await supabase
+          .from('driver_assignments')
+          .select('id,order_id,status,assigned_at,responded_at')
+          .eq('driver_id', user.id)
+          .eq('status', 'pending')
+          .order('assigned_at', { ascending: false })
+          .limit(50);
 
-      const { data, error } = await supabase
-        .from('orders')
-        .select('id,order_number,status,total_amount,delivery_address,created_at,driver_id')
-        .eq('driver_id', user.id)
-        .in('status', statuses as any)
-        .order('created_at', { ascending: false })
-        .limit(50);
+        if (error) throw error;
+        setRequests((data as any) || []);
+        setOrders([]);
+      } else {
+        const statuses = tab === 'active' ? ACTIVE : HISTORY;
 
-      if (error) throw error;
-      setOrders((data as any) || []);
+        const { data, error } = await supabase
+          .from('orders')
+          .select('id,order_number,status,total_amount,delivery_address,created_at')
+          .eq('driver_id', user.id)
+          .in('status', statuses as any)
+          .order('created_at', { ascending: false })
+          .limit(100);
+
+        if (error) throw error;
+        setOrders((data as any) || []);
+        setRequests([]);
+      }
     } catch (e: any) {
-      logger.error('DriverOrders load failed', e);
-      toast.error(e?.message || 'Failed to load orders');
+      logger.error('orders page load failed', e);
+      toast.error(e?.message || 'Failed to load');
     } finally {
       setLoading(false);
     }
   };
 
-  const stats = useMemo(() => {
-    const a = orders.filter((o) => ACTIVE.includes(String(o.status || ''))).length;
-    const h = orders.filter((o) => DONE.includes(String(o.status || ''))).length;
-    return { a, h };
-  }, [orders]);
-
   if (!user) {
     return (
       <DashboardLayout>
-        <div className="p-8 text-gray-700">Please login.</div>
+        <div className="p-8">Login required.</div>
       </DashboardLayout>
     );
   }
 
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-start sm:items-center justify-between gap-3 flex-col sm:flex-row mb-6">
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="flex items-start justify-between gap-3 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">My Orders</h1>
-            <p className="text-sm text-gray-600">Auto refresh every 5 seconds.</p>
+            <h1 className="text-3xl font-bold text-gray-900">Orders</h1>
+            <p className="text-sm text-gray-600">Realtime + refresh every 5 seconds.</p>
           </div>
           <button onClick={load} className="px-4 py-2 rounded-lg bg-gray-900 text-white flex items-center gap-2">
             <RefreshCcw size={16} />
@@ -104,57 +133,59 @@ export default function DriverOrdersPage() {
 
         <div className="flex gap-2 mb-6">
           <button
-            onClick={() => setTab('active')}
-            className={`px-4 py-2 rounded-lg font-semibold ${tab === 'active' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'}`}
+            onClick={() => setTab('requests')}
+            className={`px-4 py-2 rounded-lg font-semibold ${tab === 'requests' ? 'bg-primary text-white' : 'bg-gray-100'}`}
           >
-            Active ({stats.a})
+            Requests
+          </button>
+          <button
+            onClick={() => setTab('active')}
+            className={`px-4 py-2 rounded-lg font-semibold ${tab === 'active' ? 'bg-primary text-white' : 'bg-gray-100'}`}
+          >
+            Active
           </button>
           <button
             onClick={() => setTab('history')}
-            className={`px-4 py-2 rounded-lg font-semibold ${tab === 'history' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'}`}
+            className={`px-4 py-2 rounded-lg font-semibold ${tab === 'history' ? 'bg-primary text-white' : 'bg-gray-100'}`}
           >
-            History ({stats.h})
+            History
           </button>
         </div>
 
         {loading ? (
           <div className="space-y-3">
-            {[...Array(4)].map((_, i) => (
+            {[...Array(5)].map((_, i) => (
               <div key={i} className="h-20 bg-gray-200 rounded-lg animate-pulse" />
             ))}
           </div>
+        ) : tab === 'requests' ? (
+          requests.length === 0 ? (
+            <div className="bg-white rounded-lg shadow p-10 text-gray-600">No pending requests.</div>
+          ) : (
+            <div className="space-y-3">
+              {requests.map((r) => (
+                <div key={r.id} className="bg-white rounded-lg shadow p-4">
+                  <div className="font-bold">Assignment for Order ID: {r.order_id}</div>
+                  <div className="text-sm text-gray-600">Assigned: {new Date(r.assigned_at).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          )
         ) : orders.length === 0 ? (
-          <div className="bg-white rounded-xl shadow p-12 text-center">
-            <Truck size={64} className="mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-600">No orders found.</p>
-          </div>
+          <div className="bg-white rounded-lg shadow p-10 text-gray-600">No orders found.</div>
         ) : (
           <div className="space-y-3">
             {orders.map((o) => (
-              <Link
-                key={o.id}
-                href={`/driver/orders/${o.id}`}
-                className="block bg-white rounded-xl shadow p-4 hover:shadow-lg transition"
-              >
+              <Link key={o.id} href={`/driver/orders/${o.id}`} className="block bg-white rounded-lg shadow p-4 hover:shadow-lg transition">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="font-bold text-gray-900">
-                      Order #{o.order_number ?? String(o.id).slice(0, 8)}
-                    </div>
-                    <div className="text-sm text-gray-600 line-clamp-1">
-                      {o.delivery_address || 'No address provided'}
-                    </div>
+                    <div className="font-bold text-gray-900">Order #{o.order_number ?? o.id.slice(0, 8)}</div>
+                    <div className="text-sm text-gray-600 line-clamp-1">{o.delivery_address || 'No address'}</div>
                     <div className="text-xs text-gray-500 mt-1">{new Date(o.created_at).toLocaleString()}</div>
                   </div>
-
                   <div className="text-right">
                     <div className="font-bold text-primary">₹{Number(o.total_amount || 0).toFixed(2)}</div>
-                    <div className="text-xs mt-1 inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 text-gray-700">
-                      {String(o.status || '—')}
-                      {String(o.status) === 'delivered' ? <CheckCircle size={14} /> : null}
-                      {String(o.status) === 'cancelled' ? <XCircle size={14} /> : null}
-                      {ACTIVE.includes(String(o.status || '')) ? <Package size={14} /> : null}
-                    </div>
+                    <div className="text-xs text-gray-700 mt-1">Status: {String(o.status || '—')}</div>
                   </div>
                 </div>
               </Link>
