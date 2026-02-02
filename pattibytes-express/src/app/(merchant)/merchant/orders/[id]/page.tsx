@@ -589,23 +589,60 @@ export default function MerchantOrderDetailPage() {
     return { elapsedMinutes, estimatedMinutes, actualMinutes };
   }, [order?.createdAt, order?.estimatedDeliveryTime, order?.actualDeliveryTime]);
 
-  const sendNotification = async (userId: string, title: string, message: string, type: string, data?: any) => {
+ const sendNotification = async (
+  userId: string,
+  title: string,
+  message: string,
+  type: string,
+  data?: any
+) => {
+  try {
+    // 1) Newer/standard schema: user_id, body, is_read, created_at
     try {
       const { error } = await supabase.from('notifications').insert({
-        userid: userId,
+        user_id: userId,
         title,
-        message,
+        body: message,
+        message, // harmless if column exists; if not, this insert will fail and we fallback
         type,
         data: data ?? null,
-        isread: false,
-      });
-      if (error) throw error;
-      return true;
-    } catch (e) {
-      console.error('Notification error', e);
-      return false;
+        is_read: false,
+        created_at: new Date().toISOString(),
+      } as any);
+
+      if (!error) return true;
+    } catch {
+      // fall through to legacy schema
     }
-  };
+
+    // 2) Legacy schema used in your pasted code: userid, isread, createdat (+ body/message)
+    const { error: error2 } = await supabase.from('notifications').insert({
+      userid: userId,
+      title,
+      body: message,
+      message,
+      type,
+      data: data ?? null,
+      isread: false,
+      createdat: new Date().toISOString(),
+    } as any);
+
+    if (error2) throw error2;
+
+    return true;
+  } catch (e: any) {
+    // Supabase errors often have .message/.details/.hint; console.error({}) hides it
+    console.error('Notification error', {
+      message: e?.message,
+      details: e?.details,
+      hint: e?.hint,
+      code: e?.code,
+      raw: e,
+    });
+    return false;
+  }
+};
+
 
   const resolveMerchantId = async (): Promise<string | null> => {
     const a = await supabase.from('merchants').select('id').eq('userid', user!.id).maybeSingle();
