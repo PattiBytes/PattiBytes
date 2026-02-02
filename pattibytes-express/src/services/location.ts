@@ -184,6 +184,9 @@ export function calculateDeliveryFeeByDistance(distanceKm: number): DeliveryFeeQ
 }
 
 class LocationService {
+  calculateDeliveryCharge(distance: any): import("react").ReactNode {
+    throw new Error('Method not implemented.');
+  }
   private safeLogSupabaseError(context: string, error: PostgrestishError) {
     const e: any = error;
     console.error(context, {
