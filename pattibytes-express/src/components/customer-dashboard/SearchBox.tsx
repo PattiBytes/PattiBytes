@@ -46,7 +46,7 @@ export default function SearchBox({
       ].slice(0, 15);
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-4 md:p-5 mt-4">
+    <div className="bg-white rounded-2xl shadow-lg p-3 sm:p-4 md:p-5 mt-3 sm:mt-4">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
         <input
@@ -54,8 +54,9 @@ export default function SearchBox({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search restaurants or dishes…"
-          className="w-full pl-10 pr-10 py-3 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-primary focus:border-primary text-sm transition-all bg-white"
+          className="w-full pl-10 pr-10 py-2.5 sm:py-3 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-primary focus:border-primary text-sm transition-all bg-white"
         />
+
         {!!query && (
           <button
             type="button"
@@ -68,14 +69,14 @@ export default function SearchBox({
         )}
 
         {results.length > 0 && (
-          <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-2xl shadow-2xl max-h-96 overflow-y-auto">
+          <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-2xl shadow-2xl max-h-[60vh] sm:max-h-96 overflow-y-auto">
             {results.map((res, idx) => (
               <button
                 key={idx}
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => onOpen(res)}
-                className="w-full text-left px-4 py-3 hover:bg-orange-50 border-b last:border-b-0 flex items-start gap-3 transition-colors"
+                className="w-full text-left px-3 sm:px-4 py-3 hover:bg-orange-50 border-b last:border-b-0 flex items-start gap-3 transition-colors"
               >
                 {res.type === 'restaurant' ? (
                   <Store className="text-primary w-5 h-5 mt-0.5 flex-shrink-0" />
@@ -86,7 +87,9 @@ export default function SearchBox({
                 <div className="flex-1 min-w-0">
                   {res.type === 'restaurant' ? (
                     <>
-                      <p className="font-semibold text-gray-900 text-sm truncate">{res.restaurant.business_name}</p>
+                      <p className="font-semibold text-gray-900 text-sm truncate">
+                        {res.restaurant.business_name}
+                      </p>
                       <p className="text-xs text-gray-600 truncate">Open restaurant</p>
                     </>
                   ) : (

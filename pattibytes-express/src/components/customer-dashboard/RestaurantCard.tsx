@@ -27,7 +27,7 @@ export default function RestaurantCard({
       onClick={onOpen}
       className="bg-white rounded-2xl shadow hover:shadow-xl transition-all overflow-hidden text-left"
     >
-      <div className="relative w-full h-44 bg-gray-100">
+      <div className="relative w-full h-40 sm:h-44 bg-gray-100">
         {banner ? (
           <Image
             src={banner}
@@ -41,7 +41,7 @@ export default function RestaurantCard({
         )}
 
         {!!logo && (
-          <div className="absolute top-3 right-3 w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-lg bg-white">
+          <div className="absolute top-3 right-3 w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden border-2 border-white shadow-lg bg-white">
             <Image src={logo} alt="Logo" fill sizes="48px" className="object-cover" />
           </div>
         )}
@@ -56,13 +56,16 @@ export default function RestaurantCard({
         )}
       </div>
 
-      <div className="p-4">
-        <h3 className="font-bold text-base text-gray-900 truncate" title={restaurant.business_name}>
+      <div className="p-3 sm:p-4">
+        <h3
+          className="font-bold text-sm sm:text-base text-gray-900 truncate"
+          title={restaurant.business_name}
+        >
           {restaurant.business_name}
         </h3>
 
         {!!restaurant.address && (
-          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{restaurant.address}</p>
+          <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">{restaurant.address}</p>
         )}
 
         {cuisines.length > 0 && (
@@ -83,19 +86,19 @@ export default function RestaurantCard({
           </div>
         )}
 
-        <div className="mt-4 pt-3 border-t grid grid-cols-2 gap-2 text-xs text-gray-700">
+        <div className="mt-4 pt-3 border-t grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-700">
           <div className="flex items-center gap-1">
             <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
             <span className="font-bold">{rating ? rating.toFixed(1) : '—'}</span>
             <span className="text-gray-500">{totalReviews ? `(${totalReviews})` : ''}</span>
           </div>
 
-          <div className="flex items-center gap-1 justify-end">
+          <div className="flex items-center gap-1 sm:justify-end">
             <Clock className="w-4 h-4 text-gray-600" />
             <span>{restaurant.estimated_prep_time ? `${restaurant.estimated_prep_time} min` : '—'}</span>
           </div>
 
-          <div className="col-span-2 text-xs text-gray-600">
+          <div className="sm:col-span-2 text-xs text-gray-600">
             Min order: {restaurant.min_order_amount ? formatCurrencyINR(restaurant.min_order_amount) : '—'}
             {typeof menuCount === 'number' ? ` • ${menuCount} items` : ''}
           </div>

@@ -12,7 +12,15 @@ import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { logger } from '@/lib/logger';
 
-type Merchant = { id: string; business_name?: string | null; address?: string | null; phone?: string | null; latitude?: number | null; longitude?: number | null };
+type Merchant = {
+  id: string;
+  business_name?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
 type Customer = { id: string; full_name?: string | null; phone?: string | null };
 
 type LocationPayload = {
@@ -51,16 +59,26 @@ type Order = {
 
   delivery_latitude?: number | null;
   delivery_longitude?: number | null;
-
-  merchant?: Merchant | null;
-  customer?: Customer | null;
 };
+
+export const ORDER_STATUSES = [
+  'pending','confirmed','preparing','ready','assigned','picked_up','delivered','cancelled'
+] as const;
+
+const PAYMENT_STATUSES = ['pending', 'paid', 'failed'] as const;
 
 const BOTTOM_NAV_PX = 96;
 
 function money(n: any) {
   return `₹${Number(n || 0).toFixed(2)}`;
 }
+
+function normalizeStatus(v: any) {
+  const s = String(v ?? '').trim().toLowerCase();
+  if (s === 'pickedup' || s === 'picked up' || s === 'picked-up') return 'picked_up';
+  return s.replace(/\s+/g, '_');
+}
+
 
 function parseLocation(v: any): LocationPayload | null {
   if (!v) return null;
@@ -77,7 +95,7 @@ function parseLocation(v: any): LocationPayload | null {
 }
 
 function mapsLink(lat?: number | null, lng?: number | null) {
-  if (!lat || !lng) return null;
+  if (lat == null || lng == null) return null;
   return `https://www.google.com/maps?q=${lat},${lng}`;
 }
 
@@ -86,8 +104,13 @@ function fmtTime(iso?: string | null) {
   try {
     return new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
   } catch {
-    return iso;
+    return String(iso);
   }
+}
+
+function isCheckConstraintError(e: any) {
+  const msg = String(e?.message || '').toLowerCase();
+  return msg.includes('violates check constraint');
 }
 
 function LocationModal({
@@ -194,6 +217,7 @@ export default function DriverOrderDetailsPage() {
   const [locOpen, setLocOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const watchIdRef = useRef<number | null>(null);
+  const lastSentAtRef = useRef<number>(0);
 
   const driverLoc = useMemo(() => parseLocation(order?.driver_location), [order?.driver_location]);
   const customerLoc = useMemo(() => parseLocation(order?.customer_location), [order?.customer_location]);
@@ -223,10 +247,8 @@ export default function DriverOrderDetailsPage() {
 
       const o = (data as any) as Order | null;
       setOrder(o);
-
       if (!o) return;
 
-      // optional safety: only let driver open if they own it
       if (o.driver_id && o.driver_id !== user?.id) {
         toast.error('This order is not assigned to you.');
         router.push('/driver/orders');
@@ -234,8 +256,12 @@ export default function DriverOrderDetailsPage() {
       }
 
       const [mRes, cRes] = await Promise.all([
-        o.merchant_id ? supabase.from('merchants').select('id,business_name,address,phone,latitude,longitude').eq('id', o.merchant_id).maybeSingle() : Promise.resolve({ data: null } as any),
-        o.customer_id ? supabase.from('profiles').select('id,full_name,phone').eq('id', o.customer_id).maybeSingle() : Promise.resolve({ data: null } as any),
+        o.merchant_id
+          ? supabase.from('merchants').select('id,business_name,address,phone,latitude,longitude').eq('id', o.merchant_id).maybeSingle()
+          : Promise.resolve({ data: null } as any),
+        o.customer_id
+          ? supabase.from('profiles').select('id,full_name,phone').eq('id', o.customer_id).maybeSingle()
+          : Promise.resolve({ data: null } as any),
       ]);
 
       setMerchant((mRes.data as any) || null);
@@ -260,6 +286,10 @@ export default function DriverOrderDetailsPage() {
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       async (pos) => {
+        const now = Date.now();
+        if (now - lastSentAtRef.current < 5000) return; // throttle
+        lastSentAtRef.current = now;
+
         const payload: LocationPayload = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
@@ -268,7 +298,6 @@ export default function DriverOrderDetailsPage() {
         };
 
         try {
-          // recommended column type: jsonb; if your column is text, change to JSON.stringify(payload)
           const { error } = await supabase
             .from('orders')
             .update({ driver_location: payload as any, updated_at: new Date().toISOString() })
@@ -298,40 +327,45 @@ export default function DriverOrderDetailsPage() {
     setSharing(false);
   };
 
-  const markPickedUp = async () => {
+  const updateOrder = async (patch: any) => {
     if (!user?.id || !order?.id) return;
-    try {
-      const { error } = await supabase
-        .from('orders')
-        .update({ status: 'picked_up', updated_at: new Date().toISOString() })
-        .eq('id', order.id)
-        .eq('driver_id', user.id);
 
-      if (error) throw error;
+    const { error } = await supabase
+      .from('orders')
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('id', order.id)
+      .eq('driver_id', user.id);
+
+    if (error) throw error;
+  };
+
+  const markPickedUp = async () => {
+    try {
+      await updateOrder({ status: 'picked_up' });
       toast.success('Marked picked up');
     } catch (e: any) {
-      toast.error(e?.message || 'Failed (check orders_status_check)');
+      if (isCheckConstraintError(e)) {
+        toast.error('DB constraint rejected this status. Run the SQL fix for orders_status_check.');
+      } else {
+        toast.error(e?.message || 'Failed to mark picked up');
+      }
     }
   };
 
   const markDelivered = async () => {
-    if (!user?.id || !order?.id) return;
     try {
-      const { error } = await supabase
-        .from('orders')
-        .update({
-          status: 'delivered',
-          payment_status: 'paid',
-          actual_delivery_time: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', order.id)
-        .eq('driver_id', user.id);
-
-      if (error) throw error;
+      await updateOrder({
+        status: 'delivered',
+        payment_status: 'paid',
+        actual_delivery_time: new Date().toISOString(),
+      });
       toast.success('Delivered');
     } catch (e: any) {
-      toast.error(e?.message || 'Failed (check orders_status_check)');
+      if (isCheckConstraintError(e)) {
+        toast.error('DB constraint rejected status/payment. Run the SQL fix for orders_status_check / orders_payment_status_check.');
+      } else {
+        toast.error(e?.message || 'Failed to mark delivered');
+      }
     }
   };
 
@@ -345,10 +379,7 @@ export default function DriverOrderDetailsPage() {
 
   return (
     <DashboardLayout>
-      <div
-        className="max-w-4xl mx-auto px-4 py-8"
-        style={{ paddingBottom: `calc(${BOTTOM_NAV_PX}px + env(safe-area-inset-bottom))` }}
-      >
+      <div className="max-w-4xl mx-auto px-4 py-8" style={{ paddingBottom: `calc(${BOTTOM_NAV_PX}px + env(safe-area-inset-bottom))` }}>
         <div className="flex items-start justify-between gap-3 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Order Details</h1>
@@ -378,7 +409,9 @@ export default function DriverOrderDetailsPage() {
                 <div className="text-right">
                   <div className="text-sm text-gray-600">Total</div>
                   <div className="text-xl font-bold text-primary">{money(order.total_amount)}</div>
-                  <div className="text-xs text-gray-700 mt-1">Status: {String(order.status || '—')}</div>
+                  <div className="text-xs text-gray-700 mt-1">
+                    Status: {normalizeStatus(order.status) || '—'}
+                  </div>
                 </div>
               </div>
             </div>
@@ -434,17 +467,11 @@ export default function DriverOrderDetailsPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 mt-4">
-                <button
-                  onClick={() => setLocOpen(true)}
-                  className="flex-1 bg-gray-900 text-white py-3 rounded-lg font-semibold"
-                >
+                <button onClick={() => setLocOpen(true)} className="flex-1 bg-gray-900 text-white py-3 rounded-lg font-semibold">
                   Open live location
                 </button>
 
-                <Link
-                  href="/driver/orders"
-                  className="flex-1 border py-3 rounded-lg font-semibold text-center hover:bg-gray-50"
-                >
+                <Link href="/driver/orders" className="flex-1 border py-3 rounded-lg font-semibold text-center hover:bg-gray-50">
                   Back to orders
                 </Link>
               </div>
@@ -453,23 +480,17 @@ export default function DriverOrderDetailsPage() {
             <div className="bg-white rounded-xl shadow p-5">
               <div className="font-bold text-gray-900 mb-3">Actions</div>
               <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  onClick={markPickedUp}
-                  className="flex-1 bg-primary text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
-                >
+                <button onClick={markPickedUp} className="flex-1 bg-primary text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2">
                   <Truck size={18} />
                   Mark picked up
                 </button>
-                <button
-                  onClick={markDelivered}
-                  className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
-                >
+                <button onClick={markDelivered} className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2">
                   <CheckCircle size={18} />
                   Mark delivered
                 </button>
               </div>
               <p className="text-xs text-gray-600 mt-3">
-                If these actions fail, your <code>orders_status_check</code> doesn’t allow those values.
+                Allowed statuses: {ORDER_STATUSES.join(', ')}. Allowed payment statuses: {PAYMENT_STATUSES.join(', ')}.
               </p>
             </div>
 
