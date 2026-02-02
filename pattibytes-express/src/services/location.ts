@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+'use client';
+
 import { supabase } from '@/lib/supabase';
 
 export interface Coordinates {
@@ -118,19 +120,71 @@ export interface MerchantRow {
   created_at: string;
 }
 
-type PostgrestishError = {
-  message?: string;
-  details?: string;
-  hint?: string;
-  code?: string;
-} | null;
+type PostgrestishError =
+  | {
+      message?: string;
+      details?: string;
+      hint?: string;
+      code?: string;
+    }
+  | null;
 
 type SavedAddressSchema = 'snake' | 'camel';
 
+function isMissingTableError(e: any) {
+  // Postgres "undefined_table" is 42P01 (often returned by PostgREST/Supabase)
+  return String(e?.code || '').toUpperCase() === '42P01';
+}
+
+function asNumber(v: any, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+export type DeliveryFeeQuote = {
+  distanceKm: number;
+  fee: number;
+  breakdown: string;
+};
+
+/**
+ * Delivery fee rule (as requested):
+ * - ₹50 if distance <= 3km
+ * - If outside 3km: ₹50 + ₹15 per km beyond 3km
+ */
+export function calculateDeliveryFeeByDistance(distanceKm: number): DeliveryFeeQuote {
+  const d = Math.max(0, Number(distanceKm) || 0);
+  const baseKm = 3;
+  const baseFee = 50;
+  const perKm = 15;
+
+  if (d <= baseKm) {
+    return {
+      distanceKm: round2(d),
+      fee: baseFee,
+      breakdown: `Up to ${baseKm}km: ₹${baseFee}`,
+    };
+  }
+
+  const extraKm = d - baseKm;
+
+  // Charge proportionally for fractional km; if you want "per started km", replace with Math.ceil(extraKm)
+  const extraFee = extraKm * perKm;
+  const fee = baseFee + extraFee;
+
+  return {
+    distanceKm: round2(d),
+    fee: round2(fee),
+    breakdown: `₹${baseFee} (first ${baseKm}km) + ${round2(extraKm)}km × ₹${perKm} = ₹${round2(fee)}`,
+  };
+}
+
 class LocationService {
   private safeLogSupabaseError(context: string, error: PostgrestishError) {
-    // Many Supabase/PostgREST errors stringify to {} because fields are not enumerable
-    // so log the common keys explicitly.
     const e: any = error;
     console.error(context, {
       message: e?.message,
@@ -139,6 +193,47 @@ class LocationService {
       code: e?.code,
       raw: e,
     });
+  }
+
+  private toRad(degrees: number): number {
+    return degrees * (Math.PI / 180);
+  }
+
+  calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371;
+    const dLat = this.toRad(lat2 - lat1);
+    const dLon = this.toRad(lon2 - lon1);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.toRad(lat1)) *
+        Math.cos(this.toRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c;
+    return round2(distance);
+  }
+
+  calculateDeliveryFeeFromMerchant(
+    merchantLat: number,
+    merchantLon: number,
+    customerLat: number,
+    customerLon: number
+  ): DeliveryFeeQuote {
+    const dist = this.calculateDistance(merchantLat, merchantLon, customerLat, customerLon);
+    return calculateDeliveryFeeByDistance(dist);
+  }
+
+  isWithinRadius(
+    centerLat: number,
+    centerLon: number,
+    pointLat: number,
+    pointLon: number,
+    radiusKm: number
+  ): boolean {
+    return this.calculateDistance(centerLat, centerLon, pointLat, pointLon) <= radiusKm;
   }
 
   filterByRadius<T extends { latitude: number; longitude: number }>(
@@ -170,52 +265,11 @@ class LocationService {
     return withDistance;
   }
 
-  calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371;
-    const dLat = this.toRad(lat2 - lat1);
-    const dLon = this.toRad(lon2 - lon1);
-
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRad(lat1)) *
-        Math.cos(this.toRad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
-    return Math.round(distance * 100) / 100;
-  }
-
-  private toRad(degrees: number): number {
-    return degrees * (Math.PI / 180);
-  }
-
-  isWithinRadius(
-    centerLat: number,
-    centerLon: number,
-    pointLat: number,
-    pointLon: number,
-    radiusKm: number
-  ): boolean {
-    return this.calculateDistance(centerLat, centerLon, pointLat, pointLon) <= radiusKm;
-  }
-
-  calculateDeliveryCharge(distanceKm: number): number {
-    const baseCharge = 20;
-    const perKmCharge = 8;
-    const freeDeliveryDistance = 2;
-
-    if (distanceKm <= freeDeliveryDistance) return 0;
-
-    const chargeableDistance = distanceKm - freeDeliveryDistance;
-    return Math.ceil(baseCharge + chargeableDistance * perKmCharge);
-  }
-
   async getCurrentLocation(): Promise<Coordinates> {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) return reject(new Error('Geolocation is not supported by your browser'));
+    if (typeof window === 'undefined') throw new Error('Geolocation is only available in the browser');
+    if (!navigator.geolocation) throw new Error('Geolocation is not supported by your browser');
 
+    return new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(
         (position) =>
           resolve({
@@ -239,20 +293,16 @@ class LocationService {
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`,
-        {
-          // Browsers won't let you set User-Agent; keep headers minimal.
-          headers: { Accept: 'application/json' },
-        }
+        { headers: { Accept: 'application/json' } }
       );
 
       if (!response.ok) throw new Error(`Failed to reverse geocode (${response.status})`);
-
-      const data = await response.json();
+      const data: any = await response.json();
 
       return {
         lat,
         lon,
-        address: data.display_name || `${lat.toFixed(6)}, ${lon.toFixed(6)}`,
+        address: data?.display_name || `${lat.toFixed(6)}, ${lon.toFixed(6)}`,
         city: data?.address?.city || data?.address?.town || data?.address?.village,
         state: data?.address?.state,
         postalcode: data?.address?.postcode,
@@ -272,10 +322,10 @@ class LocationService {
 
       if (!response.ok) throw new Error(`Failed to geocode address (${response.status})`);
 
-      const data = await response.json();
+      const data: any[] = await response.json();
       if (!data?.length) return null;
 
-      const item = data[0];
+      const item: any = data[0];
       const lat = parseFloat(item.lat);
       const lon = parseFloat(item.lon);
 
@@ -293,10 +343,10 @@ class LocationService {
     }
   }
 
-  // Supports: https://maps.google.com/?q=lat,lng  OR  .../@lat,lng,17z  OR  ...?query=lat,lng
+  // Supports: .../@lat,lng... OR ...?q=lat,lng OR ...?query=lat,lng
   parseGoogleMapsLink(input: string): Coordinates | null {
     try {
-      const s = input.trim();
+      const s = String(input || '').trim();
 
       const atMatch = s.match(/@(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)/);
       if (atMatch) return { lat: parseFloat(atMatch[1]), lon: parseFloat(atMatch[3]) };
@@ -325,8 +375,8 @@ class LocationService {
       apartmentfloor: row.apartment_floor ?? null,
       landmark: row.landmark ?? null,
 
-      latitude: Number(row.latitude ?? 0),
-      longitude: Number(row.longitude ?? 0),
+      latitude: asNumber(row.latitude, 0),
+      longitude: asNumber(row.longitude, 0),
 
       city: row.city ?? null,
       state: row.state ?? null,
@@ -353,8 +403,8 @@ class LocationService {
       apartmentfloor: row.apartmentfloor ?? null,
       landmark: row.landmark ?? null,
 
-      latitude: Number(row.latitude ?? 0),
-      longitude: Number(row.longitude ?? 0),
+      latitude: asNumber(row.latitude, 0),
+      longitude: asNumber(row.longitude, 0),
 
       city: row.city ?? null,
       state: row.state ?? null,
@@ -381,9 +431,7 @@ class LocationService {
   }
 
   async getSavedAddresses(customerId: string): Promise<SavedAddress[]> {
-    // Try snake_case schema first (most common in Supabase), then camelCase.
     const tryOrder: SavedAddressSchema[] = ['snake', 'camel'];
-
     let lastError: any = null;
 
     for (const schema of tryOrder) {
@@ -392,23 +440,23 @@ class LocationService {
           .from('saved_addresses')
           .select(
             `
-            id,
-            label,
-            recipient_name,
-            recipient_phone,
-            address,
-            apartment_floor,
-            landmark,
-            latitude,
-            longitude,
-            city,
-            state,
-            postal_code,
-            is_default,
-            delivery_instructions,
-            customer_id,
-            created_at
-          `
+              id,
+              label,
+              recipient_name,
+              recipient_phone,
+              address,
+              apartment_floor,
+              landmark,
+              latitude,
+              longitude,
+              city,
+              state,
+              postal_code,
+              is_default,
+              delivery_instructions,
+              customer_id,
+              created_at
+            `
           )
           .eq('customer_id', customerId)
           .order('is_default', { ascending: false })
@@ -416,6 +464,7 @@ class LocationService {
 
         if (!error) return (data || []).map((r: any) => this.normalizeSavedAddressSnake(r));
         lastError = error;
+        if (!isMissingTableError(error)) continue;
       } else {
         const { data, error } = await supabase
           .from('savedaddresses')
@@ -438,8 +487,7 @@ class LocationService {
       const customerId = this.resolveCustomerId(input);
       const isDefault = this.resolveIsDefault(input);
 
-      // Prefer snake_case table first.
-      // If that table doesn't exist in your DB, it will fail and we fallback to camelCase.
+      // Prefer snake_case table first
       {
         if (isDefault) {
           await supabase.from('saved_addresses').update({ is_default: false }).eq('customer_id', customerId);
@@ -455,8 +503,8 @@ class LocationService {
           apartment_floor: input.apartmentfloor ?? input.apartment_floor ?? null,
           landmark: input.landmark ?? null,
 
-          latitude: Number(input.latitude ?? 0),
-          longitude: Number(input.longitude ?? 0),
+          latitude: asNumber(input.latitude, 0),
+          longitude: asNumber(input.longitude, 0),
 
           city: input.city ?? null,
           state: input.state ?? null,
@@ -470,9 +518,11 @@ class LocationService {
         };
 
         const { data, error } = await supabase.from('saved_addresses').insert([row]).select().single();
-        if (!error) return this.normalizeSavedAddressSnake(data);
 
-        // fallback
+        if (!error) return this.normalizeSavedAddressSnake(data);
+        if (!isMissingTableError(error)) {
+          this.safeLogSupabaseError('saveAddress(snake) error:', error);
+        }
       }
 
       // camelCase fallback
@@ -491,8 +541,8 @@ class LocationService {
           apartmentfloor: input.apartmentfloor ?? input.apartment_floor ?? null,
           landmark: input.landmark ?? null,
 
-          latitude: Number(input.latitude ?? 0),
-          longitude: Number(input.longitude ?? 0),
+          latitude: asNumber(input.latitude, 0),
+          longitude: asNumber(input.longitude, 0),
 
           city: input.city ?? null,
           state: input.state ?? null,
@@ -506,7 +556,10 @@ class LocationService {
         };
 
         const { data, error } = await supabase.from('savedaddresses').insert([row]).select().single();
-        if (error) throw error;
+        if (error) {
+          this.safeLogSupabaseError('saveAddress(camel) error:', error);
+          throw error;
+        }
 
         return this.normalizeSavedAddressCamel(data);
       }
@@ -523,12 +576,7 @@ class LocationService {
       // Try snake first
       {
         if (wantsDefault === true) {
-          const { data: row } = await supabase
-            .from('saved_addresses')
-            .select('customer_id')
-            .eq('id', addressId)
-            .single();
-
+          const { data: row } = await supabase.from('saved_addresses').select('customer_id').eq('id', addressId).single();
           const customerId = row?.customer_id;
           if (customerId) {
             await supabase.from('saved_addresses').update({ is_default: false }).eq('customer_id', customerId);
@@ -537,27 +585,38 @@ class LocationService {
 
         const patch: any = {};
         if ('label' in updates) patch.label = updates.label;
+
         if ('recipientname' in updates || 'recipient_name' in updates)
           patch.recipient_name = (updates as any).recipientname ?? (updates as any).recipient_name ?? null;
+
         if ('recipientphone' in updates || 'recipient_phone' in updates)
           patch.recipient_phone = (updates as any).recipientphone ?? (updates as any).recipient_phone ?? null;
+
         if ('address' in updates) patch.address = updates.address;
+
         if ('apartmentfloor' in updates || 'apartment_floor' in updates)
           patch.apartment_floor = (updates as any).apartmentfloor ?? (updates as any).apartment_floor ?? null;
+
         if ('landmark' in updates) patch.landmark = updates.landmark ?? null;
-        if ('latitude' in updates) patch.latitude = Number(updates.latitude);
-        if ('longitude' in updates) patch.longitude = Number(updates.longitude);
+
+        if ('latitude' in updates) patch.latitude = asNumber(updates.latitude, 0);
+        if ('longitude' in updates) patch.longitude = asNumber(updates.longitude, 0);
+
         if ('city' in updates) patch.city = updates.city ?? null;
         if ('state' in updates) patch.state = updates.state ?? null;
+
         if ('postalcode' in updates || 'postal_code' in updates)
           patch.postal_code = (updates as any).postalcode ?? (updates as any).postal_code ?? null;
+
         if ('deliveryinstructions' in updates || 'delivery_instructions' in updates)
           patch.delivery_instructions =
             (updates as any).deliveryinstructions ?? (updates as any).delivery_instructions ?? null;
+
         if (wantsDefault !== undefined) patch.is_default = Boolean(wantsDefault);
 
         const { error } = await supabase.from('saved_addresses').update(patch).eq('id', addressId);
         if (!error) return true;
+        if (!isMissingTableError(error)) this.safeLogSupabaseError('updateAddress(snake) error:', error);
       }
 
       // camel fallback
@@ -572,27 +631,40 @@ class LocationService {
 
         const patch: any = {};
         if ('label' in updates) patch.label = updates.label;
+
         if ('recipientname' in updates || 'recipient_name' in updates)
           patch.recipientname = (updates as any).recipientname ?? (updates as any).recipient_name ?? null;
+
         if ('recipientphone' in updates || 'recipient_phone' in updates)
           patch.recipientphone = (updates as any).recipientphone ?? (updates as any).recipient_phone ?? null;
+
         if ('address' in updates) patch.address = updates.address;
+
         if ('apartmentfloor' in updates || 'apartment_floor' in updates)
           patch.apartmentfloor = (updates as any).apartmentfloor ?? (updates as any).apartment_floor ?? null;
+
         if ('landmark' in updates) patch.landmark = updates.landmark ?? null;
-        if ('latitude' in updates) patch.latitude = Number(updates.latitude);
-        if ('longitude' in updates) patch.longitude = Number(updates.longitude);
+
+        if ('latitude' in updates) patch.latitude = asNumber(updates.latitude, 0);
+        if ('longitude' in updates) patch.longitude = asNumber(updates.longitude, 0);
+
         if ('city' in updates) patch.city = updates.city ?? null;
         if ('state' in updates) patch.state = updates.state ?? null;
+
         if ('postalcode' in updates || 'postal_code' in updates)
           patch.postalcode = (updates as any).postalcode ?? (updates as any).postal_code ?? null;
+
         if ('deliveryinstructions' in updates || 'delivery_instructions' in updates)
           patch.deliveryinstructions =
             (updates as any).deliveryinstructions ?? (updates as any).delivery_instructions ?? null;
+
         if (wantsDefault !== undefined) patch.isdefault = Boolean(wantsDefault);
 
         const { error } = await supabase.from('savedaddresses').update(patch).eq('id', addressId);
-        if (error) throw error;
+        if (error) {
+          this.safeLogSupabaseError('updateAddress(camel) error:', error);
+          throw error;
+        }
         return true;
       }
     } catch (e) {
@@ -606,10 +678,14 @@ class LocationService {
       {
         const { error } = await supabase.from('saved_addresses').delete().eq('id', addressId);
         if (!error) return true;
+        if (!isMissingTableError(error)) this.safeLogSupabaseError('deleteAddress(snake) error:', error);
       }
       {
         const { error } = await supabase.from('savedaddresses').delete().eq('id', addressId);
-        if (error) throw error;
+        if (error) {
+          this.safeLogSupabaseError('deleteAddress(camel) error:', error);
+          throw error;
+        }
         return true;
       }
     } catch (e) {
@@ -621,9 +697,11 @@ class LocationService {
   async setDefaultAddress(customerId: string, addressId: string): Promise<boolean> {
     try {
       {
-        await supabase.from('saved_addresses').update({ is_default: false }).eq('customer_id', customerId);
-        const { error } = await supabase.from('saved_addresses').update({ is_default: true }).eq('id', addressId);
-        if (!error) return true;
+        const reset = await supabase.from('saved_addresses').update({ is_default: false }).eq('customer_id', customerId);
+        if (!reset.error) {
+          const { error } = await supabase.from('saved_addresses').update({ is_default: true }).eq('id', addressId);
+          if (!error) return true;
+        }
       }
       {
         await supabase.from('savedaddresses').update({ isdefault: false }).eq('customerid', customerId);
@@ -643,23 +721,23 @@ class LocationService {
         .from('saved_addresses')
         .select(
           `
-          id,
-          label,
-          recipient_name,
-          recipient_phone,
-          address,
-          apartment_floor,
-          landmark,
-          latitude,
-          longitude,
-          city,
-          state,
-          postal_code,
-          is_default,
-          delivery_instructions,
-          customer_id,
-          created_at
-        `
+            id,
+            label,
+            recipient_name,
+            recipient_phone,
+            address,
+            apartment_floor,
+            landmark,
+            latitude,
+            longitude,
+            city,
+            state,
+            postal_code,
+            is_default,
+            delivery_instructions,
+            customer_id,
+            created_at
+          `
         )
         .eq('customer_id', customerId)
         .eq('is_default', true)
@@ -687,10 +765,7 @@ class LocationService {
    * - Only merchants with lat/lon
    * - Distance must be <= merchant.delivery_radius_km
    */
-  async getNearbyMerchantsForUser(
-    userLat: number,
-    userLon: number
-  ): Promise<(MerchantRow & { distance_km: number })[]> {
+  async getNearbyMerchantsForUser(userLat: number, userLon: number): Promise<(MerchantRow & { distance_km: number })[]> {
     try {
       const { data, error } = await supabase
         .from('merchants')
@@ -726,3 +801,87 @@ class LocationService {
 }
 
 export const locationService = new LocationService();
+
+/* ----------------------- Geocoding service (optional) ---------------------- */
+
+export interface GeocodingResult {
+  lat: number;
+  lon: number;
+  displayName: string;
+  address?: {
+    house_number?: string;
+    road?: string;
+    suburb?: string;
+    city?: string;
+    state?: string;
+    postcode?: string;
+    country?: string;
+  };
+}
+
+class GeocodingService {
+  private baseUrl = 'https://nominatim.openstreetmap.org';
+  private debounceTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  async reverseGeocode(lat: number, lon: number): Promise<GeocodingResult> {
+    try {
+      const response = await fetch(`${this.baseUrl}/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`, {
+        headers: { 'Accept-Language': 'en' },
+      });
+
+      if (!response.ok) throw new Error('Failed to reverse geocode');
+
+      const data: any = await response.json();
+
+      return {
+        lat,
+        lon,
+        displayName: data.display_name,
+        address: data.address,
+      };
+    } catch (error) {
+      console.error('Reverse geocoding error:', error);
+      return {
+        lat,
+        lon,
+        displayName: `${lat.toFixed(6)}, ${lon.toFixed(6)}`,
+      };
+    }
+  }
+
+  async searchAddress(query: string): Promise<GeocodingResult[]> {
+    if (!query || query.trim().length < 3) return [];
+
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+
+      if (!response.ok) throw new Error('Failed to search address');
+
+      const data: any[] = await response.json();
+
+      return data.map((item: any) => ({
+        lat: parseFloat(item.lat),
+        lon: parseFloat(item.lon),
+        displayName: item.display_name,
+        address: item.address,
+      }));
+    } catch (error) {
+      console.error('Address search error:', error);
+      return [];
+    }
+  }
+
+  debouncedSearch(query: string, callback: (results: GeocodingResult[]) => void, delay = 500) {
+    if (this.debounceTimeout) clearTimeout(this.debounceTimeout);
+
+    this.debounceTimeout = setTimeout(async () => {
+      const results = await this.searchAddress(query);
+      callback(results);
+    }, delay);
+  }
+}
+
+export const geocodingService = new GeocodingService();

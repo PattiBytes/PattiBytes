@@ -15,6 +15,8 @@ interface BottomNavProps {
   role: string;
 }
 
+const BAR_H = 64; // visible bar height (without safe-area)
+
 export default function BottomNav({ role }: BottomNavProps) {
   const pathname = usePathname();
 
@@ -24,23 +26,30 @@ export default function BottomNav({ role }: BottomNavProps) {
         { name: 'Home', href: '/customer/dashboard', icon: Home },
         { name: 'Search', href: '/customer/search', icon: Search },
         { name: 'Cart', href: '/customer/cart', icon: ShoppingBag },
+        { name: 'Orders', href: '/customer/orders', icon: Store },
         { name: 'Profile', href: '/customer/profile', icon: User },
       ];
-    } else if (role === 'merchant') {
+    }
+
+    if (role === 'merchant') {
       return [
         { name: 'Home', href: '/merchant/dashboard', icon: Home },
         { name: 'Orders', href: '/merchant/orders', icon: ShoppingBag },
         { name: 'Menu', href: '/merchant/menu', icon: Store },
         { name: 'Profile', href: '/merchant/profile', icon: User },
       ];
-    } else if (role === 'driver') {
+    }
+
+    if (role === 'driver') {
       return [
         { name: 'Home', href: '/driver/dashboard', icon: Home },
         { name: 'Orders', href: '/driver/orders', icon: Truck },
         { name: 'Earnings', href: '/driver/earnings', icon: Wallet },
         { name: 'Profile', href: '/driver/profile', icon: User },
       ];
-    } else if (role === 'admin' || role === 'superadmin') {
+    }
+
+    if (role === 'admin' || role === 'superadmin') {
       return [
         { name: 'Home', href: '/admin/dashboard', icon: Home },
         { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
@@ -54,30 +63,44 @@ export default function BottomNav({ role }: BottomNavProps) {
 
   const navItems = getNavItems();
 
-  // Show on mobile and tablet (hide on desktop)
+  // Important: render a spacer so page content never sits behind the fixed bar.
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe">
-      <div className="flex justify-around items-center h-16 max-w-screen-xl mx-auto px-2">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-          const Icon = item.icon;
-          
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center justify-center flex-1 h-full transition-colors px-1 ${
-                isActive
-                  ? 'text-primary'
-                  : 'text-gray-600 hover:text-primary'
-              }`}
-            >
-              <Icon size={22} className="mb-0.5 flex-shrink-0" />
-              <span className="text-[10px] sm:text-xs font-medium truncate max-w-full">{item.name}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+    <>
+      <nav
+        className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-200 z-40"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="max-w-screen-xl mx-auto px-2">
+          <div className="flex items-center justify-around" style={{ height: BAR_H }}>
+            {navItems.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={[
+                    'flex flex-col items-center justify-center flex-1 h-full px-1 transition',
+                    'active:scale-[0.98]',
+                    isActive ? 'text-primary' : 'text-gray-600 hover:text-primary',
+                  ].join(' ')}
+                >
+                  <Icon size={22} className="mb-0.5 flex-shrink-0" />
+                  <span className="text-[10px] font-semibold truncate max-w-full">{item.name}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </nav>
+
+      {/* Spacer: prevents bottom nav from covering buttons/links */}
+      <div
+        className="lg:hidden"
+        style={{ height: `calc(${BAR_H}px + env(safe-area-inset-bottom))` }}
+      />
+    </>
   );
 }

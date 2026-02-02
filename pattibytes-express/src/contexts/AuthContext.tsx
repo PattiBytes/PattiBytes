@@ -25,6 +25,9 @@ interface Profile {
 }
 
 interface AuthContextType {
+  id(id: unknown): unknown;
+  id: unknown;
+  id: any;
   user: Profile | null;
   authUser: User | null;
   loading: boolean;
