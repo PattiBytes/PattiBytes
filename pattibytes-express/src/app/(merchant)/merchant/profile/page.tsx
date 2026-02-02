@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { Save, Store, Clock } from 'lucide-react';
+import { Save, Store, Clock, Percent } from 'lucide-react';
 import { toast } from 'react-toastify';
 import ImageUpload from '@/components/common/ImageUpload';
 import LocationPicker from '@/components/common/LocationPicker';
@@ -31,6 +31,10 @@ export default function MerchantProfilePage() {
     delivery_radius_km: 5,
     estimated_prep_time: 30,
     is_active: true,
+
+    // NEW: GST controls
+    gst_enabled: false,
+    gst_percentage: 5,
   });
 
   const cuisineOptions = [
@@ -74,6 +78,9 @@ export default function MerchantProfilePage() {
           delivery_radius_km: data.delivery_radius_km || 5,
           estimated_prep_time: data.estimated_prep_time || 30,
           is_active: data.is_active ?? true,
+
+          gst_enabled: data.gst_enabled ?? false,
+          gst_percentage: Number(data.gst_percentage ?? 5),
         });
 
         if (data.address && data.latitude && data.longitude) {
@@ -118,6 +125,13 @@ export default function MerchantProfilePage() {
         return toast.error('Please select a business location');
       }
 
+      if (formData.gst_enabled) {
+        const pct = Number(formData.gst_percentage);
+        if (!Number.isFinite(pct) || pct < 0 || pct > 28) {
+          return toast.error('GST % must be between 0 and 28');
+        }
+      }
+
       const { error } = await supabase
         .from('merchants')
         .update({
@@ -141,6 +155,10 @@ export default function MerchantProfilePage() {
           delivery_radius_km: formData.delivery_radius_km,
           estimated_prep_time: formData.estimated_prep_time,
           is_active: formData.is_active,
+
+          // NEW: GST fields
+          gst_enabled: formData.gst_enabled,
+          gst_percentage: Number(formData.gst_percentage || 0),
 
           updated_at: new Date().toISOString(),
         })
@@ -346,6 +364,46 @@ export default function MerchantProfilePage() {
                     min={10}
                     max={120}
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* GST Settings (NEW) */}
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Percent size={20} className="text-primary" />
+                GST Settings
+              </h3>
+
+              <div className="rounded-lg border border-gray-200 p-4 space-y-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="gst_enabled"
+                    checked={formData.gst_enabled}
+                    onChange={(e) => setFormData({ ...formData, gst_enabled: e.target.checked })}
+                    className="w-5 h-5 text-primary rounded"
+                  />
+                  <label htmlFor="gst_enabled" className="font-medium text-gray-900">
+                    This restaurant charges GST
+                  </label>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">GST %</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      max={28}
+                      value={formData.gst_percentage}
+                      disabled={!formData.gst_enabled}
+                      onChange={(e) => setFormData({ ...formData, gst_percentage: Number(e.target.value) })}
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary disabled:bg-gray-50"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">If disabled, checkout GST becomes 0 for this merchant.</p>
+                  </div>
                 </div>
               </div>
             </div>
