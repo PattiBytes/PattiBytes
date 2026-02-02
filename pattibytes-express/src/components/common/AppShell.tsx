@@ -19,12 +19,12 @@ import BottomNav from '@/components/navigation/BottomNav';
 type NavItem = { href: string; label: string };
 
 const NAV: NavItem[] = [
-  { href: '/merchant/dashboard', label: 'Dashboard' },
-  { href: '/merchant/orders', label: 'Orders' },
-  { href: '/merchant/menu', label: 'Menu' },
-  { href: '/merchant/analytics', label: 'Analytics' },
-  { href: '/customer/dashboard', label: 'Browse Food' },
-  { href: '/merchant/profile', label: 'Profile' },
+  { href: '/customer/dashboard', label: 'Dashboard' },
+
+  { href: '/customer/cart', label: 'Cart' },
+  { href: '/customer/Orders', label: 'Orders' },
+
+  { href: '/customer/profile', label: 'Profile' },
 ];
 
 const MOBILE_BOTTOM_NAV_PX = 72;
@@ -85,15 +85,10 @@ export default function AppShell({
   const displayName = (user as any)?.full_name || (user as any)?.fullname || 'User';
   const roleLabel = String((user as any)?.role || '').toLowerCase();
 
-  // If you want to ALWAYS show app logo (not user avatar), set this to true.
-  const FORCE_APP_LOGO_AS_AVATAR = true;
-
-  const userAvatarUrl = (user as any)?.avatar_url || (user as any)?.logo_url || '';
-  const showAppLogo = FORCE_APP_LOGO_AS_AVATAR || !userAvatarUrl;
-
+  // Always show app logo (requested)
   const AppLogo = ({ size }: { size: number }) => (
     <div
-      className="relative rounded-full overflow-hidden ring-2 ring-gray-200 bg-white"
+      className="relative rounded-full overflow-hidden ring-2 ring-gray-200 bg-white shrink-0"
       style={{ width: size, height: size }}
     >
       <Image
@@ -118,13 +113,14 @@ export default function AppShell({
             onClick={onNavigate}
             className={cx(
               'flex items-center justify-between gap-2 px-3 py-2 rounded-xl transition-all duration-200',
+              'min-w-0 max-w-full', // ✅ prevent overflow
               isActive
                 ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white shadow'
                 : 'text-gray-700 hover:bg-orange-50 hover:text-primary'
             )}
           >
-            <span className="text-sm font-semibold truncate">{n.label}</span>
-            {isActive && <ChevronRight size={14} />}
+            <span className="text-sm font-semibold truncate min-w-0">{n.label}</span>
+            {isActive && <ChevronRight size={14} className="shrink-0" />}
           </Link>
         );
       })}
@@ -133,10 +129,13 @@ export default function AppShell({
         <button
           type="button"
           onClick={handleLogout}
-          className="w-full flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 rounded-xl transition font-semibold"
+          className={cx(
+            'w-full flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 rounded-xl transition font-semibold',
+            'min-w-0 max-w-full'
+          )}
         >
-          <LogOut size={18} />
-          <span className="text-sm">Logout</span>
+          <LogOut size={18} className="shrink-0" />
+          <span className="text-sm truncate min-w-0">Logout</span>
         </button>
       </div>
     </nav>
@@ -146,30 +145,34 @@ export default function AppShell({
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-pink-50"
+      className={cx(
+        'min-h-screen bg-gradient-to-br from-orange-50 via-white to-pink-50',
+        'w-full max-w-full overflow-x-clip' // ✅ hard stop horizontal overflow [web:120]
+      )}
       style={{ paddingBottom: `calc(${MOBILE_BOTTOM_NAV_PX}px + env(safe-area-inset-bottom))` }}
     >
-      {/* Smaller topbar with circular logo */}
+      {/* Topbar (compact, overflow safe) */}
       <header
         className={cx(
           'sticky top-0 z-40 bg-white/85 backdrop-blur border-b border-gray-200/70',
-          isScrolled ? 'shadow' : 'shadow-sm'
+          isScrolled ? 'shadow' : 'shadow-sm',
+          'w-full max-w-full overflow-x-clip'
         )}
       >
         <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8">
-          <div className="h-14 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+          <div className="h-14 flex items-center justify-between gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden w-9 h-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white hover:bg-gray-50"
+                className="lg:hidden w-9 h-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shrink-0"
                 aria-label="Open menu"
               >
                 <Menu className="w-5 h-5 text-gray-900" />
               </button>
 
-              <Link href="/customer/dashboard" className="flex items-center gap-2">
+              <Link href="/customer/dashboard" className="flex items-center gap-2 min-w-0 max-w-full">
                 <AppLogo size={28} />
-                <span className="font-extrabold text-sm sm:text-base text-gray-900">
+                <span className="font-extrabold text-sm sm:text-base text-gray-900 truncate min-w-0">
                   <span className="bg-gradient-to-r from-orange-500 to-pink-500 bg-clip-text text-transparent">
                     {title}
                   </span>
@@ -177,108 +180,100 @@ export default function AppShell({
               </Link>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <NotificationBell />
 
-              <Link href={profileHref} className="hidden sm:inline-flex items-center gap-2" title="Profile">
-                {showAppLogo ? (
-                  <AppLogo size={32} />
-                ) : (
-                  <div className="relative w-8 h-8 rounded-full overflow-hidden ring-2 ring-gray-200 bg-white">
-                    <Image src={userAvatarUrl} alt="Profile" fill sizes="32px" className="object-cover" />
-                  </div>
-                )}
+              <Link
+                href={profileHref}
+                className="hidden sm:inline-flex items-center gap-2"
+                title="Profile"
+              >
+                <AppLogo size={32} />
               </Link>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="flex max-w-7xl mx-auto">
-        {/* Desktop Sidebar */}
-        <aside className="hidden lg:block sticky top-14 h-[calc(100vh-3.5rem)] w-72 bg-white shadow-xl rounded-r-2xl overflow-y-auto">
-          <div className="p-4 space-y-4">
-            {/* Profile card using circular logo */}
-            <Link
-              href={profileHref}
-              className="flex items-center gap-3 p-3 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-white transition"
-            >
-              {showAppLogo ? (
+      {/* Body */}
+      <div className="w-full max-w-full overflow-x-clip">
+        <div className="flex max-w-7xl mx-auto w-full min-w-0">
+          {/* Desktop Sidebar */}
+          <aside className="hidden lg:block sticky top-14 h-[calc(100vh-3.5rem)] w-72 shrink-0 bg-white shadow-xl rounded-r-2xl overflow-y-auto overflow-x-hidden">
+            <div className="p-4 space-y-4">
+              {/* Profile card */}
+              <Link
+                href={profileHref}
+                className="flex items-center gap-3 p-3 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-white transition min-w-0"
+              >
                 <AppLogo size={44} />
-              ) : (
-                <div className="relative w-11 h-11 rounded-full overflow-hidden ring-2 ring-gray-200 bg-white">
-                  <Image src={userAvatarUrl} alt="Profile" fill sizes="44px" className="object-cover" />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-gray-900 truncate">{displayName}</p>
+                  <p className="text-xs text-gray-600 capitalize truncate">{roleLabel || 'user'}</p>
                 </div>
-              )}
+              </Link>
 
               <div className="min-w-0">
-                <p className="text-sm font-bold text-gray-900 truncate">{displayName}</p>
-                <p className="text-xs text-gray-600 capitalize truncate">{roleLabel || 'user'}</p>
+                <p className="text-xs font-bold text-gray-500 mb-3">Navigation</p>
+                <NavLinks />
               </div>
-            </Link>
-
-            <div>
-              <p className="text-xs font-bold text-gray-500 mb-3">Navigation</p>
-              <NavLinks />
             </div>
-          </div>
-        </aside>
+          </aside>
 
-        {/* Mobile Drawer (smaller) */}
-        {sidebarOpen && (
-          <div className="lg:hidden fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-black/45" onClick={() => setSidebarOpen(false)} />
+          {/* Mobile Drawer (smaller + clamped widths) */}
+          {sidebarOpen && (
+            <div className="lg:hidden fixed inset-0 z-50">
+              <div className="absolute inset-0 bg-black/45" onClick={() => setSidebarOpen(false)} />
 
-            <div className="absolute left-0 top-0 h-full bg-white shadow-2xl w-[72vw] max-w-[260px]">
-              <div className="p-3">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <AppLogo size={26} />
-                    <p className="text-sm font-extrabold text-gray-900 truncate">{title}</p>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="w-9 h-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white hover:bg-gray-50"
-                    onClick={() => setSidebarOpen(false)}
-                    aria-label="Close menu"
-                  >
-                    <X className="w-5 h-5 text-gray-900" />
-                  </button>
-                </div>
-
-                {/* compact profile card */}
-                <Link
-                  href={profileHref}
-                  onClick={() => setSidebarOpen(false)}
-                  className="flex items-center gap-2.5 p-2.5 rounded-2xl border border-gray-100 bg-gray-50"
-                >
-                  {showAppLogo ? (
-                    <AppLogo size={40} />
-                  ) : (
-                    <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-gray-200 bg-white">
-                      <Image src={userAvatarUrl} alt="Profile" fill sizes="40px" className="object-cover" />
+              <div
+                className={cx(
+                  'absolute left-0 top-0 h-full bg-white shadow-2xl',
+                  'w-[72vw] max-w-[260px]',
+                  'overflow-y-auto overflow-x-hidden'
+                )}
+              >
+                <div className="p-3 w-full max-w-full overflow-x-hidden">
+                  <div className="flex items-center justify-between mb-3 gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <AppLogo size={26} />
+                      <p className="text-sm font-extrabold text-gray-900 truncate min-w-0">{title}</p>
                     </div>
-                  )}
 
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-gray-900 truncate">{displayName}</p>
-                    <p className="text-[11px] text-gray-600 capitalize truncate">{roleLabel || 'user'}</p>
+                    <button
+                      type="button"
+                      className="w-9 h-9 inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white hover:bg-gray-50 shrink-0"
+                      onClick={() => setSidebarOpen(false)}
+                      aria-label="Close menu"
+                    >
+                      <X className="w-5 h-5 text-gray-900" />
+                    </button>
                   </div>
-                </Link>
 
-                <div className="mt-3">
-                  <NavLinks onNavigate={() => setSidebarOpen(false)} />
+                  <Link
+                    href={profileHref}
+                    onClick={() => setSidebarOpen(false)}
+                    className="flex items-center gap-2.5 p-2.5 rounded-2xl border border-gray-100 bg-gray-50 min-w-0 max-w-full"
+                  >
+                    <AppLogo size={40} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-900 truncate">{displayName}</p>
+                      <p className="text-[11px] text-gray-600 capitalize truncate">{roleLabel || 'user'}</p>
+                    </div>
+                  </Link>
+
+                  <div className="mt-3 min-w-0">
+                    <NavLinks onNavigate={() => setSidebarOpen(false)} />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Main */}
-        <main className="flex-1 min-h-[calc(100vh-3.5rem)] px-2.5 sm:px-3.5 md:px-5 lg:px-6 py-4">
-          {children}
-        </main>
+          {/* Main (critical: min-w-0 so content can shrink inside flex row) */}
+          <main className="flex-1 min-w-0 max-w-full px-2.5 sm:px-3.5 md:px-5 lg:px-6 py-4 overflow-x-clip">
+            {children}
+          </main>
+        </div>
       </div>
 
       <BottomNav role={(user as any).role} />
