@@ -18,7 +18,7 @@ import {
   Youtube,
 } from 'lucide-react';
 
-import DashboardLayout from '@/components/layouts/DashboardLayout';
+import AppShell from '@/components/common/AppShell';
 import { supabase } from '@/lib/supabase';
 import { locationService, type SavedAddress } from '@/services/location';
 
@@ -535,7 +535,7 @@ export default function CustomerDashboardPage() {
   ].filter((x) => !!x.href);
 
   return (
-    <DashboardLayout>
+     <AppShell title="Pattibytes Express">
       <div
         className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-pink-50"
         style={{ paddingBottom: `calc(${BOTTOM_NAV_PX}px + env(safe-area-inset-bottom))` }}
@@ -794,6 +794,6 @@ export default function CustomerDashboardPage() {
           onPickSaved={handlePickSaved}
         />
       </div>
-    </DashboardLayout>
+  </AppShell>
   );
 }
