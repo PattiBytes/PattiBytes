@@ -1,264 +1,302 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useMemo, useState } from 'react';
+import { X, Upload, FileText } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { Upload, FileText, X, CheckCircle, AlertCircle } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { uploadToCloudinary } from '@/lib/cloudinary';
+import { menuService } from '@/services/menu';
 
-interface BulkMenuUploadProps {
-  merchantId: string;
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-interface MenuItem {
+type Row = {
   name: string;
   description: string;
   price: number;
   category: string;
-  is_veg: boolean;
+  image_url: string;
   is_available: boolean;
+  is_veg: boolean;
+  preparation_time: number;
+  discount_percentage: number;
+  category_id: string | null;
+  _file?: File | null; // optional per-row image file
+};
+
+function parseBool(v: string, fallback: boolean) {
+  const s = String(v ?? '').trim().toLowerCase();
+  if (!s) return fallback;
+  if (['true', '1', 'yes', 'y'].includes(s)) return true;
+  if (['false', '0', 'no', 'n'].includes(s)) return false;
+  return fallback;
 }
 
-export default function BulkMenuUpload({ merchantId, onClose, onSuccess }: BulkMenuUploadProps) {
-  const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState<MenuItem[]>([]);
-  const [errors, setErrors] = useState<string[]>([]);
+function parseNum(v: string, fallback: number) {
+  const n = Number(String(v ?? '').trim());
+  return Number.isFinite(n) ? n : fallback;
+}
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+function splitCsvLine(line: string) {
+  // Minimal CSV parser (supports quoted fields with commas)
+  const out: string[] = [];
+  let cur = '';
+  let inQ = false;
 
-    const fileType = file.name.split('.').pop()?.toLowerCase();
-
-    try {
-      if (fileType === 'json') {
-        const text = await file.text();
-        const data = JSON.parse(text);
-        validateAndPreview(Array.isArray(data) ? data : [data]);
-      } else if (fileType === 'csv' || fileType === 'xlsx' || fileType === 'xls') {
-        const arrayBuffer = await file.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer);
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const data = XLSX.utils.sheet_to_json(worksheet);
-        validateAndPreview(data);
-      } else {
-        toast.error('Unsupported file format. Use JSON, CSV, or Excel.');
-      }
-    } catch (error) {
-      console.error('File parse error:', error);
-      toast.error('Failed to parse file');
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"' && line[i + 1] === '"') {
+      cur += '"';
+      i++;
+      continue;
     }
-  };
+    if (ch === '"') {
+      inQ = !inQ;
+      continue;
+    }
+    if (ch === ',' && !inQ) {
+      out.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  out.push(cur);
+  return out.map((x) => x.trim());
+}
 
-  const validateAndPreview = (data: any[]) => {
-    const validated: MenuItem[] = [];
-    const newErrors: string[] = [];
+function parseCsv(text: string): { rows: Row[]; errors: string[] } {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
 
-    data.forEach((row, index) => {
-      if (!row.name || !row.price) {
-        newErrors.push(`Row ${index + 1}: Missing name or price`);
-        return;
-      }
+  if (lines.length === 0) return { rows: [], errors: ['CSV is empty'] };
 
-      validated.push({
-        name: String(row.name),
-        description: String(row.description || ''),
-        price: parseFloat(row.price),
-        category: String(row.category || 'Main Course'),
-        is_veg: row.is_veg === true || row.is_veg === 'true' || row.is_veg === 1,
-        is_available: row.is_available !== false && row.is_available !== 'false' && row.is_available !== 0,
-      });
+  const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
+  const idx = (key: string) => header.indexOf(key);
+
+  if (idx('name') === -1 || idx('price') === -1) {
+    return { rows: [], errors: ['CSV must include headers: name, price (recommended: category, image_url, is_available, is_veg, preparation_time, discount_percentage)'] };
+  }
+
+  const errors: string[] = [];
+  const rows: Row[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCsvLine(lines[i]);
+    const get = (k: string) => (idx(k) >= 0 ? (cols[idx(k)] ?? '') : '');
+
+    const name = get('name');
+    const price = parseNum(get('price'), NaN);
+
+    if (!name.trim()) errors.push(`Line ${i + 1}: name is required`);
+    if (!Number.isFinite(price)) errors.push(`Line ${i + 1}: price is invalid`);
+
+    rows.push({
+      name: name.trim(),
+      description: get('description')?.trim() || '',
+      price: Number.isFinite(price) ? price : 0,
+      category: get('category')?.trim() || 'Main Course',
+      image_url: get('image_url')?.trim() || '',
+      is_available: parseBool(get('is_available'), true),
+      is_veg: parseBool(get('is_veg'), true),
+      preparation_time: parseNum(get('preparation_time'), 30),
+      discount_percentage: parseNum(get('discount_percentage'), 0),
+      category_id: (get('category_id')?.trim() || '') || null,
+      _file: null,
     });
+  }
 
-    setPreview(validated);
-    setErrors(newErrors);
+  return { rows, errors };
+}
 
-    if (validated.length > 0) {
-      toast.success(`${validated.length} items ready to upload`);
-    }
+export default function BulkMenuUploadModal({
+  merchantId,
+  onClose,
+  onSuccess,
+}: {
+  merchantId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [csvText, setCsvText] = useState(
+    `name,description,price,category,image_url,is_available,is_veg,preparation_time,discount_percentage,category_id\n`
+  );
+  const [rows, setRows] = useState<Row[]>([]);
+  const [parsing, setParsing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const previewCount = useMemo(() => rows.length, [rows]);
+
+  const loadCsvFile = async (file: File) => {
+    const text = await file.text();
+    setCsvText(text);
   };
 
-  const handleUpload = async () => {
-    if (preview.length === 0) return;
-
-    setUploading(true);
+  const handleParse = () => {
+    setParsing(true);
     try {
-     const items = preview.map((item) => ({
-  merchant_id: merchantId,
-  name: String(item.name).trim(),
-  description: String(item.description || ''),
-  price: Number(item.price),
-  category: String(item.category || 'Main Course'),
-  is_veg: !!item.is_veg,
-  is_available: item.is_available !== false,
-}));
-
-
-      const { error } = await supabase.from('menu_items').insert(items);
-
-      if (error) throw error;
-
-      toast.success(`${items.length} items uploaded successfully!`);
-      onSuccess();
-      onClose();
-    } catch (error: any) {
-      console.error('Upload error:', error);
-      toast.error(error.message || 'Failed to upload menu items');
+      const { rows, errors } = parseCsv(csvText);
+      if (errors.length) {
+        toast.error(errors.slice(0, 3).join(' | '));
+      }
+      setRows(rows);
+      if (rows.length) toast.success(`Parsed ${rows.length} row(s)`);
     } finally {
-      setUploading(false);
+      setParsing(false);
     }
   };
 
-  const downloadTemplate = () => {
-    const template = [
-      {
-        name: 'Butter Chicken',
-        description: 'Creamy tomato curry with tender chicken',
-        price: 350,
-        category: 'Main Course',
-        is_veg: false,
-        is_available: true,
-      },
-      {
-        name: 'Paneer Tikka',
-        description: 'Grilled cottage cheese with spices',
-        price: 250,
-        category: 'Starters',
-        is_veg: true,
-        is_available: true,
-      },
-    ];
+  const setRowFile = (i: number, file: File | null) => {
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, _file: file } : r)));
+  };
 
-    const ws = XLSX.utils.json_to_sheet(template);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Menu Items');
-    XLSX.writeFile(wb, 'menu_template.xlsx');
-    toast.success('Template downloaded');
+  const saveAll = async () => {
+    if (!rows.length) return toast.error('Parse CSV first');
+
+    setSaving(true);
+    try {
+      // Upload images for rows that have a file and no image_url
+      const fixed: Row[] = [];
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+
+        if (!r.name.trim()) {
+          toast.error(`Row ${i + 1}: name is required`);
+          setSaving(false);
+          return;
+        }
+
+        let imageUrl = r.image_url;
+        if (!imageUrl && r._file) {
+          imageUrl = await uploadToCloudinary(r._file, 'menu-items');
+        }
+
+        fixed.push({ ...r, image_url: imageUrl || '' });
+      }
+
+      // Insert in one go (your service should do supabase insert)
+      await menuService.createMenuItemsBulk(
+        fixed.map((r) => ({
+          merchant_id: merchantId,
+          name: r.name,
+          description: r.description,
+          price: r.price,
+          category: r.category,
+          image_url: r.image_url,
+          is_available: r.is_available,
+          is_veg: r.is_veg,
+          preparation_time: r.preparation_time,
+          discount_percentage: r.discount_percentage,
+          category_id: r.category_id,
+        }))
+      );
+
+      toast.success(`Uploaded ${fixed.length} item(s)`);
+      onSuccess();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || 'Bulk upload failed');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white p-6 border-b flex items-center justify-between">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Bulk Menu Upload</h2>
-            <p className="text-sm text-gray-600 mt-1">Upload multiple menu items at once</p>
+            <h2 className="text-xl font-bold text-gray-900">Bulk Upload Menu Items</h2>
+            <p className="text-xs text-gray-600 mt-1">CSV supports image_url (link) or per-row image upload.</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={24} />
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Upload Section */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Upload File</h3>
-              <button
-                onClick={downloadTemplate}
-                className="text-sm text-primary hover:underline flex items-center gap-1"
-              >
-                <FileText size={16} />
-                Download Template
-              </button>
-            </div>
-
-            <label className="block cursor-pointer">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary transition-colors">
-                <Upload className="mx-auto text-gray-400 mb-3" size={48} />
-                <p className="text-gray-700 font-medium mb-1">
-                  Click to upload or drag and drop
-                </p>
-                <p className="text-sm text-gray-500">
-                  Supports JSON, CSV, Excel (.xlsx, .xls)
-                </p>
-              </div>
+        <div className="p-6 space-y-5">
+          <div className="flex flex-wrap gap-3 items-center">
+            <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 cursor-pointer hover:bg-gray-50">
+              <FileText size={16} />
+              <span className="font-semibold text-sm">Upload CSV</span>
               <input
                 type="file"
-                accept=".json,.csv,.xlsx,.xls"
-                onChange={handleFileUpload}
+                accept=".csv,text/csv"
                 className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) loadCsvFile(f);
+                }}
               />
             </label>
+
+            <button
+              onClick={handleParse}
+              disabled={parsing}
+              className="px-4 py-2 rounded-xl bg-primary text-white font-semibold disabled:opacity-50"
+            >
+              {parsing ? 'Parsing…' : 'Parse CSV'}
+            </button>
+
+            <button
+              onClick={saveAll}
+              disabled={saving || !rows.length}
+              className="px-4 py-2 rounded-xl bg-green-600 text-white font-semibold disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : `Save (${previewCount})`}
+            </button>
           </div>
 
-          {/* Errors */}
-          {errors.length > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
-                <div className="flex-1">
-                  <h4 className="font-semibold text-red-900 mb-2">Validation Errors</h4>
-                  <ul className="text-sm text-red-700 space-y-1">
-                    {errors.map((error, i) => (
-                      <li key={i}>• {error}</li>
-                    ))}
-                  </ul>
-                </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">CSV content</label>
+            <textarea
+              value={csvText}
+              onChange={(e) => setCsvText(e.target.value)}
+              rows={8}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl font-mono text-xs"
+            />
+          </div>
+
+          {rows.length > 0 && (
+            <div className="border rounded-2xl overflow-hidden">
+              <div className="bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900">Preview (first 20 rows)</div>
+              <div className="divide-y">
+                {rows.slice(0, 20).map((r, i) => (
+                  <div key={i} className="p-4 flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 truncate">{r.name || '—'}</p>
+                      <p className="text-xs text-gray-600 truncate">
+                        ₹{Number(r.price || 0).toFixed(2)} • {r.category} • veg:{String(r.is_veg)} • avail:{String(r.is_available)}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        image_url: {r.image_url ? r.image_url : '(empty)'}
+                      </p>
+                    </div>
+
+                    {/* Optional file picker per row (only needed if image_url is empty) */}
+                    <div className="flex items-center gap-2">
+                      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-300 cursor-pointer hover:bg-gray-50">
+                        <Upload size={16} />
+                        <span className="text-sm font-semibold">Row Image</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => setRowFile(i, e.target.files?.[0] ?? null)}
+                        />
+                      </label>
+                      <span className="text-xs text-gray-600">{r._file ? r._file.name : 'No file'}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* Preview */}
-          {preview.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                  <CheckCircle className="text-green-600" size={20} />
-                  Preview ({preview.length} items)
-                </h3>
-              </div>
-
-              <div className="max-h-96 overflow-y-auto border rounded-lg">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 sticky top-0">
-                    <tr>
-                      <th className="px-4 py-2 text-left font-medium text-gray-700">Name</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-700">Price</th>
-                      <th className="px-4 py-2 text-left font-medium text-gray-700">Category</th>
-                      <th className="px-4 py-2 text-center font-medium text-gray-700">Type</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.map((item, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="px-4 py-2 font-medium">{item.name}</td>
-                        <td className="px-4 py-2">₹{item.price}</td>
-                        <td className="px-4 py-2">{item.category}</td>
-                        <td className="px-4 py-2 text-center">
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            item.is_veg ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            {item.is_veg ? '🌱 Veg' : '🍖 Non-veg'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-4 border-t">
-            <button
-              onClick={onClose}
-              className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleUpload}
-              disabled={uploading || preview.length === 0}
-              className="flex-1 px-6 py-3 bg-primary text-white rounded-lg hover:bg-orange-600 font-medium disabled:opacity-50"
-            >
-              {uploading ? 'Uploading...' : `Upload ${preview.length} Items`}
-            </button>
+          <div className="text-xs text-gray-600">
+            Example row (matches your DB): <br />
+            <span className="font-mono">
+              Pizza,Very nice chopping,98.00,Main Course,https://res.cloudinary.com/...png,true,true,30,0,
+            </span>
           </div>
         </div>
       </div>
