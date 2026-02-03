@@ -1,7 +1,8 @@
- 
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
@@ -28,15 +29,22 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
+const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+
 export default function CartPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { cart, updateQuantity, removeFromCart, clearCart } = useCart();
+
+  const c: any = cart as any;
+
   const [validating, setValidating] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
+
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [deliveryDistance, setDeliveryDistance] = useState(0);
   const [deliveryBreakdown, setDeliveryBreakdown] = useState('');
+
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
   const [promoDiscount, setPromoDiscount] = useState(0);
@@ -52,14 +60,16 @@ export default function CartPage() {
 
     loadDeliveryFee();
     loadAvailablePromos();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Optional but recommended if your cart has stale merchant GST flags:
+    // cartService.refreshMerchantMeta?.();
+
+     
   }, [user, router]);
 
   const loadDeliveryFee = async () => {
     try {
       await deliveryFeeService.loadConfig();
 
-      // Get user's default address or use current location
       const addresses = await locationService.getSavedAddresses(user!.id);
       let lat = 31.3260; // Default Patti coordinates
       let lon = 74.8560;
@@ -71,39 +81,35 @@ export default function CartPage() {
       }
 
       const feeData = deliveryFeeService.calculateDeliveryFee(lat, lon);
-      setDeliveryFee(feeData.fee);
-      setDeliveryDistance(feeData.distance);
-      setDeliveryBreakdown(feeData.breakdown);
+      setDeliveryFee(Number(feeData.fee || 0));
+      setDeliveryDistance(Number(feeData.distance || 0));
+      setDeliveryBreakdown(String(feeData.breakdown || ''));
     } catch (error) {
       console.error('Failed to calculate delivery fee:', error);
-      setDeliveryFee(10); // Default fee
+      setDeliveryFee(10);
     }
   };
 
   const loadAvailablePromos = async () => {
     try {
       const promos = await promoCodeService.getActivePromoCodes();
-      setAvailablePromos(promos);
+      setAvailablePromos(promos || []);
     } catch (error) {
       console.error('Failed to load promo codes:', error);
     }
   };
 
   const handleApplyPromo = async (code?: string) => {
-    const codeToApply = code || promoCode;
-    if (!codeToApply.trim() || !cart) return;
+    const codeToApply = (code || promoCode || '').trim();
+    if (!codeToApply || !c?.subtotal) return;
 
     setApplyingPromo(true);
     try {
-      const result = await promoCodeService.validatePromoCode(
-        codeToApply,
-        cart.subtotal,
-        user!.id
-      );
+      const result = await promoCodeService.validatePromoCode(codeToApply, Number(c.subtotal || 0), user!.id);
 
       if (result.valid && result.promoCode) {
         setAppliedPromo(result.promoCode);
-        setPromoDiscount(result.discount);
+        setPromoDiscount(Number(result.discount || 0));
         setPromoCode('');
         setShowPromoList(false);
         toast.success(result.message);
@@ -125,7 +131,7 @@ export default function CartPage() {
   };
 
   const handleUpdateQuantity = (itemId: string, currentQuantity: number, delta: number) => {
-    const newQuantity = currentQuantity + delta;
+    const newQuantity = Number(currentQuantity || 0) + Number(delta || 0);
     if (newQuantity < 1 || newQuantity > 10) return;
     updateQuantity(itemId, newQuantity);
   };
@@ -143,29 +149,69 @@ export default function CartPage() {
     toast.success('Cart cleared');
   };
 
+  const calculateItemPrice = (price: number, discount?: number) => {
+    const p = Number(price || 0);
+    const d = Number(discount || 0);
+    if (!d || d <= 0) return p;
+    return p * (1 - d / 100);
+  };
+
+  // ----- Totals (GST only if enabled by merchant) -----
+  const computed = useMemo(() => {
+    const subtotal = round2(Number(c?.subtotal || 0));
+    const promoDisc = round2(Number(promoDiscount || 0));
+
+    const gstEnabled = Boolean(c?.gstenabled);
+    const gstPct = Number(c?.gstpercentage ?? 0);
+
+    const taxableBase = round2(Math.max(0, subtotal - promoDisc));
+    const tax = gstEnabled && Number.isFinite(gstPct) && gstPct > 0 ? round2(taxableBase * (gstPct / 100)) : 0;
+
+    const finalTotal = round2(taxableBase + Number(deliveryFee || 0) + tax);
+
+    return { subtotal, promoDisc, gstEnabled, gstPct, taxableBase, tax, finalTotal };
+  }, [c?.subtotal, c?.gstenabled, c?.gstpercentage, promoDiscount, deliveryFee]);
+
+  const items: any[] = Array.isArray(c?.items) ? c.items : [];
+
+  // Savings (item discounts + promo discount)
+  const itemDiscountSavings = useMemo(() => {
+    return round2(
+      items.reduce((total: number, item: any) => {
+        const disc = Number(item?.discountpercentage ?? 0);
+        if (disc > 0) {
+          const savings = (Number(item?.price || 0) * disc / 100) * Number(item?.quantity || 0);
+          return total + savings;
+        }
+        return total;
+      }, 0)
+    );
+  }, [items]);
+
+  const totalSavings = round2(itemDiscountSavings + computed.promoDisc);
+
   const handleCheckout = async () => {
-    if (!cart || cart.items.length === 0) return;
+    if (!c || !items.length) return;
 
     setValidating(true);
     try {
       const validation = await cartService.validateCart();
-
       if (!validation.valid) {
         toast.error(validation.message || 'Cart validation failed');
         return;
       }
 
-      // Store order details in session storage for checkout
+      // IMPORTANT: checkout page expects "checkoutdata" key. [file:301]
       sessionStorage.setItem(
-        'checkout_data',
+        'checkoutdata',
         JSON.stringify({
-          cart,
-          deliveryFee,
-          deliveryDistance,
-          tax,
-          promoCode: appliedPromo?.code,
-          promoDiscount,
-          finalTotal,
+          cart: c,
+          deliveryFee: Number(deliveryFee || 0),
+          deliveryDistance: Number(deliveryDistance || 0),
+          tax: Number(computed.tax || 0),
+          promoCode: appliedPromo?.code ?? null,
+          promoDiscount: Number(computed.promoDisc || 0),
+          finalTotal: Number(computed.finalTotal || 0),
         })
       );
 
@@ -178,21 +224,13 @@ export default function CartPage() {
     }
   };
 
-  const calculateItemPrice = (price: number, discount?: number) => {
-    if (!discount) return price;
-    return price * (1 - discount / 100);
-  };
-
-  if (!cart || cart.items.length === 0) {
+  if (!c || !items.length) {
     return (
       <DashboardLayout>
         <div className="min-h-screen bg-gray-50">
           <div className="max-w-4xl mx-auto px-4 py-8">
             <div className="flex items-center gap-4 mb-6">
-              <button
-                onClick={() => router.back()}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
+              <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <ArrowLeft className="w-6 h-6" />
               </button>
               <h1 className="text-2xl font-bold text-gray-900">Your Cart</h1>
@@ -217,21 +255,6 @@ export default function CartPage() {
     );
   }
 
-  const tax = cart.subtotal * 0.05;
-  const subtotalAfterDiscount = cart.subtotal - promoDiscount;
-  const finalTotal = subtotalAfterDiscount + deliveryFee + tax;
-
-  // Calculate total savings
-  const itemDiscountSavings = cart.items.reduce((total: number, item) => {
-    if (item.discount_percentage) {
-      const savings = (item.price * item.discount_percentage / 100) * item.quantity;
-      return total + savings;
-    }
-    return total;
-  }, 0);
-
-  const totalSavings = itemDiscountSavings + promoDiscount;
-
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-gray-50 pb-32 md:pb-8">
@@ -239,15 +262,12 @@ export default function CartPage() {
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
-              <button
-                onClick={() => router.back()}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
+              <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <ArrowLeft className="w-6 h-6" />
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Your Cart</h1>
-                <p className="text-sm text-gray-600">{cart.items.length} items</p>
+                <p className="text-sm text-gray-600">{items.length} items</p>
               </div>
             </div>
 
@@ -270,29 +290,26 @@ export default function CartPage() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm text-gray-600">Ordering from</p>
-                  <h2 className="font-bold text-gray-900">{cart.merchant_name}</h2>
+                  <h2 className="font-bold text-gray-900">{String(c.merchantname || 'Restaurant')}</h2>
                 </div>
               </div>
 
               {/* Cart Items List */}
               <div className="bg-white rounded-xl shadow-md divide-y">
-                {cart.items.map((item) => {
-                  const itemPrice = calculateItemPrice(item.price, item.discount_percentage);
-                  const totalItemPrice = itemPrice * item.quantity;
-                  const hasDiscount = item.discount_percentage && item.discount_percentage > 0;
+                {items.map((item: any) => {
+                  const disc = Number(item?.discountpercentage ?? 0);
+                  const itemPrice = calculateItemPrice(Number(item?.price || 0), disc);
+                  const qty = Number(item?.quantity || 0);
+                  const totalItemPrice = round2(itemPrice * qty);
+                  const hasDiscount = disc > 0;
+                  const img = item?.imageurl ? String(item.imageurl) : '';
 
                   return (
-                    <div key={item.id} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div key={String(item.id)} className="p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex gap-4">
-                        {item.image_url ? (
+                        {img ? (
                           <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
-                            <Image
-                              src={item.image_url}
-                              alt={item.name}
-                              fill
-                              sizes="96px"
-                              className="object-cover"
-                            />
+                            <Image src={img} alt={String(item.name || 'Item')} fill sizes="96px" className="object-cover" />
                           </div>
                         ) : (
                           <div className="w-20 h-20 md:w-24 md:h-24 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
@@ -304,30 +321,26 @@ export default function CartPage() {
                           <div className="flex items-start justify-between gap-2 mb-2">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                {item.is_veg !== undefined && (
+                                {item?.isveg !== undefined && (
                                   <div
                                     className={`w-4 h-4 border-2 ${
-                                      item.is_veg ? 'border-green-600' : 'border-red-600'
+                                      item.isveg ? 'border-green-600' : 'border-red-600'
                                     } flex items-center justify-center flex-shrink-0`}
                                   >
-                                    <div
-                                      className={`w-2 h-2 rounded-full ${
-                                        item.is_veg ? 'bg-green-600' : 'bg-red-600'
-                                      }`}
-                                    />
+                                    <div className={`w-2 h-2 rounded-full ${item.isveg ? 'bg-green-600' : 'bg-red-600'}`} />
                                   </div>
                                 )}
-                                <h3 className="font-bold text-gray-900 text-sm md:text-base">
-                                  {item.name}
+
+                                <h3 className="font-bold text-gray-900 text-sm md:text-base truncate">
+                                  {String(item.name || 'Item')}
                                 </h3>
                               </div>
-                              {item.category && (
-                                <p className="text-xs text-gray-500 mb-1">{item.category}</p>
-                              )}
+
+                              {item?.category && <p className="text-xs text-gray-500 mb-1">{String(item.category)}</p>}
                             </div>
 
                             <button
-                              onClick={() => handleRemoveItem(item.id, item.name)}
+                              onClick={() => handleRemoveItem(String(item.id), String(item.name || 'Item'))}
                               className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors flex-shrink-0"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -338,35 +351,31 @@ export default function CartPage() {
                             <div>
                               {hasDiscount ? (
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-sm text-gray-400 line-through">
-                                    ₹{item.price.toFixed(2)}
-                                  </span>
-                                  <span className="font-bold text-gray-900">
-                                    ₹{itemPrice.toFixed(2)}
-                                  </span>
+                                  <span className="text-sm text-gray-400 line-through">₹{Number(item.price || 0).toFixed(2)}</span>
+                                  <span className="font-bold text-gray-900">₹{itemPrice.toFixed(2)}</span>
                                   <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
-                                    {item.discount_percentage}% OFF
+                                    {disc}% OFF
                                   </span>
                                 </div>
                               ) : (
-                                <span className="font-bold text-gray-900">₹{item.price.toFixed(2)}</span>
+                                <span className="font-bold text-gray-900">₹{Number(item.price || 0).toFixed(2)}</span>
                               )}
                             </div>
 
                             <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
                               <button
-                                onClick={() => handleUpdateQuantity(item.id, item.quantity, -1)}
-                                disabled={item.quantity <= 1}
+                                onClick={() => handleUpdateQuantity(String(item.id), qty, -1)}
+                                disabled={qty <= 1}
                                 className="w-8 h-8 flex items-center justify-center hover:bg-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Minus className="w-4 h-4 text-gray-700" />
                               </button>
-                              <span className="w-8 text-center font-bold text-gray-900">
-                                {item.quantity}
-                              </span>
+
+                              <span className="w-8 text-center font-bold text-gray-900">{qty}</span>
+
                               <button
-                                onClick={() => handleUpdateQuantity(item.id, item.quantity, 1)}
-                                disabled={item.quantity >= 10}
+                                onClick={() => handleUpdateQuantity(String(item.id), qty, 1)}
+                                disabled={qty >= 10}
                                 className="w-8 h-8 flex items-center justify-center hover:bg-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Plus className="w-4 h-4 text-gray-700" />
@@ -377,9 +386,7 @@ export default function CartPage() {
                           <div className="mt-2 text-right">
                             <p className="text-sm text-gray-600">
                               Total:{' '}
-                              <span className="font-bold text-gray-900">
-                                ₹{totalItemPrice.toFixed(2)}
-                              </span>
+                              <span className="font-bold text-gray-900">₹{totalItemPrice.toFixed(2)}</span>
                             </p>
                           </div>
                         </div>
@@ -390,10 +397,10 @@ export default function CartPage() {
               </div>
 
               <button
-                onClick={() => router.push(`/customer/restaurant/${cart.merchant_id}`)}
+                onClick={() => router.push(`/customer/restaurant/${String(c.merchantid)}`)}
                 className="w-full bg-white border-2 border-dashed border-gray-300 rounded-xl p-4 hover:border-primary hover:bg-orange-50 transition-colors text-primary font-semibold"
               >
-                + Add more items from {cart.merchant_name}
+                + Add more items from {String(c.merchantname || 'Restaurant')}
               </button>
             </div>
 
@@ -420,11 +427,7 @@ export default function CartPage() {
                           disabled={!promoCode.trim() || applyingPromo}
                           className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-orange-600 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
-                          {applyingPromo ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            'Apply'
-                          )}
+                          {applyingPromo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
                         </button>
                       </div>
 
@@ -454,12 +457,8 @@ export default function CartPage() {
                                     : `₹${promo.discount_value} OFF`}
                                 </span>
                               </div>
-                              {promo.description && (
-                                <p className="text-xs text-gray-600">{promo.description}</p>
-                              )}
-                              <p className="text-xs text-gray-500 mt-1">
-                                Min order: ₹{promo.min_order_amount}
-                              </p>
+                              {promo.description && <p className="text-xs text-gray-600">{promo.description}</p>}
+                              <p className="text-xs text-gray-500 mt-1">Min order: ₹{promo.min_order_amount}</p>
                             </button>
                           ))}
                         </div>
@@ -472,15 +471,10 @@ export default function CartPage() {
                           <Check className="w-5 h-5 text-green-600" />
                           <div>
                             <p className="font-bold text-green-700">{appliedPromo.code}</p>
-                            <p className="text-xs text-green-600">
-                              Saved ₹{promoDiscount.toFixed(2)}
-                            </p>
+                            <p className="text-xs text-green-600">Saved ₹{computed.promoDisc.toFixed(2)}</p>
                           </div>
                         </div>
-                        <button
-                          onClick={handleRemovePromo}
-                          className="p-1 hover:bg-green-100 rounded transition-colors"
-                        >
+                        <button onClick={handleRemovePromo} className="p-1 hover:bg-green-100 rounded transition-colors">
                           <X className="w-4 h-4 text-green-700" />
                         </button>
                       </div>
@@ -492,17 +486,13 @@ export default function CartPage() {
                 <div className="space-y-3 pb-4 border-b">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600">Item Total</span>
-                    <span className="font-semibold text-gray-900">
-                      ₹{cart.subtotal.toFixed(2)}
-                    </span>
+                    <span className="font-semibold text-gray-900">₹{computed.subtotal.toFixed(2)}</span>
                   </div>
 
-                  {promoDiscount > 0 && (
+                  {computed.promoDisc > 0 && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-green-600">Promo Discount</span>
-                      <span className="font-semibold text-green-600">
-                        -₹{promoDiscount.toFixed(2)}
-                      </span>
+                      <span className="font-semibold text-green-600">-₹{computed.promoDisc.toFixed(2)}</span>
                     </div>
                   )}
 
@@ -511,16 +501,23 @@ export default function CartPage() {
                       <MapPin className="w-3 h-3 text-gray-600" />
                       <span className="text-gray-600">Delivery Fee</span>
                     </div>
-                    <span className="font-semibold text-gray-900">₹{deliveryFee.toFixed(2)}</span>
+                    <span className="font-semibold text-gray-900">₹{Number(deliveryFee || 0).toFixed(2)}</span>
                   </div>
+
                   {deliveryBreakdown && (
-                    <p className="text-xs text-gray-500 pl-4">{deliveryBreakdown}</p>
+                    <p className="text-xs text-gray-500 pl-4">
+                      {deliveryDistance > 0 ? `${deliveryDistance.toFixed(2)} km • ` : ''}
+                      {deliveryBreakdown}
+                    </p>
                   )}
 
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Taxes & Fees (5%)</span>
-                    <span className="font-semibold text-gray-900">₹{tax.toFixed(2)}</span>
-                  </div>
+                  {/* Show GST only when it applies */}
+                  {computed.tax > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">GST {computed.gstPct > 0 ? `${computed.gstPct}%` : ''}</span>
+                      <span className="font-semibold text-gray-900">₹{computed.tax.toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Total */}
@@ -529,9 +526,7 @@ export default function CartPage() {
                   <div className="text-right">
                     <div className="flex items-center gap-1">
                       <IndianRupee className="w-5 h-5 text-primary" />
-                      <span className="text-2xl font-bold text-primary">
-                        {finalTotal.toFixed(2)}
-                      </span>
+                      <span className="text-2xl font-bold text-primary">{computed.finalTotal.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -541,9 +536,7 @@ export default function CartPage() {
                   <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                     <div className="flex items-center gap-2 text-green-700">
                       <Tag className="w-4 h-4" />
-                      <span className="text-sm font-semibold">
-                        Total Savings: ₹{totalSavings.toFixed(2)}
-                      </span>
+                      <span className="text-sm font-semibold">Total Savings: ₹{totalSavings.toFixed(2)}</span>
                     </div>
                   </div>
                 )}
@@ -577,10 +570,8 @@ export default function CartPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-600">Total Amount</p>
-              <p className="text-xl font-bold text-primary">₹{finalTotal.toFixed(2)}</p>
-              {totalSavings > 0 && (
-                <p className="text-xs text-green-600">Saved ₹{totalSavings.toFixed(2)}</p>
-              )}
+              <p className="text-xl font-bold text-primary">₹{computed.finalTotal.toFixed(2)}</p>
+              {totalSavings > 0 && <p className="text-xs text-green-600">Saved ₹{totalSavings.toFixed(2)}</p>}
             </div>
             <button
               onClick={handleCheckout}
@@ -610,9 +601,7 @@ export default function CartPage() {
                 <Trash2 className="w-8 h-8 text-red-600" />
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Clear Cart?</h2>
-              <p className="text-gray-600">
-                Are you sure you want to remove all items from your cart?
-              </p>
+              <p className="text-gray-600">Are you sure you want to remove all items from your cart?</p>
             </div>
 
             <div className="flex gap-3">
