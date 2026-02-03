@@ -22,20 +22,17 @@ class PromoCodeService {
     userId: string
   ): Promise<{ valid: boolean; discount: number; message: string; promoCode?: PromoCode }> {
     try {
-      const { data: promoCode, error } = await supabase
-        .from('promo_codes')
-        .select('*')
-        .eq('code', code.toUpperCase())
-        .eq('is_active', true)
-        .single();
+     const { data: promoCode, error } = await supabase
+  .from('promo_codes')
+  .select('*')
+  .eq('code', code.toUpperCase())
+  .eq('is_active', true)
+  .maybeSingle();
 
-      if (error || !promoCode) {
-        return {
-          valid: false,
-          discount: 0,
-          message: 'Invalid promo code',
-        };
-      }
+if (error) throw error;
+if (!promoCode) {
+  return { valid: false, discount: 0, message: 'Invalid promo code' };
+}
 
       // Check validity period
       const now = new Date();
@@ -69,20 +66,17 @@ class PromoCodeService {
       }
 
       // Check if user has already used this promo
-      const { data: userUsage } = await supabase
-        .from('promo_code_usage')
-        .select('id')
-        .eq('promo_code_id', promoCode.id)
-        .eq('user_id', userId)
-        .single();
+      const { data: userUsage, error: usageErr } = await supabase
+  .from('promo_code_usage')
+  .select('id')
+  .eq('promo_code_id', promoCode.id)
+  .eq('user_id', userId)
+  .maybeSingle();
 
-      if (userUsage) {
-        return {
-          valid: false,
-          discount: 0,
-          message: 'You have already used this promo code',
-        };
-      }
+if (usageErr) throw usageErr;
+if (userUsage) {
+  return { valid: false, discount: 0, message: 'You have already used this promo code' };
+}
 
       // Calculate discount
       let discount = 0;
