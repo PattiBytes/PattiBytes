@@ -1,14 +1,7 @@
+ 
 'use client';
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { cartService, type Cart, type CartItem } from '@/services/cart';
 
 interface CartContextType {
@@ -33,12 +26,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setItemCount(cartService.getItemCount());
   }, []);
 
-  // Initial load + listen for in-app cart updates
   useEffect(() => {
+    // Initial cart load
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshCart();
 
-    const handleCartUpdate = () => refreshCart();
+    // Listen for cart updates
+    const handleCartUpdate = () => {
+      refreshCart();
+    };
+
     window.addEventListener('cartUpdated', handleCartUpdate);
 
     return () => {
@@ -46,69 +43,44 @@ export function CartProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshCart]);
 
-  // Sync across tabs/windows (localStorage changes)
-  useEffect(() => {
-    const handleStorage = (e: StorageEvent) => {
-      // Cart is stored under this key in your app. [file:302]
-      if (e.key === 'pattibytescart') refreshCart();
-    };
-
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+  const addToCart = useCallback((item: CartItem, merchantName: string): boolean => {
+    const success = cartService.addItem(item, merchantName);
+    if (success) {
+      refreshCart();
+    }
+    return success;
   }, [refreshCart]);
 
-  const addToCart = useCallback(
-    (item: CartItem, merchantName: string): boolean => {
-      const success = cartService.addItem(item, merchantName);
-      if (success) refreshCart();
-      return success;
-    },
-    [refreshCart]
-  );
-
-  const updateQuantity = useCallback(
-    (itemId: string, quantity: number) => {
-      cartService.updateItemQuantity(itemId, quantity);
-      refreshCart();
-    },
-    [refreshCart]
-  );
-
-  const removeFromCart = useCallback(
-    (itemId: string) => {
-      cartService.removeItem(itemId);
-      refreshCart();
-    },
-    [refreshCart]
-  );
-
-  const clearCart = useCallback(() => {
-    cartService.clearCart();
-
-    // Optional: prevents stale checkout state if user clears cart from cart page. [file:302]
-    try {
-      sessionStorage.removeItem('checkoutdata');
-    } catch {
-      // ignore
-    }
-
+  const updateQuantity = useCallback((itemId: string, quantity: number) => {
+    cartService.updateItemQuantity(itemId, quantity);
     refreshCart();
   }, [refreshCart]);
 
-  const value = useMemo<CartContextType>(
-    () => ({
-      cart,
-      itemCount,
-      addToCart,
-      updateQuantity,
-      removeFromCart,
-      clearCart,
-      refreshCart,
-    }),
-    [cart, itemCount, addToCart, updateQuantity, removeFromCart, clearCart, refreshCart]
-  );
+  const removeFromCart = useCallback((itemId: string) => {
+    cartService.removeItem(itemId);
+    refreshCart();
+  }, [refreshCart]);
 
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+  const clearCart = useCallback(() => {
+    cartService.clearCart();
+    refreshCart();
+  }, [refreshCart]);
+
+  return (
+    <CartContext.Provider
+      value={{
+        cart,
+        itemCount,
+        addToCart,
+        updateQuantity,
+        removeFromCart,
+        clearCart,
+        refreshCart,
+      }}
+    >
+      {children}
+    </CartContext.Provider>
+  );
 }
 
 export function useCart() {
