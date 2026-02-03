@@ -166,6 +166,19 @@ export default function AdminDashboardPage() {
       scheduleReload();
     },
   });
+  
+// Add this polling effect (keep 5000; use 1000 only if you really need it)
+useEffect(() => {
+  if (!user) return;
+
+  const id = window.setInterval(() => {
+    loadStats();
+    loadRecentOrders();
+  }, 5000);
+
+  return () => window.clearInterval(id);
+   
+}, [user]);
 
   useEffect(() => {
     if (user) {

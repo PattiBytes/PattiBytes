@@ -1,8 +1,10 @@
- 
+
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
 import { cartService } from '@/services/cart';
@@ -28,15 +30,24 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
+type MerchantTaxMini = {
+  id: string;
+  gstenabled: boolean | null;
+  gstpercentage: number | null;
+};
+
 export default function CartPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { cart, updateQuantity, removeFromCart, clearCart } = useCart();
+
   const [validating, setValidating] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
+
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [deliveryDistance, setDeliveryDistance] = useState(0);
   const [deliveryBreakdown, setDeliveryBreakdown] = useState('');
+
   const [promoCode, setPromoCode] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
   const [promoDiscount, setPromoDiscount] = useState(0);
@@ -44,6 +55,9 @@ export default function CartPage() {
   const [showPromoList, setShowPromoList] = useState(false);
   const [availablePromos, setAvailablePromos] = useState<PromoCode[]>([]);
 
+  const [merchantTax, setMerchantTax] = useState<MerchantTaxMini | null>(null);
+
+  // 1) Auth gate + initial loads
   useEffect(() => {
     if (!user) {
       router.push('/login');
@@ -52,14 +66,47 @@ export default function CartPage() {
 
     loadDeliveryFee();
     loadAvailablePromos();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, router]);
+
+  // 2) Load merchant GST settings whenever merchant changes
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    let cancelled = false;
+
+    async function loadMerchantTax() {
+      if (!cart?.merchant_id) {
+        setMerchantTax(null);
+        return;
+      }
+
+     const { data, error } = await supabase
+  .from('merchants')
+  .select('id, gstenabled:gst_enabled, gstpercentage:gst_percentage')
+  .eq('id', cart.merchant_id)
+  .maybeSingle();
+
+if (error) {
+  console.error('Failed to load merchant tax config:', error);
+  setMerchantTax(null);
+  return;
+}
+
+setMerchantTax((data as MerchantTaxMini) ?? null);
+
+    }
+
+    loadMerchantTax();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cart?.merchant_id]);
 
   const loadDeliveryFee = async () => {
     try {
       await deliveryFeeService.loadConfig();
 
-      // Get user's default address or use current location
       const addresses = await locationService.getSavedAddresses(user!.id);
       let lat = 31.3260; // Default Patti coordinates
       let lon = 74.8560;
@@ -76,7 +123,7 @@ export default function CartPage() {
       setDeliveryBreakdown(feeData.breakdown);
     } catch (error) {
       console.error('Failed to calculate delivery fee:', error);
-      setDeliveryFee(10); // Default fee
+      setDeliveryFee(10);
     }
   };
 
@@ -89,16 +136,16 @@ export default function CartPage() {
     }
   };
 
-  const handleApplyPromo = async (code?: string) => {
-    const codeToApply = code || promoCode;
-    if (!codeToApply.trim() || !cart) return;
+  const handleApplyPromo = async (code?: string, opts?: { silent?: boolean }) => {
+    const codeToApply = (code || promoCode).trim();
+    if (!codeToApply || !cart || !user) return;
 
     setApplyingPromo(true);
     try {
       const result = await promoCodeService.validatePromoCode(
         codeToApply,
         cart.subtotal,
-        user!.id
+        user.id
       );
 
       if (result.valid && result.promoCode) {
@@ -106,17 +153,27 @@ export default function CartPage() {
         setPromoDiscount(result.discount);
         setPromoCode('');
         setShowPromoList(false);
-        toast.success(result.message);
+        if (!opts?.silent) toast.success(result.message);
       } else {
-        toast.error(result.message);
+        setAppliedPromo(null);
+        setPromoDiscount(0);
+        if (!opts?.silent) toast.error(result.message);
       }
     } catch (error) {
       console.error('Promo code error:', error);
-      toast.error('Failed to apply promo code');
+      if (!opts?.silent) toast.error('Failed to apply promo code');
     } finally {
       setApplyingPromo(false);
     }
   };
+
+  // Revalidate applied promo if subtotal changes (quantity edits etc.)
+  useEffect(() => {
+    if (!appliedPromo?.code || !cart?.subtotal || !user?.id) return;
+    // silent re-check so it doesn’t spam “success” toasts
+    handleApplyPromo(appliedPromo.code, { silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart?.subtotal, user?.id]);
 
   const handleRemovePromo = () => {
     setAppliedPromo(null);
@@ -143,6 +200,30 @@ export default function CartPage() {
     toast.success('Cart cleared');
   };
 
+  const calculateItemPrice = (price: number, discount?: number) => {
+    if (!discount) return price;
+    return price * (1 - discount / 100);
+  };
+
+  // ---- Totals (GST only if enabled) ----
+  const taxableBase = useMemo(() => {
+    const subtotal = cart?.subtotal ?? 0;
+    return Math.max(0, subtotal - promoDiscount);
+  }, [cart?.subtotal, promoDiscount]);
+
+  const gstEnabled = !!merchantTax?.gstenabled;
+  const gstPct = Number(merchantTax?.gstpercentage ?? 0);
+
+  const tax = useMemo(() => {
+    if (!gstEnabled) return 0;
+    if (!Number.isFinite(gstPct) || gstPct <= 0) return 0;
+    return taxableBase * (gstPct / 100);
+  }, [gstEnabled, gstPct, taxableBase]);
+
+  const finalTotal = useMemo(() => {
+    return taxableBase + deliveryFee + tax;
+  }, [taxableBase, deliveryFee, tax]);
+
   const handleCheckout = async () => {
     if (!cart || cart.items.length === 0) return;
 
@@ -155,7 +236,6 @@ export default function CartPage() {
         return;
       }
 
-      // Store order details in session storage for checkout
       sessionStorage.setItem(
         'checkout_data',
         JSON.stringify({
@@ -176,11 +256,6 @@ export default function CartPage() {
     } finally {
       setValidating(false);
     }
-  };
-
-  const calculateItemPrice = (price: number, discount?: number) => {
-    if (!discount) return price;
-    return price * (1 - discount / 100);
   };
 
   if (!cart || cart.items.length === 0) {
@@ -217,11 +292,6 @@ export default function CartPage() {
     );
   }
 
-  const tax = cart.subtotal * 0.05;
-  const subtotalAfterDiscount = cart.subtotal - promoDiscount;
-  const finalTotal = subtotalAfterDiscount + deliveryFee + tax;
-
-  // Calculate total savings
   const itemDiscountSavings = cart.items.reduce((total: number, item) => {
     if (item.discount_percentage) {
       const savings = (item.price * item.discount_percentage / 100) * item.quantity;
@@ -518,7 +588,9 @@ export default function CartPage() {
                   )}
 
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Taxes & Fees (5%)</span>
+                   <span className="text-gray-600">
+  {gstEnabled && gstPct > 0 ? `GST (${gstPct}%)` : 'Taxes & Fees'}
+</span>
                     <span className="font-semibold text-gray-900">₹{tax.toFixed(2)}</span>
                   </div>
                 </div>

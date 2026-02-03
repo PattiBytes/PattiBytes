@@ -9,6 +9,8 @@ import { supabase } from '@/lib/supabase';
 import { locationService, type SavedAddress } from '@/services/location';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
+import { cartService } from '@/services/cart';
+
 import {
   MapPin,
   ShoppingBag,
@@ -184,12 +186,34 @@ export default function CheckoutPage() {
   const loadCheckoutData = async () => {
     setLoading(true);
     try {
-      const stored = sessionStorage.getItem('checkoutdata');
+     const stored = sessionStorage.getItem('checkout_data');
+
       if (!stored) {
         toast.error('No items in cart');
         router.push('/customer/cart');
         return;
       }
+      if (!stored) {
+  const cart = cartService.getCart();
+  if (!cart?.items?.length) {
+    toast.error('No items in cart');
+    router.push('/customer/cart');
+    return;
+  }
+
+  const rebuilt = {
+    cart,
+    promoCode: null,
+    promoDiscount: 0,
+    // optionally set deliveryFee/distance/tax later after merchant/address loads
+  };
+
+  sessionStorage.setItem('checkout_data', JSON.stringify(rebuilt));
+  setCartData(rebuilt as any);
+  // continue with merchant load etc.
+  return;
+}
+
 
       const data = JSON.parse(stored) as CheckoutStored;
       setCartData(data);
@@ -529,9 +553,9 @@ export default function CheckoutPage() {
       const { data: order, error: orderError } = await supabase.from('orders').insert(orderData).select().single();
       if (orderError) throw new Error(orderError.message || 'Failed to create order');
 
-      sessionStorage.removeItem('checkoutdata');
-      localStorage.removeItem('pattibytescart');
-      window.dispatchEvent(new CustomEvent('cartUpdated', { detail: null }));
+      sessionStorage.removeItem('checkout_data');
+cartService.clearCart(); // removes pattibytes_cart and dispatches cartUpdated
+
 
       toast.success('Order placed successfully!');
 
