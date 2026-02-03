@@ -1,11 +1,12 @@
+ 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import LocationPicker from '@/components/LocationPicker';
-import { Plus, Store, Mail, Phone, MapPin, Trash2, Settings, LogOut, Key } from 'lucide-react';
+import { Plus, Store, Mail, Phone, MapPin, Trash2, Settings, LogOut, Search, RefreshCw } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useRouter } from 'next/navigation';
 import { Merchant } from '@/types';
@@ -13,23 +14,12 @@ import { Merchant } from '@/types';
 export default function AdminMerchantsPage() {
   const { user, logout } = useAuth();
   const router = useRouter();
+
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [formData, setFormData] = useState({
-    business_name: '',
-    email: '',
-    phone: '',
-    address: '',
-    latitude: 30.9010,
-    longitude: 75.8573,
-    city: '',
-    state: 'Punjab',
-    zipcode: '',
-    cuisine_type: '',
-    description: '',
-    delivery_radius_km: 10,
-  });
+
+  const [query, setQuery] = useState('');
+  const [cityFilter, setCityFilter] = useState('all');
 
   useEffect(() => {
     if (user) loadMerchants();
@@ -37,13 +27,10 @@ export default function AdminMerchantsPage() {
 
   const loadMerchants = async () => {
     try {
-      const { data, error } = await supabase
-        .from('merchants')
-        .select('*')
-        .order('created_at', { ascending: false });
-
+      setLoading(true);
+      const { data, error } = await supabase.from('merchants').select('*').order('created_at', { ascending: false });
       if (error) throw error;
-      setMerchants(data as Merchant[] || []);
+      setMerchants((data as Merchant[]) || []);
     } catch (error) {
       console.error('Failed to load merchants:', error);
       toast.error('Failed to load merchants');
@@ -52,99 +39,39 @@ export default function AdminMerchantsPage() {
     }
   };
 
-  const generatePassword = () => {
-    return Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
-  };
+  const cities = useMemo(() => {
+    const set = new Set<string>();
+    merchants.forEach((m: any) => m?.city && set.add(String(m.city)));
+    return ['all', ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+  }, [merchants]);
+
+  const filteredMerchants = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return merchants.filter((m: any) => {
+      const byCity = cityFilter === 'all' ? true : String(m.city || '') === cityFilter;
+
+      const byQ =
+        !q ||
+        String(m.business_name || '').toLowerCase().includes(q) ||
+        String(m.email || '').toLowerCase().includes(q) ||
+        String(m.phone || '').toLowerCase().includes(q) ||
+        String(m.business_type || '').toLowerCase().includes(q) ||
+        String(m.address?.address || m.address || '').toLowerCase().includes(q);
+
+      return byCity && byQ;
+    });
+  }, [merchants, query, cityFilter]);
 
   const handleLogout = async () => {
     await logout();
     router.push('/');
   };
 
-  const handleAddMerchant = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const tempPassword = generatePassword();
-      const merchantEmail = formData.email;
-
-      // 1. Create auth user for merchant
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: merchantEmail,
-        password: tempPassword,
-        email_confirm: true,
-        user_metadata: {
-          full_name: formData.business_name,
-          phone: formData.phone,
-        },
-      });
-
-      if (authError) throw authError;
-
-      // 2. Update profile with merchant role
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          role: 'merchant',
-          full_name: formData.business_name,
-          phone: formData.phone,
-        })
-        .eq('id', authData.user.id);
-
-      if (profileError) throw profileError;
-
-      // 3. Create merchant record
-      const { error: merchantError } = await supabase
-        .from('merchants')
-        .insert([
-          {
-            user_id: authData.user.id,
-            owner_id: authData.user.id,
-            business_name: formData.business_name,
-            email: merchantEmail,
-            phone: formData.phone,
-            address: {
-              address: formData.address,
-              city: formData.city,
-              state: formData.state,
-              zipcode: formData.zipcode,
-            },
-            latitude: formData.latitude,
-            longitude: formData.longitude,
-            delivery_radius_km: formData.delivery_radius_km,
-            cuisine_type: formData.cuisine_type,
-            description: formData.description,
-            is_active: true,
-            is_verified: true,
-          },
-        ]);
-
-      if (merchantError) throw merchantError;
-
-      toast.success(
-        `Restaurant added! Credentials:\nEmail: ${merchantEmail}\nPassword: ${tempPassword}\n\n⚠️ Save these credentials!`,
-        { autoClose: false }
-      );
-
-      setShowAddModal(false);
-      resetForm();
-      loadMerchants();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      console.error('Failed to add merchant:', error);
-      toast.error(error.message || 'Failed to add restaurant');
-    }
-  };
-
   const handleDelete = async (merchantId: string) => {
     if (!confirm('Are you sure you want to delete this restaurant?')) return;
 
     try {
-      const { error } = await supabase
-        .from('merchants')
-        .delete()
-        .eq('id', merchantId);
-
+      const { error } = await supabase.from('merchants').delete().eq('id', merchantId);
       if (error) throw error;
       toast.success('Restaurant deleted');
       loadMerchants();
@@ -154,45 +81,38 @@ export default function AdminMerchantsPage() {
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      business_name: '',
-      email: '',
-      phone: '',
-      address: '',
-      latitude: 30.9010,
-      longitude: 75.8573,
-      city: '',
-      state: 'Punjab',
-      zipcode: '',
-      cuisine_type: '',
-      description: '',
-      delivery_radius_km: 10,
-    });
-  };
-
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Manage Restaurants</h1>
+      <div
+        className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 overflow-x-hidden"
+        style={{ paddingBottom: `calc(88px + env(safe-area-inset-bottom))` }}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 min-w-0">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Manage Restaurants</h1>
             <p className="text-gray-600 mt-1">Add and manage restaurant partners</p>
           </div>
-          <div className="flex gap-3">
+
+          <div className="flex gap-3 flex-wrap shrink-0">
             <button
-              onClick={() => {
-                resetForm();
-                setShowAddModal(true);
-              }}
-              className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium flex items-center gap-2 shadow-lg"
+              onClick={() => router.push('/admin/merchants/new')}
+              className="bg-primary text-white px-4 sm:px-6 py-3 rounded-xl hover:bg-orange-600 font-semibold flex items-center gap-2 shadow-lg"
             >
               <Plus size={20} />
               Add Restaurant
             </button>
+
+            <button
+              onClick={loadMerchants}
+              className="border px-4 py-3 rounded-xl hover:bg-gray-50 font-semibold flex items-center gap-2"
+            >
+              <RefreshCw size={18} />
+              Refresh
+            </button>
+
             <button
               onClick={handleLogout}
-              className="bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 font-medium flex items-center gap-2"
+              className="bg-red-600 text-white px-4 py-3 rounded-xl hover:bg-red-700 font-semibold flex items-center gap-2"
             >
               <LogOut size={20} />
               <span className="hidden sm:inline">Logout</span>
@@ -200,56 +120,107 @@ export default function AdminMerchantsPage() {
           </div>
         </div>
 
+        {/* Search + filters */}
+        <div className="bg-white rounded-2xl border shadow-sm p-4 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name, email, phone, address, type…"
+                className="w-full border rounded-xl pl-9 pr-4 py-3"
+              />
+            </div>
+
+            <select
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+              className="w-full border rounded-xl px-4 py-3"
+            >
+              {cities.map((c) => (
+                <option key={c} value={c}>
+                  {c === 'all' ? 'All cities' : c}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('');
+                setCityFilter('all');
+              }}
+              className="w-full border rounded-xl px-4 py-3 hover:bg-gray-50 font-semibold"
+            >
+              Clear filters
+            </button>
+          </div>
+
+          <div className="mt-3 text-sm text-gray-600">
+            Showing <span className="font-semibold">{filteredMerchants.length}</span> of{' '}
+            <span className="font-semibold">{merchants.length}</span> restaurants
+          </div>
+        </div>
+
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-gray-200 h-64 rounded-lg animate-pulse" />
+              <div key={i} className="bg-gray-200 h-64 rounded-2xl animate-pulse" />
             ))}
           </div>
-        ) : merchants.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {merchants.map((merchant) => (
-              <div key={merchant.id} className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-pink-500 rounded-full flex items-center justify-center">
+        ) : filteredMerchants.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 w-full max-w-full">
+            {/* FIX: map filteredMerchants (not merchants) */}
+            {filteredMerchants.map((merchant: any) => (
+              <div
+                key={merchant.id}
+                className="bg-white rounded-2xl shadow-sm hover:shadow-lg transition-shadow p-6 w-full max-w-full overflow-x-hidden border"
+              >
+                <div className="flex items-start justify-between mb-4 gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-pink-500 rounded-full flex items-center justify-center shrink-0">
                       <Store className="text-white" size={24} />
                     </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900">{merchant.business_name}</h3>
-                      <span className={`text-xs px-2 py-1 rounded-full ${merchant.is_verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-gray-900 truncate">{merchant.business_name}</h3>
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full ${
+                          merchant.is_verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                        }`}
+                      >
                         {merchant.is_verified ? 'Verified' : 'Pending'}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-2 text-sm text-gray-600">
-                  <div className="flex items-center gap-2">
-                    <Mail size={16} />
-                    <span className="truncate">{merchant.email}</span>
+                <div className="space-y-2 text-sm text-gray-600 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Mail size={16} className="shrink-0" />
+                    <span className="truncate min-w-0">{merchant.email || '—'}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Phone size={16} />
-                    <span>{merchant.phone}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Phone size={16} className="shrink-0" />
+                    <span className="truncate min-w-0">{merchant.phone || '—'}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin size={16} />
-                    <span className="truncate">{merchant.address?.address || 'No address'}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MapPin size={16} className="shrink-0" />
+                    <span className="truncate min-w-0">{merchant.address?.address || merchant.address || 'No address'}</span>
                   </div>
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
                   <button
                     onClick={() => router.push(`/admin/merchants/${merchant.id}`)}
-                    className="flex-1 bg-primary text-white px-4 py-2 rounded-lg hover:bg-orange-600 font-medium flex items-center justify-center gap-2"
+                    className="flex-1 bg-primary text-white px-4 py-2 rounded-xl hover:bg-orange-600 font-semibold flex items-center justify-center gap-2"
                   >
                     <Settings size={16} />
                     Manage
                   </button>
                   <button
                     onClick={() => handleDelete(merchant.id)}
-                    className="flex-1 bg-red-50 text-red-600 px-4 py-2 rounded-lg hover:bg-red-100 font-medium flex items-center justify-center gap-2"
+                    className="flex-1 bg-red-50 text-red-600 px-4 py-2 rounded-xl hover:bg-red-100 font-semibold flex items-center justify-center gap-2"
                   >
                     <Trash2 size={16} />
                     Delete
@@ -259,200 +230,10 @@ export default function AdminMerchantsPage() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-12 bg-white rounded-lg">
+          <div className="text-center py-12 bg-white rounded-2xl border">
             <Store size={64} className="mx-auto text-gray-400 mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">No restaurants yet</h3>
-            <p className="text-gray-600">Add your first restaurant partner</p>
-          </div>
-        )}
-
-        {/* Add Restaurant Modal */}
-        {showAddModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-            <div className="bg-white rounded-lg max-w-4xl w-full my-8">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-2xl font-bold text-gray-900">Add New Restaurant</h2>
-              </div>
-
-              <form onSubmit={handleAddMerchant} className="p-6 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Business Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.business_name}
-                    onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email *
-                    </label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Phone *
-                    </label>
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Location Picker */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Restaurant Location * (Click on map to select)
-                  </label>
-                  <LocationPicker
-                    onLocationSelect={(location) => {
-                      setFormData({
-                        ...formData,
-                        latitude: location.lat,
-                        longitude: location.lon,
-                        address: location.address,
-                      });
-                    }}
-                    initialLat={formData.latitude}
-                    initialLon={formData.longitude}
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      City *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      State
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.state}
-                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Pincode *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.zipcode}
-                      onChange={(e) => setFormData({ ...formData, zipcode: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                      maxLength={6}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Delivery Radius (km) *
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.delivery_radius_km}
-                    onChange={(e) => setFormData({ ...formData, delivery_radius_km: Number(e.target.value) })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                    min="1"
-                    max="50"
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Restaurant will be visible to customers within this radius
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Cuisine Type
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.cuisine_type}
-                    onChange={(e) => setFormData({ ...formData, cuisine_type: e.target.value })}
-                    placeholder="e.g., Punjabi, Chinese, Italian"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  />
-                </div>
-
-                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-                  <div className="flex items-start gap-2">
-                    <Key className="text-blue-600 flex-shrink-0 mt-1" size={20} />
-                    <div>
-                      <p className="font-semibold text-blue-900 mb-1">Auto-Generated Credentials</p>
-                      <p className="text-sm text-blue-800">
-                        A random password will be generated and displayed after creation. 
-                        The merchant can login with their email and change the password later.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-4 sticky bottom-0 bg-white">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAddModal(false);
-                      resetForm();
-                    }}
-                    className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 bg-primary text-white px-6 py-3 rounded-lg hover:bg-orange-600 font-medium"
-                  >
-                    Add Restaurant
-                  </button>
-                </div>
-              </form>
-            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">No restaurants found</h3>
+            <p className="text-gray-600">Try clearing filters or add a new restaurant.</p>
           </div>
         )}
       </div>
