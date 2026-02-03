@@ -184,37 +184,12 @@ export default function CheckoutPage() {
   const loadCheckoutData = async () => {
     setLoading(true);
     try {
-     // inside CheckoutPage loadCheckoutData()
-const stored = sessionStorage.getItem('checkoutdata'); // this is what you already use [file:272][file:301]
-if (!stored) {
-  toast.error('No items in cart');
-  router.push('/customer/cart');
-  return;
-}
-
-const raw = JSON.parse(stored);
-
-// normalize wrapper + cart shape
-const rawCart = raw?.cart ?? raw;
-
-const normalizedCart = {
-  merchantid: rawCart?.merchantid ?? rawCart?.merchantId ?? null,
-  merchantname: rawCart?.merchantname ?? rawCart?.merchantName ?? null,
-  items: Array.isArray(rawCart?.items) ? rawCart.items : [],
-  subtotal:
-    Number.isFinite(Number(rawCart?.subtotal))
-      ? Number(rawCart.subtotal)
-      : (Array.isArray(rawCart?.items) ? rawCart.items : []).reduce(
-          (sum: number, it: any) => sum + Number(it?.price || 0) * Number(it?.quantity || 0),
-          0
-        ),
-};
-
-setCartData({
-  ...raw,
-  cart: normalizedCart,
-});
-
+      const stored = sessionStorage.getItem('checkoutdata');
+      if (!stored) {
+        toast.error('No items in cart');
+        router.push('/customer/cart');
+        return;
+      }
 
       const data = JSON.parse(stored) as CheckoutStored;
       setCartData(data);
@@ -248,7 +223,6 @@ setCartData({
       setLoading(false);
     }
   };
-  
 
   const computeDistanceAndFee = async (addr: SavedAddress, merchantId?: string) => {
     let m = merchant;
