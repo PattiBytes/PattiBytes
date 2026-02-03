@@ -79,16 +79,18 @@ const handleAddToCart = (item: any) => {
   const quantity = quantities[item.id] || 1;
 
   const cartItem: CartItem = {
-    id: item.id,
-    merchant_id: restaurantId,
-    name: item.name,
-    price: item.price,
-    quantity,
-    image_url: item.image_url,
-    is_veg: item.is_veg,
-    category: item.category,
-    discount_percentage: item.discount_percentage,
-  };
+  id: String(item.id),
+  merchantid: String(restaurantId),
+  name: String(item.name ?? ''),
+  price: Number(item.price ?? 0),
+  quantity: Number(quantity ?? 1),
+
+  imageurl: item.image_url ?? item.imageurl ?? undefined,
+  isveg: item.is_veg ?? item.isveg ?? undefined,
+  category: item.category ?? undefined,
+  discountpercentage: item.discount_percentage ?? item.discountpercentage ?? 0,
+};
+
 
   const success = addToCart(cartItem, restaurant?.business_name || 'Restaurant');
 
