@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { menuService } from '@/services/menu';
 import { MenuItem } from '@/types';
-import { X, Upload, Link2, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { X, Upload, Link2, Trash2, CheckCircle2, AlertTriangle, Clipboard } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 
@@ -47,6 +47,9 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
 
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // Ref for the modal container to attach paste listener
+  const modalRef = useRef<HTMLDivElement>(null);
 
   const resolvedCategory = useMemo(() => {
     if (formData.category === '__custom__') {
@@ -65,20 +68,74 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
     return Number.isFinite(d) && d >= 0 && d <= 100;
   }, [formData.discount_percentage]);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const uploadFile = async (file: File) => {
     setUploading(true);
     try {
       const url = await uploadToCloudinary(file, 'menu-items');
       setFormData((p) => ({ ...p, image_url: url }));
       toast.success('Image uploaded successfully');
+      // Switch to link mode to show preview properly if needed, 
+      // but usually 'upload' mode UI handles preview if URL exists too.
     } catch (err: any) {
       toast.error(err?.message || 'Failed to upload image');
     } finally {
       setUploading(false);
-      e.currentTarget.value = '';
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await uploadFile(file);
+      e.currentTarget.value = ''; // reset
+    }
+  };
+
+  const handlePaste = async (e: ClipboardEvent) => {
+    // 1. Check for files (images)
+    if (e.clipboardData && e.clipboardData.files.length > 0) {
+      const file = e.clipboardData.files[0];
+      if (file.type.startsWith('image/')) {
+        e.preventDefault();
+        await uploadFile(file);
+        return;
+      }
+    }
+
+    // 2. Check for text (URL) if focusing on URL input
+    //    (Browser handles text paste naturally, but we could intervene if needed)
+  };
+
+  // Attach global paste listener within modal scope
+  useEffect(() => {
+    const el = modalRef.current;
+    if (!el) return;
+
+    // We cast to any because React TS types don't strictly match native addEventListener for ClipboardEvent sometimes
+    const listener = (e: any) => handlePaste(e);
+    el.addEventListener('paste', listener);
+    return () => el.removeEventListener('paste', listener);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Manual "Paste Image" button handler (uses Clipboard API)
+  const handleManualPasteClick = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        // Prefer image types
+        const type = item.types.find((t) => t.startsWith('image/'));
+        if (type) {
+          const blob = await item.getType(type);
+          const file = new File([blob], 'pasted-image.png', { type });
+          await uploadFile(file);
+          return;
+        }
+      }
+      toast.info('No image found in clipboard');
+    } catch (err) {
+      console.error(err);
+      toast.error('Unable to read clipboard. Try Ctrl+V instead.');
     }
   };
 
@@ -137,14 +194,18 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+      {/* Attach ref here to capture paste events anywhere in the modal */}
+      <div 
+        ref={modalRef} 
+        className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+      >
         <div className="sticky top-0 bg-white border-b border-gray-200 px-5 sm:px-6 py-4 flex items-center justify-between">
           <div className="min-w-0">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
               {item ? 'Edit Menu Item' : 'Add Menu Item'}
             </h2>
             <p className="text-xs text-gray-600 mt-1">
-              Tip: Upload image for best performance; link also works.
+              Tip: Paste image (Ctrl+V) directly to upload.
             </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-50">
@@ -190,8 +251,12 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
                     className="w-full h-40 sm:h-40 object-cover rounded-xl border bg-white"
                   />
                 ) : (
-                  <div className="w-full h-40 bg-white rounded-xl flex items-center justify-center border">
+                  <div 
+                    className="w-full h-40 bg-white rounded-xl flex flex-col items-center justify-center border cursor-pointer hover:bg-gray-50 transition"
+                    onClick={() => document.getElementById('image-upload')?.click()}
+                  >
                     {imageMode === 'link' ? <Link2 className="text-gray-400" size={32} /> : <Upload className="text-gray-400" size={32} />}
+                    <span className="text-[10px] text-gray-400 mt-2 font-medium">Click or Paste</span>
                   </div>
                 )}
 
@@ -217,15 +282,32 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
                       id="image-upload"
                       disabled={uploading}
                     />
-                    <label
-                      htmlFor="image-upload"
-                      className="cursor-pointer inline-flex items-center gap-2 bg-white text-gray-800 px-4 py-2 rounded-xl border hover:bg-gray-50 font-semibold"
-                    >
-                      <Upload size={16} />
-                      {uploading ? 'Uploading…' : 'Choose image'}
-                    </label>
+                    
+                    <div className="flex flex-wrap gap-2">
+                      <label
+                        htmlFor="image-upload"
+                        className="cursor-pointer inline-flex items-center gap-2 bg-white text-gray-800 px-4 py-2 rounded-xl border hover:bg-gray-50 font-semibold"
+                      >
+                        <Upload size={16} />
+                        {uploading ? 'Uploading…' : 'Choose image'}
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={handleManualPasteClick}
+                        disabled={uploading}
+                        className="inline-flex items-center gap-2 bg-white text-gray-800 px-4 py-2 rounded-xl border hover:bg-gray-50 font-semibold"
+                        title="Paste from clipboard"
+                      >
+                        <Clipboard size={16} />
+                        Paste
+                      </button>
+                    </div>
+
                     <p className="text-xs text-gray-600 mt-2">
-                      Uploads to Cloudinary folder: <span className="font-mono">menu-items</span>
+                      Uploads to Cloudinary folder: <span className="font-mono">menu-items</span>.
+                      <br />
+                      You can also press <strong>Ctrl+V</strong> anywhere in this modal to paste an image.
                     </p>
                   </>
                 ) : (
