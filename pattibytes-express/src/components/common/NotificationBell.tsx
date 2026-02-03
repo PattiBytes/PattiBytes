@@ -1,64 +1,93 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Bell, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 
-interface Notification {
+interface NotificationRow {
   id: string;
   title: string;
-  message: string;
+  body?: string | null;
+  message?: string | null; // some of your code stores message, some stores body
   type: string;
-  data: any;
+  data?: any;
   is_read: boolean;
   created_at: string;
+  read_at?: string | null;
 }
 
 export default function NotificationBell() {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const canUseBrowserNotifications = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return 'Notification' in window;
+  }, []);
+
+  const requestBrowserPermission = async () => {
+    if (!canUseBrowserNotifications) return false;
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission === 'denied') return false;
+    const p = await Notification.requestPermission();
+    return p === 'granted';
+  };
+
+  const showBrowserPopup = async (n: NotificationRow) => {
+    if (!canUseBrowserNotifications) return;
+    if (document.visibilityState === 'visible') return; // optional: avoid spam when user is already looking
+    const ok = await requestBrowserPermission();
+    if (!ok) return;
+
+    new Notification(n.title, {
+      body: n.body ?? n.message ?? '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+    });
+  };
+
   useEffect(() => {
-    if (user) {
-      loadNotifications();
+    if (!user) return;
 
-      // Real-time subscription
-      const subscription = supabase
-        .channel('user-notifications')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'notifications',
-            filter: `user_id=eq.${user.id}`,
-          },
-          (payload) => {
-            const newNotif = payload.new as Notification;
-            setNotifications((prev) => [newNotif, ...prev]);
-            setUnreadCount((prev) => prev + 1);
+    void loadNotifications();
+    void loadUnreadCount();
 
-            // Show toast notification
-            toast.info(newNotif.title, {
-              position: 'top-right',
-              autoClose: 5000,
-            });
-          }
-        )
-        .subscribe();
+    const channel = supabase
+      .channel(`user-notifications:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          const newNotif = payload.new as NotificationRow;
 
-      return () => {
-        subscription.unsubscribe();
-      };
-    }
+          setNotifications((prev) => [newNotif, ...prev].slice(0, 20));
+          setUnreadCount((prev) => prev + 1);
+
+          toast.info(newNotif.title, { position: 'top-right', autoClose: 5000 });
+
+          // Browser notification for the logged-in user only
+          await showBrowserPopup(newNotif);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user?.id]);
 
   const loadNotifications = async () => {
     if (!user) return;
@@ -77,8 +106,7 @@ export default function NotificationBell() {
         return;
       }
 
-      setNotifications(data || []);
-      setUnreadCount(data?.filter((n) => !n.is_read).length || 0);
+      setNotifications((data as NotificationRow[]) || []);
     } catch (error) {
       console.error('Failed to load notifications:', error);
     } finally {
@@ -86,16 +114,39 @@ export default function NotificationBell() {
     }
   };
 
+  const loadUnreadCount = async () => {
+    if (!user) return;
+
+    try {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+
+      if (error) throw error;
+      setUnreadCount(count ?? 0);
+    } catch (error) {
+      console.error('Failed to load unread count:', error);
+      setUnreadCount(0);
+    }
+  };
+
   const markAsRead = async (notificationId: string) => {
     try {
-      const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId);
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq('id', notificationId);
 
       if (error) {
         console.error('Mark as read error:', error);
         return;
       }
 
-      setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n)));
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notificationId ? { ...n, is_read: true, read_at: new Date().toISOString() } : n))
+      );
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch (error) {
       console.error('Failed to mark as read:', error);
@@ -103,8 +154,14 @@ export default function NotificationBell() {
   };
 
   const markAllAsRead = async () => {
+    if (!user) return;
+
     try {
-      const { error } = await supabase.from('notifications').update({ is_read: true }).eq('user_id', user?.id).eq('is_read', false);
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
 
       if (error) {
         console.error('Mark all as read error:', error);
@@ -112,7 +169,7 @@ export default function NotificationBell() {
         return;
       }
 
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true, read_at: new Date().toISOString() })));
       setUnreadCount(0);
       toast.success('All notifications marked as read');
     } catch (error) {
@@ -128,6 +185,7 @@ export default function NotificationBell() {
       system: '🔔',
       payment: '💰',
       restaurant: '🍽️',
+      order_admin: '🛡️',
     };
     return icons[type] || '🔔';
   };
@@ -136,10 +194,10 @@ export default function NotificationBell() {
 
   return (
     <div className="relative">
-      {/* Bell Icon */}
       <button
-        onClick={() => setShowDropdown(!showDropdown)}
+        onClick={() => setShowDropdown((v) => !v)}
         className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+        aria-label="Notifications"
       >
         <Bell size={24} />
         {unreadCount > 0 && (
@@ -149,15 +207,11 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* Dropdown */}
       {showDropdown && (
         <>
-          {/* Backdrop */}
-          <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)}></div>
+          <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
 
-          {/* Dropdown Content */}
           <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[80vh] overflow-hidden flex flex-col">
-            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b">
               <h3 className="font-bold text-lg text-gray-900">Notifications</h3>
               <div className="flex gap-2">
@@ -172,7 +226,6 @@ export default function NotificationBell() {
               </div>
             </div>
 
-            {/* Notifications List */}
             <div className="overflow-y-auto flex-1">
               {loading ? (
                 <div className="p-4 text-center text-gray-500">Loading...</div>
@@ -186,11 +239,11 @@ export default function NotificationBell() {
                   {notifications.map((notification) => (
                     <div
                       key={notification.id}
-                      className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${!notification.is_read ? 'bg-blue-50' : ''}`}
+                      className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
+                        !notification.is_read ? 'bg-blue-50' : ''
+                      }`}
                       onClick={() => {
-                        if (!notification.is_read) {
-                          markAsRead(notification.id);
-                        }
+                        if (!notification.is_read) markAsRead(notification.id);
                       }}
                     >
                       <div className="flex items-start gap-3">
@@ -198,10 +251,16 @@ export default function NotificationBell() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <p className="font-semibold text-gray-900 text-sm">{notification.title}</p>
-                            {!notification.is_read && <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0 mt-1"></div>}
+                            {!notification.is_read && <div className="w-2 h-2 bg-blue-600 rounded-full flex-shrink-0 mt-1" />}
                           </div>
-                          <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
-                          <p className="text-xs text-gray-400 mt-1">{new Date(notification.created_at).toLocaleString()}</p>
+
+                          <p className="text-sm text-gray-600 mt-1">
+                            {notification.body ?? notification.message ?? ''}
+                          </p>
+
+                          <p className="text-xs text-gray-400 mt-1">
+                            {new Date(notification.created_at).toLocaleString()}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -210,13 +269,10 @@ export default function NotificationBell() {
               )}
             </div>
 
-            {/* Footer */}
             {notifications.length > 0 && (
               <div className="p-3 border-t bg-gray-50">
                 <button
-                  onClick={() => {
-                    setShowDropdown(false);
-                  }}
+                  onClick={() => setShowDropdown(false)}
                   className="w-full text-center text-sm text-primary hover:text-orange-600 font-semibold"
                 >
                   View All Notifications
