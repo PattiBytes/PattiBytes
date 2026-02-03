@@ -1,6 +1,9 @@
 /// <reference lib="deno.ns" />
 
+<<<<<<< HEAD
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+=======
+>>>>>>> e490f8f8d44a0b758bfcd8d9e9e240a295de0f46
 import { createClient } from "@supabase/supabase-js";
 
 type NotifyBody = {
@@ -24,7 +27,11 @@ Deno.serve(async (req) => {
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+<<<<<<< HEAD
   const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY"); // custom secret
+=======
+  const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY");
+>>>>>>> e490f8f8d44a0b758bfcd8d9e9e240a295de0f46
 
   if (!SUPABASE_URL || !ANON_KEY) {
     return json(500, { error: "Missing SUPABASE_URL / SUPABASE_ANON_KEY in function env" });
