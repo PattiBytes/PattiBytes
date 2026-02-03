@@ -48,6 +48,8 @@ class NotificationService {
    */
   async sendNotification(userId: string, title: string, message: string, type: string, data?: any): Promise<void> {
     try {
+      // Supabase docs indicate Edge Functions use the Authorization header, and
+      // supabase-js generally handles auth automatically for the signed-in user. [web:176][web:183]
       const { error } = await supabase.functions.invoke('notify', {
         body: {
           targetUserId: userId,
@@ -55,8 +57,8 @@ class NotificationService {
           message,
           type,
           data: data ?? {},
-          body: message
-        }
+          body: message,
+        },
       });
 
       if (error) throw error;
@@ -101,6 +103,16 @@ class NotificationService {
     if (error) throw error;
   }
 
+  // ✅ FIX: this is what your build is complaining about
+  async deleteNotification(notificationId: string): Promise<void> {
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', notificationId);
+
+    if (error) throw error;
+  }
+
   /**
    * Realtime subscription for current logged-in user.
    * Put browser popups HERE (correct place).
@@ -120,7 +132,6 @@ class NotificationService {
           const row = payload.new as NotificationRow;
           onInsert(row);
 
-          // Optional: browser popup (only for the logged-in user receiving it)
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             new Notification(row.title, {
               body: row.body ?? row.message ?? '',
@@ -183,8 +194,6 @@ class NotificationService {
           });
         }
       }
-
-      // No manual superadmin loop here anymore.
     } catch (error) {
       console.error('Failed to send order notification:', error);
     }
@@ -192,6 +201,3 @@ class NotificationService {
 }
 
 export const notificationService = new NotificationService();
-
-
-
