@@ -158,32 +158,34 @@ export type DeliveryFeeQuote = {
  */
 export function calculateDeliveryFeeByDistance(distanceKm: number): DeliveryFeeQuote {
   const d = Math.max(0, Number(distanceKm) || 0);
+
   const baseKm = 3;
-  const baseFee = 50;
+  const within3kmFee = 50;
   const perKm = 15;
 
+  // <= 3km => flat ₹50
   if (d <= baseKm) {
     return {
       distanceKm: round2(d),
-      fee: baseFee,
-      breakdown: `Up to ${baseKm}km: ₹${baseFee}`,
+      fee: within3kmFee,
+      breakdown: `Up to ${baseKm}km: ₹${within3kmFee}`,
     };
   }
 
-  const extraKm = d - baseKm;
-
-  // Charge proportionally for fractional km; if you want "per started km", replace with Math.ceil(extraKm)
-  const extraFee = extraKm * perKm;
-  const fee = baseFee + extraFee;
+  // > 3km => ₹15/km from 1km (no ₹50), fractional km allowed
+  const billableKm = d;              // fractional allowed
+  const fee = billableKm * perKm;
 
   return {
     distanceKm: round2(d),
     fee: round2(fee),
-    breakdown: `₹${baseFee} (first ${baseKm}km) + ${round2(extraKm)}km × ₹${perKm} = ₹${round2(fee)}`,
+    breakdown: `${round2(billableKm)}km × ₹${perKm} = ₹${round2(fee)} (outside ${baseKm}km, no ₹50)`,
   };
 }
 
+
 class LocationService {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   calculateDeliveryCharge(distance: any): import("react").ReactNode {
     throw new Error('Method not implemented.');
   }
