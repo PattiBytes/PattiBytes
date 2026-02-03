@@ -44,6 +44,42 @@ export default function MerchantProfilePage() {
   ];
 
   const businessTypes = ['Restaurant', 'Cloud Kitchen', 'Cafe', 'Bakery', 'Sweet Shop', 'Dhaba'];
+const [pwd, setPwd] = useState({
+  current: '',
+  next: '',
+  confirm: '',
+});
+const [changingPwd, setChangingPwd] = useState(false);
+
+const handleChangePassword = async () => {
+  try {
+    if (!user?.email) return toast.error('Missing user email');
+    if (!pwd.current || !pwd.next || !pwd.confirm) return toast.error('Fill all password fields');
+    if (pwd.next.length < 6) return toast.error('New password must be at least 6 characters');
+    if (pwd.next !== pwd.confirm) return toast.error('New password and confirm password do not match');
+    if (pwd.current === pwd.next) return toast.error('New password must be different');
+
+    setChangingPwd(true);
+
+    // Optional but recommended: verify current password first
+    const { error: reauthErr } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: pwd.current,
+    });
+    if (reauthErr) throw new Error('Current password is incorrect');
+
+    const { error } = await supabase.auth.updateUser({ password: pwd.next });
+    if (error) throw error;
+
+    toast.success('Password changed successfully');
+    setPwd({ current: '', next: '', confirm: '' });
+  } catch (e: any) {
+    console.error(e);
+    toast.error(e?.message || 'Failed to change password');
+  } finally {
+    setChangingPwd(false);
+  }
+};
 
   useEffect(() => {
     if (user) loadProfile();
@@ -407,6 +443,59 @@ export default function MerchantProfilePage() {
                 </div>
               </div>
             </div>
+<div>
+  <h3 className="text-lg font-bold text-gray-900 mb-4">Security</h3>
+
+  <div className="rounded-lg border border-gray-200 p-4 space-y-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Current password</label>
+        <input
+          type="password"
+          value={pwd.current}
+          onChange={(e) => setPwd((p) => ({ ...p, current: e.target.value }))}
+          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
+          autoComplete="current-password"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">New password</label>
+        <input
+          type="password"
+          value={pwd.next}
+          onChange={(e) => setPwd((p) => ({ ...p, next: e.target.value }))}
+          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
+          autoComplete="new-password"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Confirm new password</label>
+        <input
+          type="password"
+          value={pwd.confirm}
+          onChange={(e) => setPwd((p) => ({ ...p, confirm: e.target.value }))}
+          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
+          autoComplete="new-password"
+        />
+      </div>
+    </div>
+
+    <button
+      type="button"
+      onClick={handleChangePassword}
+      disabled={changingPwd}
+      className="bg-gray-900 text-white px-5 py-2.5 rounded-lg hover:bg-black font-semibold disabled:opacity-50"
+    >
+      {changingPwd ? 'Changing...' : 'Change password'}
+    </button>
+
+    <p className="text-xs text-gray-500">
+      Tip: After changing password, keep it private and avoid reusing old passwords.
+    </p>
+  </div>
+</div>
 
             {/* Active */}
             <div className="flex items-center gap-3">

@@ -87,10 +87,19 @@ export default function MerchantDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (user) loadMerchantData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+ useEffect(() => {
+  if (!user) return;
+
+  loadMerchantData();
+
+  const interval = setInterval(() => {
+    loadMerchantData();
+  }, 30000); // 60000 if you want faster
+
+  return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [user]);
+
 
   const fetchOrders = async (merchantId: string): Promise<OrderRow[]> => {
     // Fix for your error: your schema does not have orders.total [file:13]

@@ -1,3 +1,5 @@
+/// <reference lib="deno.ns" />
+
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 
@@ -20,16 +22,15 @@ function json(status: number, payload: unknown) {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json(405, { error: "Method not allowed" });
 
-  // Supabase provides these by default in Edge Functions env
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL"); // default [web:86]
-  const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY"); // default [web:86]
-  const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY"); // custom secret you set
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+  const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY"); // custom secret
 
   if (!SUPABASE_URL || !ANON_KEY) {
     return json(500, { error: "Missing SUPABASE_URL / SUPABASE_ANON_KEY in function env" });
   }
   if (!SERVICE_ROLE_KEY) {
-    return json(500, { error: "Missing SERVICE_ROLE_KEY secret (set via `supabase secrets set SERVICE_ROLE_KEY=...`)" });
+    return json(500, { error: "Missing SERVICE_ROLE_KEY secret" });
   }
 
   // 1) Verify caller JWT
@@ -42,7 +43,7 @@ Deno.serve(async (req) => {
   const caller = userData?.user;
   if (userErr || !caller) return json(401, { error: "Invalid JWT" });
 
-  // 2) Admin client (bypass RLS for role checks + fanout insert)
+  // 2) Admin client (bypass RLS)
   const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   const { data: callerProfile, error: profErr } = await supabaseAdmin
@@ -74,7 +75,7 @@ Deno.serve(async (req) => {
     return json(400, { error: "Missing fields" });
   }
 
-  // 4) Fetch recipients (admins + superadmins + target)
+  // 4) Recipients (admins + superadmins + target)
   const { data: admins, error: adminErr } = await supabaseAdmin
     .from("profiles")
     .select("id")
@@ -87,7 +88,7 @@ Deno.serve(async (req) => {
   const adminIds = (admins ?? []).map((a: { id: string }) => a.id);
   const recipientIds = Array.from(new Set([targetUserId, ...adminIds]));
 
-  // 5) Fanout insert via SQL RPC you created
+  // 5) Fanout insert (RPC must exist in DB)
   const { error: rpcErr } = await supabaseAdmin.rpc("create_notification_fanout", {
     p_recipient_ids: recipientIds,
     p_title: title,

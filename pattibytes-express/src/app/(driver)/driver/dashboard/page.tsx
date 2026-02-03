@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
@@ -85,10 +86,7 @@ const BOTTOM_NAV_PX = 96;
 
 const BRAND = {
   title: 'Presented by Pattibytes',
-  instagram1: 'https://instagram.com/pattibytes',
-  instagram2: 'https://instagram.com/pbexpress_38',
-  youtube: 'https://www.youtube.com/@pattibytes',
-  facebook: 'https://facebook.com/pattibytes',
+
 };
 
 function startOfTodayISO() {
@@ -136,35 +134,37 @@ export default function DriverDashboardPage() {
     await loadOrdersAndStats();
   };
 
-  useEffect(() => {
-    if (!user?.id) return;
+ useEffect(() => {
+  if (!user?.id) return;
 
+  refreshAll();
+
+  const interval = setInterval(() => {
     refreshAll();
+  }, 30000); // or 60000
 
-    // Realtime only (no polling).
-    const driverFilter = `driver_id=eq.${user.id}`;
-    const poolFilter = `status=eq.${POOL_STATUS}`;
+  // your existing realtime subscriptions...
+  const driverFilter = `driver_id=eq.${user.id}`;
+  const poolFilter = `status=eq.${POOL_STATUS}`;
 
-    const chMine = supabase
-      .channel(`driver-orders-${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: driverFilter }, () => {
-        loadOrdersAndStats();
-      })
-      .subscribe();
+  const chMine = supabase
+    .channel(`driver-orders-${user.id}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: driverFilter }, refreshAll)
+    .subscribe();
 
-    const chPool = supabase
-      .channel('orders-pool')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: poolFilter }, () => {
-        loadOrdersAndStats();
-      })
-      .subscribe();
+  const chPool = supabase
+    .channel('orders-pool')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: poolFilter }, refreshAll)
+    .subscribe();
 
-    return () => {
-      supabase.removeChannel(chMine);
-      supabase.removeChannel(chPool);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  return () => {
+    clearInterval(interval);
+    supabase.removeChannel(chMine);
+    supabase.removeChannel(chPool);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [user?.id]);
+
 
   const enrichOrders = async (rows: any[]): Promise<Order[]> => {
     const merchantIds = Array.from(new Set(rows.map((o) => o.merchant_id).filter(Boolean))) as string[];
@@ -199,38 +199,32 @@ export default function DriverDashboardPage() {
       setLoading(true);
 
       // Available pool (all drivers)
-      const { data: available, error: availableError } = await supabase
-        .from('orders')
-        .select(
-          'id,order_number,status,customer_id,merchant_id,driver_id,total_amount,delivery_address,customer_phone,delivery_distance_km,created_at'
-        )
-        .eq('status', POOL_STATUS)
-        .is('driver_id', null)
-        .order('created_at', { ascending: true })
-        .limit(50);
+     // Available pool
+const { data: available, error: availableError } = await supabase
+  .from('orders')
+  .select('id,order_number,status,customer_id,merchant_id,driver_id,total_amount,delivery_address,customer_phone,delivery_distance_km,created_at')
+  .eq('status', POOL_STATUS)
+  .is('driver_id', null)
+  .order('created_at', { ascending: true })
+  .limit(50);
 
-      if (availableError) logger.error('available load failed', availableError);
+// Active orders for this driver
+const { data: active, error: activeError } = await supabase
+  .from('orders')
+  .select('id,order_number,status,customer_id,merchant_id,driver_id,total_amount,delivery_address,customer_phone,delivery_distance_km,created_at,updated_at,actual_delivery_time')
+  .eq('driver_id', user.id)
+  .in('status', ACTIVE_STATUSES as any)
+  .order('created_at', { ascending: false })
+  .limit(10);
 
-      // Active orders for this driver (show list, not only one)
-      const { data: active, error: activeError } = await supabase
-        .from('orders')
-        .select(
-          'id,order_number,status,customer_id,merchant_id,driver_id,total_amount,delivery_address,customer_phone,delivery_distance_km,created_at,updated_at,actual_delivery_time'
-        )
-        .eq('driver_id', user.id)
-        .in('status', ACTIVE_STATUSES as any)
-        .order('created_at', { ascending: false })
-        .limit(10);
+// Delivered today analytics
+const { data: completedToday, error: completedError } = await supabase
+  .from('orders')
+  .select('total_amount,created_at')
+  .eq('driver_id', user.id)
+  .eq('status', DELIVERED_STATUS)
+  .gte('created_at', startOfTodayISO());
 
-      if (activeError) logger.error('active load failed', activeError);
-
-      // Delivered today (analytics)
-      const { data: completedToday, error: completedError } = await supabase
-        .from('orders')
-        .select('total_amount,created_at')
-        .eq('driver_id', user.id)
-        .eq('status', DELIVERED_STATUS)
-        .gte('created_at', startOfTodayISO());
 
       if (completedError) logger.error('completed load failed', completedError);
 
@@ -250,6 +244,7 @@ export default function DriverDashboardPage() {
         completed: completedToday?.length || 0,
         earnings,
       });
+      
     } catch (e: any) {
       logger.error('loadOrdersAndStats failed', e);
       toast.error(e?.message || 'Failed to load driver dashboard');
@@ -355,21 +350,6 @@ export default function DriverDashboardPage() {
               <p className="text-xs sm:text-sm text-gray-600 mt-1">
                 Presented by Pattibytes • Built for fast delivery operations.
               </p>
-
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs sm:text-sm">
-                <a className="text-primary font-semibold hover:underline" href={BRAND.instagram1} target="_blank" rel="noreferrer">
-                  Instagram: @pattibytes
-                </a>
-                <a className="text-primary font-semibold hover:underline" href={BRAND.instagram2} target="_blank" rel="noreferrer">
-                  Instagram: @pbexpress_38
-                </a>
-                <a className="text-primary font-semibold hover:underline" href={BRAND.youtube} target="_blank" rel="noreferrer">
-                  YouTube/Website: @pattibytes
-                </a>
-                <a className="text-primary font-semibold hover:underline" href={BRAND.facebook} target="_blank" rel="noreferrer">
-                  Facebook: @pattibytes
-                </a>
-              </div>
             </div>
 
             <button

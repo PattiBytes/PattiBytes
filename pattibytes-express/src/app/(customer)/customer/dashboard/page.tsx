@@ -1,22 +1,15 @@
+ 
 'use client';
 
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
-import {
-  Facebook,
-  Globe,
-  Instagram,
-  Receipt,
-  RefreshCcw,
-  ShoppingBag,
-  Truck,
-  Youtube,
-} from 'lucide-react';
+import { Facebook, Globe, Instagram, Receipt, RefreshCcw, ShoppingBag, Truck, Youtube } from 'lucide-react';
 
 import AppShell from '@/components/common/AppShell';
 import { supabase } from '@/lib/supabase';
@@ -76,6 +69,34 @@ type ActiveOrder = {
   merchantLogoUrl?: string | null;
 };
 
+type CustomLink = {
+  id: string;
+  title: string;
+  url: string;
+  logo_url?: string | null;
+  enabled?: boolean;
+};
+
+type AppSettingsRow = {
+  id: string;
+  app_name: string | null;
+
+  support_email: string | null;
+  support_phone: string | null;
+  business_address: string | null;
+
+  facebook_url: string | null;
+  instagram_url: string | null;
+  twitter_url: string | null;
+  youtube_url: string | null;
+  website_url: string | null;
+
+  custom_links?: any; // jsonb
+  customer_search_radius_km?: number | null; // only if you add this column
+};
+
+const APP_SETTINGS_ID = 'a6ba88a3-6fe9-4652-8c5d-b25ee1a05e39';
+
 function toMoney(n: any) {
   const x = Number(n || 0);
   if (!Number.isFinite(x)) return '0';
@@ -98,6 +119,31 @@ function tinyTime(iso?: string | null) {
   } catch {
     return iso;
   }
+}
+
+function safeArr<T = any>(v: any): T[] {
+  return Array.isArray(v) ? v : [];
+}
+
+function normalizeMaybeMarkdownUrl(v: any) {
+  const s0 = String(v ?? '').trim();
+  if (!s0) return '';
+
+  // Handles: [https://x](https://x) or [text](https://x)
+  const md = s0.match(/\((https?:\/\/[^)]+)\)/i);
+  const picked = (md?.[1] || s0).trim();
+
+  // Handles: [https://x](https://x) (just brackets)
+  const bracketOnly = picked.match(/^\[([^\]]+)\]$/);
+  return (bracketOnly?.[1] || picked).trim();
+}
+
+function iconForUrl(url: string) {
+  const u = String(url || '').toLowerCase();
+  if (u.includes('instagram.com')) return Instagram;
+  if (u.includes('facebook.com')) return Facebook;
+  if (u.includes('youtube.com') || u.includes('youtu.be')) return Youtube;
+  return Globe;
 }
 
 export default function CustomerDashboardPage() {
@@ -135,76 +181,112 @@ export default function CustomerDashboardPage() {
   const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
   const [loadingActiveOrders, setLoadingActiveOrders] = useState(false);
 
-  // Brand (optional from app_settings, with safe fallbacks)
+  const [appSettings, setAppSettings] = useState<AppSettingsRow | null>(null);
+  const [customLinks, setCustomLinks] = useState<CustomLink[]>([]);
+
+  // Brand (fallbacks)
   const [brand, setBrand] = useState({
     title: 'Presented by Pattibytes',
-    instagram1: 'https://instagram.com/pattibytes',
-    instagram2: 'https://instagram.com/pbexpress38',
+    instagram1: 'https://www.instagram.com/pb_express38',
+    instagram2: 'https://instagram.com/patti_bytes',
     youtube: 'https://www.youtube.com/@pattibytes',
-    website: 'https://pattibytes.com',
-    facebook: 'https://facebook.com/pattibytes',
+    website: 'https://www.pattibytes.com',
+    facebook: 'https://www.facebook.com/ipattibytes',
   });
 
   const firstName = useMemo(() => getFirstNameFromUser(user), [user]);
 
-  // Load radius (app_settings)
+  // Load app_settings by ID (single row)
   useEffect(() => {
-    const loadRadius = async () => {
+    const loadAppSettings = async () => {
       try {
-        const { data, error } = await supabase
+        // Try with radius column (if you added it)
+        let row: AppSettingsRow | null = null;
+
+        const try1 = await supabase
           .from('app_settings')
-          .select('value')
-          .eq('key', 'customer_search_radius_km')
+          .select(
+            'id,app_name,support_email,support_phone,business_address,facebook_url,instagram_url,twitter_url,youtube_url,website_url,custom_links,customer_search_radius_km'
+          )
+          .eq('id', APP_SETTINGS_ID)
           .single();
 
-        if (error) {
-          setSearchRadiusKm(25);
-          return;
+        if (!try1.error) {
+          row = (try1.data || null) as any;
+        } else {
+          // Fallback: schema may not have customer_search_radius_km yet
+          const msg = String(try1.error.message || '');
+          if (msg.toLowerCase().includes('customer_search_radius_km')) {
+            const try2 = await supabase
+              .from('app_settings')
+              .select(
+                'id,app_name,support_email,support_phone,business_address,facebook_url,instagram_url,twitter_url,youtube_url,website_url,custom_links'
+              )
+              .eq('id', APP_SETTINGS_ID)
+              .single();
+            if (try2.error) throw try2.error;
+            row = (try2.data || null) as any;
+          } else {
+            throw try1.error;
+          }
         }
-        const n = Number(data?.value);
-        setSearchRadiusKm(Number.isFinite(n) && n > 0 ? Math.round(n) : 25);
-      } catch {
-        setSearchRadiusKm(25);
-      }
-    };
 
-    loadRadius();
-  }, []);
+        if (!row) return;
 
-  // Load brand links (optional)
-  useEffect(() => {
-    const loadBrand = async () => {
-      try {
-        const { data } = await supabase
-          .from('app_settings')
-          .select('key,value')
-          .in('key', [
-            'brand_title',
-            'brand_instagram_pattibytes',
-            'brand_instagram_pbexpress38',
-            'brand_youtube',
-            'brand_website',
-            'brand_facebook',
-          ])
-          .limit(20);
+        setAppSettings(row);
 
-        const map = new Map<string, string>();
-        (data || []).forEach((r: any) => map.set(String(r.key), String(r.value || '')));
+        // Radius (only if column exists + valid)
+        const r = Number((row as any).customer_search_radius_km);
+        if (Number.isFinite(r) && r > 0) setSearchRadiusKm(Math.round(r));
+
+        // Map DB URLs -> your existing "brand" shape
+        const instagramMain = normalizeMaybeMarkdownUrl(row.instagram_url);
+        const extra = normalizeMaybeMarkdownUrl(row.twitter_url); // your CSV currently has pb_express here
+        const youtube = normalizeMaybeMarkdownUrl(row.youtube_url);
+        const website = normalizeMaybeMarkdownUrl(row.website_url);
+        const facebook = normalizeMaybeMarkdownUrl(row.facebook_url);
 
         setBrand((b) => ({
-          title: map.get('brand_title') || b.title,
-          instagram1: map.get('brand_instagram_pattibytes') || b.instagram1,
-          instagram2: map.get('brand_instagram_pbexpress38') || b.instagram2,
-          youtube: map.get('brand_youtube') || b.youtube,
-          website: map.get('brand_website') || b.website,
-          facebook: map.get('brand_facebook') || b.facebook,
+          title: row.app_name ? `Presented by ${row.app_name}` : b.title,
+          instagram1: instagramMain || b.instagram1,
+          instagram2: extra || b.instagram2,
+          youtube: youtube || b.youtube,
+          website: website || b.website,
+          facebook: facebook || b.facebook,
         }));
+
+        // Custom links (jsonb array)
+        const links = safeArr<any>((row as any).custom_links)
+          .map((x) => ({
+            id: String(x?.id || ''),
+            title: String(x?.title || ''),
+            url: normalizeMaybeMarkdownUrl(x?.url || ''),
+            logo_url: normalizeMaybeMarkdownUrl(x?.logo_url || ''),
+            enabled: Boolean(x?.enabled ?? true),
+          }))
+          .filter((x) => !!x.url);
+
+        setCustomLinks(links);
       } catch {
-        // keep defaults
+        // Keep fallbacks silently
       }
     };
 
-    loadBrand();
+    loadAppSettings();
+
+    // Realtime update when this row changes
+    const ch = supabase
+      .channel('app-settings-live')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'app_settings', filter: `id=eq.${APP_SETTINGS_ID}` },
+        () => loadAppSettings()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ch);
+    };
   }, []);
 
   // Load saved addresses (and set location)
@@ -260,84 +342,78 @@ export default function CustomerDashboardPage() {
   };
 
   // Load order stats + active orders list (snake-first with fallback)
- const loadOrdersAndStats = async () => {
-  if (!user) return;
+  const loadOrdersAndStats = async () => {
+    if (!user) return;
 
-  setLoadingActiveOrders(true);
-  try {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('id,status,total_amount,merchant_id,created_at,order_number')
-      .eq('customer_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(2000);
+    setLoadingActiveOrders(true);
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id,status,total_amount,merchant_id,created_at,order_number')
+        .eq('customer_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(2000);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    const rows = data || [];
+      const rows = data || [];
+      const totalOrders = rows.length;
 
-    const totalOrders = rows.length;
+      const activeOrdersCount = rows.filter((o: any) =>
+        ACTIVE_STATUSES.includes(String(o.status || '').toLowerCase())
+      ).length;
 
-    const activeOrdersCount = rows.filter((o: any) =>
-      ACTIVE_STATUSES.includes(String(o.status || '').toLowerCase())
-    ).length;
+      const completedOrders = rows.filter((o: any) => String(o.status || '').toLowerCase() === 'delivered').length;
 
-    const completedOrders = rows.filter(
-      (o: any) => String(o.status || '').toLowerCase() === 'delivered'
-    ).length;
+      const totalSpent = rows.reduce((sum: number, o: any) => sum + Number(o.total_amount || 0), 0);
 
-    const totalSpent = rows.reduce(
-      (sum: number, o: any) => sum + Number(o.total_amount || 0),
-      0
-    );
+      setStats({ totalOrders, activeOrders: activeOrdersCount, completedOrders, totalSpent });
 
-    setStats({ totalOrders, activeOrders: activeOrdersCount, completedOrders, totalSpent });
+      // top 3 active orders (for the small Active Orders card)
+      const active = rows
+        .filter((o: any) => ACTIVE_STATUSES.includes(String(o.status || '').toLowerCase()))
+        .slice(0, 3)
+        .map((o: any) => ({
+          id: String(o.id),
+          ordernumber: o.order_number ?? null,
+          status: o.status ?? null,
+          total_amount: Number(o.total_amount || 0),
+          created_at: o.created_at ?? null,
+          merchant_id: o.merchant_id ?? null,
+        }));
 
-    // top 3 active orders (for the small Active Orders card)
-    const active = rows
-      .filter((o: any) => ACTIVE_STATUSES.includes(String(o.status || '').toLowerCase()))
-      .slice(0, 3)
-      .map((o: any) => ({
-        id: String(o.id),
-        order_number: o.order_number ?? null,
-        status: o.status ?? null,
-        total_amount: Number(o.total_amount || 0),
-        created_at: o.created_at ?? null,
-        merchant_id: o.merchant_id ?? null,
-      }));
+      // hydrate merchant names (optional)
+      const merchantIds = Array.from(new Set(active.map((x: any) => x.merchant_id).filter(Boolean))) as string[];
+      if (merchantIds.length) {
+        const m = await supabase
+          .from('merchants')
+          .select('id,business_name,logo_url')
+          .in('id', merchantIds)
+          .limit(50);
 
-    // hydrate merchant names (optional)
-    const merchantIds = Array.from(new Set(active.map((x) => x.merchant_id).filter(Boolean))) as string[];
-    if (merchantIds.length) {
-      const m = await supabase
-        .from('merchants')
-        .select('id,business_name,logo_url')
-        .in('id', merchantIds)
-        .limit(50);
+        const mapM = new Map<string, { business_name: string | null; logo_url: string | null }>();
+        (m.data || []).forEach((r: any) =>
+          mapM.set(String(r.id), { business_name: r.business_name ?? null, logo_url: r.logo_url ?? null })
+        );
 
-      const mapM = new Map<string, { business_name: string | null; logo_url: string | null }>();
-      (m.data || []).forEach((r: any) =>
-        mapM.set(String(r.id), { business_name: r.business_name ?? null, logo_url: r.logo_url ?? null })
-      );
+        active.forEach((a: any) => {
+          const info = mapM.get(String(a.merchant_id || ''));
+          if (info) {
+            a.merchantName = info.business_name || 'Restaurant';
+            a.merchantLogoUrl = info.logo_url || null;
+          }
+        });
+      }
 
-      active.forEach((a: any) => {
-        const info = mapM.get(String(a.merchant_id || ''));
-        if (info) {
-          a.merchantName = info.business_name || 'Restaurant';
-          a.merchantLogoUrl = info.logo_url || null;
-        }
-      });
+      setActiveOrders(active as any);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to load order analytics');
+      setStats({ totalOrders: 0, activeOrders: 0, completedOrders: 0, totalSpent: 0 });
+      setActiveOrders([]);
+    } finally {
+      setLoadingActiveOrders(false);
     }
-
-    setActiveOrders(active as any);
-  } catch (e: any) {
-    toast.error(e?.message || 'Failed to load order analytics');
-    setStats({ totalOrders: 0, activeOrders: 0, completedOrders: 0, totalSpent: 0 });
-    setActiveOrders([]);
-  } finally {
-    setLoadingActiveOrders(false);
-  }
-};
+  };
 
   // initial load + realtime refresh for orders
   useEffect(() => {
@@ -413,15 +489,16 @@ export default function CustomerDashboardPage() {
 
         const withDistance = all
           .map((m) => {
-            const lat = Number(m.latitude || 0);
-            const lon = Number(m.longitude || 0);
-            const dist = lat && lon ? haversineKm(location.lat, location.lon, lat, lon) : Number.POSITIVE_INFINITY;
-            return { ...m, distance_km: dist };
+            const lat = Number((m as any).latitude || 0);
+            const lon = Number((m as any).longitude || 0);
+            const dist =
+              lat && lon ? haversineKm(location.lat, location.lon, lat, lon) : Number.POSITIVE_INFINITY;
+            return { ...(m as any), distance_km: dist };
           })
-          .filter((m) => Number.isFinite(m.distance_km as number) && (m.distance_km as number) <= searchRadiusKm)
-          .sort((a, b) => Number(a.distance_km || 0) - Number(b.distance_km || 0));
+          .filter((m: any) => Number.isFinite(m.distance_km as number) && (m.distance_km as number) <= searchRadiusKm)
+          .sort((a: any, b: any) => Number(a.distance_km || 0) - Number(b.distance_km || 0));
 
-        setRestaurants(withDistance);
+        setRestaurants(withDistance as any);
       } catch (e: any) {
         setRestaurants([]);
         toast.error(e?.message || 'Failed to load restaurants');
@@ -442,7 +519,7 @@ export default function CustomerDashboardPage() {
     }
 
     const out = restaurants.filter((r) => {
-      const cuisines = parseCuisineList(r.cuisine_types).map((x) => x.toLowerCase());
+      const cuisines = parseCuisineList((r as any).cuisine_types).map((x) => x.toLowerCase());
       return cuisines.some((c) => c.includes(f));
     });
 
@@ -453,7 +530,7 @@ export default function CustomerDashboardPage() {
   useEffect(() => {
     const loadMenu = async () => {
       try {
-        const ids = filteredRestaurants.slice(0, 30).map((r) => r.id);
+        const ids = filteredRestaurants.slice(0, 30).map((r) => (r as any).id);
         if (!ids.length) {
           setMenuItems([]);
           setMenuCountByMerchant({});
@@ -462,9 +539,7 @@ export default function CustomerDashboardPage() {
 
         const { data, error } = await supabase
           .from('menu_items')
-          .select(
-            'id,merchant_id,name,description,price,category,image_url,is_available,is_veg,preparation_time,discount_percentage'
-          )
+          .select('id,merchant_id,name,description,price,category,image_url,is_available,is_veg,preparation_time,discount_percentage')
           .in('merchant_id', ids)
           .limit(1000);
 
@@ -474,7 +549,7 @@ export default function CustomerDashboardPage() {
         setMenuItems(items);
 
         const counts: Record<string, number> = {};
-        for (const it of items) counts[it.merchant_id] = (counts[it.merchant_id] || 0) + 1;
+        for (const it of items as any[]) counts[it.merchant_id] = (counts[it.merchant_id] || 0) + 1;
         setMenuCountByMerchant(counts);
       } catch {
         setMenuItems([]);
@@ -505,11 +580,11 @@ export default function CustomerDashboardPage() {
 
   const onOpenSearchResult = (res: SearchResult) => {
     if (res.type === 'restaurant') {
-      router.push(`/customer/restaurant/${res.restaurant.id}`);
+      router.push(`/customer/restaurant/${(res as any).restaurant.id}`);
       setSearchQuery('');
       return;
     }
-    router.push(`/customer/restaurant/${res.menu.merchant_id}?item=${res.menu.id}`);
+    router.push(`/customer/restaurant/${(res as any).menu.merchant_id}?item=${(res as any).menu.id}`);
     setSearchQuery('');
   };
 
@@ -526,16 +601,29 @@ export default function CustomerDashboardPage() {
     toast.success('Location updated');
   };
 
-  const socials = [
-    { href: brand.instagram1, label: 'Instagram (pattibytes)', Icon: Instagram },
-    { href: brand.instagram2, label: 'Instagram (pbexpress38)', Icon: Instagram },
-    { href: brand.youtube, label: 'YouTube', Icon: Youtube },
-    { href: brand.website, label: 'Website', Icon: Globe },
-    { href: brand.facebook, label: 'Facebook', Icon: Facebook },
-  ].filter((x) => !!x.href);
+  const socials = useMemo(() => {
+    const base = [
+      { href: brand.instagram1, label: 'Instagram', Icon: Instagram },
+      { href: brand.instagram2, label: 'More', Icon: iconForUrl(brand.instagram2) },
+      { href: brand.youtube, label: 'YouTube', Icon: Youtube },
+      { href: brand.website, label: 'Website', Icon: Globe },
+      { href: brand.facebook, label: 'Facebook', Icon: Facebook },
+    ].filter((x) => !!x.href);
+
+    const extra = (customLinks || [])
+      .filter((x) => x.enabled !== false && !!x.url)
+      .map((x) => ({
+        href: x.url,
+        label: x.title || 'Link',
+        Icon: iconForUrl(x.url),
+        logoUrl: x.logo_url || '',
+      }));
+
+    return [...base, ...extra];
+  }, [brand, customLinks]);
 
   return (
-     <AppShell title="Pattibytes Express">
+    <AppShell title={appSettings?.app_name || 'Pattibytes Express'}>
       <div
         className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-pink-50"
         style={{ paddingBottom: `calc(${BOTTOM_NAV_PX}px + env(safe-area-inset-bottom))` }}
@@ -554,17 +642,21 @@ export default function CustomerDashboardPage() {
               </div>
 
               <div className="flex items-center gap-1.5 shrink-0">
-                {socials.slice(0, 5).map(({ href, label, Icon }) => (
+                {socials.slice(0, 6).map(({ href, label, Icon, logoUrl }: any) => (
                   <Link
-                    key={label}
+                    key={`${label}-${href}`}
                     href={href}
                     target="_blank"
                     rel="noreferrer"
                     aria-label={label}
                     title={label}
-                    className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md hover:border-primary/40 transition active:scale-[0.98]"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md hover:border-primary/40 transition active:scale-[0.98] overflow-hidden"
                   >
-                    <Icon className="w-4 h-4 text-gray-800" />
+                    {logoUrl ? (
+                      <Image src={logoUrl} alt={label} width={36} height={36} className="w-full h-full object-cover" />
+                    ) : (
+                      <Icon className="w-4 h-4 text-gray-800" />
+                    )}
                   </Link>
                 ))}
               </div>
@@ -608,9 +700,7 @@ export default function CustomerDashboardPage() {
                 <div className="flex items-center justify-between gap-2 mb-2.5">
                   <div className="min-w-0">
                     <h3 className="text-sm font-bold text-gray-900 truncate">Active orders</h3>
-                    <p className="text-[11px] text-gray-600 leading-4">
-                      Quick access to what’s in progress.
-                    </p>
+                    <p className="text-[11px] text-gray-600 leading-4">Quick access to what’s in progress.</p>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -794,6 +884,6 @@ export default function CustomerDashboardPage() {
           onPickSaved={handlePickSaved}
         />
       </div>
-  </AppShell>
+    </AppShell>
   );
 }

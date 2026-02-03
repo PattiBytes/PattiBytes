@@ -55,6 +55,7 @@ type ProfileMini = {
 };
 
 type OrderDetail = {
+  ordernumber: any;
   id: string;
   order_number: number;
   customer_id: string;
@@ -311,6 +312,7 @@ export default function CustomerOrderDetailPage() {
     openInNewTab(`https://wa.me/${clean}?text=${encodeURIComponent(message)}`);
   };
 
+   
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const buildInvoiceHtml = (o: OrderDetail) => {
     const merchantName = o.merchants?.business_name || 'Restaurant';
@@ -449,28 +451,38 @@ export default function CustomerOrderDetailPage() {
     return html;
   };
 
- const downloadInvoice = async () => {
+ // inside CustomerOrderDetailPage
+
+const downloadInvoice = async () => {
   if (!order) return;
-  try {
-    const res = await fetch(`/api/orders/${order.id}/invoice`, { method: 'GET' });
-    if (!res.ok) throw new Error('Failed to download invoice');
 
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `invoice-${order.order_number}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
 
-    toast.success('Invoice downloaded!');
-  } catch (e: any) {
-    console.error(e);
-    toast.error(e?.message || 'Invoice download failed');
+  const res = await fetch(`/api/orders/${order.id}/invoice`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    console.error('Invoice API failed:', res.status, text); // you already have this pattern
+    throw new Error(`Failed to download invoice (${res.status})`);
   }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `invoice-${order.order_number}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 };
+
+
+
 
 
   const stopSharing = () => {
