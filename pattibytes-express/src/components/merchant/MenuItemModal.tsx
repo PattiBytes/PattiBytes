@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react';
 import { menuService } from '@/services/menu';
 import { MenuItem } from '@/types';
-import { X, Upload, Link2 } from 'lucide-react';
+import { X, Upload, Link2, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 
@@ -24,6 +24,10 @@ function isValidHttpUrl(v: string) {
   }
 }
 
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
 export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: MenuItemModalProps) {
   const [imageMode, setImageMode] = useState<'upload' | 'link'>(() => (item?.image_url ? 'link' : 'upload'));
 
@@ -32,6 +36,7 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
     description: item?.description || '',
     price: Number(item?.price ?? 0),
     category: item?.category || 'Main Course',
+    custom_category: '',
     image_url: item?.image_url || '',
     is_available: item?.is_available ?? true,
     is_veg: item?.is_veg ?? true,
@@ -43,7 +48,22 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const imageOk = useMemo(() => !formData.image_url || isValidHttpUrl(formData.image_url), [formData.image_url]);
+  const resolvedCategory = useMemo(() => {
+    if (formData.category === '__custom__') {
+      return (formData.custom_category || '').trim() || 'Main Course';
+    }
+    return formData.category || 'Main Course';
+  }, [formData.category, formData.custom_category]);
+
+  const imageOk = useMemo(
+    () => !formData.image_url || isValidHttpUrl(formData.image_url),
+    [formData.image_url]
+  );
+
+  const discountOk = useMemo(() => {
+    const d = Number(formData.discount_percentage ?? 0);
+    return Number.isFinite(d) && d >= 0 && d <= 100;
+  }, [formData.discount_percentage]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -54,50 +74,62 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
       const url = await uploadToCloudinary(file, 'menu-items');
       setFormData((p) => ({ ...p, image_url: url }));
       toast.success('Image uploaded successfully');
-    } catch {
-      toast.error('Failed to upload image');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to upload image');
     } finally {
       setUploading(false);
+      e.currentTarget.value = '';
     }
   };
+
+  const removeImage = () => setFormData((p) => ({ ...p, image_url: '' }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name.trim()) return toast.error('Name is required');
-    if (!Number.isFinite(formData.price) || formData.price < 0) return toast.error('Invalid price');
-    if (!Number.isFinite(formData.preparation_time) || formData.preparation_time < 0) return toast.error('Invalid preparation time');
-    if (!Number.isFinite(formData.discount_percentage) || formData.discount_percentage < 0 || formData.discount_percentage > 100) {
-      return toast.error('Discount must be 0 to 100');
-    }
+    const name = formData.name.trim();
+    const price = Number(formData.price ?? 0);
+    const prep = Number(formData.preparation_time ?? 0);
+    const disc = Number(formData.discount_percentage ?? 0);
+
+    if (!name) return toast.error('Name is required');
+    if (!Number.isFinite(price) || price < 0) return toast.error('Invalid price');
+    if (!Number.isFinite(prep) || prep < 0) return toast.error('Invalid preparation time');
+    if (!discountOk) return toast.error('Discount must be 0 to 100');
     if (!imageOk) return toast.error('Image URL must be a valid http/https link');
 
     setLoading(true);
     try {
       const payload: any = {
-        name: formData.name.trim(),
-        description: formData.description?.trim() || '',
-        price: Number(formData.price),
-        category: formData.category,
+        name,
+        description: (formData.description || '').trim(),
+        price: Number(price),
+        category: resolvedCategory,
         image_url: formData.image_url || '',
         is_available: Boolean(formData.is_available),
         is_veg: Boolean(formData.is_veg),
-        preparation_time: Number(formData.preparation_time),
-        discount_percentage: Number(formData.discount_percentage),
-        category_id: formData.category_id,
+        preparation_time: clamp(Number(prep), 0, 10000),
+        discount_percentage: clamp(Number(disc), 0, 100),
+        category_id: formData.category_id || null,
+        updated_at: new Date().toISOString(),
       };
 
       if (item) {
         await menuService.updateMenuItem(item.id, payload);
         toast.success('Menu item updated successfully');
       } else {
-        await menuService.createMenuItem({ ...payload, merchant_id: merchantId });
+        await menuService.createMenuItem({
+          ...payload,
+          merchant_id: merchantId,
+          created_at: new Date().toISOString(),
+        });
         toast.success('Menu item added successfully');
       }
 
       onSuccess();
-    } catch {
-      toast.error('Failed to save menu item');
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save menu item');
     } finally {
       setLoading(false);
     }
@@ -105,49 +137,76 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">{item ? 'Edit Menu Item' : 'Add Menu Item'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X size={24} />
+      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-5 sm:px-6 py-4 flex items-center justify-between">
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
+              {item ? 'Edit Menu Item' : 'Add Menu Item'}
+            </h2>
+            <p className="text-xs text-gray-600 mt-1">
+              Tip: Upload image for best performance; link also works.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-50">
+            <X size={22} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-6">
           {/* Image */}
-          <div>
-            <div className="flex items-center justify-between gap-3 mb-2">
-              <label className="block text-sm font-medium text-gray-700">Item Image</label>
+          <div className="rounded-2xl border p-4 bg-gray-50">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <label className="block text-sm font-bold text-gray-900">Item Image</label>
 
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setImageMode('upload')}
-                  className={`px-3 py-1 rounded-lg text-sm font-semibold border ${imageMode === 'upload' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-300'}`}
+                  className={`px-3 py-1.5 rounded-xl text-sm font-semibold border ${
+                    imageMode === 'upload' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-300'
+                  }`}
                 >
                   Upload
                 </button>
                 <button
                   type="button"
                   onClick={() => setImageMode('link')}
-                  className={`px-3 py-1 rounded-lg text-sm font-semibold border ${imageMode === 'link' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-300'}`}
+                  className={`px-3 py-1.5 rounded-xl text-sm font-semibold border ${
+                    imageMode === 'link' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-300'
+                  }`}
                 >
                   Use Link
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              {formData.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={formData.image_url} alt="Preview" className="w-32 h-32 object-cover rounded-lg border" />
-              ) : (
-                <div className="w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center border">
-                  {imageMode === 'link' ? <Link2 className="text-gray-400" size={32} /> : <Upload className="text-gray-400" size={32} />}
-                </div>
-              )}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="w-full sm:w-40">
+                {formData.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={formData.image_url}
+                    alt="Preview"
+                    className="w-full h-40 sm:h-40 object-cover rounded-xl border bg-white"
+                  />
+                ) : (
+                  <div className="w-full h-40 bg-white rounded-xl flex items-center justify-center border">
+                    {imageMode === 'link' ? <Link2 className="text-gray-400" size={32} /> : <Upload className="text-gray-400" size={32} />}
+                  </div>
+                )}
 
-              <div className="flex-1">
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  disabled={!formData.image_url}
+                  className="mt-2 w-full px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={16} />
+                  Remove
+                </button>
+              </div>
+
+              <div className="flex-1 min-w-0">
                 {imageMode === 'upload' ? (
                   <>
                     <input
@@ -160,25 +219,35 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
                     />
                     <label
                       htmlFor="image-upload"
-                      className="cursor-pointer bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 inline-block"
+                      className="cursor-pointer inline-flex items-center gap-2 bg-white text-gray-800 px-4 py-2 rounded-xl border hover:bg-gray-50 font-semibold"
                     >
-                      {uploading ? 'Uploading...' : 'Choose Image'}
+                      <Upload size={16} />
+                      {uploading ? 'Uploading…' : 'Choose image'}
                     </label>
-                    <p className="text-xs text-gray-500 mt-2">Uploads to Cloudinary folder: menu-items</p>
+                    <p className="text-xs text-gray-600 mt-2">
+                      Uploads to Cloudinary folder: <span className="font-mono">menu-items</span>
+                    </p>
                   </>
                 ) : (
                   <>
-                    <input
-                      type="url"
-                      value={formData.image_url}
-                      onChange={(e) => setFormData((p) => ({ ...p, image_url: e.target.value }))}
-                      placeholder="https://res.cloudinary.com/.../menu-items/....png"
-                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent ${
-                        imageOk ? 'border-gray-300' : 'border-red-400'
-                      }`}
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="url"
+                        value={formData.image_url}
+                        onChange={(e) => setFormData((p) => ({ ...p, image_url: e.target.value }))}
+                        placeholder="https://res.cloudinary.com/.../menu-items/....png"
+                        className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent ${
+                          imageOk ? 'border-gray-300' : 'border-red-400'
+                        }`}
+                      />
+                      {imageOk ? (
+                        <CheckCircle2 className="text-green-600 shrink-0" size={18} />
+                      ) : (
+                        <AlertTriangle className="text-red-600 shrink-0" size={18} />
+                      )}
+                    </div>
                     {!imageOk && <p className="text-xs text-red-600 mt-1">Please enter a valid http/https URL</p>}
-                    <p className="text-xs text-gray-500 mt-2">Paste any public image URL (Cloudinary recommended).</p>
+                    <p className="text-xs text-gray-600 mt-2">Paste any public image URL (Cloudinary recommended).</p>
                   </>
                 )}
               </div>
@@ -192,7 +261,7 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
               type="text"
               value={formData.name}
               onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
               required
             />
           </div>
@@ -204,19 +273,19 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
               value={formData.description}
               onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
             />
           </div>
 
           {/* Price & Category */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Price (₹) *</label>
               <input
                 type="number"
                 value={formData.price}
                 onChange={(e) => setFormData((p) => ({ ...p, price: Number(e.target.value) }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
                 required
                 min="0"
                 step="0.01"
@@ -228,7 +297,7 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
               <select
                 value={formData.category}
                 onChange={(e) => setFormData((p) => ({ ...p, category: e.target.value }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
                 required
               >
                 <option value="Starter">Starter</option>
@@ -237,20 +306,34 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
                 <option value="Beverage">Beverage</option>
                 <option value="Snack">Snack</option>
                 <option value="Combo">Combo</option>
+                <option value="__custom__">Custom…</option>
               </select>
             </div>
+
+            {formData.category === '__custom__' && (
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Custom category</label>
+                <input
+                  type="text"
+                  value={formData.custom_category}
+                  onChange={(e) => setFormData((p) => ({ ...p, custom_category: e.target.value }))}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
+                  placeholder="e.g. Tandoor, Rolls, Thali"
+                />
+              </div>
+            )}
           </div>
 
-          {/* Prep time & Discount */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Prep time & Discount & Category ID */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Preparation time (minutes)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Prep time (min)</label>
               <input
                 type="number"
                 min={0}
                 value={formData.preparation_time}
                 onChange={(e) => setFormData((p) => ({ ...p, preparation_time: Number(e.target.value) }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
               />
             </div>
 
@@ -262,50 +345,68 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
                 max={100}
                 value={formData.discount_percentage}
                 onChange={(e) => setFormData((p) => ({ ...p, discount_percentage: Number(e.target.value) }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent ${
+                  discountOk ? 'border-gray-300' : 'border-red-400'
+                }`}
+              />
+              {!discountOk && <p className="text-xs text-red-600 mt-1">0 to 100 only</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Category ID (optional)</label>
+              <input
+                type="text"
+                value={formData.category_id || ''}
+                onChange={(e) => setFormData((p) => ({ ...p, category_id: e.target.value || null }))}
+                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
+                placeholder="UUID or blank"
               />
             </div>
           </div>
 
           {/* Checkboxes */}
-          <div className="space-y-3">
-            <label className="flex items-center gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="flex items-center gap-2 rounded-xl border px-4 py-3 hover:bg-gray-50 cursor-pointer">
               <input
                 type="checkbox"
                 checked={formData.is_veg}
                 onChange={(e) => setFormData((p) => ({ ...p, is_veg: e.target.checked }))}
                 className="w-5 h-5 text-primary rounded focus:ring-primary"
               />
-              <span className="text-gray-700">Vegetarian</span>
+              <span className="text-gray-800 font-semibold">Vegetarian</span>
+              <span className="text-xs text-gray-500 ml-auto">Shown as Veg</span>
             </label>
 
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2 rounded-xl border px-4 py-3 hover:bg-gray-50 cursor-pointer">
               <input
                 type="checkbox"
                 checked={formData.is_available}
                 onChange={(e) => setFormData((p) => ({ ...p, is_available: e.target.checked }))}
                 className="w-5 h-5 text-primary rounded focus:ring-primary"
               />
-              <span className="text-gray-700">Available</span>
+              <span className="text-gray-800 font-semibold">Available</span>
+              <span className="text-xs text-gray-500 ml-auto">Visible to customers</span>
             </label>
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || uploading}
-              className="flex-1 px-6 py-3 bg-primary text-white rounded-lg hover:bg-orange-600 font-medium disabled:opacity-50"
-            >
-              {loading ? 'Saving...' : item ? 'Update Item' : 'Add Item'}
-            </button>
+          <div className="sticky bottom-0 bg-white pt-2 pb-1">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading || uploading}
+                className="flex-1 px-6 py-3 bg-primary text-white rounded-xl hover:bg-orange-600 font-semibold disabled:opacity-50"
+              >
+                {loading ? 'Saving…' : item ? 'Update Item' : 'Add Item'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
