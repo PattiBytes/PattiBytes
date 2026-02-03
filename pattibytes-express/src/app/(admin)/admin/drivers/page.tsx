@@ -1,14 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-toastify';
-import { Check, X, RefreshCcw, User, FileText } from 'lucide-react';
+import { Check, X, RefreshCcw, User, FileText, ExternalLink } from 'lucide-react';
+
+import DashboardLayout from '@/components/layouts/DashboardLayout';
+import BottomNav from '@/components/navigation/BottomNav';
 
 type DriverRow = {
-  id: string; // profiles.id
+  id: string;
   email: string | null;
   full_name: string | null;
   phone: string | null;
@@ -42,16 +46,18 @@ function isImageUrl(url?: string | null) {
   return /\.(png|jpe?g|webp|gif|avif)(\?.*)?$/i.test(url);
 }
 
+// Avoid content hiding behind BottomNav on mobile
+const BOTTOM_NAV_PX = 96;
+
 export default function AdminDriversPage() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<DriverRow[]>([]);
   const [query, setQuery] = useState('');
   const [onlyPending, setOnlyPending] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      // Requires FK: driver_profiles.user_id -> profiles.id
       const { data, error } = await supabase
         .from('profiles')
         .select(
@@ -78,17 +84,72 @@ export default function AdminDriversPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
+  // Initial load + refresh only on events (no interval polling)
   useEffect(() => {
     load();
-  }, []);
+
+    // 1) New driver added (INSERT)
+    const chDrivers = supabase
+      .channel('admin-drivers-profiles')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'profiles', filter: 'role=eq.driver' },
+        () => {
+          toast.info('New driver added');
+          load();
+        }
+      )
+      // 2) Driver updated (e.g., logged-in flag is_active changes, approval changes, etc.)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: 'role=eq.driver' },
+        (payload: any) => {
+          const oldRow = payload?.old || {};
+          const newRow = payload?.new || {};
+
+          const meaningful =
+            oldRow.is_active !== newRow.is_active ||
+            oldRow.approval_status !== newRow.approval_status ||
+            oldRow.profile_completed !== newRow.profile_completed;
+
+          if (meaningful) load();
+        }
+      )
+      .subscribe();
+
+    // 3) Documents / vehicle / license uploads (driver_profiles)
+    const chDriverProfiles = supabase
+      .channel('admin-drivers-driver_profiles')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_profiles' }, () => load())
+      .subscribe();
+
+    // 4) Admin login/logout in this tab
+    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
+      load();
+    });
+
+    // 5) When user comes back to the tab, refresh once
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      supabase.removeChannel(chDrivers);
+      supabase.removeChannel(chDriverProfiles);
+      authListener?.subscription?.unsubscribe();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [load]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((r) => {
       if (onlyPending && (r.approval_status || '').toLowerCase() !== 'pending') return false;
       if (!q) return true;
+
       const hay = [
         r.full_name,
         r.email,
@@ -99,6 +160,7 @@ export default function AdminDriversPage() {
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
+
       return hay.includes(q);
     });
   }, [rows, query, onlyPending]);
@@ -120,158 +182,167 @@ export default function AdminDriversPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="p-6 text-gray-600">
-        Loading drivers…
-      </div>
-    );
-  }
-
   return (
-    <div className="p-4 sm:p-6 space-y-4">
-      <div className="flex items-start sm:items-center justify-between gap-3 flex-col sm:flex-row">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Drivers</h1>
-          <p className="text-sm text-gray-600">Review documents and manage driver approvals.</p>
+    <DashboardLayout>
+      <div
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4"
+        style={{ paddingBottom: `calc(${BOTTOM_NAV_PX}px + env(safe-area-inset-bottom))` }}
+      >
+        <div className="flex items-start sm:items-center justify-between gap-3 flex-col sm:flex-row">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Drivers</h1>
+            <p className="text-sm text-gray-600">Review documents and manage driver approvals.</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={load}
+            className="px-4 py-2 rounded-lg bg-gray-900 text-white flex items-center gap-2"
+          >
+            <RefreshCcw size={16} />
+            Refresh
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={load}
-          className="px-4 py-2 rounded-lg bg-gray-900 text-white flex items-center gap-2"
-        >
-          <RefreshCcw size={16} />
-          Refresh
-        </button>
-      </div>
-
-      <div className="bg-white rounded-xl shadow p-3 sm:p-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name, email, phone, vehicle no, license no…"
-          className="w-full sm:w-2/3 px-3 py-2 border rounded-lg"
-        />
-        <label className="flex items-center gap-2 text-sm text-gray-700">
+        <div className="bg-white rounded-xl shadow p-3 sm:p-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
           <input
-            type="checkbox"
-            checked={onlyPending}
-            onChange={(e) => setOnlyPending(e.target.checked)}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name, email, phone, vehicle no, license no…"
+            className="w-full sm:w-2/3 px-3 py-2 border rounded-lg"
           />
-          Only pending
-        </label>
-      </div>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={onlyPending}
+              onChange={(e) => setOnlyPending(e.target.checked)}
+            />
+            Only pending
+          </label>
+        </div>
 
-      <div className="space-y-4">
-        {filtered.map((d) => {
-          const dp = d.driver_profiles;
-          const status = (d.approval_status || 'pending').toLowerCase();
+        {loading ? (
+          <div className="p-6 text-gray-600">Loading drivers…</div>
+        ) : (
+          <div className="space-y-4">
+            {filtered.map((d) => {
+              const dp = d.driver_profiles;
+              const status = (d.approval_status || 'pending').toLowerCase();
 
-          return (
-            <div key={d.id} className="bg-white rounded-2xl shadow p-4 sm:p-6">
-              <div className="flex flex-col lg:flex-row gap-4 lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <User size={18} className="text-gray-700" />
-                    <h3 className="text-lg font-bold text-gray-900 truncate">
-                      {d.full_name || 'Unnamed driver'}
-                    </h3>
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full ${
-                        status === 'approved'
-                          ? 'bg-green-100 text-green-700'
-                          : status === 'rejected'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}
-                    >
-                      {status}
-                    </span>
+              return (
+                <div key={d.id} className="bg-white rounded-2xl shadow p-4 sm:p-6">
+                  <div className="flex flex-col lg:flex-row gap-4 lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <User size={18} className="text-gray-700" />
+                        <h3 className="text-lg font-bold text-gray-900 truncate">
+                          {d.full_name || 'Unnamed driver'}
+                        </h3>
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full ${
+                            status === 'approved'
+                              ? 'bg-green-100 text-green-700'
+                              : status === 'rejected'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}
+                        >
+                          {status}
+                        </span>
+                      </div>
+
+                      <div className="text-sm text-gray-600 mt-1">
+                        {d.email || '—'} • {d.phone || '—'}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 text-sm">
+                        <div className="p-3 rounded-xl bg-gray-50">
+                          <div className="text-gray-500">Vehicle</div>
+                          <div className="font-semibold text-gray-900">
+                            {dp?.vehicle_type || '—'} • {dp?.vehicle_number || '—'}
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-gray-50">
+                          <div className="text-gray-500">License</div>
+                          <div className="font-semibold text-gray-900">{dp?.license_number || '—'}</div>
+                          <div className="text-gray-600 text-xs mt-1">
+                            Expiry: {dp?.license_expiry || '—'}
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-gray-50">
+                          <div className="text-gray-500">Stats</div>
+                          <div className="font-semibold text-gray-900">
+                            Rating: {dp?.rating ?? 0} • Deliveries: {dp?.total_deliveries ?? 0}
+                          </div>
+                          <div className="text-gray-600 text-xs mt-1">
+                            Earnings: ₹{dp?.earnings ?? 0}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                      <Link
+                        href={`/admin/drivers/${d.id}`}
+                        className="px-4 py-2 rounded-lg bg-gray-100 text-gray-900 border flex items-center justify-center gap-2 font-semibold"
+                      >
+                        <ExternalLink size={16} />
+                        Manage
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => setApproval(d.id, true)}
+                        className="px-4 py-2 rounded-lg bg-green-600 text-white flex items-center justify-center gap-2"
+                      >
+                        <Check size={16} />
+                        Approve
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setApproval(d.id, false)}
+                        className="px-4 py-2 rounded-lg bg-red-600 text-white flex items-center justify-center gap-2"
+                      >
+                        <X size={16} />
+                        Reject
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="text-sm text-gray-600 mt-1">
-                    {d.email || '—'} • {d.phone || '—'}
-                  </div>
+                  <div className="mt-5">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-3">
+                      <FileText size={16} />
+                      Documents
+                    </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 text-sm">
-                    <div className="p-3 rounded-xl bg-gray-50">
-                      <div className="text-gray-500">Vehicle</div>
-                      <div className="font-semibold text-gray-900">
-                        {dp?.vehicle_type || '—'} • {dp?.vehicle_number || '—'}
-                      </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <DocCard title="Profile photo" url={dp?.profile_photo || ''} />
+                      <DocCard title="Vehicle photo" url={dp?.vehicle_photo || ''} />
+                      <DocCard title="License photo" url={dp?.license_photo || ''} />
+                      <DocCard title="Aadhar photo" url={dp?.aadhar_photo || ''} />
                     </div>
-                    <div className="p-3 rounded-xl bg-gray-50">
-                      <div className="text-gray-500">License</div>
-                      <div className="font-semibold text-gray-900">
-                        {dp?.license_number || '—'}
-                      </div>
-                      <div className="text-gray-600 text-xs mt-1">
-                        Expiry: {dp?.license_expiry || '—'}
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-gray-50">
-                      <div className="text-gray-500">Stats</div>
-                      <div className="font-semibold text-gray-900">
-                        Rating: {dp?.rating ?? 0} • Deliveries: {dp?.total_deliveries ?? 0}
-                      </div>
-                      <div className="text-gray-600 text-xs mt-1">
-                        Earnings: ₹{dp?.earnings ?? 0}
-                      </div>
-                    </div>
+
+                    {dp?.aadhar_number ? (
+                      <div className="text-xs text-gray-600 mt-3">Aadhar number: {dp.aadhar_number}</div>
+                    ) : null}
                   </div>
                 </div>
+              );
+            })}
 
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setApproval(d.id, true)}
-                    className="px-4 py-2 rounded-lg bg-green-600 text-white flex items-center gap-2"
-                  >
-                    <Check size={16} />
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setApproval(d.id, false)}
-                    className="px-4 py-2 rounded-lg bg-red-600 text-white flex items-center gap-2"
-                  >
-                    <X size={16} />
-                    Reject
-                  </button>
-                </div>
+            {filtered.length === 0 ? (
+              <div className="text-center py-16 text-gray-600 bg-white rounded-2xl shadow">
+                No drivers found.
               </div>
-
-              <div className="mt-5">
-                <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-3">
-                  <FileText size={16} />
-                  Documents
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <DocCard title="Profile photo" url={dp?.profile_photo || ''} />
-                  <DocCard title="Vehicle photo" url={dp?.vehicle_photo || ''} />
-                  <DocCard title="License photo" url={dp?.license_photo || ''} />
-                  <DocCard title="Aadhar photo" url={dp?.aadhar_photo || ''} />
-                </div>
-
-                {dp?.aadhar_number ? (
-                  <div className="text-xs text-gray-600 mt-3">
-                    Aadhar number: {dp.aadhar_number}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          );
-        })}
-
-        {filtered.length === 0 ? (
-          <div className="text-center py-16 text-gray-600 bg-white rounded-2xl shadow">
-            No drivers found.
+            ) : null}
           </div>
-        ) : null}
+        )}
       </div>
-    </div>
+
+      {/* If DashboardLayout already renders BottomNav internally, remove this line. */}
+      <BottomNav role={''} />
+    </DashboardLayout>
   );
 }
 
