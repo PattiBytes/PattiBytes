@@ -183,7 +183,7 @@ export default function RestaurantFullMenuPage() {
     wrapper.appendChild(content.cloneNode(true));
     document.body.appendChild(wrapper);
 
-    window.print(); // user can "Save as PDF" from browser print dialog [web:272]
+    window.print();
 
     setTimeout(() => wrapper.remove(), 700);
   };
@@ -193,57 +193,63 @@ export default function RestaurantFullMenuPage() {
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 py-6 pb-28 md:pb-8">
-          {/* Top bar */}
-          <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-28 md:pb-8">
+          {/* Top bar (stacks on mobile) */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <button
               onClick={() => router.back()}
-              className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900 font-extrabold"
+              className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900 font-extrabold text-sm sm:text-base"
             >
               <ArrowLeft className="w-5 h-5" />
               Back
             </button>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <button
                 onClick={() => {
                   setSheetRenderAll(false);
                   setSheetOpen(true);
                 }}
-                className="inline-flex items-center gap-2 bg-white border border-gray-200 shadow-sm hover:shadow px-3 py-2 rounded-xl font-extrabold text-gray-900"
+                className="inline-flex items-center justify-center gap-2 flex-1 sm:flex-none bg-white border border-gray-200 shadow-sm hover:shadow px-3 py-2.5 rounded-xl font-extrabold text-gray-900 text-sm sm:text-base"
               >
                 <FileText className="w-5 h-5 text-gray-700" />
-                Menu sheet
+                <span className="sm:inline">Menu sheet</span>
               </button>
 
               {itemCount > 0 && (
                 <button
                   onClick={() => router.push('/customer/cart')}
-                  className="inline-flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl font-extrabold hover:bg-orange-600"
+                  className="inline-flex items-center justify-center gap-2 flex-1 sm:flex-none bg-primary text-white px-3 sm:px-4 py-2.5 rounded-xl font-extrabold hover:bg-orange-600 text-sm sm:text-base"
                 >
                   <ShoppingCart className="w-5 h-5" />
-                  Cart ({itemCount})
+                  <span className="truncate">Cart ({itemCount})</span>
                 </button>
               )}
             </div>
           </div>
 
           {/* Header */}
-          <div className="bg-white rounded-2xl shadow p-4 md:p-5">
-            <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
+          <div className="bg-white rounded-2xl shadow p-3 sm:p-4 md:p-5">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
                 {merchantLogo ? (
-                  <Image src={merchantLogo} alt="Merchant logo" width={56} height={56} className="object-cover w-full h-full" />
+                  <Image
+                    src={merchantLogo}
+                    alt="Merchant logo"
+                    width={56}
+                    height={56}
+                    className="object-cover w-full h-full"
+                  />
                 ) : (
                   <ImageIcon className="w-6 h-6 text-gray-400" />
                 )}
               </div>
 
               <div className="flex-1 min-w-0">
-                <h1 className="text-xl md:text-2xl font-extrabold text-gray-900 truncate">
+                <h1 className="text-lg sm:text-xl md:text-2xl font-extrabold text-gray-900 truncate">
                   {restaurant?.business_name || 'Full Menu'}
                 </h1>
-                <p className="text-xs text-gray-600 font-semibold mt-1">
+                <p className="text-[11px] sm:text-xs text-gray-600 font-semibold mt-1">
                   Showing {gridItems.length} / {flatItems.length} items
                 </p>
               </div>
@@ -251,14 +257,14 @@ export default function RestaurantFullMenuPage() {
           </div>
 
           {/* Controls */}
-          <div className="mt-4 bg-white rounded-2xl shadow p-4">
+          <div className="mt-3 sm:mt-4 bg-white rounded-2xl shadow p-3 sm:p-4">
             <div className="flex flex-col md:flex-row gap-3 md:items-center">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-10 pr-10 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary"
+                  className="w-full pl-10 pr-10 py-2.5 sm:py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary text-sm sm:text-base"
                   placeholder="Search items, category..."
                 />
                 {search && (
@@ -276,7 +282,8 @@ export default function RestaurantFullMenuPage() {
                 <button
                   type="button"
                   onClick={() => setVegOnly((v) => !v)}
-                  className={`px-3 py-3 rounded-xl border-2 font-extrabold inline-flex items-center gap-2 transition ${
+                  aria-pressed={vegOnly}
+                  className={`px-3 py-2.5 sm:py-3 rounded-xl border-2 font-extrabold inline-flex items-center gap-2 transition text-sm sm:text-base ${
                     vegOnly
                       ? 'border-green-600 bg-green-50 text-green-700'
                       : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
@@ -286,7 +293,7 @@ export default function RestaurantFullMenuPage() {
                   Veg
                 </button>
 
-                <div className="px-3 py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-700 font-extrabold inline-flex items-center gap-2">
+                <div className="px-3 py-2.5 sm:py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-700 font-extrabold inline-flex items-center gap-2 text-sm sm:text-base">
                   <SlidersHorizontal className="w-5 h-5" />
                   <select
                     value={sortKey}
@@ -305,14 +312,14 @@ export default function RestaurantFullMenuPage() {
 
           {/* Grid */}
           {loading ? (
-            <div className="mt-6 text-gray-600 font-semibold">Loading menu...</div>
+            <div className="mt-6 text-gray-600 font-semibold text-sm sm:text-base">Loading menu...</div>
           ) : flatItems.length === 0 ? (
-            <div className="mt-6 bg-white rounded-2xl shadow p-16 text-center text-gray-600 font-bold">
+            <div className="mt-6 bg-white rounded-2xl shadow p-10 sm:p-16 text-center text-gray-600 font-bold">
               No menu items found
             </div>
           ) : (
             <>
-              <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="mt-4 sm:mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {gridItems.map((item: any) => {
                   const img = getSafeImageSrc(item.image_url);
                   const qty = quantities[item.id] || 1;
@@ -321,53 +328,69 @@ export default function RestaurantFullMenuPage() {
 
                   return (
                     <div key={item.id} className="bg-white rounded-2xl shadow hover:shadow-lg transition overflow-hidden">
-                      <div className="relative aspect-square bg-gray-100">
+                      <div className="relative aspect-[4/3] sm:aspect-square bg-gray-100">
                         {img ? (
-                          <Image src={img} alt={item.name} fill className="object-cover" sizes="300px" />
+                          <Image
+                            src={img}
+                            alt={item.name}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                          />
                         ) : (
-                          <div className="absolute inset-0 flex items-center justify-center text-gray-400 font-extrabold text-sm">
+                          <div className="absolute inset-0 flex items-center justify-center text-gray-400 font-extrabold text-xs sm:text-sm">
                             No Image
                           </div>
                         )}
 
                         {hasDiscount && (
-                          <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-extrabold px-2 py-1 rounded-full">
+                          <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] sm:text-xs font-extrabold px-2 py-1 rounded-full">
                             {item.discount_percentage}% OFF
                           </div>
                         )}
                       </div>
 
-                      <div className="p-3">
-                        <div className="font-extrabold text-gray-900 line-clamp-1">{item.name}</div>
-                        <div className="text-xs text-gray-600 line-clamp-1">{String(item.category || 'Other')}</div>
+                      <div className="p-2.5 sm:p-3">
+                        <div className="font-extrabold text-gray-900 line-clamp-1 text-sm sm:text-base">
+                          {item.name}
+                        </div>
+                        <div className="text-[11px] sm:text-xs text-gray-600 line-clamp-1">
+                          {String(item.category || 'Other')}
+                        </div>
 
                         {item.description && (
-                          <div className="text-xs text-gray-600 mt-1 line-clamp-2">{item.description}</div>
+                          <div className="text-[11px] sm:text-xs text-gray-600 mt-1 line-clamp-2">
+                            {item.description}
+                          </div>
                         )}
 
                         <div className="mt-2 flex items-center gap-2">
                           {hasDiscount && (
-                            <span className="text-xs text-gray-400 line-through">₹{Number(item.price).toFixed(2)}</span>
+                            <span className="text-[11px] sm:text-xs text-gray-400 line-through">
+                              ₹{Number(item.price).toFixed(2)}
+                            </span>
                           )}
-                          <span className="font-extrabold text-gray-900">₹{discounted.toFixed(2)}</span>
+                          <span className="font-extrabold text-gray-900 text-sm sm:text-base">
+                            ₹{discounted.toFixed(2)}
+                          </span>
                         </div>
 
-                        <div className="mt-3 flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1">
+                        <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <div className="flex items-center justify-between sm:justify-start gap-2 bg-gray-100 rounded-xl p-1">
                             <button
                               onClick={() => updateQty(item.id, -1)}
-                              className="w-9 h-9 rounded-lg bg-white hover:bg-gray-50 border border-gray-200 flex items-center justify-center disabled:opacity-40"
+                              className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white hover:bg-gray-50 border border-gray-200 flex items-center justify-center disabled:opacity-40"
                               disabled={qty <= 1}
                               aria-label="Decrease quantity"
                             >
                               <Minus className="w-4 h-4" />
                             </button>
 
-                            <span className="w-8 text-center font-extrabold text-gray-900">{qty}</span>
+                            <span className="w-8 text-center font-extrabold text-gray-900 text-sm">{qty}</span>
 
                             <button
                               onClick={() => updateQty(item.id, 1)}
-                              className="w-9 h-9 rounded-lg bg-white hover:bg-gray-50 border border-gray-200 flex items-center justify-center disabled:opacity-40"
+                              className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white hover:bg-gray-50 border border-gray-200 flex items-center justify-center disabled:opacity-40"
                               disabled={qty >= 10}
                               aria-label="Increase quantity"
                             >
@@ -377,7 +400,7 @@ export default function RestaurantFullMenuPage() {
 
                           <button
                             onClick={() => add(item)}
-                            className="bg-primary text-white px-3 py-2 rounded-xl font-extrabold hover:bg-orange-600"
+                            className="w-full sm:w-auto bg-primary text-white px-3 py-2 rounded-xl font-extrabold hover:bg-orange-600 text-sm sm:text-base"
                           >
                             Add
                           </button>
@@ -390,16 +413,16 @@ export default function RestaurantFullMenuPage() {
 
               {/* Load more */}
               {visibleCount < flatItems.length && (
-                <div className="mt-6 flex items-center justify-center gap-2">
+                <div className="mt-5 sm:mt-6 flex items-center justify-center gap-2 flex-wrap">
                   <button
                     onClick={() => setVisibleCount((c) => Math.min(c + 80, flatItems.length))}
-                    className="px-5 py-3 rounded-2xl bg-white border border-gray-200 shadow-sm hover:shadow font-extrabold text-gray-900"
+                    className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-white border border-gray-200 shadow-sm hover:shadow font-extrabold text-gray-900 text-sm sm:text-base"
                   >
                     Load more
                   </button>
                   <button
                     onClick={() => setVisibleCount(flatItems.length)}
-                    className="px-5 py-3 rounded-2xl bg-gray-900 text-white hover:bg-black font-extrabold"
+                    className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-gray-900 text-white hover:bg-black font-extrabold text-sm sm:text-base"
                   >
                     Show all ({flatItems.length})
                   </button>
@@ -411,10 +434,10 @@ export default function RestaurantFullMenuPage() {
 
         {/* Mobile sticky cart bar */}
         {itemCount > 0 && (
-          <div className="fixed bottom-4 left-4 right-4 md:hidden z-50">
+          <div className="fixed bottom-4 left-3 right-3 sm:left-4 sm:right-4 md:hidden z-50">
             <button
               onClick={() => router.push('/customer/cart')}
-              className="w-full bg-primary text-white px-6 py-4 rounded-2xl hover:bg-orange-600 font-extrabold flex items-center justify-between shadow-2xl"
+              className="w-full bg-primary text-white px-5 sm:px-6 py-3.5 sm:py-4 rounded-2xl hover:bg-orange-600 font-extrabold flex items-center justify-between shadow-2xl text-sm sm:text-base"
             >
               <div className="flex items-center gap-2">
                 <ShoppingCart className="w-6 h-6" />
@@ -427,19 +450,19 @@ export default function RestaurantFullMenuPage() {
           </div>
         )}
 
-        {/* Menu Sheet Modal (renders ALL items when enabled) */}
+        {/* Menu Sheet Modal (responsive + still prints A4) */}
         {sheetOpen && (
           <div className="fixed inset-0 z-[9999]">
             <div className="absolute inset-0 bg-black/50" onClick={() => setSheetOpen(false)} aria-hidden="true" />
 
-            <div className="absolute inset-0 flex items-center justify-center p-3 md:p-8">
+            <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-3 md:p-8">
               <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden">
-                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
-                  <div className="font-extrabold text-gray-900">Menu sheet preview</div>
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 sm:px-4 py-3 border-b">
+                  <div className="font-extrabold text-gray-900 text-sm sm:text-base">Menu sheet preview</div>
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                     <button
                       onClick={() => setSheetRenderAll(true)}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl font-extrabold border border-gray-200 hover:bg-gray-50"
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl font-extrabold border border-gray-200 hover:bg-gray-50 text-sm"
                       title="Render all items (up to 1000)"
                     >
                       {sheetRenderAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
@@ -448,7 +471,7 @@ export default function RestaurantFullMenuPage() {
 
                     <button
                       onClick={printSheet}
-                      className="inline-flex items-center gap-2 bg-gray-900 text-white px-3 py-2 rounded-xl font-extrabold hover:bg-gray-800"
+                      className="inline-flex items-center gap-2 bg-gray-900 text-white px-3 py-2 rounded-xl font-extrabold hover:bg-gray-800 text-sm"
                     >
                       <Printer className="w-4 h-4" />
                       Print / Save PDF
@@ -456,33 +479,39 @@ export default function RestaurantFullMenuPage() {
 
                     <button
                       onClick={() => setSheetOpen(false)}
-                      className="px-3 py-2 rounded-xl font-extrabold border border-gray-200 hover:bg-gray-50"
+                      className="px-3 py-2 rounded-xl font-extrabold border border-gray-200 hover:bg-gray-50 text-sm"
                     >
                       Close
                     </button>
                   </div>
                 </div>
 
-                <div className="max-h-[80vh] overflow-auto bg-gray-100 p-4">
+                <div className="max-h-[82vh] overflow-auto bg-gray-100 p-3 sm:p-4">
                   <div
                     ref={sheetRef}
-                    className="mx-auto bg-white shadow rounded-lg"
-                    style={{ width: '794px', minHeight: '1123px', padding: '28px' }}
+                    className="__sheet mx-auto bg-white shadow rounded-lg w-full max-w-[794px] p-4 sm:p-7"
+                    style={{ minHeight: '1123px' }}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center">
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center">
                         {merchantLogo ? (
-                          <Image src={merchantLogo} alt="Logo" width={56} height={56} className="object-cover w-full h-full" />
+                          <Image
+                            src={merchantLogo}
+                            alt="Logo"
+                            width={56}
+                            height={56}
+                            className="object-cover w-full h-full"
+                          />
                         ) : (
                           <ImageIcon className="w-6 h-6 text-gray-400" />
                         )}
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-2xl font-extrabold text-gray-900">
+                        <div className="text-lg sm:text-2xl font-extrabold text-gray-900 truncate">
                           {restaurant?.business_name || 'Restaurant'}
                         </div>
-                        <div className="text-sm text-gray-600 font-semibold">
+                        <div className="text-xs sm:text-sm text-gray-600 font-semibold">
                           Full menu sheet • Items: {flatItems.length}
                         </div>
                       </div>
@@ -490,7 +519,7 @@ export default function RestaurantFullMenuPage() {
 
                     <div className="h-px bg-gray-200 my-4" />
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       {(sheetRenderAll ? flatItems : flatItems.slice(0, 120)).map((item: any) => {
                         const img = getSafeImageSrc(item.image_url);
                         const price = finalPrice(item.price, item.discount_percentage);
@@ -498,7 +527,7 @@ export default function RestaurantFullMenuPage() {
                         return (
                           <div key={item.id} className="border border-gray-200 rounded-xl overflow-hidden">
                             <div className="flex">
-                              <div className="relative w-24 h-24 bg-gray-100 flex-shrink-0">
+                              <div className="relative w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 flex-shrink-0">
                                 {img ? (
                                   <Image src={img} alt={item.name} fill className="object-cover" sizes="96px" />
                                 ) : (
@@ -509,17 +538,25 @@ export default function RestaurantFullMenuPage() {
                               </div>
 
                               <div className="p-3 flex-1 min-w-0">
-                                <div className="font-extrabold text-gray-900 truncate">{item.name}</div>
-                                <div className="text-xs text-gray-600 truncate">{String(item.category || 'Other')}</div>
+                                <div className="font-extrabold text-gray-900 truncate text-sm sm:text-base">
+                                  {item.name}
+                                </div>
+                                <div className="text-[11px] sm:text-xs text-gray-600 truncate">
+                                  {String(item.category || 'Other')}
+                                </div>
                                 {item.description && (
-                                  <div className="text-xs text-gray-600 mt-1 line-clamp-2">{item.description}</div>
+                                  <div className="text-[11px] sm:text-xs text-gray-600 mt-1 line-clamp-2">
+                                    {item.description}
+                                  </div>
                                 )}
 
                                 <div className="mt-2 flex items-center justify-between gap-2">
-                                  <div className="font-extrabold text-gray-900">₹{price.toFixed(2)}</div>
+                                  <div className="font-extrabold text-gray-900 text-sm sm:text-base">
+                                    ₹{price.toFixed(2)}
+                                  </div>
                                   <button
                                     onClick={() => add(item)}
-                                    className="bg-primary text-white px-3 py-1.5 rounded-lg font-extrabold hover:bg-orange-600"
+                                    className="bg-primary text-white px-3 py-1.5 rounded-lg font-extrabold hover:bg-orange-600 text-sm"
                                   >
                                     Add
                                   </button>
@@ -531,16 +568,12 @@ export default function RestaurantFullMenuPage() {
                       })}
                     </div>
 
-                    <div className="text-xs text-gray-500 mt-6 font-semibold">
-                      Use Print / Save PDF to export this sheet. [web:272]
-                    </div>
+                    {!sheetRenderAll && flatItems.length > 120 && (
+                      <div className="text-[11px] sm:text-xs text-gray-700 mt-4 text-center font-semibold">
+                        Preview is showing first 120 items for speed. Click “Render all” to include all {flatItems.length}.
+                      </div>
+                    )}
                   </div>
-
-                  {!sheetRenderAll && flatItems.length > 120 && (
-                    <div className="text-xs text-gray-700 mt-3 text-center font-semibold">
-                      Preview is showing first 120 items for speed. Click “Render all” to include all {flatItems.length}.
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -558,6 +591,12 @@ export default function RestaurantFullMenuPage() {
             }
             #__print_sheet__ {
               position: static !important;
+            }
+            /* Ensure the sheet prints as A4-like width even if it was responsive on screen */
+            #__print_sheet__ .__sheet {
+              width: 794px !important;
+              max-width: 794px !important;
+              padding: 28px !important;
             }
           }
         `}</style>
