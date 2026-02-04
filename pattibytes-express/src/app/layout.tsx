@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import { AuthProvider } from '@/contexts/AuthContext';
+import AuthProvider from '@/contexts/AuthContext';
+
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import PWAInstaller from '@/components/PWAInstaller';
