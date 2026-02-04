@@ -35,15 +35,14 @@ export interface AuthContextType {
 export const AuthContext = createContext<AuthContextType | null>(null);
 
 const PROFILE_CACHE_KEY = '__pbx_profile_cache_v1__';
-const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 function readProfileCache(userId: string): Profile | null {
   try {
     const raw = localStorage.getItem(PROFILE_CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { ts: number; userId: string; profile: Profile };
-    if (!parsed?.ts || !parsed?.userId || !parsed?.profile) return null;
-    if (parsed.userId !== userId) return null;
+    if (!parsed?.ts || parsed.userId !== userId) return null;
     if (Date.now() - parsed.ts > PROFILE_CACHE_TTL_MS) return null;
     return parsed.profile;
   } catch {
@@ -54,17 +53,13 @@ function readProfileCache(userId: string): Profile | null {
 function writeProfileCache(userId: string, profile: Profile) {
   try {
     localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ ts: Date.now(), userId, profile }));
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 function clearProfileCache() {
   try {
     localStorage.removeItem(PROFILE_CACHE_KEY);
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
@@ -74,20 +69,16 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
   const [user, setUser] = useState<Profile | null>(null);
   const [authUser, setAuthUser] = useState<SupabaseUser | null>(null);
-
-  // Start as "loading" so your protected pages don't redirect before session restore finishes
   const [loading, setLoading] = useState(true);
 
-  // Avoid running multiple profile fetches at once
-  const profileReqRef = useRef(0);
   const initialHandledRef = useRef(false);
+  const profileReqRef = useRef(0);
 
   useEffect(() => {
     pathnameRef.current = pathname || '/';
   }, [pathname]);
 
   const loadUserProfile = async (userId: string) => {
-    // Instant from cache (optional)
     const cached = readProfileCache(userId);
     if (cached) setUser(cached);
 
@@ -95,12 +86,10 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data, error } = await supabase
       .from('profiles')
-      // smaller payload = faster
       .select('id,email,full_name,phone,role,approval_status,avatar_url,logo_url,profile_completed,is_active,updated_at,created_at')
       .eq('id', userId)
       .maybeSingle();
 
-    // Ignore outdated request results
     if (reqId !== profileReqRef.current) return;
 
     if (error) {
@@ -118,59 +107,55 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     setAuthUser(u);
 
     if (u?.id) {
-      // do not block UI on profile
       loadUserProfile(u.id).catch((e) => console.error('loadUserProfile error:', e?.message || String(e)));
     } else {
       setUser(null);
-      clearProfileCache();
     }
   };
 
   useEffect(() => {
     let alive = true;
 
-    // Listen first; it fires INITIAL_SESSION on registration (important for “reopen app”). [web:480]
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event: AuthChangeEvent, session) => {
-        if (!alive) return;
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session) => {
+      if (!alive) return;
 
-        if (event === 'INITIAL_SESSION') {
-          initialHandledRef.current = true;
-          await applySession(session);
-          setLoading(false);
-          return;
-        }
-
-        if (event === 'SIGNED_OUT') {
-          setAuthUser(null);
-          setUser(null);
-          clearProfileCache();
-          setLoading(false);
-
-          const p = pathnameRef.current || '/';
-          const isPublic = p === '/' || p.startsWith('/login') || p.startsWith('/signup') || p.startsWith('/auth/');
-
-          if (!isPublic) router.replace(`/login?redirect=${encodeURIComponent(p)}`);
-          else router.replace('/');
-
-          return;
-        }
-
-        // SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED, etc. [web:480]
+      // IMPORTANT: don’t redirect until initial session is known
+      if (event === 'INITIAL_SESSION') {
+        initialHandledRef.current = true;
         await applySession(session);
+        setLoading(false);
+        return;
       }
-    );
 
-    // Fallback: in case INITIAL_SESSION is delayed for some reason, try getSession once.
+      if (event === 'SIGNED_OUT') {
+        setAuthUser(null);
+        setUser(null);
+        clearProfileCache();
+        setLoading(false);
+
+        const p = pathnameRef.current || '/';
+        const isPublic = p === '/' || p.startsWith('/login') || p.startsWith('/signup') || p.startsWith('/auth/');
+
+        if (!isPublic) router.replace(`/login?redirect=${encodeURIComponent(p)}`);
+        else router.replace('/');
+
+        return;
+      }
+
+      // SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED...
+      await applySession(session);
+    });
+
+    // Fallback: if INITIAL_SESSION doesn’t arrive quickly, getSession once
     (async () => {
       try {
         const { data } = await supabase.auth.getSession();
         if (!alive) return;
 
         if (!initialHandledRef.current) {
+          initialHandledRef.current = true;
           await applySession(data.session);
           setLoading(false);
-          initialHandledRef.current = true;
         }
       } catch (e: any) {
         console.error('getSession error:', e?.message || String(e));
@@ -184,14 +169,12 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [router]);
 
-  // When user reopens the PWA/tab, refresh session (prevents “random logout” after idle). [page:3]
+  // Optional: on resume, calling getSession can refresh an expired access token.
   useEffect(() => {
     const onResume = async () => {
       try {
-        await supabase.auth.refreshSession();
-      } catch {
-        // If refresh fails, Supabase will eventually emit SIGNED_OUT
-      }
+        await supabase.auth.getSession();
+      } catch {}
     };
 
     window.addEventListener('focus', onResume);
@@ -199,9 +182,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       if (document.visibilityState === 'visible') onResume();
     });
 
-    return () => {
-      window.removeEventListener('focus', onResume);
-    };
+    return () => window.removeEventListener('focus', onResume);
   }, []);
 
   const refreshUser = async () => {
