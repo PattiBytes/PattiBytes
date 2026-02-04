@@ -124,7 +124,7 @@ function normalizePhone(v: string) {
 }
 
 export default function CustomerOrderDetailPage() {
-  const { user } = useAuth();
+const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
 
@@ -138,6 +138,7 @@ export default function CustomerOrderDetailPage() {
   const [cancelReason, setCancelReason] = useState('');
 
   const [customerProfile, setCustomerProfile] = useState<any>(null);
+  
 
   // Live location sharing
   const [shareLiveLocation, setShareLiveLocation] = useState(false);
@@ -146,12 +147,15 @@ export default function CustomerOrderDetailPage() {
   const watchIdRef = useRef<number | null>(null);
   const lastSentAtRef = useRef<number>(0);
 
-  useEffect(() => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-    if (!orderId) return;
+ useEffect(() => {
+  if (authLoading) return;
+
+  if (!user) {
+    router.replace('/login');
+    return;
+  }
+
+  if (!orderId) return;
 
     loadOrder();
     loadCustomerProfile();
@@ -166,7 +170,7 @@ export default function CustomerOrderDetailPage() {
       stopSharing();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, orderId]);
+  }, [authLoading, user, orderId, router]);
 
   const loadCustomerProfile = async () => {
     if (!user) return;
