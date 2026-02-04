@@ -27,39 +27,19 @@ export interface Profile {
 export interface AuthContextType {
   user: Profile | null;
   authUser: SupabaseUser | null;
-  loading: boolean; // true only while restoring initial session
+  loading: boolean;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
+// ✅ Export it (this fixes your build error)
 export const AuthContext = createContext<AuthContextType | null>(null);
 
-const PROFILE_CACHE_KEY = '__pbx_profile_cache_v1__';
-const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-function readProfileCache(userId: string): Profile | null {
-  try {
-    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { ts: number; userId: string; profile: Profile };
-    if (!parsed?.ts || parsed.userId !== userId) return null;
-    if (Date.now() - parsed.ts > PROFILE_CACHE_TTL_MS) return null;
-    return parsed.profile;
-  } catch {
-    return null;
-  }
-}
-
-function writeProfileCache(userId: string, profile: Profile) {
-  try {
-    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ ts: Date.now(), userId, profile }));
-  } catch {}
-}
-
-function clearProfileCache() {
-  try {
-    localStorage.removeItem(PROFILE_CACHE_KEY);
-  } catch {}
+function withTimeout<T>(p: Promise<T>, ms = 8000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('Auth timeout')), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }).catch((e) => { clearTimeout(t); reject(e); });
+  });
 }
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
@@ -71,67 +51,52 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const [authUser, setAuthUser] = useState<SupabaseUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const initialHandledRef = useRef(false);
-  const profileReqRef = useRef(0);
-
   useEffect(() => {
     pathnameRef.current = pathname || '/';
   }, [pathname]);
 
   const loadUserProfile = async (userId: string) => {
-    const cached = readProfileCache(userId);
-    if (cached) setUser(cached);
-
-    const reqId = ++profileReqRef.current;
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id,email,full_name,phone,role,approval_status,avatar_url,logo_url,profile_completed,is_active,updated_at,created_at')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (reqId !== profileReqRef.current) return;
-
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     if (error) {
       console.error('Profile fetch error:', error.message);
+      setUser(null);
       return;
     }
-
-    const profile = (data as Profile) ?? null;
-    setUser(profile);
-    if (profile?.id) writeProfileCache(profile.id, profile);
+    setUser((data as Profile) ?? null);
   };
 
-  const applySession = async (session: any) => {
-    const u = session?.user ?? null;
+  const initAuth = async () => {
+    const res = await withTimeout(supabase.auth.getSession(), 8000);
+    const u = res.data.session?.user ?? null;
     setAuthUser(u);
-
-    if (u?.id) {
-      loadUserProfile(u.id).catch((e) => console.error('loadUserProfile error:', e?.message || String(e)));
-    } else {
-      setUser(null);
-    }
+    if (u?.id) await loadUserProfile(u.id);
+    else setUser(null);
   };
 
   useEffect(() => {
     let alive = true;
 
+    const run = async () => {
+      setLoading(true);
+      try {
+        await initAuth();
+      } catch (e: any) {
+        console.error('Auth init error:', e?.message || String(e));
+        setAuthUser(null);
+        setUser(null);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+
+    run();
+
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session) => {
       if (!alive) return;
-
-      // IMPORTANT: don’t redirect until initial session is known
-      if (event === 'INITIAL_SESSION') {
-        initialHandledRef.current = true;
-        await applySession(session);
-        setLoading(false);
-        return;
-      }
 
       if (event === 'SIGNED_OUT') {
         setAuthUser(null);
         setUser(null);
-        clearProfileCache();
-        setLoading(false);
 
         const p = pathnameRef.current || '/';
         const isPublic = p === '/' || p.startsWith('/login') || p.startsWith('/signup') || p.startsWith('/auth/');
@@ -142,26 +107,11 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED...
-      await applySession(session);
+      const u = session?.user ?? null;
+      setAuthUser(u);
+      if (u?.id) await loadUserProfile(u.id);
+      else setUser(null);
     });
-
-    // Fallback: if INITIAL_SESSION doesn’t arrive quickly, getSession once
-    (async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!alive) return;
-
-        if (!initialHandledRef.current) {
-          initialHandledRef.current = true;
-          await applySession(data.session);
-          setLoading(false);
-        }
-      } catch (e: any) {
-        console.error('getSession error:', e?.message || String(e));
-        if (alive) setLoading(false);
-      }
-    })();
 
     return () => {
       alive = false;
@@ -169,43 +119,32 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [router]);
 
-  // Optional: on resume, calling getSession can refresh an expired access token.
-  useEffect(() => {
-    const onResume = async () => {
-      try {
-        await supabase.auth.getSession();
-      } catch {}
-    };
-
-    window.addEventListener('focus', onResume);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') onResume();
-    });
-
-    return () => window.removeEventListener('focus', onResume);
-  }, []);
-
   const refreshUser = async () => {
+    setLoading(true);
     try {
-      const { data } = await supabase.auth.getSession();
-      await applySession(data.session);
+      await initAuth();
     } catch (e: any) {
       console.error('refreshUser error:', e?.message || String(e));
+      setAuthUser(null);
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
   };
 
   const logout = async () => {
-    // Optimistic UI
-    setAuthUser(null);
-    setUser(null);
-    setLoading(false);
-    clearProfileCache();
-
+    setLoading(true);
     try {
-      await supabase.auth.signOut();
-    } finally {
+      const { error } = await supabase.auth.signOut();
+      if (error) console.error('Logout error:', error.message);
+
+      setAuthUser(null);
+      setUser(null);
+
       router.replace('/');
       router.refresh();
+    } finally {
+      setLoading(false);
     }
   };
 
