@@ -1,14 +1,17 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
+
 import AuthProvider from '@/contexts/AuthContext';
+import { CartProvider } from '@/contexts/CartContext';
 
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+
 import PWAInstaller from '@/components/PWAInstaller';
 import Header from '@/components/common/Header';
-import { CartProvider } from '@/contexts/CartContext';
 
+import { GoogleAnalytics } from '@next/third-parties/google'; // Next.js GA for App Router [web:348][web:349]
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -28,8 +31,21 @@ export const metadata: Metadata = {
     default: 'PattiBytes Express - ਪੱਟੀ ਦੀ ਲੋੜ, ਹਾਢੇ ਕੋਲ ਤੋੜ',
     template: '%s | PattiBytes Express',
   },
-  description: 'Fast food delivery service in Patti, Punjab. Order from local restaurants and get food delivered quickly.',
-  keywords: ['food delivery', 'patti', 'punjab', 'restaurant', 'online food', 'pattibytes', 'ਪੱਟੀਬਾਈਟਸ'],
+  description:
+    'Fast food delivery service in Patti, Punjab. Order from local restaurants and get food delivered quickly.',
+  keywords: [
+    'food delivery',
+    'patti',
+    'punjab',
+    'restaurant',
+    'pbexpress',
+    'pb express',
+    'pattibytesexpress',
+    'pattibytes express',
+    'online food',
+    'pattibytes',
+    'ਪੱਟੀਬਾਈਟਸ',
+  ],
   authors: [{ name: 'PattiBytes Express' }],
   manifest: '/manifest.json',
   icons: {
@@ -37,9 +53,7 @@ export const metadata: Metadata = {
       { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
       { url: '/favicon.ico', sizes: 'any' },
     ],
-    apple: [
-      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-    ],
+    apple: [{ url: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
   },
   appleWebApp: {
     capable: true,
@@ -69,6 +83,12 @@ export const metadata: Metadata = {
     description: 'Fast food delivery in Patti, Punjab',
     images: ['/icon-192.png'],
   },
+
+  // Optional (recommended) for Search Console meta-tag verification
+  // Put only the code Google gives you (not the whole meta tag).
+  ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION } }
+    : {}), // Next.js supports Google verification in metadata [web:341]
 };
 
 export const viewport: Viewport = {
@@ -91,12 +111,14 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
+
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>
           <CartProvider>
             <Header />
             <PWAInstaller />
             {children}
+
             <ToastContainer
               position="top-right"
               autoClose={3000}
@@ -111,6 +133,9 @@ export default function RootLayout({
             />
           </CartProvider>
         </AuthProvider>
+
+        {/* GA4: This replaces pasting the raw gtag.js snippet manually */}
+        <GoogleAnalytics gaId="G-MNVMTQ010K" /> {/* include in root layout to load on all routes [web:348][web:349] */}
       </body>
     </html>
   );
