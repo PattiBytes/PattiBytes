@@ -1,14 +1,21 @@
 @import "tailwindcss";
 
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
   --primary: #f97316;
   --primary-dark: #ea580c;
   --primary-light: #fb923c;
+  /* Helps native form controls + scrollbars in dark mode */
+
+.dark { color-scheme: dark; }
+
+
 }
 
 @theme inline {
+  
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
