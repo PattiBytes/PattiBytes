@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-
+   
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import type { User as SupabaseUser, AuthChangeEvent } from '@supabase/supabase-js';
 import { useRouter, usePathname } from 'next/navigation';
