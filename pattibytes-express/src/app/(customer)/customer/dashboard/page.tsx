@@ -1,23 +1,32 @@
- 
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
-import { Facebook, Globe, Instagram, Receipt, RefreshCcw, ShoppingBag, Truck, Youtube } from 'lucide-react';
+import {
+  Facebook,
+  Globe,
+  Instagram,
+  Receipt,
+  RefreshCcw,
+  ShoppingBag,
+  Truck,
+  Youtube,
+  TrendingUp,
+  ArrowRight,
+  Image as ImageIcon,
+} from 'lucide-react';
 
 import AppShell from '@/components/common/AppShell';
 import { supabase } from '@/lib/supabase';
 import { locationService, type SavedAddress } from '@/services/location';
 
-// Pick ONE auth import that matches your project
-import { useAuth } from '@/contexts/AuthContext'; // if you use contexts/AuthContext
-// import { useAuth } from '@/hooks/useAuth'; // if you use hooks/useAuth
+import { useAuth } from '@/contexts/AuthContext';
 
 import type { Location, MenuItem, Merchant, SearchResult } from '@/components/customer-dashboard/types';
 import {
@@ -58,13 +67,9 @@ type ActiveOrder = {
   ordernumber?: number | null;
   status?: string | null;
   total_amount?: number | null;
-  totalamount?: number | null;
   created_at?: string | null;
-  createdat?: string | null;
   merchant_id?: string | null;
-  merchantid?: string | null;
 
-  // hydrated
   merchantName?: string;
   merchantLogoUrl?: string | null;
 };
@@ -91,11 +96,26 @@ type AppSettingsRow = {
   youtube_url: string | null;
   website_url: string | null;
 
-  custom_links?: any; // jsonb
-  customer_search_radius_km?: number | null; // only if you add this column
+  custom_links?: any;
+  customer_search_radius_km?: number | null;
 };
 
 const APP_SETTINGS_ID = 'a6ba88a3-6fe9-4652-8c5d-b25ee1a05e39';
+
+type TrendingDish = {
+  id: string;
+  merchant_id: string;
+  name: string;
+  description?: string | null;
+  price: number;
+  category?: string | null;
+  image_url?: string | null;
+  discount_percentage?: number | null;
+  is_veg?: boolean | null;
+
+  merchantName?: string | null;
+  totalQty: number;
+};
 
 function toMoney(n: any) {
   const x = Number(n || 0);
@@ -117,7 +137,7 @@ function tinyTime(iso?: string | null) {
       minute: '2-digit',
     });
   } catch {
-    return iso;
+    return iso || '';
   }
 }
 
@@ -129,11 +149,9 @@ function normalizeMaybeMarkdownUrl(v: any) {
   const s0 = String(v ?? '').trim();
   if (!s0) return '';
 
-  // Handles: [https://x](https://x) or [text](https://x)
   const md = s0.match(/\((https?:\/\/[^)]+)\)/i);
   const picked = (md?.[1] || s0).trim();
 
-  // Handles: [https://x](https://x) (just brackets)
   const bracketOnly = picked.match(/^\[([^\]]+)\]$/);
   return (bracketOnly?.[1] || picked).trim();
 }
@@ -144,6 +162,13 @@ function iconForUrl(url: string) {
   if (u.includes('facebook.com')) return Facebook;
   if (u.includes('youtube.com') || u.includes('youtu.be')) return Youtube;
   return Globe;
+}
+
+function finalPrice(price: any, discount?: any) {
+  const p = Number(price || 0);
+  const d = Number(discount || 0);
+  if (!d) return p;
+  return p * (1 - d / 100);
 }
 
 export default function CustomerDashboardPage() {
@@ -163,13 +188,14 @@ export default function CustomerDashboardPage() {
   const [restaurants, setRestaurants] = useState<Merchant[]>([]);
   const [filteredRestaurants, setFilteredRestaurants] = useState<Merchant[]>([]);
 
+  // SearchBox inputs
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuCountByMerchant, setMenuCountByMerchant] = useState<Record<string, number>>({});
 
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
-
   const [searchQuery, setSearchQuery] = useState('');
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const menuSearchReq = useRef(0);
 
   const [stats, setStats] = useState({
     totalOrders: 0,
@@ -184,7 +210,10 @@ export default function CustomerDashboardPage() {
   const [appSettings, setAppSettings] = useState<AppSettingsRow | null>(null);
   const [customLinks, setCustomLinks] = useState<CustomLink[]>([]);
 
-  // Brand (fallbacks)
+  // Trending dishes
+  const [trending, setTrending] = useState<TrendingDish[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(false);
+
   const [brand, setBrand] = useState({
     title: 'Presented by Pattibytes',
     instagram1: 'https://www.instagram.com/pb_express38',
@@ -196,11 +225,10 @@ export default function CustomerDashboardPage() {
 
   const firstName = useMemo(() => getFirstNameFromUser(user), [user]);
 
-  // Load app_settings by ID (single row)
+  // App settings (same as your code)
   useEffect(() => {
     const loadAppSettings = async () => {
       try {
-        // Try with radius column (if you added it)
         let row: AppSettingsRow | null = null;
 
         const try1 = await supabase
@@ -214,7 +242,6 @@ export default function CustomerDashboardPage() {
         if (!try1.error) {
           row = (try1.data || null) as any;
         } else {
-          // Fallback: schema may not have customer_search_radius_km yet
           const msg = String(try1.error.message || '');
           if (msg.toLowerCase().includes('customer_search_radius_km')) {
             const try2 = await supabase
@@ -235,13 +262,11 @@ export default function CustomerDashboardPage() {
 
         setAppSettings(row);
 
-        // Radius (only if column exists + valid)
         const r = Number((row as any).customer_search_radius_km);
         if (Number.isFinite(r) && r > 0) setSearchRadiusKm(Math.round(r));
 
-        // Map DB URLs -> your existing "brand" shape
         const instagramMain = normalizeMaybeMarkdownUrl(row.instagram_url);
-        const extra = normalizeMaybeMarkdownUrl(row.twitter_url); // your CSV currently has pb_express here
+        const extra = normalizeMaybeMarkdownUrl(row.twitter_url);
         const youtube = normalizeMaybeMarkdownUrl(row.youtube_url);
         const website = normalizeMaybeMarkdownUrl(row.website_url);
         const facebook = normalizeMaybeMarkdownUrl(row.facebook_url);
@@ -255,7 +280,6 @@ export default function CustomerDashboardPage() {
           facebook: facebook || b.facebook,
         }));
 
-        // Custom links (jsonb array)
         const links = safeArr<any>((row as any).custom_links)
           .map((x) => ({
             id: String(x?.id || ''),
@@ -268,13 +292,12 @@ export default function CustomerDashboardPage() {
 
         setCustomLinks(links);
       } catch {
-        // Keep fallbacks silently
+        // keep fallbacks
       }
     };
 
     loadAppSettings();
 
-    // Realtime update when this row changes
     const ch = supabase
       .channel('app-settings-live')
       .on(
@@ -289,7 +312,7 @@ export default function CustomerDashboardPage() {
     };
   }, []);
 
-  // Load saved addresses (and set location)
+  // Saved addresses + initial location
   useEffect(() => {
     if (!user) return;
 
@@ -316,9 +339,8 @@ export default function CustomerDashboardPage() {
     };
 
     run();
-  }, [user]);
+  }, [user?.id]);
 
-  // Detect location
   const getCurrentLocation = async () => {
     setLocationLoading(true);
     try {
@@ -341,62 +363,63 @@ export default function CustomerDashboardPage() {
     }
   };
 
-  // Load order stats + active orders list (snake-first with fallback)
+  // FAST stats using aggregates + small active list (no 2000-row download)
   const loadOrdersAndStats = async () => {
     if (!user) return;
 
     setLoadingActiveOrders(true);
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('id,status,total_amount,merchant_id,created_at,order_number')
-        .eq('customer_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(2000);
+      const uid = user.id;
 
-      if (error) throw error;
+      const [totalRes, activeRes, deliveredRes, sumRes, activeListRes] = await Promise.all([
+        supabase.from('orders').select('id', { count: 'exact', head: true }).eq('customer_id', uid),
+        supabase
+          .from('orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('customer_id', uid)
+          .in('status', ACTIVE_STATUSES),
+        supabase
+          .from('orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('customer_id', uid)
+          .eq('status', 'delivered'),
+        // PostgREST aggregate: total_amount.sum() [web:274]
+        supabase.from('orders').select('total:total_amount.sum()').eq('customer_id', uid),
+        supabase
+          .from('orders')
+          .select('id,status,total_amount,merchant_id,created_at,order_number')
+          .eq('customer_id', uid)
+          .in('status', ACTIVE_STATUSES)
+          .order('created_at', { ascending: false })
+          .limit(3),
+      ]);
 
-      const rows = data || [];
-      const totalOrders = rows.length;
+      setStats({
+        totalOrders: totalRes.count || 0,
+        activeOrders: activeRes.count || 0,
+        completedOrders: deliveredRes.count || 0,
+        totalSpent: Number((sumRes.data as any)?.[0]?.total || 0),
+      });
 
-      const activeOrdersCount = rows.filter((o: any) =>
-        ACTIVE_STATUSES.includes(String(o.status || '').toLowerCase())
-      ).length;
+      const active = (activeListRes.data || []).map((o: any) => ({
+        id: String(o.id),
+        ordernumber: o.order_number ?? null,
+        status: o.status ?? null,
+        total_amount: Number(o.total_amount || 0),
+        created_at: o.created_at ?? null,
+        merchant_id: o.merchant_id ?? null,
+      })) as ActiveOrder[];
 
-      const completedOrders = rows.filter((o: any) => String(o.status || '').toLowerCase() === 'delivered').length;
-
-      const totalSpent = rows.reduce((sum: number, o: any) => sum + Number(o.total_amount || 0), 0);
-
-      setStats({ totalOrders, activeOrders: activeOrdersCount, completedOrders, totalSpent });
-
-      // top 3 active orders (for the small Active Orders card)
-      const active = rows
-        .filter((o: any) => ACTIVE_STATUSES.includes(String(o.status || '').toLowerCase()))
-        .slice(0, 3)
-        .map((o: any) => ({
-          id: String(o.id),
-          ordernumber: o.order_number ?? null,
-          status: o.status ?? null,
-          total_amount: Number(o.total_amount || 0),
-          created_at: o.created_at ?? null,
-          merchant_id: o.merchant_id ?? null,
-        }));
-
-      // hydrate merchant names (optional)
-      const merchantIds = Array.from(new Set(active.map((x: any) => x.merchant_id).filter(Boolean))) as string[];
+      // hydrate merchant names for at most 3
+      const merchantIds = Array.from(new Set(active.map((x) => x.merchant_id).filter(Boolean))) as string[];
       if (merchantIds.length) {
-        const m = await supabase
-          .from('merchants')
-          .select('id,business_name,logo_url')
-          .in('id', merchantIds)
-          .limit(50);
-
+        const m = await supabase.from('merchants').select('id,business_name,logo_url').in('id', merchantIds).limit(50);
         const mapM = new Map<string, { business_name: string | null; logo_url: string | null }>();
         (m.data || []).forEach((r: any) =>
           mapM.set(String(r.id), { business_name: r.business_name ?? null, logo_url: r.logo_url ?? null })
         );
 
-        active.forEach((a: any) => {
+        active.forEach((a) => {
           const info = mapM.get(String(a.merchant_id || ''));
           if (info) {
             a.merchantName = info.business_name || 'Restaurant';
@@ -405,7 +428,7 @@ export default function CustomerDashboardPage() {
         });
       }
 
-      setActiveOrders(active as any);
+      setActiveOrders(active);
     } catch (e: any) {
       toast.error(e?.message || 'Failed to load order analytics');
       setStats({ totalOrders: 0, activeOrders: 0, completedOrders: 0, totalSpent: 0 });
@@ -415,40 +438,51 @@ export default function CustomerDashboardPage() {
     }
   };
 
-  // initial load + realtime refresh for orders
+  // Realtime refresh (throttled)
+  const ordersThrottle = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (!user) return;
 
     loadOrdersAndStats();
 
-    const channel = supabase
+    const ch = supabase
       .channel(`customer-orders-${user.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders', filter: `customer_id=eq.${user.id}` },
-        () => loadOrdersAndStats()
-      )
-      .subscribe();
-
-    // camel fallback channel (won't harm if column doesn't exist)
-    const channel2 = supabase
-      .channel(`customer-orders-camel-${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders', filter: `customerid=eq.${user.id}` },
-        () => loadOrdersAndStats()
+        () => {
+          if (ordersThrottle.current) return;
+          ordersThrottle.current = setTimeout(() => {
+            ordersThrottle.current = null;
+            loadOrdersAndStats();
+          }, 1200);
+        }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
-      supabase.removeChannel(channel2);
+      supabase.removeChannel(ch);
+      if (ordersThrottle.current) clearTimeout(ordersThrottle.current);
+      ordersThrottle.current = null;
     };
   }, [user?.id]);
 
-  // Load restaurants when location or radius changes
+  // Restaurants: cache + fetch
   useEffect(() => {
     if (!location) return;
+
+    const key = `merchants:${location.lat.toFixed(3)}:${location.lon.toFixed(3)}:${searchRadiusKm}`;
+
+    // Instant cache
+    try {
+      const cached = sessionStorage.getItem(key);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) setRestaurants(parsed);
+        setLoadingRestaurants(false);
+      }
+    } catch {}
 
     const load = async () => {
       setLoadingRestaurants(true);
@@ -485,20 +519,23 @@ export default function CustomerDashboardPage() {
 
         if (error) throw error;
 
-        const all = (data || []) as unknown as Merchant[];
+        const all = (data || []) as any[];
 
         const withDistance = all
           .map((m) => {
-            const lat = Number((m as any).latitude || 0);
-            const lon = Number((m as any).longitude || 0);
-            const dist =
-              lat && lon ? haversineKm(location.lat, location.lon, lat, lon) : Number.POSITIVE_INFINITY;
-            return { ...(m as any), distance_km: dist };
+            const lat = Number(m.latitude || 0);
+            const lon = Number(m.longitude || 0);
+            const dist = lat && lon ? haversineKm(location.lat, location.lon, lat, lon) : Number.POSITIVE_INFINITY;
+            return { ...m, distance_km: dist };
           })
-          .filter((m: any) => Number.isFinite(m.distance_km as number) && (m.distance_km as number) <= searchRadiusKm)
-          .sort((a: any, b: any) => Number(a.distance_km || 0) - Number(b.distance_km || 0));
+          .filter((m) => Number.isFinite(m.distance_km) && m.distance_km <= searchRadiusKm)
+          .sort((a, b) => Number(a.distance_km || 0) - Number(b.distance_km || 0));
 
         setRestaurants(withDistance as any);
+
+        try {
+          sessionStorage.setItem(key, JSON.stringify(withDistance));
+        } catch {}
       } catch (e: any) {
         setRestaurants([]);
         toast.error(e?.message || 'Failed to load restaurants');
@@ -526,39 +563,162 @@ export default function CustomerDashboardPage() {
     setFilteredRestaurants(out);
   }, [selectedFilter, restaurants]);
 
-  // Load menu items (for search + menu counts) for currently visible restaurants
-  useEffect(() => {
-    const loadMenu = async () => {
-      try {
-        const ids = filteredRestaurants.slice(0, 30).map((r) => (r as any).id);
-        if (!ids.length) {
-          setMenuItems([]);
-          setMenuCountByMerchant({});
-          return;
-        }
+  // FAST menu search: load menu items only when user types (no preload)
+  const setSearchQueryDebounced = (v: string) => {
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
 
+    searchDebounce.current = setTimeout(async () => {
+      setSearchQuery(v);
+
+      const q = v.trim();
+      if (q.length < 2) {
+        setMenuItems([]);
+        setMenuCountByMerchant({});
+        return;
+      }
+
+      const ids = filteredRestaurants.slice(0, 60).map((r: any) => r.id).filter(Boolean);
+      if (!ids.length) {
+        setMenuItems([]);
+        setMenuCountByMerchant({});
+        return;
+      }
+
+      const reqId = ++menuSearchReq.current;
+
+      try {
         const { data, error } = await supabase
           .from('menu_items')
           .select('id,merchant_id,name,description,price,category,image_url,is_available,is_veg,preparation_time,discount_percentage')
           .in('merchant_id', ids)
-          .limit(1000);
+          .or(`name.ilike.%${q}%,description.ilike.%${q}%`)
+          .limit(120);
 
+        if (reqId !== menuSearchReq.current) return;
         if (error) throw error;
 
         const items = (data || []) as MenuItem[];
         setMenuItems(items);
 
+        // optional counts (cheap for <=120)
         const counts: Record<string, number> = {};
         for (const it of items as any[]) counts[it.merchant_id] = (counts[it.merchant_id] || 0) + 1;
         setMenuCountByMerchant(counts);
       } catch {
+        if (reqId !== menuSearchReq.current) return;
         setMenuItems([]);
         setMenuCountByMerchant({});
       }
+    }, 180);
+  };
+
+  // Trending dishes (last 7 days), sorted client-side for speed/compat
+  useEffect(() => {
+    const loadTrending = async () => {
+      if (!location) return;
+
+      const ids = filteredRestaurants.slice(0, 60).map((r: any) => r.id).filter(Boolean);
+      if (!ids.length) {
+        setTrending([]);
+        return;
+      }
+
+      const cacheKey = `trending:7d:${location.lat.toFixed(2)}:${location.lon.toFixed(2)}:${searchRadiusKm}:${ids.length}`;
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) setTrending(parsed);
+        }
+      } catch {}
+
+      setTrendingLoading(true);
+      try {
+        const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Aggregate quantities by menu_item_id (PostgREST auto GROUP BY) [web:274]
+        const aggRes = await supabase
+          .from('order_items')
+          .select('menu_item_id,merchant_id,total_qty:quantity.sum(),created_at')
+          .in('merchant_id', ids)
+          .gte('created_at', since)
+          .limit(2000);
+
+        if (aggRes.error) throw aggRes.error;
+
+        const grouped = (aggRes.data || [])
+          .map((r: any) => ({
+            menu_item_id: String(r.menu_item_id || ''),
+            merchant_id: String(r.merchant_id || ''),
+            totalQty: Number(r.total_qty || 0),
+          }))
+          .filter((x: any) => x.menu_item_id && x.merchant_id && x.totalQty > 0);
+
+        // Merge duplicates (sometimes returned multiple times depending on schema)
+        const map = new Map<string, { menu_item_id: string; merchant_id: string; totalQty: number }>();
+        for (const g of grouped) {
+          const k = `${g.menu_item_id}:${g.merchant_id}`;
+          const prev = map.get(k);
+          map.set(k, { ...g, totalQty: (prev?.totalQty || 0) + g.totalQty });
+        }
+
+        const top = Array.from(map.values())
+          .sort((a, b) => b.totalQty - a.totalQty)
+          .slice(0, 12);
+
+        const topItemIds = top.map((x) => x.menu_item_id);
+        const topMerchantIds = Array.from(new Set(top.map((x) => x.merchant_id)));
+
+        const [itemsRes, merchantsRes] = await Promise.all([
+          supabase
+            .from('menu_items')
+            .select('id,merchant_id,name,description,price,category,image_url,is_veg,discount_percentage')
+            .in('id', topItemIds)
+            .limit(200),
+          supabase.from('merchants').select('id,business_name').in('id', topMerchantIds).limit(200),
+        ]);
+
+        const itemMap = new Map<string, any>();
+        (itemsRes.data || []).forEach((it: any) => itemMap.set(String(it.id), it));
+
+        const merchantMap = new Map<string, string>();
+        (merchantsRes.data || []).forEach((m: any) => merchantMap.set(String(m.id), String(m.business_name || 'Restaurant')));
+
+        const merged: TrendingDish[] = top
+          .map((t) => {
+            const it = itemMap.get(String(t.menu_item_id));
+            if (!it) return null;
+
+            return {
+              id: String(it.id),
+              merchant_id: String(it.merchant_id),
+              name: String(it.name || ''),
+              description: it.description ?? null,
+              price: Number(it.price || 0),
+              category: it.category ?? null,
+              image_url: it.image_url ?? null,
+              discount_percentage: it.discount_percentage ?? null,
+              is_veg: it.is_veg ?? null,
+              merchantName: merchantMap.get(String(it.merchant_id)) || 'Restaurant',
+              totalQty: Number(t.totalQty || 0),
+            };
+          })
+          .filter(Boolean) as TrendingDish[];
+
+        setTrending(merged);
+        try {
+          sessionStorage.setItem(cacheKey, JSON.stringify(merged));
+        } catch {}
+      } catch {
+        // If order_items doesn't exist, trending stays hidden
+        setTrending([]);
+      } finally {
+        setTrendingLoading(false);
+      }
     };
 
-    loadMenu();
-  }, [filteredRestaurants]);
+    loadTrending();
+  }, [location?.lat, location?.lon, searchRadiusKm, filteredRestaurants]);
 
   // Close modals on ESC
   useEffect(() => {
@@ -571,12 +731,6 @@ export default function CustomerDashboardPage() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
-
-  // Search debounced (keeps typing smooth)
-  const setSearchQueryDebounced = (v: string) => {
-    if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    searchDebounce.current = setTimeout(() => setSearchQuery(v), 120);
-  };
 
   const onOpenSearchResult = (res: SearchResult) => {
     if (res.type === 'restaurant') {
@@ -631,37 +785,100 @@ export default function CustomerDashboardPage() {
         <div className="mx-auto w-full max-w-7xl px-2.5 sm:px-3.5 md:px-5 lg:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
           <DashboardHeader firstName={firstName} radiusKm={searchRadiusKm} />
 
-          {/* Presented by + socials (compact) */}
-          <div className="bg-white/90 backdrop-blur rounded-2xl shadow-sm border border-gray-100 px-3 py-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[11px] text-gray-600 leading-4">{brand.title}</p>
-                <p className="text-[11px] text-gray-500 leading-4 truncate">
-                  Fast, compact, mobile-first dashboard experience.
-                </p>
-              </div>
+          {/* Presented by + socials (use <img> for remote logos to avoid next/image host config issues) [web:244] */}
+        {/* Presented by + quick actions (interactive) */}
+<div className="bg-white/90 backdrop-blur rounded-2xl shadow-sm border border-gray-100 px-3 py-2.5">
+  <div className="flex items-start justify-between gap-2">
+    <div className="min-w-0">
+      <p className="text-[11px] text-gray-600 leading-4">{brand.title}</p>
 
-              <div className="flex items-center gap-1.5 shrink-0">
-                {socials.slice(0, 6).map(({ href, label, Icon, logoUrl }: any) => (
-                  <Link
-                    key={`${label}-${href}`}
-                    href={href}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={label}
-                    title={label}
-                    className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md hover:border-primary/40 transition active:scale-[0.98] overflow-hidden"
-                  >
-                    {logoUrl ? (
-                      <Image src={logoUrl} alt={label} width={36} height={36} className="w-full h-full object-cover" />
-                    ) : (
-                      <Icon className="w-4 h-4 text-gray-800" />
-                    )}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
+      <p className="text-[11px] text-gray-500 leading-4">
+        For professional queries contact us at{' '}
+        <a
+          href="https://www.pattibytes.com/#collaboration"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-gray-900 hover:underline"
+        >
+          pattibytes.com/collaboration
+        </a>
+      </p>
+
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText('https://www.pattibytes.com/#collaboration');
+              toast.success('Link copied');
+            } catch {
+              toast.info('Copy not supported on this device');
+            }
+          }}
+          className="text-[11px] px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-semibold transition"
+          title="Copy collaboration link"
+        >
+          Copy link
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            const email = appSettings?.support_email || 'pattibytesltdbusiness@gmail.com';
+            window.location.href = `mailto:${email}?subject=Collaboration%20Query&body=Hi%20team,%20`;
+          }}
+          className="text-[11px] px-2.5 py-1.5 rounded-xl bg-gray-900 text-white hover:bg-black font-semibold transition"
+          title="Email us"
+        >
+          Email us
+        </button>
+
+        {!!appSettings?.support_phone && (
+          <a
+            href={`tel:${appSettings.support_phone}`}
+            className="text-[11px] px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-semibold transition"
+            title="Call support"
+          >
+            Call
+          </a>
+        )}
+      </div>
+
+      <div id="collaboration" />
+    </div>
+
+    {/* socials: keep your existing socials icons to the right */}
+    <div className="flex items-center gap-1.5 shrink-0">
+      {socials.slice(0, 6).map(({ href, label, Icon, logoUrl }: any) => (
+        <Link
+          key={`${label}-${href}`}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={label}
+          title={label}
+          className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md hover:border-primary/40 transition active:scale-[0.98] overflow-hidden"
+        >
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={label}
+              loading="lazy"
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <Icon className="w-4 h-4 text-gray-800" />
+          )}
+        </Link>
+      ))}
+    </div>
+  </div>
+</div>
+
 
           <LocationBar
             address={location?.address || ''}
@@ -695,11 +912,98 @@ export default function CustomerDashboardPage() {
                 totalSpent={stats.totalSpent}
               />
 
-              {/* Active orders (compact) */}
+              {/* Trending dishes */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4">
                 <div className="flex items-center justify-between gap-2 mb-2.5">
                   <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-gray-900 truncate">Active orders</h3>
+                    <h3 className="text-sm font-extrabold text-gray-900 truncate inline-flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-primary" />
+                      Trending dishes
+                    </h3>
+                    <p className="text-[11px] text-gray-600 leading-4">Most ordered in last 7 days (nearby).</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // quick refresh by re-triggering with a small state nudge
+                      setTrendingLoading(true);
+                      setTimeout(() => setTrendingLoading(false), 250);
+                    }}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-800 transition"
+                    title="Refresh"
+                  >
+                    <RefreshCcw className="w-4 h-4" />
+                    Refresh
+                  </button>
+                </div>
+
+                {trendingLoading ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />
+                    ))}
+                  </div>
+                ) : trending.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3 text-center">
+                    <p className="text-xs text-gray-700 font-semibold">Trending will appear after some orders.</p>
+                   
+                  </div>
+                ) : (
+                  <div className="flex gap-3 overflow-x-auto no-scrollbar py-1">
+                    {trending.map((d) => {
+                      const img = String(d.image_url || '').trim();
+                      const price = finalPrice(d.price, d.discount_percentage);
+
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => router.push(`/customer/restaurant/${d.merchant_id}?item=${d.id}`)}
+                          className="min-w-[220px] max-w-[220px] text-left bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md hover:border-primary/30 transition overflow-hidden"
+                        >
+                          <div className="h-24 bg-gray-100 relative">
+                            {img ? (
+                              // use plain img here too (avoid next/image host config pain on dashboard) [web:244]
+                              <img
+                                src={img}
+                                alt={d.name}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                <ImageIcon className="w-6 h-6" />
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="p-3">
+                            <div className="text-xs text-gray-600 font-semibold truncate">{d.merchantName}</div>
+                            <div className="font-extrabold text-gray-900 truncate">{d.name}</div>
+                            <div className="mt-1 flex items-center justify-between">
+                              <div className="text-sm font-extrabold text-gray-900">₹{price.toFixed(0)}</div>
+                              <div className="text-[11px] font-bold text-primary">
+                                {d.totalQty}+ orders <ArrowRight className="inline w-3.5 h-3.5" />
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Active orders (faster) */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4">
+                <div className="flex items-center justify-between gap-2 mb-2.5">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-extrabold text-gray-900 truncate">Active orders</h3>
                     <p className="text-[11px] text-gray-600 leading-4">Quick access to what’s in progress.</p>
                   </div>
 
@@ -739,8 +1043,8 @@ export default function CustomerDashboardPage() {
                 ) : (
                   <div className="space-y-2">
                     {activeOrders.map((o) => {
-                      const total = o.total_amount ?? o.totalamount ?? 0;
-                      const created = o.created_at ?? o.createdat ?? null;
+                      const total = o.total_amount || 0;
+                      const created = o.created_at || null;
 
                       return (
                         <button
@@ -751,7 +1055,7 @@ export default function CustomerDashboardPage() {
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="text-xs font-bold text-gray-900 truncate">
+                              <p className="text-xs font-extrabold text-gray-900 truncate">
                                 {o.merchantName || 'Restaurant'} • Order #{o.ordernumber ?? o.id.slice(0, 6)}
                               </p>
                               <p className="text-[11px] text-gray-600 mt-0.5 truncate">
@@ -760,7 +1064,7 @@ export default function CustomerDashboardPage() {
                             </div>
 
                             <div className="text-right shrink-0">
-                              <p className="text-xs font-bold text-primary">₹{toMoney(total)}</p>
+                              <p className="text-xs font-extrabold text-primary">₹{toMoney(total)}</p>
                               <p className="text-[11px] text-gray-500 mt-0.5">Tap to track</p>
                             </div>
                           </div>
@@ -775,7 +1079,7 @@ export default function CustomerDashboardPage() {
 
               <div className="flex items-end justify-between gap-2">
                 <div className="min-w-0">
-                  <h2 className="text-sm sm:text-base font-bold text-gray-900 truncate">
+                  <h2 className="text-sm sm:text-base font-extrabold text-gray-900 truncate">
                     {selectedFilter === 'all' ? 'Restaurants near you' : selectedFilter}
                   </h2>
                   <p className="text-[11px] text-gray-600">
@@ -812,10 +1116,10 @@ export default function CustomerDashboardPage() {
               />
             </div>
 
-            {/* Right rail (desktop only, compact) */}
+            {/* Right rail */}
             <div className="hidden lg:block lg:col-span-4 space-y-3">
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                <p className="text-sm font-bold text-gray-900">Quick links</p>
+                <p className="text-sm font-extrabold text-gray-900">Quick links</p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -849,15 +1153,14 @@ export default function CustomerDashboardPage() {
               </div>
 
               <div className="bg-gradient-to-br from-orange-500 via-pink-500 to-purple-500 rounded-2xl shadow-lg p-4 text-white">
-                <p className="text-sm font-bold">Tip</p>
+                <p className="text-sm font-extrabold">Tip</p>
                 <p className="text-[12px] text-white/90 mt-1">
-                  Use search for dishes (not just restaurants) to find items faster.
+                  Search dishes first—results load only when you type (faster on mobile).
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Footer credit (compact) */}
           <div className="pt-1 text-center">
             <p className="text-[11px] text-gray-600">
               {brand.title} • Developed with ❤️ by{' '}
