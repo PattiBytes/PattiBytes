@@ -1,16 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
-export const supabase = createClient(
+export const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      // flowType: 'pkce', // optional; fine to omit for email+password
-    },
-  }
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 // Get redirect URL based on environment
@@ -20,8 +12,10 @@ export const getRedirectUrl = () => {
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return `${protocol}//${hostname}:${port}`;
     }
+    // Use current origin for production
     return window.location.origin;
   }
-
+  
+  // Fallback for SSR
   return process.env.NEXT_PUBLIC_SITE_URL || 'https://pbexpress.pattibytes.com';
 };
