@@ -2,23 +2,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  ReactNode,
-} from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import type { User as SupabaseUser, AuthChangeEvent } from '@supabase/supabase-js';
 import { useRouter, usePathname } from 'next/navigation';
-
-// ✅ Choose ONE supabase export style and use it everywhere.
-// If your lib exports: export const supabase = createClient(...):
 import { supabase } from '@/lib/supabase';
-// If your lib exports: export default supabase:
-// import supabase from '@/lib/supabase';
 
 export interface Profile {
   user_metadata?: any;
@@ -37,26 +24,21 @@ export interface Profile {
   updated_at?: string | null;
 }
 
-interface AuthContextType {
-  user: Profile | null; // profiles row
-  authUser: SupabaseUser | null; // supabase auth user
+export interface AuthContextType {
+  user: Profile | null;
+  authUser: SupabaseUser | null;
   loading: boolean;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+// ✅ Export it (this fixes your build error)
+export const AuthContext = createContext<AuthContextType | null>(null);
 
 function withTimeout<T>(p: Promise<T>, ms = 8000): Promise<T> {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('Auth timeout')), ms);
-    p.then((v) => {
-      clearTimeout(t);
-      resolve(v);
-    }).catch((e) => {
-      clearTimeout(t);
-      reject(e);
-    });
+    p.then((v) => { clearTimeout(t); resolve(v); }).catch((e) => { clearTimeout(t); reject(e); });
   });
 }
 
@@ -69,34 +51,24 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const [authUser, setAuthUser] = useState<SupabaseUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Keep latest path WITHOUT re-running auth init effect
   useEffect(() => {
     pathnameRef.current = pathname || '/';
   }, [pathname]);
 
   const loadUserProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
     if (error) {
       console.error('Profile fetch error:', error.message);
       setUser(null);
       return;
     }
-
     setUser((data as Profile) ?? null);
   };
 
   const initAuth = async () => {
-    // Fast start: load from local session storage (no route-dependency)
     const res = await withTimeout(supabase.auth.getSession(), 8000);
     const u = res.data.session?.user ?? null;
-
     setAuthUser(u);
-
     if (u?.id) await loadUserProfile(u.id);
     else setUser(null);
   };
@@ -119,38 +91,33 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
     run();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event: AuthChangeEvent, session) => {
-        if (!alive) return;
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session) => {
+      if (!alive) return;
 
-        if (event === 'SIGNED_OUT') {
-          setAuthUser(null);
-          setUser(null);
+      if (event === 'SIGNED_OUT') {
+        setAuthUser(null);
+        setUser(null);
 
-          const p = pathnameRef.current || '/';
-          const isPublic =
-            p === '/' || p.startsWith('/login') || p.startsWith('/signup') || p.startsWith('/auth/');
+        const p = pathnameRef.current || '/';
+        const isPublic = p === '/' || p.startsWith('/login') || p.startsWith('/signup') || p.startsWith('/auth/');
 
-          if (!isPublic) router.replace(`/login?redirect=${encodeURIComponent(p)}`);
-          else router.replace('/');
+        if (!isPublic) router.replace(`/login?redirect=${encodeURIComponent(p)}`);
+        else router.replace('/');
 
-          return;
-        }
-
-        // SIGNED_IN / TOKEN_REFRESHED / USER_UPDATED
-        const u = session?.user ?? null;
-        setAuthUser(u);
-
-        if (u?.id) await loadUserProfile(u.id);
-        else setUser(null);
+        return;
       }
-    );
+
+      const u = session?.user ?? null;
+      setAuthUser(u);
+      if (u?.id) await loadUserProfile(u.id);
+      else setUser(null);
+    });
 
     return () => {
       alive = false;
       authListener.subscription.unsubscribe();
     };
-  }, [router]); // ✅ do NOT include pathname here
+  }, [router]);
 
   const refreshUser = async () => {
     setLoading(true);
@@ -181,10 +148,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const value = useMemo(
-    () => ({ user, authUser, loading, logout, refreshUser }),
-    [user, authUser, loading]
-  );
+  const value = useMemo(() => ({ user, authUser, loading, logout, refreshUser }), [user, authUser, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
