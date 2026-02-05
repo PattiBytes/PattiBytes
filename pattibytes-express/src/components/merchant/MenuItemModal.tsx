@@ -1,10 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { menuService } from '@/services/menu';
 import { MenuItem } from '@/types';
-import { X, Upload, Link2, Trash2, CheckCircle2, AlertTriangle, Clipboard } from 'lucide-react';
+import {
+  X,
+  Upload,
+  Link2,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  Clipboard,
+  Copy,
+} from 'lucide-react';
 import { toast } from 'react-toastify';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 
@@ -24,12 +33,73 @@ function isValidHttpUrl(v: string) {
   }
 }
 
+function isDataImageUrl(v: string) {
+  const s = String(v || '').trim();
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(s);
+}
+
+function isValidImageSource(v: string) {
+  if (!v) return true; // optional
+  return isValidHttpUrl(v) || isDataImageUrl(v);
+}
+
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
+function extFromMime(mime: string) {
+  const m = (mime || '').toLowerCase();
+  if (m.includes('png')) return 'png';
+  if (m.includes('webp')) return 'webp';
+  if (m.includes('gif')) return 'gif';
+  if (m.includes('jpeg') || m.includes('jpg')) return 'jpg';
+  return 'png';
+}
+
+function dataUrlToFile(dataUrl: string, filenameBase = 'pasted-image') {
+  const s = dataUrl.trim();
+  const match = s.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!match) throw new Error('Invalid data URL');
+  const mime = match[1];
+  const b64 = match[2];
+
+  const binary = atob(b64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+
+  const ext = extFromMime(mime);
+  const file = new File([bytes], `${filenameBase}.${ext}`, { type: mime });
+  return file;
+}
+
+async function copyText(text: string) {
+  const s = String(text || '');
+  if (!s) return;
+
+  // Clipboard API needs secure context in many browsers. [web:144]
+  if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(s);
+    return;
+  }
+
+  // Fallback
+  const ta = document.createElement('textarea');
+  ta.value = s;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  ta.style.top = '-9999px';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+}
+
 export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: MenuItemModalProps) {
-  const [imageMode, setImageMode] = useState<'upload' | 'link'>(() => (item?.image_url ? 'link' : 'upload'));
+  const [imageMode, setImageMode] = useState<'upload' | 'link'>(() =>
+    item?.image_url ? 'link' : 'upload'
+  );
 
   const [formData, setFormData] = useState({
     name: item?.name || '',
@@ -47,7 +117,7 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
 
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+
   // Ref for the modal container to attach paste listener
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -58,30 +128,33 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
     return formData.category || 'Main Course';
   }, [formData.category, formData.custom_category]);
 
-  const imageOk = useMemo(
-    () => !formData.image_url || isValidHttpUrl(formData.image_url),
-    [formData.image_url]
-  );
+  const imageOk = useMemo(() => isValidImageSource(formData.image_url), [formData.image_url]);
 
   const discountOk = useMemo(() => {
     const d = Number(formData.discount_percentage ?? 0);
     return Number.isFinite(d) && d >= 0 && d <= 100;
   }, [formData.discount_percentage]);
 
-  const uploadFile = async (file: File) => {
+  const uploadFile = useCallback(async (file: File) => {
     setUploading(true);
     try {
       const url = await uploadToCloudinary(file, 'menu-items');
       setFormData((p) => ({ ...p, image_url: url }));
       toast.success('Image uploaded successfully');
-      // Switch to link mode to show preview properly if needed, 
-      // but usually 'upload' mode UI handles preview if URL exists too.
     } catch (err: any) {
       toast.error(err?.message || 'Failed to upload image');
     } finally {
       setUploading(false);
     }
-  };
+  }, []);
+
+  const uploadDataUrl = useCallback(
+    async (dataUrl: string) => {
+      const file = dataUrlToFile(dataUrl, 'dataurl-image');
+      await uploadFile(file);
+    },
+    [uploadFile]
+  );
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -91,48 +164,73 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
     }
   };
 
-  const handlePaste = async (e: ClipboardEvent) => {
-    // 1. Check for files (images)
-    if (e.clipboardData && e.clipboardData.files.length > 0) {
-      const file = e.clipboardData.files[0];
-      if (file.type.startsWith('image/')) {
-        e.preventDefault();
-        await uploadFile(file);
-        return;
-      }
-    }
-
-    // 2. Check for text (URL) if focusing on URL input
-    //    (Browser handles text paste naturally, but we could intervene if needed)
-  };
-
-  // Attach global paste listener within modal scope
-  useEffect(() => {
-    const el = modalRef.current;
-    if (!el) return;
-
-    // We cast to any because React TS types don't strictly match native addEventListener for ClipboardEvent sometimes
-    const listener = (e: any) => handlePaste(e);
-    el.addEventListener('paste', listener);
-    return () => el.removeEventListener('paste', listener);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Manual "Paste Image" button handler (uses Clipboard API)
-  const handleManualPasteClick = async () => {
-    try {
-      const items = await navigator.clipboard.read();
-      for (const item of items) {
-        // Prefer image types
-        const type = item.types.find((t) => t.startsWith('image/'));
-        if (type) {
-          const blob = await item.getType(type);
-          const file = new File([blob], 'pasted-image.png', { type });
+  const handlePaste = useCallback(
+    async (e: ClipboardEvent) => {
+      // 1) Pasted image file
+      if (e.clipboardData && e.clipboardData.files.length > 0) {
+        const file = e.clipboardData.files[0];
+        if (file.type.startsWith('image/')) {
+          e.preventDefault();
           await uploadFile(file);
           return;
         }
       }
-      toast.info('No image found in clipboard');
+
+      // 2) Pasted text (URL or data URL)
+      const text = e.clipboardData?.getData('text/plain')?.trim() || '';
+      if (!text) return;
+
+      // If it’s a data URL image → upload it (recommended) and replace image_url
+      if (isDataImageUrl(text)) {
+        e.preventDefault();
+        toast.info('Uploading pasted data image…');
+        await uploadDataUrl(text);
+        return;
+      }
+
+      // If it’s a normal URL → set it (works for “Copy image address”)
+      if (isValidHttpUrl(text)) {
+        // Only hijack paste when link mode, otherwise let paste behave normally in inputs
+        if (imageMode === 'link') {
+          e.preventDefault();
+          setFormData((p) => ({ ...p, image_url: text }));
+          toast.success('Image link pasted');
+        }
+      }
+    },
+    [imageMode, uploadDataUrl, uploadFile]
+  );
+
+  // Attach paste listener within modal scope
+  useEffect(() => {
+    const el = modalRef.current;
+    if (!el) return;
+
+    const listener = (e: any) => handlePaste(e);
+    el.addEventListener('paste', listener);
+    return () => el.removeEventListener('paste', listener);
+  }, [handlePaste]);
+
+  // Manual "Paste Image" button handler (uses Async Clipboard API)
+  const handleManualPasteClick = async () => {
+    try {
+      // If available, this can read clipboard images (requires permission in many browsers). [web:144]
+      if (typeof navigator?.clipboard?.read === 'function') {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const type = item.types.find((t) => t.startsWith('image/'));
+          if (type) {
+            const blob = await item.getType(type);
+            const file = new File([blob], 'pasted-image.png', { type });
+            await uploadFile(file);
+            return;
+          }
+        }
+        toast.info('No image found in clipboard');
+        return;
+      }
+
+      toast.error('Clipboard read not supported. Use Ctrl+V instead.');
     } catch (err) {
       console.error(err);
       toast.error('Unable to read clipboard. Try Ctrl+V instead.');
@@ -140,6 +238,16 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
   };
 
   const removeImage = () => setFormData((p) => ({ ...p, image_url: '' }));
+
+  const handleCopyImageLink = async () => {
+    try {
+      if (!formData.image_url) return toast.info('No image to copy');
+      await copyText(formData.image_url);
+      toast.success('Image link copied');
+    } catch {
+      toast.error('Failed to copy');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,16 +261,30 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
     if (!Number.isFinite(price) || price < 0) return toast.error('Invalid price');
     if (!Number.isFinite(prep) || prep < 0) return toast.error('Invalid preparation time');
     if (!discountOk) return toast.error('Discount must be 0 to 100');
-    if (!imageOk) return toast.error('Image URL must be a valid http/https link');
+    if (!imageOk) return toast.error('Image must be a valid URL or data:image;base64');
 
     setLoading(true);
     try {
+      // If user still has a data URL at submit time, auto-upload it and use the Cloudinary URL
+      let finalImageUrl = (formData.image_url || '').trim();
+      if (finalImageUrl && isDataImageUrl(finalImageUrl)) {
+        toast.info('Uploading image…');
+        const file = dataUrlToFile(finalImageUrl, 'menu-item');
+        setUploading(true);
+        try {
+          finalImageUrl = await uploadToCloudinary(file, 'menu-items');
+          setFormData((p) => ({ ...p, image_url: finalImageUrl }));
+        } finally {
+          setUploading(false);
+        }
+      }
+
       const payload: any = {
         name,
         description: (formData.description || '').trim(),
         price: Number(price),
         category: resolvedCategory,
-        image_url: formData.image_url || '',
+        image_url: finalImageUrl || '',
         is_available: Boolean(formData.is_available),
         is_veg: Boolean(formData.is_veg),
         preparation_time: clamp(Number(prep), 0, 10000),
@@ -195,8 +317,8 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       {/* Attach ref here to capture paste events anywhere in the modal */}
-      <div 
-        ref={modalRef} 
+      <div
+        ref={modalRef}
         className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
       >
         <div className="sticky top-0 bg-white border-b border-gray-200 px-5 sm:px-6 py-4 flex items-center justify-between">
@@ -205,10 +327,13 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
               {item ? 'Edit Menu Item' : 'Add Menu Item'}
             </h2>
             <p className="text-xs text-gray-600 mt-1">
-              Tip: Paste image (Ctrl+V) directly to upload.
+              Tip: Paste image (Ctrl+V) or paste an image link / data:image;base64.
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-50">
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-50"
+          >
             <X size={22} />
           </button>
         </div>
@@ -224,7 +349,9 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
                   type="button"
                   onClick={() => setImageMode('upload')}
                   className={`px-3 py-1.5 rounded-xl text-sm font-semibold border ${
-                    imageMode === 'upload' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-300'
+                    imageMode === 'upload'
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-white text-gray-700 border-gray-300'
                   }`}
                 >
                   Upload
@@ -233,7 +360,9 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
                   type="button"
                   onClick={() => setImageMode('link')}
                   className={`px-3 py-1.5 rounded-xl text-sm font-semibold border ${
-                    imageMode === 'link' ? 'bg-primary text-white border-primary' : 'bg-white text-gray-700 border-gray-300'
+                    imageMode === 'link'
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-white text-gray-700 border-gray-300'
                   }`}
                 >
                   Use Link
@@ -248,27 +377,44 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
                   <img
                     src={formData.image_url}
                     alt="Preview"
-                    className="w-full h-40 sm:h-40 object-cover rounded-xl border bg-white"
+                    className="w-full h-40 object-cover rounded-xl border bg-white"
                   />
                 ) : (
-                  <div 
+                  <div
                     className="w-full h-40 bg-white rounded-xl flex flex-col items-center justify-center border cursor-pointer hover:bg-gray-50 transition"
                     onClick={() => document.getElementById('image-upload')?.click()}
                   >
-                    {imageMode === 'link' ? <Link2 className="text-gray-400" size={32} /> : <Upload className="text-gray-400" size={32} />}
+                    {imageMode === 'link' ? (
+                      <Link2 className="text-gray-400" size={32} />
+                    ) : (
+                      <Upload className="text-gray-400" size={32} />
+                    )}
                     <span className="text-[10px] text-gray-400 mt-2 font-medium">Click or Paste</span>
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  onClick={removeImage}
-                  disabled={!formData.image_url}
-                  className="mt-2 w-full px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  <Trash2 size={16} />
-                  Remove
-                </button>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={removeImage}
+                    disabled={!formData.image_url}
+                    className="px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={16} />
+                    Remove
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyImageLink}
+                    disabled={!formData.image_url}
+                    className="px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                    title="Copy image link"
+                  >
+                    <Copy size={16} />
+                    Copy
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 min-w-0">
@@ -282,7 +428,7 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
                       id="image-upload"
                       disabled={uploading}
                     />
-                    
+
                     <div className="flex flex-wrap gap-2">
                       <label
                         htmlFor="image-upload"
@@ -307,17 +453,18 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
                     <p className="text-xs text-gray-600 mt-2">
                       Uploads to Cloudinary folder: <span className="font-mono">menu-items</span>.
                       <br />
-                      You can also press <strong>Ctrl+V</strong> anywhere in this modal to paste an image.
+                      You can also press <strong>Ctrl+V</strong> anywhere in this modal to paste an image,
+                      or paste a link / data:image;base64.
                     </p>
                   </>
                 ) : (
                   <>
                     <div className="flex items-center gap-2">
                       <input
-                        type="url"
+                        type="text"
                         value={formData.image_url}
                         onChange={(e) => setFormData((p) => ({ ...p, image_url: e.target.value }))}
-                        placeholder="https://res.cloudinary.com/.../menu-items/....png"
+                        placeholder="https://... OR data:image/jpeg;base64,..."
                         className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent ${
                           imageOk ? 'border-gray-300' : 'border-red-400'
                         }`}
@@ -328,8 +475,16 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
                         <AlertTriangle className="text-red-600 shrink-0" size={18} />
                       )}
                     </div>
-                    {!imageOk && <p className="text-xs text-red-600 mt-1">Please enter a valid http/https URL</p>}
-                    <p className="text-xs text-gray-600 mt-2">Paste any public image URL (Cloudinary recommended).</p>
+
+                    {!imageOk && (
+                      <p className="text-xs text-red-600 mt-1">
+                        Use a valid https/http URL or a data:image/*;base64,... string.
+                      </p>
+                    )}
+
+                    <p className="text-xs text-gray-600 mt-2">
+                      Tip: “Copy image address” → paste here. For data URLs, we auto-upload to Cloudinary on save.
+                    </p>
                   </>
                 )}
               </div>
@@ -426,7 +581,9 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
                 min={0}
                 max={100}
                 value={formData.discount_percentage}
-                onChange={(e) => setFormData((p) => ({ ...p, discount_percentage: Number(e.target.value) }))}
+                onChange={(e) =>
+                  setFormData((p) => ({ ...p, discount_percentage: Number(e.target.value) }))
+                }
                 className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent ${
                   discountOk ? 'border-gray-300' : 'border-red-400'
                 }`}
