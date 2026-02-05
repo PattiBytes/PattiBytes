@@ -1,11 +1,18 @@
-/* eslint-disable react-hooks/exhaustive-deps */
+ 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-   
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
-import type { User as SupabaseUser, AuthChangeEvent } from '@supabase/supabase-js';
+
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { User, AuthChangeEvent } from '@supabase/supabase-js';
 import { useRouter, usePathname } from 'next/navigation';
+
+// IMPORTANT:
+// Use whichever matches your supabase client export.
+// If your file is: export const supabase = createClient(...)
+// keep this:
 import { supabase } from '@/lib/supabase';
+// If your file is: export default supabase
+// then change to: import supabase from '@/lib/supabase';
 
 export interface Profile {
   user_metadata?: any;
@@ -24,137 +31,229 @@ export interface Profile {
   updated_at?: string | null;
 }
 
-export interface AuthContextType {
+interface AuthContextType {
   user: Profile | null;
-  authUser: SupabaseUser | null;
+  authUser: User | null;
   loading: boolean;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
-// ✅ Export it (this fixes your build error)
-export const AuthContext = createContext<AuthContextType | null>(null);
+export const AuthContext = createContext<AuthContextType>({
+  user: null,
+  authUser: null,
+  loading: true,
+  logout: async () => {},
+  refreshUser: async () => {},
+});
 
-function withTimeout<T>(p: Promise<T>, ms = 8000): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('Auth timeout')), ms);
-    p.then((v) => { clearTimeout(t); resolve(v); }).catch((e) => { clearTimeout(t); reject(e); });
-  });
-}
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  // Note: useContext will always return something because we have a default value.
+  return context;
+};
 
-export default function AuthProvider({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const pathnameRef = useRef<string>('/');
-
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Profile | null>(null);
-  const [authUser, setAuthUser] = useState<SupabaseUser | null>(null);
+  const [authUser, setAuthUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    pathnameRef.current = pathname || '/';
-  }, [pathname]);
-
-  const loadUserProfile = async (userId: string) => {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-    if (error) {
-      console.error('Profile fetch error:', error.message);
-      setUser(null);
-      return;
-    }
-    setUser((data as Profile) ?? null);
-  };
-
-  const initAuth = async () => {
-    const res = await withTimeout(supabase.auth.getSession(), 8000);
-    const u = res.data.session?.user ?? null;
-    setAuthUser(u);
-    if (u?.id) await loadUserProfile(u.id);
-    else setUser(null);
-  };
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    let alive = true;
+    let mounted = true;
 
-    const run = async () => {
-      setLoading(true);
+    const checkUser = async () => {
       try {
-        await initAuth();
-      } catch (e: any) {
-        console.error('Auth init error:', e?.message || String(e));
+        const {
+          data: { user: u },
+          error,
+        } = await supabase.auth.getUser();
+
+        if (error) {
+          // Only log real errors (missing session is normal when logged out)
+          if (error.message !== 'Auth session missing!' && (error as any).status !== 400) {
+            console.error('Error getting user:', error.message);
+          }
+          if (!mounted) return;
+          setAuthUser(null);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        if (!mounted) return;
+
+        if (u) {
+          setAuthUser(u);
+          await loadUserProfile(u.id);
+        } else {
+          setAuthUser(null);
+          setUser(null);
+        }
+      } catch {
+        if (!mounted) return;
         setAuthUser(null);
         setUser(null);
       } finally {
-        if (alive) setLoading(false);
+        if (!mounted) return;
+        setLoading(false);
       }
     };
 
-    run();
+    const loadUserProfile = async (userId: string) => {
+      try {
+        const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session) => {
-      if (!alive) return;
+        if (error) {
+          // PGRST116 = "Results contain 0 rows" in many setups; treat as "no profile".
+          if (error.code !== 'PGRST116') {
+            console.error('Profile fetch error:', error.message);
+          }
+          if (!mounted) return;
+          setUser(null);
+          return;
+        }
 
-      if (event === 'SIGNED_OUT') {
-        setAuthUser(null);
+        if (!mounted) return;
+
+        if (data) {
+          setUser(data as Profile);
+        } else {
+          setUser(null);
+        }
+      } catch (e: any) {
+        console.error('Error loading user profile:', e?.message || String(e));
+        if (!mounted) return;
         setUser(null);
+      }
+    };
 
-        const p = pathnameRef.current || '/';
-        const isPublic = p === '/' || p.startsWith('/login') || p.startsWith('/signup') || p.startsWith('/auth/');
+    // Make loadUserProfile available to other closures in this effect
+    (globalThis as any).__loadUserProfile = loadUserProfile;
 
-        if (!isPublic) router.replace(`/login?redirect=${encodeURIComponent(p)}`);
-        else router.replace('/');
+    // Initial auth check
+    checkUser();
 
-        return;
+    // Listen for auth changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session) => {
+      if (!mounted) return;
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        if (session?.user) {
+          setAuthUser(session.user);
+          await loadUserProfile(session.user.id);
+        }
       }
 
-      const u = session?.user ?? null;
-      setAuthUser(u);
-      if (u?.id) await loadUserProfile(u.id);
-      else setUser(null);
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setAuthUser(null);
+
+        // Redirect to login with current path for protected routes
+        if (
+          pathname &&
+          !pathname.startsWith('/login') &&
+          !pathname.startsWith('/signup') &&
+          pathname !== '/'
+        ) {
+          router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+        } else {
+          router.push('/');
+        }
+      }
     });
 
     return () => {
-      alive = false;
+      mounted = false;
       authListener.subscription.unsubscribe();
     };
-  }, [router]);
+  }, [pathname, router]);
 
-  const refreshUser = async () => {
-    setLoading(true);
+  const loadUserProfile = async (userId: string) => {
+    // same logic as above, but accessible outside useEffect
     try {
-      await initAuth();
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+
+      if (error) {
+        if (error.code !== 'PGRST116') console.error('Profile fetch error:', error.message);
+        setUser(null);
+        return;
+      }
+
+      setUser(data ? (data as Profile) : null);
     } catch (e: any) {
-      console.error('refreshUser error:', e?.message || String(e));
+      console.error('Error loading user profile:', e?.message || String(e));
+      setUser(null);
+    }
+  };
+
+  const checkUser = async () => {
+    try {
+      const {
+        data: { user: u },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (error) {
+        if (error.message !== 'Auth session missing!' && (error as any).status !== 400) {
+          console.error('Error getting user:', error.message);
+        }
+        setAuthUser(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      if (u) {
+        setAuthUser(u);
+        await loadUserProfile(u.id);
+      } else {
+        setAuthUser(null);
+        setUser(null);
+      }
+    } catch {
       setAuthUser(null);
       setUser(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshUser = async () => {
+    if (authUser) {
+      await loadUserProfile(authUser.id);
+    } else {
+      await checkUser();
     }
   };
 
   const logout = async () => {
-    setLoading(true);
     try {
+      setLoading(true);
+
       const { error } = await supabase.auth.signOut();
       if (error) console.error('Logout error:', error.message);
 
-      setAuthUser(null);
       setUser(null);
+      setAuthUser(null);
 
-      router.replace('/');
+      router.push('/');
       router.refresh();
+    } catch (e) {
+      console.error('Error logging out:', e instanceof Error ? e.message : String(e));
+      setUser(null);
+      setAuthUser(null);
+      router.push('/');
     } finally {
       setLoading(false);
     }
   };
 
-  const value = useMemo(() => ({ user, authUser, loading, logout, refreshUser }), [user, authUser, loading]);
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
+  return (
+    <AuthContext.Provider value={{ user, authUser, loading, logout, refreshUser }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
