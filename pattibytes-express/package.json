@@ -4,13 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-     "build": "next build --webpack",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "@next/third-parties": "^16.1.6",
     "@reduxjs/toolkit": "^2.11.2",
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/ssr": "^0.1.0",
