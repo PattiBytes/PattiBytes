@@ -142,3 +142,4 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|icon-192.png|icon-512.png|manifest.json|sw.js).*)',
   ],
 };
+ 
