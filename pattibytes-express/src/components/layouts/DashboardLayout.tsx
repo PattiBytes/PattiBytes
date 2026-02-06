@@ -193,8 +193,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: 'Dashboard', href: '/merchant/dashboard', icon: Home },
         { name: 'Orders', href: '/merchant/orders', icon: ShoppingBag },
         { name: 'Menu', href: '/merchant/menu', icon: Store },
+        { name: 'Offers', href: '/merchant/promo-codes', icon: Tag },
         { name: 'Analytics', href: '/merchant/analytics', icon: BarChart3 },
-        customerDashboardItem,
+       
         { name: 'Profile', href: '/merchant/profile', icon: User },
       ];
     }

@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase';
 
 export interface CartItem {
+  category_id: null;
+  menu_item_id: string;
   id: string;
   merchant_id: string;
   name: string;
