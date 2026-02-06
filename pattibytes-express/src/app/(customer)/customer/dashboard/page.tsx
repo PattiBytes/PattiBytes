@@ -1041,8 +1041,8 @@ useEffect(() => {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      const email = appSettings?.support_email || 'pattibytesltdbusiness@gmail.com';
+                                        onClick={() => {
+                      const email = appSettings?.support_email || 'pbexpress38@gmail.com';
                       window.location.href = `mailto:${email}?subject=Collaboration%20Query&body=Hi%20team,%20`;
                     }}
                     className="text-[11px] px-2.5 py-1.5 rounded-xl bg-gray-900 text-white hover:bg-black font-semibold transition"
@@ -1052,11 +1052,11 @@ useEffect(() => {
                   </button>
 {!!appSettings?.support_phone && (
   <a
-    href={`tel:${appSettings.support_phone}`}
+    href={`https://wa.me${appSettings.support_phone}`}
     className="text-[11px] px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-semibold transition"
-    title="Call support"
+     title="Chat on WhatsApp"
   >
-    Call us
+    WhatsApp us
   </a>
 )}
                 </div>
