@@ -142,11 +142,19 @@ setMerchantTax((data as MerchantTaxMini) ?? null);
 
     setApplyingPromo(true);
     try {
-      const result = await promoCodeService.validatePromoCode(
-        codeToApply,
-        cart.subtotal,
-        user.id
-      );
+     const result = await promoCodeService.validatePromoCode(codeToApply, cart.subtotal, user.id, {
+  merchantId: cart.merchant_id,
+  cartItems: cart.items.map((i) => ({
+    menu_item_id: i.menu_item_id ?? i.id,     // use real menu_item_id if you have it
+    merchant_id: cart.merchant_id,
+    category_id: i.category_id ?? null,       // must be uuid; don't pass category name here
+    qty: i.quantity,
+    unit_price: i.price,
+  })),
+});
+
+
+
 
       if (result.valid && result.promoCode) {
         setAppliedPromo(result.promoCode);

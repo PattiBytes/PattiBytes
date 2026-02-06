@@ -1050,15 +1050,23 @@ useEffect(() => {
                   >
                     Email us
                   </button>
-{!!appSettings?.support_phone && (
-  <a
-    href={`https://wa.me${appSettings.support_phone}`}
-    className="text-[11px] px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-semibold transition"
-     title="Chat on WhatsApp"
-  >
-    WhatsApp us
-  </a>
-)}
+{!!appSettings?.support_phone && (() => {
+  const phone = String(appSettings.support_phone).replace(/\D/g, ''); // digits only
+  if (!phone) return null;
+
+  return (
+    <a
+      href={`https://wa.me/${phone}`}
+      className="text-[11px] px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-semibold transition"
+      title="Chat on WhatsApp"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      WhatsApp us
+    </a>
+  );
+})()}
+
                 </div>
 
                 <div id="collaboration" />

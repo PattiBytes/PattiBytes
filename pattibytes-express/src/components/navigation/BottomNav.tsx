@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, ShoppingBag, User, Store, Truck, Wallet, Bell, BarChart3 } from 'lucide-react';
+import { Home, ShoppingBag, User, Store, Truck, Wallet, Bell, BarChart3, Tag } from 'lucide-react';
 
 interface NavItem {
   name: string;
@@ -36,6 +36,7 @@ export default function BottomNav({ role }: BottomNavProps) {
         { name: 'Home', href: '/merchant/dashboard', icon: Home },
         { name: 'Orders', href: '/merchant/orders', icon: ShoppingBag },
         { name: 'Menu', href: '/merchant/menu', icon: Store },
+        { name: 'Offers', href: '/merchant/promo-codes', icon: Tag },
         { name: 'Profile', href: '/merchant/profile', icon: User },
       ];
     }
@@ -54,7 +55,8 @@ export default function BottomNav({ role }: BottomNavProps) {
         { name: 'Home', href: '/admin/dashboard', icon: Home },
         { name: 'Orders', href: '/admin/orders', icon: ShoppingBag },
         { name: 'Requests', href: '/admin/access-requests', icon: Bell },
-             { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
+         { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
+       { name: 'Offers', href: '/admin/promo-codes', icon: Tag },
         { name: 'Settings', href: '/admin/settings', icon: User },
         
       ];
