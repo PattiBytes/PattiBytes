@@ -98,6 +98,7 @@ function firstLetter(v: any) {
   return (s[0] || 'P').toUpperCase();
 }
 
+
 function iconForUrl(url: string) {
   const u = String(url || '').toLowerCase();
   if (u.includes('instagram.com')) return Instagram;
@@ -123,6 +124,53 @@ function safeMailtoFromSupportEmail(raw: any) {
 
   return { email: maybe, href: `mailto:${maybe}` };
 }
+ 
+function AnnouncementBar({
+  text,
+  href,
+  version = 'v1',
+}: { text: string; href?: string; version?: string }) {
+  const key = `pb_announcement_dismissed:${version}`;
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      const dismissed = localStorage.getItem(key);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOpen(!dismissed);
+    } catch {
+      setOpen(true);
+    }
+  }, [key]);
+
+  if (!open || !text) return null;
+
+  return (
+    <div className="bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500 text-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center gap-3">
+        <p className="text-sm font-semibold truncate flex-1">
+          {href ? (
+            <a href={href} className="underline underline-offset-2" target="_blank" rel="noreferrer">
+              {text}
+            </a>
+          ) : (
+            text
+          )}
+        </p>
+        <button
+          className="text-xs font-bold bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-xl"
+          onClick={() => {
+            setOpen(false);
+            try { localStorage.setItem(key, new Date().toISOString()); } catch {}
+          }}
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
 
 export default function HomePage() {
   const { user, loading } = useAuth();
@@ -296,6 +344,12 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-pink-50 flex flex-col">
+      <AnnouncementBar
+  text="We Are Starting Trials Soon — scan QR to install Or Share the QR!"
+  href="/qr"
+  version="2026-02-06"
+/>
+
       {/* HERO */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">

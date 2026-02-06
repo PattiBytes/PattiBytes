@@ -25,6 +25,12 @@ import {
   Link as LinkIcon,
   Eye,
   EyeOff,
+  Megaphone,
+  PanelTop,
+  MessageSquare,
+  KeyRound,
+  Calendar,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useRouter } from 'next/navigation';
@@ -33,8 +39,23 @@ type CustomLink = {
   id: string;
   title: string;
   url: string;
-  logo_url: string; // Cloudinary or direct URL
+  logo_url: string;
   enabled: boolean;
+};
+
+type AnnouncementType = 'banner' | 'popup';
+
+type Announcement = {
+  enabled: boolean;
+  type: AnnouncementType;
+  title: string;
+  message: string;
+  image_url?: string;
+  link_url?: string;
+  start_at?: string; // ISO
+  end_at?: string; // ISO
+  dismissible: boolean;
+  dismiss_key: string; // change to re-show popup after edits
 };
 
 interface Settings {
@@ -52,6 +73,10 @@ interface Settings {
   min_order_amount: number;
   tax_percentage: number;
   custom_links?: CustomLink[];
+
+  // ✅ NEW
+  announcement?: Announcement;
+  show_menu_images?: boolean;
 }
 
 function uid() {
@@ -63,7 +88,6 @@ function uid() {
 function normalizeMaybeMarkdownUrl(v: any) {
   const s = String(v ?? '').trim();
   if (!s) return '';
-  // Matches: [text](https://example.com) -> https://example.com
   const m = s.match(/\((https?:\/\/[^)]+)\)/i);
   return (m?.[1] || s).trim();
 }
@@ -75,10 +99,27 @@ function normalizeHttpUrl(v: string) {
   return `https://${s}`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function isImageUrl(url?: string | null) {
-  if (!url) return false;
-  return /\.(png|jpe?g|webp|gif|avif|svg)(\?.*)?$/i.test(url);
+function toIsoOrEmptyFromDatetimeLocal(v: string) {
+  // input like: "2026-02-06T17:30"
+  const s = String(v || '').trim();
+  if (!s) return '';
+  const d = new Date(s);
+  return Number.isFinite(d.getTime()) ? d.toISOString() : '';
+}
+
+function toDatetimeLocalFromIso(iso?: string) {
+  const s = String(iso || '').trim();
+  if (!s) return '';
+  const d = new Date(s);
+  if (!Number.isFinite(d.getTime())) return '';
+  // convert to local datetime-local format (no seconds)
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mi = pad(d.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
 async function uploadToCloudinary(file: File): Promise<string> {
@@ -98,6 +139,21 @@ async function uploadToCloudinary(file: File): Promise<string> {
   const json = await res.json();
   if (!res.ok) throw new Error(json?.error?.message || 'Cloudinary upload failed');
   return json.secure_url as string;
+}
+
+function defaultAnnouncement(): Announcement {
+  return {
+    enabled: false,
+    type: 'banner',
+    title: '',
+    message: '',
+    image_url: '',
+    link_url: '',
+    start_at: '',
+    end_at: '',
+    dismissible: true,
+    dismiss_key: 'v1',
+  };
 }
 
 export default function SettingsPage() {
@@ -121,6 +177,10 @@ export default function SettingsPage() {
     min_order_amount: 100,
     tax_percentage: 5,
     custom_links: [],
+
+    // ✅ NEW defaults
+    announcement: defaultAnnouncement(),
+    show_menu_images: true,
   });
 
   // New custom link draft
@@ -133,9 +193,11 @@ export default function SettingsPage() {
   });
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
+  // Announcement uploads
+  const [uploadingAnnouncementImage, setUploadingAnnouncementImage] = useState(false);
+
   useEffect(() => {
     loadSettings();
-     
   }, []);
 
   const loadSettings = async () => {
@@ -147,6 +209,12 @@ export default function SettingsPage() {
 
       if (data) {
         const customLinksRaw = Array.isArray((data as any).custom_links) ? (data as any).custom_links : [];
+        const annRaw = (data as any).announcement;
+
+        const ann: Announcement = {
+          ...defaultAnnouncement(),
+          ...(annRaw && typeof annRaw === 'object' ? annRaw : {}),
+        };
 
         setSettings({
           id: data.id,
@@ -171,6 +239,22 @@ export default function SettingsPage() {
               enabled: Boolean(x?.enabled ?? true),
             }))
             .filter((x: CustomLink) => x.title || x.url || x.logo_url),
+
+          // ✅ NEW
+          announcement: {
+            ...ann,
+            type: ann.type === 'popup' ? 'popup' : 'banner',
+            enabled: Boolean(ann.enabled),
+            title: String(ann.title || ''),
+            message: String(ann.message || ''),
+            image_url: String(ann.image_url || ''),
+            link_url: String(ann.link_url || ''),
+            start_at: String(ann.start_at || ''),
+            end_at: String(ann.end_at || ''),
+            dismissible: Boolean(ann.dismissible ?? true),
+            dismiss_key: String(ann.dismiss_key || 'v1'),
+          },
+          show_menu_images: Boolean((data as any).show_menu_images ?? true),
         });
       }
     } catch (error) {
@@ -261,12 +345,34 @@ export default function SettingsPage() {
     }
   };
 
+  const onUploadAnnouncementImage = async (file?: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return toast.error('Please choose an image file');
+
+    setUploadingAnnouncementImage(true);
+    try {
+      const url = await uploadToCloudinary(file);
+      setSettings((p) => ({
+        ...p,
+        announcement: { ...(p.announcement || defaultAnnouncement()), image_url: url },
+      }));
+      toast.success('Announcement image uploaded');
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e?.message || 'Upload failed');
+    } finally {
+      setUploadingAnnouncementImage(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Keep payload clean
+      const ann = settings.announcement || defaultAnnouncement();
+
       const payload: Settings = {
         ...settings,
+        
         support_email: normalizeMaybeMarkdownUrl(settings.support_email),
         facebook_url: normalizeMaybeMarkdownUrl(settings.facebook_url),
         instagram_url: normalizeMaybeMarkdownUrl(settings.instagram_url),
@@ -280,6 +386,22 @@ export default function SettingsPage() {
           logo_url: normalizeMaybeMarkdownUrl(x.logo_url),
           enabled: Boolean(x.enabled),
         })),
+
+        // ✅ NEW: keep announcement clean
+        announcement: {
+          enabled: Boolean(ann.enabled),
+          type: ann.type === 'popup' ? 'popup' : 'banner',
+          title: String(ann.title || '').trim(),
+          message: String(ann.message || '').trim(),
+          image_url: normalizeMaybeMarkdownUrl(ann.image_url || ''),
+          link_url: normalizeHttpUrl(String(ann.link_url || '').trim()),
+          start_at: String(ann.start_at || '').trim(),
+          end_at: String(ann.end_at || '').trim(),
+          dismissible: Boolean(ann.dismissible),
+          dismiss_key: String(ann.dismiss_key || 'v1').trim() || 'v1',
+        },
+        show_menu_images: Boolean(settings.show_menu_images ?? true),
+        
       };
 
       const { error } = await supabase.from('app_settings').upsert(payload);
@@ -293,6 +415,8 @@ export default function SettingsPage() {
       setSaving(false);
     }
   };
+
+  const ann = settings.announcement || defaultAnnouncement();
 
   if (loading) {
     return (
@@ -384,6 +508,251 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* ✅ NEW: Announcements */}
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Megaphone size={20} className="text-primary" />
+              Announcements (Banner / Popup)
+            </h2>
+
+            <div className="rounded-2xl border bg-gradient-to-br from-orange-50 to-white p-4 space-y-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-gray-700 font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={ann.enabled}
+                    onChange={(e) =>
+                      setSettings((p) => ({
+                        ...p,
+                        announcement: { ...(p.announcement || defaultAnnouncement()), enabled: e.target.checked },
+                      }))
+                    }
+                  />
+                  Enabled
+                </label>
+
+                <div className="flex items-center gap-2">
+                  <PanelTop className="w-4 h-4 text-gray-600" />
+                  <select
+                    value={ann.type}
+                    onChange={(e) =>
+                      setSettings((p) => ({
+                        ...p,
+                        announcement: { ...(p.announcement || defaultAnnouncement()), type: e.target.value as any },
+                      }))
+                    }
+                    className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold"
+                  >
+                    <option value="banner">Top banner</option>
+                    <option value="popup">Popup modal</option>
+                  </select>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-gray-700 font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={ann.dismissible}
+                    onChange={(e) =>
+                      setSettings((p) => ({
+                        ...p,
+                        announcement: { ...(p.announcement || defaultAnnouncement()), dismissible: e.target.checked },
+                      }))
+                    }
+                  />
+                  Dismissible
+                </label>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                  <input
+                    value={ann.title}
+                    onChange={(e) =>
+                      setSettings((p) => ({
+                        ...p,
+                        announcement: { ...(p.announcement || defaultAnnouncement()), title: e.target.value },
+                      }))
+                    }
+                    placeholder="e.g. Free delivery today!"
+                    className="w-full px-4 py-3 border rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <KeyRound size={16} />
+                    Dismiss key (version)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      value={ann.dismiss_key}
+                      onChange={(e) =>
+                        setSettings((p) => ({
+                          ...p,
+                          announcement: { ...(p.announcement || defaultAnnouncement()), dismiss_key: e.target.value },
+                        }))
+                      }
+                      placeholder="v1"
+                      className="w-full px-4 py-3 border rounded-xl"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSettings((p) => ({
+                          ...p,
+                          announcement: { ...(p.announcement || defaultAnnouncement()), dismiss_key: `v${Date.now()}` },
+                        }))
+                      }
+                      className="px-4 py-3 rounded-xl bg-gray-900 text-white font-semibold"
+                      title="Generate a new key so popup shows again to users"
+                    >
+                      New
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-600 mt-1">
+                    Change this when you update announcement content (so users see it again).
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <MessageSquare size={16} />
+                  Message
+                </label>
+                <textarea
+                  value={ann.message}
+                  onChange={(e) =>
+                    setSettings((p) => ({
+                      ...p,
+                      announcement: { ...(p.announcement || defaultAnnouncement()), message: e.target.value },
+                    }))
+                  }
+                  rows={3}
+                  placeholder="Short, clear message"
+                  className="w-full px-4 py-3 border rounded-xl"
+                />
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <LinkIcon size={16} />
+                    Link (optional)
+                  </label>
+                  <input
+                    value={ann.link_url || ''}
+                    onChange={(e) =>
+                      setSettings((p) => ({
+                        ...p,
+                        announcement: { ...(p.announcement || defaultAnnouncement()), link_url: e.target.value },
+                      }))
+                    }
+                    placeholder="https://..."
+                    className="w-full px-4 py-3 border rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <Calendar size={16} />
+                    Active window (optional)
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="datetime-local"
+                      value={toDatetimeLocalFromIso(ann.start_at)}
+                      onChange={(e) =>
+                        setSettings((p) => ({
+                          ...p,
+                          announcement: {
+                            ...(p.announcement || defaultAnnouncement()),
+                            start_at: toIsoOrEmptyFromDatetimeLocal(e.target.value),
+                          },
+                        }))
+                      }
+                      className="w-full px-3 py-3 border rounded-xl text-sm"
+                    />
+                    <input
+                      type="datetime-local"
+                      value={toDatetimeLocalFromIso(ann.end_at)}
+                      onChange={(e) =>
+                        setSettings((p) => ({
+                          ...p,
+                          announcement: {
+                            ...(p.announcement || defaultAnnouncement()),
+                            end_at: toIsoOrEmptyFromDatetimeLocal(e.target.value),
+                          },
+                        }))
+                      }
+                      className="w-full px-3 py-3 border rounded-xl text-sm"
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-600 mt-1">Start / End in your local time.</p>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-3 items-start">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Image (optional)</label>
+                  <div className="flex items-center gap-3">
+                    <div className="w-16 h-16 rounded-xl border bg-white overflow-hidden flex items-center justify-center">
+                      {ann.image_url ? (
+                        <Image
+                          src={ann.image_url}
+                          alt="Announcement preview"
+                          width={64}
+                          height={64}
+                          className="object-cover w-full h-full"
+                        />
+                      ) : (
+                        <ImageIcon className="text-gray-400" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-2">
+                      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold cursor-pointer">
+                        <Upload size={16} />
+                        {uploadingAnnouncementImage ? 'Uploading…' : 'Upload'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => onUploadAnnouncementImage(e.target.files?.[0])}
+                          disabled={uploadingAnnouncementImage}
+                        />
+                      </label>
+
+                      <input
+                        value={ann.image_url || ''}
+                        onChange={(e) =>
+                          setSettings((p) => ({
+                            ...p,
+                            announcement: { ...(p.announcement || defaultAnnouncement()), image_url: e.target.value },
+                          }))
+                        }
+                        placeholder="Or paste image URL"
+                        className="w-full px-3 py-2 border rounded-xl text-sm bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-white p-3">
+                  <p className="text-sm font-extrabold text-gray-900 mb-2">Preview</p>
+                  <div className="rounded-xl border bg-gray-900 text-white p-3">
+                    <div className="font-extrabold">{ann.title || 'Announcement title'}</div>
+                    <div className="text-sm text-white/90 mt-1">{ann.message || 'Announcement message...'}</div>
+                    {!!ann.link_url && (
+                      <div className="text-xs text-white/80 mt-2 underline break-all">{ann.link_url}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Social Media */}
           <div>
             <h2 className="text-xl font-bold text-gray-900 mb-4">Social Media Links</h2>
@@ -426,14 +795,12 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Custom Links (new) */}
+          {/* Custom Links */}
           <div>
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Custom Links</h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  Add any external link with a logo (paste URL or upload).
-                </p>
+                <p className="text-sm text-gray-600 mt-1">Add any external link with a logo (paste URL or upload).</p>
               </div>
             </div>
 
@@ -446,13 +813,7 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-3">
                     <div className="w-14 h-14 rounded-xl border bg-white overflow-hidden flex items-center justify-center">
                       {draft.logo_url ? (
-                        <Image
-                          src={draft.logo_url}
-                          alt="Logo preview"
-                          width={56}
-                          height={56}
-                          className="object-cover w-full h-full"
-                        />
+                        <Image src={draft.logo_url} alt="Logo preview" width={56} height={56} className="object-cover w-full h-full" />
                       ) : (
                         <LinkIcon className="text-gray-400" />
                       )}
@@ -529,9 +890,7 @@ export default function SettingsPage() {
             {/* Existing links list */}
             <div className="mt-4 space-y-3">
               {(settings.custom_links || []).length === 0 ? (
-                <div className="text-sm text-gray-600 bg-gray-50 border rounded-2xl p-4">
-                  No custom links yet.
-                </div>
+                <div className="text-sm text-gray-600 bg-gray-50 border rounded-2xl p-4">No custom links yet.</div>
               ) : (
                 (settings.custom_links || []).map((l, idx) => (
                   <div
@@ -543,13 +902,7 @@ export default function SettingsPage() {
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-12 h-12 rounded-xl border bg-white overflow-hidden flex items-center justify-center shrink-0">
                         {l.logo_url ? (
-                          <Image
-                            src={l.logo_url}
-                            alt={l.title}
-                            width={48}
-                            height={48}
-                            className="object-cover w-full h-full"
-                          />
+                          <Image src={l.logo_url} alt={l.title} width={48} height={48} className="object-cover w-full h-full" />
                         ) : (
                           <Globe className="text-gray-400" />
                         )}
@@ -612,6 +965,24 @@ export default function SettingsPage() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+
+          {/* ✅ Optional: Menu images toggle */}
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Performance</h2>
+            <div className="rounded-2xl border bg-white p-4">
+              <label className="flex items-center gap-2 text-sm text-gray-800 font-semibold">
+                <input
+                  type="checkbox"
+                  checked={Boolean(settings.show_menu_images ?? true)}
+                  onChange={(e) => setSettings((p) => ({ ...p, show_menu_images: e.target.checked }))}
+                />
+                Show menu item images in customer app
+              </label>
+              <p className="text-[11px] text-gray-600 mt-1">
+                If disabled, images can still be uploaded (image_url is stored) but the UI won’t render them—this saves Cloudinary bandwidth.
+              </p>
             </div>
           </div>
 

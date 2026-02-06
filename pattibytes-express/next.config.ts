@@ -6,26 +6,24 @@ const nextConfig: NextConfig = {
   },
   images: {
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'pbexpress.pattibytes.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'lh3.googleusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.supabase.co',
-      },
-      {
-        protocol: 'https',
-        hostname: 'res.cloudinary.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'kheafofbofrimkkmjaiy.supabase.co',
-      },
+      { protocol: 'https', hostname: 'pbexpress.pattibytes.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/**' },
+
+      // ✅ IBBC
+      { protocol: 'https', hostname: 'i.ibb.co', pathname: '/**' },
+
+      // ✅ Cloudinary
+      { protocol: 'https', hostname: 'res.cloudinary.com', pathname: '/**' },
+
+      // ✅ Supabase (use your exact project host)
+      { protocol: 'https', hostname: 'kheafofbofrimkkmjaiy.supabase.co', pathname: '/**' },
+
+      // ✅ Pinterest images
+      { protocol: 'https', hostname: 'i.pinimg.com', pathname: '/**' },
+
+      // Optional common CDNs (only add what you use)
+      { protocol: 'https', hostname: 'images.unsplash.com', pathname: '/**' },
+      { protocol: 'https', hostname: 'i.imgur.com', pathname: '/**' },
     ],
   },
 };
