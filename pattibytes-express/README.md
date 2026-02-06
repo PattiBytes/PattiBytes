@@ -14,10 +14,12 @@ PattiBytes Express — Ultra-Dynamic Special Repo
 <br/>
 
 <!-- Animated Typing Text with Multiple Lines -->
-<img 
-  src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=26&duration=2500&pause=800&color=F7931E&center=true&vCenter=true&multiline=true&repeat=true&random=false&width=900&height=120&lines=🚀+Fully+Dynamic+Multi-Role+Food+Delivery+Platform;👤+Customer+•+🏪+Merchant+•+🏍️+Driver+•+⚙️+Admin;⚡+Real-time+Orders+%7C+📍+Live+GPS+Tracking+%7C+📱+PWA+Ready;🔥+Supabase+•+Next.js+14+•+TypeScript+•+Tailwind+CSS" 
+<!-- ✅ FIXED + ENHANCED Typing Animation (URL-encoded + HTML-safe &amp;) -->
+<img
+  src="https://readme-typing-svg.demolab.com/?font=Fira+Code&amp;weight=700&amp;size=28&amp;duration=2800&amp;pause=900&amp;color=F7931E&amp;center=true&amp;vCenter=true&amp;multiline=true&amp;repeat=true&amp;letterSpacing=0.6&amp;width=980&amp;height=140&amp;lines=%F0%9F%9A%80%20Fully%20Dynamic%20Multi-Role%20Food%20Delivery%20Platform;%F0%9F%91%A4%20Customer%20%E2%80%A2%20%F0%9F%8F%AA%20Merchant%20%E2%80%A2%20%F0%9F%8F%8D%EF%B8%8F%20Driver%20%E2%80%A2%20%E2%9A%99%EF%B8%8F%20Admin;%E2%9A%A1%20Real-time%20Orders%20%7C%20%F0%9F%93%8D%20Live%20GPS%20Tracking%20%7C%20%F0%9F%93%B1%20PWA%20Ready;%F0%9F%94%A5%20Supabase%20%E2%80%A2%20Next.js%2014%20%E2%80%A2%20TypeScript%20%E2%80%A2%20Tailwind%20CSS"
   alt="Typing Animation"
 />
+
 
 <br/><br/>
 
