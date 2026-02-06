@@ -34,12 +34,31 @@ self.addEventListener('activate', (event) => {
 
 // Fetch
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // ✅ Don't cache audio (avoids ERR_CACHE_OPERATION_NOT_SUPPORTED)
+  if (url.pathname.startsWith('/sounds/') || url.pathname.endsWith('.mp3')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
+    caches.match(event.request).then((cached) => {
+      return (
+        cached ||
+        fetch(event.request).then((resp) => {
+          // Cache only successful basic GET responses
+          if (event.request.method === 'GET' && resp && resp.ok && resp.type === 'basic') {
+            const copy = resp.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return resp;
+        })
+      );
     })
   );
 });
+
 
 // Push notification
 self.addEventListener('push', (event) => {
