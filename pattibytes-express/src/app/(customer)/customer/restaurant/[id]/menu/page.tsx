@@ -118,6 +118,8 @@ export default function RestaurantFullMenuPage() {
       is_veg: item.is_veg,
       category: item.category,
       discount_percentage: item.discount_percentage,
+      category_id: null,
+      menu_item_id: ''
     };
 
     const ok = addToCart(cartItem, restaurant?.business_name || 'Restaurant');
