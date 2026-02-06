@@ -20,6 +20,8 @@ import {
   TrendingUp,
   ArrowRight,
   Image as ImageIcon,
+  X,
+  Megaphone,
 } from 'lucide-react';
 
 import AppShell from '@/components/common/AppShell';
@@ -82,6 +84,22 @@ type CustomLink = {
   enabled?: boolean;
 };
 
+type Announcement = {
+  enabled?: boolean;
+  type?: 'banner' | 'popup';
+  title?: string;
+  message?: string;
+  image_url?: string;
+  link_url?: string;
+  start_at?: string; // ISO
+  end_at?: string; // ISO
+  dismissible?: boolean;
+  dismiss_key?: string;
+
+  // optional (if you want): control auto hide in milliseconds
+  auto_hide_ms?: number;
+};
+
 type AppSettingsRow = {
   id: string;
   app_name: string | null;
@@ -98,6 +116,10 @@ type AppSettingsRow = {
 
   custom_links?: any;
   customer_search_radius_km?: number | null;
+
+  // NEW
+  announcement?: any;
+  show_menu_images?: boolean | null;
 };
 
 const APP_SETTINGS_ID = 'a6ba88a3-6fe9-4652-8c5d-b25ee1a05e39';
@@ -171,6 +193,31 @@ function finalPrice(price: any, discount?: any) {
   return p * (1 - d / 100);
 }
 
+function isAnnouncementActive(a?: Announcement | null) {
+  if (!a?.enabled) return false;
+
+  const now = Date.now();
+  const s = a.start_at ? new Date(a.start_at).getTime() : NaN;
+  const e = a.end_at ? new Date(a.end_at).getTime() : NaN;
+
+  if (Number.isFinite(s) && now < s) return false;
+  if (Number.isFinite(e) && now > e) return false;
+
+  const hasContent =
+    Boolean(String(a.title || '').trim()) ||
+    Boolean(String(a.message || '').trim()) ||
+    Boolean(String(a.image_url || '').trim());
+
+  return hasContent;
+}
+
+function normalizeHttpUrl(v: any) {
+  const s = normalizeMaybeMarkdownUrl(v);
+  if (!s) return '';
+  if (/^https?:\/\//i.test(s)) return s;
+  return `https://${s}`;
+}
+
 export default function CustomerDashboardPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -223,27 +270,47 @@ export default function CustomerDashboardPage() {
     facebook: 'https://www.facebook.com/ipattibytes',
   });
 
+  // NEW: announcement UI state
+  const [bannerVisible, setBannerVisible] = useState(true);
+  const [popupOpen, setPopupOpen] = useState(false);
+
+  // timers
+  const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const popupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const firstName = useMemo(() => getFirstNameFromUser(user), [user]);
 
-  // App settings (same as your code)
+  const announcement: Announcement | null = useMemo(() => {
+    const raw = (appSettings as any)?.announcement;
+    if (!raw || typeof raw !== 'object') return null;
+    return raw as Announcement;
+  }, [appSettings]);
+
+  const showMenuImages = useMemo(() => {
+    return Boolean((appSettings as any)?.show_menu_images ?? true);
+  }, [appSettings]);
+
+  // App settings
   useEffect(() => {
     const loadAppSettings = async () => {
       try {
         let row: AppSettingsRow | null = null;
 
-        const try1 = await supabase
-          .from('app_settings')
-          .select(
-            'id,app_name,support_email,support_phone,business_address,facebook_url,instagram_url,twitter_url,youtube_url,website_url,custom_links,customer_search_radius_km'
-          )
-          .eq('id', APP_SETTINGS_ID)
-          .single();
+        const selectAll =
+          'id,app_name,support_email,support_phone,business_address,facebook_url,instagram_url,twitter_url,youtube_url,website_url,custom_links,customer_search_radius_km,announcement,show_menu_images';
+
+        const try1 = await supabase.from('app_settings').select(selectAll).eq('id', APP_SETTINGS_ID).single();
 
         if (!try1.error) {
           row = (try1.data || null) as any;
         } else {
-          const msg = String(try1.error.message || '');
-          if (msg.toLowerCase().includes('customer_search_radius_km')) {
+          // Backward compatible fallback if some columns don't exist yet
+          const msg = String(try1.error.message || '').toLowerCase();
+
+          const needsFallback =
+            msg.includes('customer_search_radius_km') || msg.includes('announcement') || msg.includes('show_menu_images');
+
+          if (needsFallback) {
             const try2 = await supabase
               .from('app_settings')
               .select(
@@ -251,6 +318,7 @@ export default function CustomerDashboardPage() {
               )
               .eq('id', APP_SETTINGS_ID)
               .single();
+
             if (try2.error) throw try2.error;
             row = (try2.data || null) as any;
           } else {
@@ -312,6 +380,59 @@ export default function CustomerDashboardPage() {
     };
   }, []);
 
+  // NEW: announcement open + auto-hide logic
+  useEffect(() => {
+    if (bannerTimer.current) clearTimeout(bannerTimer.current);
+    if (popupTimer.current) clearTimeout(popupTimer.current);
+    bannerTimer.current = null;
+    popupTimer.current = null;
+
+    // reset UI per new announcement payload
+    setBannerVisible(true);
+    setPopupOpen(false);
+
+    if (!isAnnouncementActive(announcement)) return;
+
+    const type = (announcement?.type || 'banner') as 'banner' | 'popup';
+    const dismissible = announcement?.dismissible !== false;
+    const dismissKey = String(announcement?.dismiss_key || 'v1').trim() || 'v1';
+    const storageKey = `pb_announcement_dismissed:${dismissKey}`;
+
+    const autoMsRaw = Number((announcement as any)?.auto_hide_ms);
+    const autoHideMs =
+      Number.isFinite(autoMsRaw) && autoMsRaw > 500 ? Math.round(autoMsRaw) : type === 'popup' ? 12000 : 8000;
+
+    if (type === 'popup') {
+      const dismissed = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
+      if (!dismissed) {
+        setPopupOpen(true);
+
+        popupTimer.current = setTimeout(() => {
+          // auto close
+          setPopupOpen(false);
+          if (dismissible) {
+            try {
+              localStorage.setItem(storageKey, new Date().toISOString());
+            } catch {}
+          }
+        }, autoHideMs);
+      }
+      return;
+    }
+
+    // banner
+    bannerTimer.current = setTimeout(() => {
+      setBannerVisible(false);
+    }, autoHideMs);
+
+    return () => {
+      if (bannerTimer.current) clearTimeout(bannerTimer.current);
+      if (popupTimer.current) clearTimeout(popupTimer.current);
+      bannerTimer.current = null;
+      popupTimer.current = null;
+    };
+  }, [announcement?.enabled, announcement?.type, announcement?.dismiss_key, announcement?.start_at, announcement?.end_at]);
+
   // Saved addresses + initial location
   useEffect(() => {
     if (!user) return;
@@ -363,80 +484,83 @@ export default function CustomerDashboardPage() {
     }
   };
 
-  // FAST stats using aggregates + small active list (no 2000-row download)
-  const loadOrdersAndStats = async () => {
-    if (!user) return;
+  // FAST stats using aggregates + small active list
+const loadOrdersAndStats = async () => {
+  if (!user) return;
 
-    setLoadingActiveOrders(true);
-    try {
-      const uid = user.id;
+  setLoadingActiveOrders(true);
+  try {
+    const uid = user.id;
 
-      const [totalRes, activeRes, deliveredRes, sumRes, activeListRes] = await Promise.all([
-        supabase.from('orders').select('id', { count: 'exact', head: true }).eq('customer_id', uid),
-        supabase
-          .from('orders')
-          .select('id', { count: 'exact', head: true })
-          .eq('customer_id', uid)
-          .in('status', ACTIVE_STATUSES),
-        supabase
-          .from('orders')
-          .select('id', { count: 'exact', head: true })
-          .eq('customer_id', uid)
-          .eq('status', 'delivered'),
-        // PostgREST aggregate: total_amount.sum() [web:274]
-        supabase.from('orders').select('total:total_amount.sum()').eq('customer_id', uid),
-        supabase
-          .from('orders')
-          .select('id,status,total_amount,merchant_id,created_at,order_number')
-          .eq('customer_id', uid)
-          .in('status', ACTIVE_STATUSES)
-          .order('created_at', { ascending: false })
-          .limit(3),
-      ]);
+    const [totalRes, activeRes, deliveredRes, spentRowsRes, activeListRes] = await Promise.all([
+      supabase.from('orders').select('id', { count: 'exact', head: true }).eq('customer_id', uid),
+      supabase.from('orders').select('id', { count: 'exact', head: true }).eq('customer_id', uid).in('status', ACTIVE_STATUSES),
+      supabase.from('orders').select('id', { count: 'exact', head: true }).eq('customer_id', uid).eq('status', 'delivered'),
 
-      setStats({
-        totalOrders: totalRes.count || 0,
-        activeOrders: activeRes.count || 0,
-        completedOrders: deliveredRes.count || 0,
-        totalSpent: Number((sumRes.data as any)?.[0]?.total || 0),
+      // ✅ Total spent fallback (avoid total_amount.sum() 400)
+      supabase
+        .from('orders')
+        .select('total_amount')
+        .eq('customer_id', uid)
+        .eq('status', 'delivered')
+        .order('created_at', { ascending: false })
+        .limit(500),
+
+      // ✅ Active list (this MUST stay last so activeListRes is correct)
+      supabase
+        .from('orders')
+        .select('id,status,total_amount,merchant_id,created_at,order_number')
+        .eq('customer_id', uid)
+        .in('status', ACTIVE_STATUSES)
+        .order('created_at', { ascending: false })
+        .limit(3),
+    ]);
+
+    const totalSpent = (spentRowsRes.data || []).reduce((acc: number, r: any) => acc + Number(r?.total_amount || 0), 0);
+
+    setStats({
+      totalOrders: totalRes.count || 0,
+      activeOrders: activeRes.count || 0,
+      completedOrders: deliveredRes.count || 0,
+      totalSpent,
+    });
+
+    const active = (activeListRes.data || []).map((o: any) => ({
+      id: String(o.id),
+      ordernumber: o.order_number ?? null,
+      status: o.status ?? null,
+      total_amount: Number(o.total_amount || 0),
+      created_at: o.created_at ?? null,
+      merchant_id: o.merchant_id ?? null,
+    })) as ActiveOrder[];
+
+    const merchantIds = Array.from(new Set(active.map((x) => x.merchant_id).filter(Boolean))) as string[];
+    if (merchantIds.length) {
+      const m = await supabase.from('merchants').select('id,business_name,logo_url').in('id', merchantIds).limit(50);
+      const mapM = new Map<string, { business_name: string | null; logo_url: string | null }>();
+      (m.data || []).forEach((r: any) =>
+        mapM.set(String(r.id), { business_name: r.business_name ?? null, logo_url: r.logo_url ?? null })
+      );
+
+      active.forEach((a) => {
+        const info = mapM.get(String(a.merchant_id || ''));
+        if (info) {
+          a.merchantName = info.business_name || 'Restaurant';
+          a.merchantLogoUrl = info.logo_url || null;
+        }
       });
-
-      const active = (activeListRes.data || []).map((o: any) => ({
-        id: String(o.id),
-        ordernumber: o.order_number ?? null,
-        status: o.status ?? null,
-        total_amount: Number(o.total_amount || 0),
-        created_at: o.created_at ?? null,
-        merchant_id: o.merchant_id ?? null,
-      })) as ActiveOrder[];
-
-      // hydrate merchant names for at most 3
-      const merchantIds = Array.from(new Set(active.map((x) => x.merchant_id).filter(Boolean))) as string[];
-      if (merchantIds.length) {
-        const m = await supabase.from('merchants').select('id,business_name,logo_url').in('id', merchantIds).limit(50);
-        const mapM = new Map<string, { business_name: string | null; logo_url: string | null }>();
-        (m.data || []).forEach((r: any) =>
-          mapM.set(String(r.id), { business_name: r.business_name ?? null, logo_url: r.logo_url ?? null })
-        );
-
-        active.forEach((a) => {
-          const info = mapM.get(String(a.merchant_id || ''));
-          if (info) {
-            a.merchantName = info.business_name || 'Restaurant';
-            a.merchantLogoUrl = info.logo_url || null;
-          }
-        });
-      }
-
-      setActiveOrders(active);
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to load order analytics');
-      setStats({ totalOrders: 0, activeOrders: 0, completedOrders: 0, totalSpent: 0 });
-      setActiveOrders([]);
-    } finally {
-      setLoadingActiveOrders(false);
     }
-  };
+
+    setActiveOrders(active);
+  } catch (e: any) {
+    toast.error(e?.message || 'Failed to load order analytics');
+    setStats({ totalOrders: 0, activeOrders: 0, completedOrders: 0, totalSpent: 0 });
+    setActiveOrders([]);
+  } finally {
+    setLoadingActiveOrders(false);
+  }
+};
+
 
   // Realtime refresh (throttled)
   const ordersThrottle = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -448,17 +572,13 @@ export default function CustomerDashboardPage() {
 
     const ch = supabase
       .channel(`customer-orders-${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders', filter: `customer_id=eq.${user.id}` },
-        () => {
-          if (ordersThrottle.current) return;
-          ordersThrottle.current = setTimeout(() => {
-            ordersThrottle.current = null;
-            loadOrdersAndStats();
-          }, 1200);
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `customer_id=eq.${user.id}` }, () => {
+        if (ordersThrottle.current) return;
+        ordersThrottle.current = setTimeout(() => {
+          ordersThrottle.current = null;
+          loadOrdersAndStats();
+        }, 1200);
+      })
       .subscribe();
 
     return () => {
@@ -600,7 +720,6 @@ export default function CustomerDashboardPage() {
         const items = (data || []) as MenuItem[];
         setMenuItems(items);
 
-        // optional counts (cheap for <=120)
         const counts: Record<string, number> = {};
         for (const it of items as any[]) counts[it.merchant_id] = (counts[it.merchant_id] || 0) + 1;
         setMenuCountByMerchant(counts);
@@ -612,113 +731,139 @@ export default function CustomerDashboardPage() {
     }, 180);
   };
 
-  // Trending dishes (last 7 days), sorted client-side for speed/compat
-  useEffect(() => {
-    const loadTrending = async () => {
-      if (!location) return;
+  // Trending dishes (last 7 days), sorted client-side
+// Trending dishes (last 7 days), sorted client-side (NO huge IN(menu_item_id))
+useEffect(() => {
+  let cancelled = false;
 
-      const ids = filteredRestaurants.slice(0, 60).map((r: any) => r.id).filter(Boolean);
-      if (!ids.length) {
-        setTrending([]);
+  const loadTrending = async () => {
+    if (!location) return;
+
+    const merchantIds = filteredRestaurants.slice(0, 60).map((r: any) => r.id).filter(Boolean);
+    if (!merchantIds.length) {
+      setTrending([]);
+      return;
+    }
+
+    const cacheKey = `trending:7d:${location.lat.toFixed(2)}:${location.lon.toFixed(2)}:${searchRadiusKm}:${merchantIds.length}`;
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) setTrending(parsed);
+      }
+    } catch {}
+
+    setTrendingLoading(true);
+
+    try {
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+      /**
+       * Key idea:
+       * - order_items has menu_item_id + quantity + created_at
+       * - menu_items has merchant_id
+       * So filter order_items by menu_items.merchant_id via an inner join.
+       */
+      const oiRes = await supabase
+        .from('order_items')
+        .select('menu_item_id,quantity,created_at,menu_items!inner(merchant_id)')
+        .gte('created_at', since)
+        .in('menu_items.merchant_id', merchantIds)
+        .limit(10000);
+
+      if (oiRes.error) throw oiRes.error;
+
+      // Sum quantities by menu_item_id
+      const qtyByItem = new Map<string, number>();
+      for (const r of oiRes.data || []) {
+        const menuItemId = String((r as any)?.menu_item_id || '');
+        const q = Number((r as any)?.quantity || 0);
+        if (!menuItemId || !Number.isFinite(q) || q <= 0) continue;
+        qtyByItem.set(menuItemId, (qtyByItem.get(menuItemId) || 0) + q);
+      }
+
+      const top = Array.from(qtyByItem.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 12)
+        .map(([menu_item_id, totalQty]) => ({ menu_item_id, totalQty }));
+
+      const topItemIds = top.map((x) => x.menu_item_id);
+      if (!topItemIds.length) {
+        if (!cancelled) setTrending([]);
         return;
       }
 
-      const cacheKey = `trending:7d:${location.lat.toFixed(2)}:${location.lon.toFixed(2)}:${searchRadiusKm}:${ids.length}`;
-      try {
-        const cached = sessionStorage.getItem(cacheKey);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed)) setTrending(parsed);
-        }
-      } catch {}
+      // Fetch item details (includes merchant_id)
+      const itemsRes = await supabase
+        .from('menu_items')
+        .select('id,merchant_id,name,description,price,category,image_url,is_veg,discount_percentage')
+        .in('id', topItemIds)
+        .limit(200);
 
-      setTrendingLoading(true);
-      try {
-        const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      if (itemsRes.error) throw itemsRes.error;
 
-        // Aggregate quantities by menu_item_id (PostgREST auto GROUP BY) [web:274]
-        const aggRes = await supabase
-          .from('order_items')
-          .select('menu_item_id,merchant_id,total_qty:quantity.sum(),created_at')
-          .in('merchant_id', ids)
-          .gte('created_at', since)
-          .limit(2000);
+      const itemMap = new Map<string, any>();
+      (itemsRes.data || []).forEach((it: any) => itemMap.set(String(it.id), it));
 
-        if (aggRes.error) throw aggRes.error;
+      const topMerchantIds = Array.from(
+        new Set((itemsRes.data || []).map((x: any) => String(x.merchant_id || '')).filter(Boolean))
+      );
 
-        const grouped = (aggRes.data || [])
-          .map((r: any) => ({
-            menu_item_id: String(r.menu_item_id || ''),
-            merchant_id: String(r.merchant_id || ''),
-            totalQty: Number(r.total_qty || 0),
-          }))
-          .filter((x: any) => x.menu_item_id && x.merchant_id && x.totalQty > 0);
+      const merchantsRes = await supabase
+        .from('merchants')
+        .select('id,business_name')
+        .in('id', topMerchantIds)
+        .limit(200);
 
-        // Merge duplicates (sometimes returned multiple times depending on schema)
-        const map = new Map<string, { menu_item_id: string; merchant_id: string; totalQty: number }>();
-        for (const g of grouped) {
-          const k = `${g.menu_item_id}:${g.merchant_id}`;
-          const prev = map.get(k);
-          map.set(k, { ...g, totalQty: (prev?.totalQty || 0) + g.totalQty });
-        }
+      if (merchantsRes.error) throw merchantsRes.error;
 
-        const top = Array.from(map.values())
-          .sort((a, b) => b.totalQty - a.totalQty)
-          .slice(0, 12);
+      const merchantMap = new Map<string, string>();
+      (merchantsRes.data || []).forEach((m: any) =>
+        merchantMap.set(String(m.id), String(m.business_name || 'Restaurant'))
+      );
 
-        const topItemIds = top.map((x) => x.menu_item_id);
-        const topMerchantIds = Array.from(new Set(top.map((x) => x.merchant_id)));
+      const merged: TrendingDish[] = top
+        .map((t) => {
+          const it = itemMap.get(String(t.menu_item_id));
+          if (!it) return null;
 
-        const [itemsRes, merchantsRes] = await Promise.all([
-          supabase
-            .from('menu_items')
-            .select('id,merchant_id,name,description,price,category,image_url,is_veg,discount_percentage')
-            .in('id', topItemIds)
-            .limit(200),
-          supabase.from('merchants').select('id,business_name').in('id', topMerchantIds).limit(200),
-        ]);
+          return {
+            id: String(it.id),
+            merchant_id: String(it.merchant_id),
+            name: String(it.name || ''),
+            description: it.description ?? null,
+            price: Number(it.price || 0),
+            category: it.category ?? null,
+            image_url: it.image_url ?? null,
+            discount_percentage: it.discount_percentage ?? null,
+            is_veg: it.is_veg ?? null,
+            merchantName: merchantMap.get(String(it.merchant_id)) || 'Restaurant',
+            totalQty: Number(t.totalQty || 0),
+          };
+        })
+        .filter(Boolean) as TrendingDish[];
 
-        const itemMap = new Map<string, any>();
-        (itemsRes.data || []).forEach((it: any) => itemMap.set(String(it.id), it));
-
-        const merchantMap = new Map<string, string>();
-        (merchantsRes.data || []).forEach((m: any) => merchantMap.set(String(m.id), String(m.business_name || 'Restaurant')));
-
-        const merged: TrendingDish[] = top
-          .map((t) => {
-            const it = itemMap.get(String(t.menu_item_id));
-            if (!it) return null;
-
-            return {
-              id: String(it.id),
-              merchant_id: String(it.merchant_id),
-              name: String(it.name || ''),
-              description: it.description ?? null,
-              price: Number(it.price || 0),
-              category: it.category ?? null,
-              image_url: it.image_url ?? null,
-              discount_percentage: it.discount_percentage ?? null,
-              is_veg: it.is_veg ?? null,
-              merchantName: merchantMap.get(String(it.merchant_id)) || 'Restaurant',
-              totalQty: Number(t.totalQty || 0),
-            };
-          })
-          .filter(Boolean) as TrendingDish[];
-
+      if (!cancelled) {
         setTrending(merged);
         try {
           sessionStorage.setItem(cacheKey, JSON.stringify(merged));
         } catch {}
-      } catch {
-        // If order_items doesn't exist, trending stays hidden
-        setTrending([]);
-      } finally {
-        setTrendingLoading(false);
       }
-    };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      // If this throws “relationship not found”, you need the FK.
+      if (!cancelled) setTrending([]);
+    } finally {
+      if (!cancelled) setTrendingLoading(false);
+    }
+  };
 
-    loadTrending();
-  }, [location?.lat, location?.lon, searchRadiusKm, filteredRestaurants]);
+  loadTrending();
+  return () => {
+    cancelled = true;
+  };
+}, [location?.lat, location?.lon, searchRadiusKm, filteredRestaurants]);
 
   // Close modals on ESC
   useEffect(() => {
@@ -726,6 +871,7 @@ export default function CustomerDashboardPage() {
       if (e.key === 'Escape') {
         setShowLocationModal(false);
         setShowLocationSearch(false);
+        setPopupOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -776,6 +922,23 @@ export default function CustomerDashboardPage() {
     return [...base, ...extra];
   }, [brand, customLinks]);
 
+  const closePopup = (mode: 'manual' | 'auto') => {
+    setPopupOpen(false);
+
+    const a = announcement;
+    if (!a) return;
+
+    const dismissible = a.dismissible !== false;
+    if (!dismissible) return;
+
+    const dismissKey = String(a.dismiss_key || 'v1').trim() || 'v1';
+    const storageKey = `pb_announcement_dismissed:${dismissKey}`;
+
+    try {
+      localStorage.setItem(storageKey, `${mode}:${new Date().toISOString()}`);
+    } catch {}
+  };
+
   return (
     <AppShell title={appSettings?.app_name || 'Pattibytes Express'}>
       <div
@@ -785,101 +948,155 @@ export default function CustomerDashboardPage() {
         <div className="mx-auto w-full max-w-7xl px-2.5 sm:px-3.5 md:px-5 lg:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
           <DashboardHeader firstName={firstName} radiusKm={searchRadiusKm} />
 
-          {/* Presented by + socials (use <img> for remote logos to avoid next/image host config issues) [web:244] */}
-        {/* Presented by + quick actions (interactive) */}
-<div className="bg-white/90 backdrop-blur rounded-2xl shadow-sm border border-gray-100 px-3 py-2.5">
-  <div className="flex items-start justify-between gap-2">
-    <div className="min-w-0">
-      <p className="text-[11px] text-gray-600 leading-4">{brand.title}</p>
+          {/* NEW: Banner announcement */}
+          {bannerVisible && isAnnouncementActive(announcement) && (announcement?.type || 'banner') === 'banner' && (
+            <div className="rounded-2xl border border-orange-200 bg-orange-50 px-3 py-2.5">
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 mt-0.5">
+                  <div className="w-9 h-9 rounded-xl bg-white border border-orange-200 flex items-center justify-center">
+                    <Megaphone className="w-4 h-4 text-primary" />
+                  </div>
+                </div>
 
-      <p className="text-[11px] text-gray-500 leading-4">
-        For professional queries contact us at{' '}
-        <a
-          href="https://www.pattibytes.com/#collaboration"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-semibold text-gray-900 hover:underline"
-        >
-          pattibytes.com/collaboration
-        </a>
-      </p>
+                {!!String(announcement?.image_url || '').trim() && (
+                  <img
+                    src={String(announcement?.image_url || '')}
+                    alt="Announcement"
+                    className="w-12 h-12 rounded-xl object-cover bg-white border"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+                  />
+                )}
 
-      <div className="mt-1 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText('https://www.pattibytes.com/#collaboration');
-              toast.success('Link copied');
-            } catch {
-              toast.info('Copy not supported on this device');
-            }
-          }}
-          className="text-[11px] px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-semibold transition"
-          title="Copy collaboration link"
-        >
-          Copy link
-        </button>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-extrabold text-gray-900 truncate">
+                    {String(announcement?.title || 'Announcement')}
+                  </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            const email = appSettings?.support_email || 'pattibytesltdbusiness@gmail.com';
-            window.location.href = `mailto:${email}?subject=Collaboration%20Query&body=Hi%20team,%20`;
-          }}
-          className="text-[11px] px-2.5 py-1.5 rounded-xl bg-gray-900 text-white hover:bg-black font-semibold transition"
-          title="Email us"
-        >
-          Email us
-        </button>
+                  {!!String(announcement?.message || '').trim() && (
+                    <div className="text-[12px] text-gray-700 mt-0.5">{String(announcement?.message || '')}</div>
+                  )}
 
-        {!!appSettings?.support_phone && (
-          <a
-            href={`tel:${appSettings.support_phone}`}
-            className="text-[11px] px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-semibold transition"
-            title="Call support"
-          >
-            Call
-          </a>
-        )}
-      </div>
+                  {!!String(announcement?.link_url || '').trim() && (
+                    <a
+                      href={normalizeHttpUrl(announcement?.link_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[12px] font-semibold text-primary hover:underline mt-1 inline-block"
+                    >
+                      Learn more →
+                    </a>
+                  )}
+                </div>
 
-      <div id="collaboration" />
-    </div>
-
-    {/* socials: keep your existing socials icons to the right */}
-    <div className="flex items-center gap-1.5 shrink-0">
-      {socials.slice(0, 6).map(({ href, label, Icon, logoUrl }: any) => (
-        <Link
-          key={`${label}-${href}`}
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={label}
-          title={label}
-          className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md hover:border-primary/40 transition active:scale-[0.98] overflow-hidden"
-        >
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt={label}
-              loading="lazy"
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = 'none';
-              }}
-            />
-          ) : (
-            <Icon className="w-4 h-4 text-gray-800" />
+                {announcement?.dismissible !== false && (
+                  <button
+                    type="button"
+                    onClick={() => setBannerVisible(false)}
+                    className="shrink-0 text-xs font-bold text-gray-700 px-3 py-2 rounded-xl border bg-white hover:bg-gray-50"
+                    title="Dismiss"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
           )}
-        </Link>
-      ))}
-    </div>
-  </div>
-</div>
 
+          {/* Presented by + quick actions */}
+          <div className="bg-white/90 backdrop-blur rounded-2xl shadow-sm border border-gray-100 px-3 py-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-600 leading-4">{brand.title}</p>
 
+                <p className="text-[11px] text-gray-500 leading-4">
+                  For professional queries contact us at{' '}
+                  <a
+                    href="https://www.pattibytes.com/#collaboration"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-gray-900 hover:underline"
+                  >
+                    pattibytes.com/collaboration
+                  </a>
+                </p>
+
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText('https://www.pattibytes.com/#collaboration');
+                        toast.success('Link copied');
+                      } catch {
+                        toast.info('Copy not supported on this device');
+                      }
+                    }}
+                    className="text-[11px] px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-semibold transition"
+                    title="Copy collaboration link"
+                  >
+                    Copy link
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const email = appSettings?.support_email || 'pattibytesltdbusiness@gmail.com';
+                      window.location.href = `mailto:${email}?subject=Collaboration%20Query&body=Hi%20team,%20`;
+                    }}
+                    className="text-[11px] px-2.5 py-1.5 rounded-xl bg-gray-900 text-white hover:bg-black font-semibold transition"
+                    title="Email us"
+                  >
+                    Email us
+                  </button>
+{!!appSettings?.support_phone && (
+  <a
+    href={`tel:${appSettings.support_phone}`}
+    className="text-[11px] px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-semibold transition"
+    title="Call support"
+  >
+    Call us
+  </a>
+)}
+                </div>
+
+                <div id="collaboration" />
+              </div>
+
+              {/* socials */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {socials.slice(0, 6).map(({ href, label, Icon, logoUrl }: any) => (
+                  <Link
+                    key={`${label}-${href}`}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={label}
+                    title={label}
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md hover:border-primary/40 transition active:scale-[0.98] overflow-hidden"
+                  >
+                    {logoUrl ? (
+                      <img
+                        src={logoUrl}
+                        alt={label}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <Icon className="w-4 h-4 text-gray-800" />
+                    )}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Location */}
           <LocationBar
             address={location?.address || ''}
             radiusKm={searchRadiusKm}
@@ -897,20 +1114,9 @@ export default function CustomerDashboardPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
             <div className="lg:col-span-8 space-y-3 sm:space-y-4">
-              <SearchBox
-                query={searchQuery}
-                setQuery={setSearchQueryDebounced}
-                restaurants={filteredRestaurants}
-                menuItems={menuItems}
-                onOpen={onOpenSearchResult}
-              />
+              <SearchBox query={searchQuery} setQuery={setSearchQueryDebounced} restaurants={filteredRestaurants} menuItems={menuItems} onOpen={onOpenSearchResult} />
 
-              <StatsCards
-                restaurantsCount={filteredRestaurants.length}
-                totalOrders={stats.totalOrders}
-                activeOrders={stats.activeOrders}
-                totalSpent={stats.totalSpent}
-              />
+              <StatsCards restaurantsCount={filteredRestaurants.length} totalOrders={stats.totalOrders} activeOrders={stats.activeOrders} totalSpent={stats.totalSpent} />
 
               {/* Trending dishes */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4">
@@ -926,7 +1132,6 @@ export default function CustomerDashboardPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      // quick refresh by re-triggering with a small state nudge
                       setTrendingLoading(true);
                       setTimeout(() => setTrendingLoading(false), 250);
                     }}
@@ -947,7 +1152,6 @@ export default function CustomerDashboardPage() {
                 ) : trending.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3 text-center">
                     <p className="text-xs text-gray-700 font-semibold">Trending will appear after some orders.</p>
-                   
                   </div>
                 ) : (
                   <div className="flex gap-3 overflow-x-auto no-scrollbar py-1">
@@ -963,8 +1167,7 @@ export default function CustomerDashboardPage() {
                           className="min-w-[220px] max-w-[220px] text-left bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md hover:border-primary/30 transition overflow-hidden"
                         >
                           <div className="h-24 bg-gray-100 relative">
-                            {img ? (
-                              // use plain img here too (avoid next/image host config pain on dashboard) [web:244]
+                            {showMenuImages && img ? (
                               <img
                                 src={img}
                                 alt={d.name}
@@ -999,7 +1202,7 @@ export default function CustomerDashboardPage() {
                 )}
               </div>
 
-              {/* Active orders (faster) */}
+              {/* Active orders */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4">
                 <div className="flex items-center justify-between gap-2 mb-2.5">
                   <div className="min-w-0">
@@ -1077,43 +1280,47 @@ export default function CustomerDashboardPage() {
 
               <CuisineFilters selected={selectedFilter} onSelect={setSelectedFilter} />
 
-              <div className="flex items-end justify-between gap-2">
-                <div className="min-w-0">
-                  <h2 className="text-sm sm:text-base font-extrabold text-gray-900 truncate">
-                    {selectedFilter === 'all' ? 'Restaurants near you' : selectedFilter}
-                  </h2>
-                  <p className="text-[11px] text-gray-600">
-                    {filteredRestaurants.length} found • within {searchRadiusKm}km
-                  </p>
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4">
+                <div className="flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <h2 className="text-sm sm:text-base font-extrabold text-gray-900 truncate">
+                      {selectedFilter === 'all' ? 'Restaurants near you' : selectedFilter}
+                    </h2>
+                    <p className="text-[11px] text-gray-600">
+                      {filteredRestaurants.length} found • within {searchRadiusKm}km
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => router.push('/customer/cart')}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-800 transition"
+                    >
+                      <ShoppingBag className="w-4 h-4" />
+                      Cart
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => router.push('/customer/orders')}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-900 text-white hover:bg-black text-xs font-semibold transition"
+                    >
+                      <Truck className="w-4 h-4" />
+                      Orders
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => router.push('/customer/cart')}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-800 transition"
-                  >
-                    <ShoppingBag className="w-4 h-4" />
-                    Cart
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => router.push('/customer/orders')}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-900 text-white hover:bg-black text-xs font-semibold transition"
-                  >
-                    <Truck className="w-4 h-4" />
-                    Orders
-                  </button>
+                <div className="mt-3">
+                  <RestaurantGrid
+                    loading={loadingRestaurants}
+                    restaurants={filteredRestaurants}
+                    menuCountByMerchant={menuCountByMerchant}
+                    onOpenRestaurant={(id) => router.push(`/customer/restaurant/${id}`)}
+                  />
                 </div>
               </div>
-
-              <RestaurantGrid
-                loading={loadingRestaurants}
-                restaurants={filteredRestaurants}
-                menuCountByMerchant={menuCountByMerchant}
-                onOpenRestaurant={(id) => router.push(`/customer/restaurant/${id}`)}
-              />
             </div>
 
             {/* Right rail */}
@@ -1154,9 +1361,7 @@ export default function CustomerDashboardPage() {
 
               <div className="bg-gradient-to-br from-orange-500 via-pink-500 to-purple-500 rounded-2xl shadow-lg p-4 text-white">
                 <p className="text-sm font-extrabold">Tip</p>
-                <p className="text-[12px] text-white/90 mt-1">
-                  Search dishes first—results load only when you type (faster on mobile).
-                </p>
+                <p className="text-[12px] text-white/90 mt-1">Search dishes first—results load only when you type (faster on mobile).</p>
               </div>
             </div>
           </div>
@@ -1175,6 +1380,70 @@ export default function CustomerDashboardPage() {
             </p>
           </div>
         </div>
+
+        {/* NEW: Popup announcement */}
+        {isAnnouncementActive(announcement) && (announcement?.type || 'banner') === 'popup' && popupOpen && (
+          <div className="fixed inset-0 z-[9999]">
+            <div
+              className="absolute inset-0 bg-black/50"
+              onClick={() => {
+                if (announcement?.dismissible === false) return;
+                closePopup('manual');
+              }}
+              aria-hidden="true"
+            />
+            <div className="absolute inset-0 flex items-center justify-center p-4">
+              <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+                {!!String(announcement?.image_url || '').trim() && (
+                  <div className="h-40 bg-gray-100">
+                    <img
+                      src={String(announcement?.image_url || '')}
+                      alt="Announcement"
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+                    />
+                  </div>
+                )}
+
+                <div className="p-4">
+                  <div className="text-lg font-extrabold text-gray-900">{String(announcement?.title || 'Announcement')}</div>
+                  {!!String(announcement?.message || '').trim() && (
+                    <div className="text-sm text-gray-700 mt-2">{String(announcement?.message || '')}</div>
+                  )}
+
+                  <div className="mt-4 flex items-center justify-end gap-2">
+                    {!!String(announcement?.link_url || '').trim() && (
+                      <a
+                        href={normalizeHttpUrl(announcement?.link_url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 rounded-xl bg-primary text-white font-extrabold hover:bg-orange-600"
+                      >
+                        Open
+                      </a>
+                    )}
+
+                    {announcement?.dismissible !== false ? (
+                      <button
+                        type="button"
+                        onClick={() => closePopup('manual')}
+                        className="px-4 py-2 rounded-xl border bg-white font-extrabold hover:bg-gray-50"
+                      >
+                        Close
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <p className="text-[11px] text-gray-500 mt-3">
+                    This popup auto-hides after a few seconds (or you can close it).
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <LocationModal
           open={showLocationModal}
