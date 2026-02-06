@@ -424,11 +424,20 @@ class LocationService {
     };
   }
 
-  private resolveCustomerId(input: SaveAddressInput): string {
-    const cid = input.customerid ?? input.customer_id ?? input.user_id;
-    if (!cid) throw new Error('Missing customer id (customerid/customer_id/user_id)');
-    return String(cid);
-  }
+  // ✅ replace your current resolveCustomerId with this async version
+private async resolveCustomerId(input: SaveAddressInput): Promise<string> {
+  const cid = input.customerid ?? input.customer_id ?? input.user_id;
+  if (cid) return String(cid);
+
+  // fallback: take current logged-in user id from Supabase session
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw new Error(error.message);
+
+  const uid = data.session?.user?.id;
+  if (!uid) throw new Error('Missing customer id and no auth session');
+  return uid;
+}
+
 
   private resolveIsDefault(input: SaveAddressInput): boolean {
     const v = input.isdefault ?? input.is_default;
@@ -489,7 +498,7 @@ class LocationService {
 
   async saveAddress(input: SaveAddressInput): Promise<SavedAddress | null> {
     try {
-      const customerId = this.resolveCustomerId(input);
+      const customerId = await this.resolveCustomerId(input);
       const isDefault = this.resolveIsDefault(input);
 
       // Prefer snake_case table first
