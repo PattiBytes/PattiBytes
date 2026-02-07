@@ -33,6 +33,7 @@ type OrderRow = {
   status: string;
   created_at: string;
   total_amount?: number | null;
+  delivery_fee?: number | null;
   total?: number | null;
 };
 
@@ -104,10 +105,10 @@ export default function MerchantDashboardPage() {
   const fetchOrders = async (merchantId: string): Promise<OrderRow[]> => {
     // Fix for your error: your schema does not have orders.total [file:13]
     // Try total_amount first (matches your customer dashboard usage), fallback to total.
-    const attempts = [
-      'id, status, created_at, total_amount',
-      'id, status, created_at, total',
-    ];
+  const attempts = [
+  'id, status, created_at, total_amount, delivery_fee',
+  'id, status, created_at, total, delivery_fee',
+];
 
     for (const selectStr of attempts) {
       const { data, error } = await supabase
@@ -150,17 +151,20 @@ export default function MerchantDashboardPage() {
 
     const todayOrders = orders.filter((o) => isToday(o.created_at)).length;
 
-    const totalRevenue = orders.reduce((sum, o) => {
-      const amount = o.total_amount ?? o.total ?? 0;
-      return sum + safeNumber(amount);
-    }, 0);
+   const totalRevenue = orders.reduce((sum, o) => {
+  const total = safeNumber(o.total_amount ?? o.total ?? 0);
+  const del = safeNumber(o.delivery_fee ?? 0);
+  return sum + Math.max(0, total - del);
+}, 0);
 
-    const todayRevenue = orders
-      .filter((o) => isToday(o.created_at))
-      .reduce((sum, o) => {
-        const amount = o.total_amount ?? o.total ?? 0;
-        return sum + safeNumber(amount);
-      }, 0);
+   const todayRevenue = orders
+  .filter((o) => isToday(o.created_at))
+  .reduce((sum, o) => {
+    const total = safeNumber(o.total_amount ?? o.total ?? 0);
+    const del = safeNumber(o.delivery_fee ?? 0);
+    return sum + Math.max(0, total - del);
+  }, 0);
+
 
     const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
@@ -419,7 +423,10 @@ export default function MerchantDashboardPage() {
             <div className="space-y-3">
               {recentOrders.map((o) => {
                 const s = normalizeStatus(o.status);
-                const amount = safeNumber(o.total_amount ?? o.total ?? 0);
+               const total = safeNumber(o.total_amount ?? o.total ?? 0);
+const del = safeNumber(o.delivery_fee ?? 0);
+const amount = Math.max(0, total - del);
+
 
                 return (
                   <div

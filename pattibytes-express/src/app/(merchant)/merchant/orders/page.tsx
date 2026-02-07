@@ -233,9 +233,16 @@ export default function MerchantOrdersPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-primary">
-                      ₹{order.total_amount?.toFixed(2) || '0.00'}
-                    </p>
+                  {(() => {
+  const net = Number(order.total_amount ?? 0) - Number(order.delivery_fee ?? 0);
+  return (
+    <p className="text-2xl font-bold text-primary">
+      ₹{Math.max(0, net).toFixed(2)}
+    </p>
+  );
+})()}
+
+
                     <p className="text-sm text-gray-600">{order.items?.length || 0} items</p>
                   </div>
                 </div>

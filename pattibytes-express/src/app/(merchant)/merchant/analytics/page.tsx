@@ -23,43 +23,65 @@ export default function MerchantAnalyticsPage() {
     if (user) loadAnalytics();
   }, [user]);
 
-  const loadAnalytics = async () => {
-    try {
-      // Get total revenue and orders
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('total, status, items')
-        .eq('merchant_id', user!.id)
-        .eq('status', 'delivered');
+  // replace loadAnalytics() with this
+const loadAnalytics = async () => {
+  try {
+    setLoading(true);
 
-      const totalRevenue = orders?.reduce((sum, order) => sum + order.total, 0) || 0;
-      const totalOrders = orders?.length || 0;
+    // get merchant id from merchants table (like your orders page does)
+    const { data: merchant, error: merchantError } = await supabase
+      .from('merchants')
+      .select('id')
+      .eq('user_id', user!.id)
+      .single();
 
-      // Calculate top items
-      const itemCounts: Record<string, number> = {};
-      orders?.forEach(order => {
-        order.items?.forEach((item: any) => {
-          itemCounts[item.name] = (itemCounts[item.name] || 0) + item.quantity;
-        });
+    if (merchantError) throw merchantError;
+
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select('total_amount, delivery_fee, status, items')
+      .eq('merchant_id', merchant.id)
+      .eq('status', 'delivered');
+
+    if (error) throw error;
+
+    const totalRevenue =
+      orders?.reduce((sum: number, o: any) => {
+        const total = Number(o.total_amount ?? 0);
+        const del = Number(o.delivery_fee ?? 0);
+        return sum + Math.max(0, total - del);
+      }, 0) || 0;
+
+    const totalOrders = orders?.length || 0;
+
+    // top items
+    const itemCounts: Record<string, number> = {};
+    (orders || []).forEach((order: any) => {
+      (order.items || []).forEach((item: any) => {
+        const name = String(item?.name || 'Item');
+        const qty = Number(item?.quantity ?? 1);
+        itemCounts[name] = (itemCounts[name] || 0) + qty;
       });
+    });
 
-      const topItems = Object.entries(itemCounts)
-        .map(([name, count]) => ({ name, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
+    const topItems = Object.entries(itemCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
 
-      setStats({
-        totalRevenue,
-        totalOrders,
-        averageRating: 4.5, // TODO: Calculate from reviews
-        topItems,
-      });
-    } catch (error) {
-      console.error('Failed to load analytics:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setStats({
+      totalRevenue,
+      totalOrders,
+      averageRating: 4.5, // keep your placeholder
+      topItems,
+    });
+  } catch (e) {
+    console.error('Failed to load analytics:', e);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <DashboardLayout>

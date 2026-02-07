@@ -6,6 +6,7 @@ import { createServerClient } from '@supabase/ssr';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+
 type MerchantInfo = {
   business_name: string | null;
   address: string | null;
@@ -22,6 +23,7 @@ export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) 
   const { id } = await ctx.params;
 
   const cookieStore = await cookies();
+  
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

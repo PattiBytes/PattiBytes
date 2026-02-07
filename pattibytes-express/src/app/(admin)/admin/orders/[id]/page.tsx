@@ -465,121 +465,169 @@ function normalizeOrder(orderRow: any, cols: OrdersCols): OrderNormalized {
 
 function buildInvoiceHtml(order: OrderNormalized, customer: ProfileMini | null, merchant: MerchantInfo | null) {
   const customerName = customer?.full_name ?? customer?.fullname ?? 'NA';
-  const merchantName = merchant?.business_name ?? merchant?.businessname ?? 'NA';
+  const merchantName = merchant?.business_name ?? merchant?.businessname ?? 'PattiBytes Express';
+  const orderNo = Number(order.orderNumber || 0);
 
-  const rows = order.items
+  const rows = (order.items ?? [])
     .map((it, idx) => {
       const qty = Number(it.quantity ?? 1);
       const price = Number(it.price ?? 0);
       const line = price * qty;
+
       return `
         <tr>
-          <td style="padding:10px;border-bottom:1px solid #eee;">${idx + 1}</td>
-          <td style="padding:10px;border-bottom:1px solid #eee;">
-            <div style="font-weight:700">${(it.name ?? 'Item').toString()}</div>
-            <div style="color:#666;font-size:12px;">${toINR(price)} × ${qty}</div>
+          <td class="td num">${idx + 1}</td>
+          <td class="td">
+            <div class="item-name">${(it.name ?? 'Item').toString()}</div>
+            <div class="item-meta">${toINR(price)} × ${qty}</div>
           </td>
-          <td style="padding:10px;border-bottom:1px solid #eee;text-align:right;font-weight:700;">${toINR(line)}</td>
+          <td class="td amt">${toINR(line)}</td>
         </tr>
       `;
     })
     .join('');
+
+  const discountRow =
+    Number(order.discount ?? 0) > 0
+      ? `<div class="row"><span class="label">Discount</span><span class="value green">-${toINR(order.discount)}</span></div>`
+      : '';
 
   return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Invoice - Order ${order.orderNumber}</title>
+  <title>Invoice - Order #${orderNo}</title>
   <style>
-    body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;background:#f6f7fb;color:#111}
-    .wrap{max-width:900px;margin:0 auto;padding:20px}
-    .card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
-    h1{font-size:20px;margin:0}
-    .muted{color:#666;font-size:12px;margin-top:6px}
-    table{width:100%;border-collapse:collapse;margin-top:10px}
-    .totals{margin-top:14px;border-top:1px solid #eee;padding-top:12px}
-    .totals div{display:flex;justify-content:space-between;margin:6px 0}
-    .total{font-size:18px;font-weight:800}
+    :root{
+      --ink:#000;
+      --muted:#222;
+      --line:#000;
+      --soft:#f2f2f2;
+      --green:#0a7a3f;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      color:var(--ink);
+      background:#fff;
+      font-size:12px;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .wrap{max-width:760px;margin:0 auto;padding:12px}
+    .card{border:1px solid var(--line); border-radius:10px; padding:12px}
+    .no-print{display:flex; justify-content:flex-end; margin-bottom:10px}
+    .btn{
+      padding:10px 14px; border-radius:10px; border:1px solid var(--line);
+      background:#111; color:#fff; font-weight:900; cursor:pointer;
+    }
+    .top{display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; border-bottom:2px solid var(--line); padding-bottom:10px}
+    .brand{font-size:16px; font-weight:1000; letter-spacing:.2px}
+    .title{margin-top:3px; font-size:13px; font-weight:1000}
+    .meta{margin-top:6px; color:var(--muted); font-weight:800; line-height:1.35}
+    .right{text-align:right}
+    .right .head{font-weight:1000}
+    .sec{margin-top:10px}
+    .sec-title{font-size:11px; font-weight:1000; letter-spacing:.6px; text-transform:uppercase; margin-bottom:4px}
+    .kv{color:var(--muted); font-weight:800; line-height:1.35}
+    .kv b{color:var(--ink)}
+    table{width:100%; border-collapse:collapse; margin-top:8px; border:1px solid var(--line)}
+    thead th{
+      text-align:left; padding:7px; font-size:11px; font-weight:1000;
+      border-bottom:2px solid var(--line); background:var(--soft);
+    }
+    .td{padding:7px; border-bottom:1px solid var(--line); vertical-align:top; font-weight:800}
+    .num{width:36px}
+    .amt{text-align:right; width:120px}
+    .item-name{font-weight:1000}
+    .item-meta{margin-top:2px; color:var(--muted); font-weight:800; font-size:11px}
+    .totals{margin-top:10px; border-top:2px solid var(--line); padding-top:8px}
+    .row{display:flex; justify-content:space-between; gap:12px; margin:4px 0; font-weight:1000}
+    .label{color:var(--muted)}
+    .value{color:var(--ink)}
+    .green{color:var(--green)}
+    .grand{
+      margin-top:8px; padding-top:8px; border-top:2px solid var(--line);
+      display:flex; justify-content:space-between; font-weight:1100; font-size:14px;
+    }
+    .footer{
+      margin-top:12px; padding-top:10px; border-top:1px solid var(--line);
+      text-align:center; color:var(--muted); font-weight:900; font-size:11px;
+    }
     @media print{
       body{background:#fff}
-      .wrap{padding:0}
-      .card{box-shadow:none}
+      .wrap{padding:0; max-width:100%}
       .no-print{display:none !important}
+      .card{border-radius:0; border:1px solid #000}
     }
   </style>
 </head>
 <body>
+
   <div class="wrap">
-    <div class="card">
-      <div class="no-print" style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:10px;">
-        <button onclick="window.print()" style="padding:10px 14px;border-radius:12px;border:1px solid #ddd;background:#111;color:#fff;cursor:pointer">Print</button>
-      </div>
 
-      <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+    <div class="card">   
+      <div class="no-print">     
+        <button class="btn" onclick="window.print()">Print</button>
+      </div>
+   <h1>PattiBytes Express</h1>
+      <div class="top">
         <div>
-          <h1>PattiBytes Express - Invoice</h1>
-          <div class="muted">Order #${order.orderNumber} • ${order.id}</div>
-          <div class="muted">Created: ${fmtTime(order.createdAt)} • Updated: ${fmtTime(order.updatedAt)}</div>
-          <div class="muted">Status: ${order.status}</div>
+          <div class="brand">${merchantName}</div>
+          <div class="title">Invoice - Order #${orderNo}</div>
+          <div class="meta">Created: ${fmtTime(order.createdAt)}</div>
+          <div class="meta">Updated: ${fmtTime(order.updatedAt)}</div>
+          <div class="meta">Status: ${(order.status || 'NA').toString().toUpperCase()}</div>
         </div>
-        <div style="text-align:right">
-          <div style="font-weight:700">Payment</div>
-          <div class="muted">Method: ${(order.paymentMethod ?? 'NA').toString().toUpperCase()}</div>
-          <div class="muted">Status: ${(order.paymentStatus ?? 'NA').toString().toUpperCase()}</div>
-          ${order.promoCode ? `<div class="muted">Promo: ${order.promoCode}</div>` : ''}
+
+        <div class="right">
+          <div class="head">Payment</div>
+          <div class="meta">Method: ${(order.paymentMethod ?? 'NA').toString().toUpperCase()}</div>
+          <div class="meta">Status: ${(order.paymentStatus ?? 'NA').toString().toUpperCase()}</div>
+          ${order.promoCode ? `<div class="meta">Promo: ${order.promoCode}</div>` : ''}
         </div>
       </div>
 
-      <div style="margin-top:14px;">
-        <div style="font-weight:800;margin-bottom:6px;">Customer</div>
-        <div class="muted">Name: ${customerName}</div>
-        <div class="muted">Phone: ${order.customerPhone ?? customer?.phone ?? 'NA'}</div>
-        <div class="muted">Email: ${customer?.email ?? 'NA'}</div>
+      <div class="sec">
+        <div class="sec-title">Customer</div>
+        <div class="kv"><b>${customerName}</b></div>
+        <div class="kv">Phone: <b>${order.customerPhone ?? customer?.phone ?? 'NA'}</b></div>
       </div>
 
-      <div style="margin-top:14px;">
-        <div style="font-weight:800;margin-bottom:6px;">Merchant</div>
-        <div class="muted">Name: ${merchantName}</div>
-        <div class="muted">Phone: ${merchant?.phone ?? 'NA'}</div>
-        <div class="muted">Address: ${merchant?.address ?? 'NA'}</div>
+      <div class="sec">
+        <div class="sec-title">Delivery Address</div>
+        <div class="kv" style="white-space:pre-line"><b>${order.deliveryAddress ?? 'NA'}</b></div>
       </div>
 
-      <div style="margin-top:14px;">
-        <div style="font-weight:800;margin-bottom:6px;">Delivery</div>
-        <div class="muted" style="white-space:pre-line">${order.deliveryAddress ?? 'NA'}</div>
-        <div class="muted">Distance: ${order.deliveryDistanceKm ?? 'NA'} km</div>
-        <div class="muted">Coords: ${order.deliveryLatitude ?? 'NA'}, ${order.deliveryLongitude ?? 'NA'}</div>
-      </div>
-
-      <div style="margin-top:14px;">
-        <div style="font-weight:800;margin-bottom:6px;">Items</div>
+      <div class="sec">
+        <div class="sec-title">Order Items</div>
         <table>
           <thead>
             <tr>
-              <th style="text-align:left;padding:10px;border-bottom:1px solid #eee;color:#666;font-size:12px;">#</th>
-              <th style="text-align:left;padding:10px;border-bottom:1px solid #eee;color:#666;font-size:12px;">Item</th>
-              <th style="text-align:right;padding:10px;border-bottom:1px solid #eee;color:#666;font-size:12px;">Amount</th>
+              <th style="width:36px">#</th>
+              <th>Item</th>
+              <th style="text-align:right;width:120px">Amount</th>
             </tr>
           </thead>
           <tbody>
-            ${rows || `<tr><td colspan="3" style="padding:12px;color:#666;">No items</td></tr>`}
+            ${rows || `<tr><td class="td" colspan="3" style="text-align:center;color:#222;font-weight:900">No items</td></tr>`}
           </tbody>
         </table>
 
         <div class="totals">
-          <div><span class="muted">Subtotal</span><span style="font-weight:700">${toINR(order.subtotal)}</span></div>
-          ${order.discount > 0 ? `<div><span class="muted">Discount</span><span style="font-weight:700;color:#0a7;">-${toINR(order.discount)}</span></div>` : ''}
-          <div><span class="muted">Delivery fee</span><span style="font-weight:700">${toINR(order.deliveryFee)}</span></div>
-          <div><span class="muted">Tax</span><span style="font-weight:700">${toINR(order.tax)}</span></div>
-          <div class="total"><span>Total</span><span>${toINR(order.totalAmount)}</span></div>
+          <div class="row"><span class="label">Subtotal</span><span class="value">${toINR(order.subtotal)}</span></div>
+          ${discountRow}
+          <div class="row"><span class="label">Delivery fee</span><span class="value">${toINR(order.deliveryFee)}</span></div>
+          <div class="row"><span class="label">Tax (GST)</span><span class="value">${toINR(order.tax)}</span></div>
+          <div class="grand"><span>TOTAL</span><span>${toINR(order.totalAmount)}</span></div>
         </div>
       </div>
 
-      <div style="margin-top:14px;border-top:1px solid #eee;padding-top:12px;">
-        <div class="muted">Estimated delivery: ${fmtTime(order.estimatedDeliveryTime)}</div>
-        <div class="muted">Actual delivery: ${fmtTime(order.actualDeliveryTime)}</div>
-        <div class="muted">Preparation time: ${order.preparationTime ?? 'NA'} min</div>
+      <div class="footer">
+        <div>Thank you for your business!</div>
+        <div>${merchantName} • PB Express • Food Delivery Platform</div>
       </div>
     </div>
   </div>
