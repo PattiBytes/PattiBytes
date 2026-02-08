@@ -174,7 +174,7 @@ useEffect(() => {
   const id = window.setInterval(() => {
     loadStats();
     loadRecentOrders();
-  }, 5000);
+  }, 30000);
 
   return () => window.clearInterval(id);
    
