@@ -462,7 +462,11 @@ function buildInvoiceHtml(order: OrderNormalized, customer: ProfileMini | null) 
       : '';
 
   // merchant total excludes delivery fee
-  const merchantTotal = Math.max(0, Number(order.totalAmount ?? 0) - Number(order.deliveryFee ?? 0));
+  const merchantTotal = Math.max(
+  0,
+  Number(order.totalAmount ?? 0) - Number(order.deliveryFee ?? 0)
+);
+
 
   return `<!doctype html>
 <html>
@@ -951,7 +955,14 @@ export default function MerchantOrderDetailPage() {
 
     URL.revokeObjectURL(url);
   };
-const merchantTotal = Math.max(0, Number(order.totalAmount ?? 0) - Number(order.deliveryFee ?? 0));
+const merchantTotal = useMemo(() => {
+  if (!order) return 0;
+
+  const total = Number(order.totalAmount ?? 0);
+  const deliveryFee = Number(order.deliveryFee ?? 0);
+
+  return Math.max(0, total - deliveryFee);
+}, [order?.id, order?.totalAmount, order?.deliveryFee]);
 
   const printInvoice = () => {
     if (!order) return;
@@ -1260,7 +1271,8 @@ const merchantTotal = Math.max(0, Number(order.totalAmount ?? 0) - Number(order.
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Subtotal</span>
-                  <span className="font-semibold">{toINR(order.subtotal)}</span>
+                 <span className="text-2xl font-bold text-primary">{toINR(merchantTotal)}</span>
+
                 </div>
 
                 {order.discount > 0 && (
