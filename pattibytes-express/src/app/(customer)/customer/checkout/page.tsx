@@ -10,6 +10,7 @@ import { locationService, type SavedAddress } from '@/services/location';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import { cartService } from '@/services/cart';
+import { calculateDeliveryFeeByDistance, getRoadDistanceKmViaApi } from '@/services/location';
 
 import {
   MapPin,
@@ -88,6 +89,16 @@ function formatFullAddress(a: SavedAddress) {
   if (cityLine) lines.push(cityLine);
 
   return lines.join('\n');
+}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function getMerchantId(cart: any): string | null {
+  // support both shapes
+  return (
+    cart?.merchant_id ??
+    cart?.merchantid ??
+    cart?.merchantId ??
+    null
+  );
 }
 
 export default function CheckoutPage() {
@@ -184,106 +195,130 @@ export default function CheckoutPage() {
   }, []);
 
   const loadCheckoutData = async () => {
-    setLoading(true);
-    try {
-     const stored = sessionStorage.getItem('checkout_data');
+  setLoading(true);
 
-      if (!stored) {
+  try {
+    const stored = sessionStorage.getItem('checkoutdata');
+
+    let checkout: CheckoutStored | null = null;
+
+    if (!stored) {
+      const cart = cartService.getCart();
+
+      if (!cart?.items?.length) {
         toast.error('No items in cart');
         router.push('/customer/cart');
         return;
       }
-      if (!stored) {
-  const cart = cartService.getCart();
-  if (!cart?.items?.length) {
-    toast.error('No items in cart');
-    router.push('/customer/cart');
-    return;
+
+      const rebuilt: CheckoutStored = {
+        cart: cart as any,
+        promoCode: null,
+        promoDiscount: 0,
+      };
+
+      sessionStorage.setItem('checkoutdata', JSON.stringify(rebuilt));
+      checkout = rebuilt;
+    } else {
+      checkout = JSON.parse(stored) as CheckoutStored;
+    }
+
+    setCartData(checkout);
+
+    const merchantId = getMerchantId(checkout?.cart);
+    if (!merchantId) throw new Error('Missing merchant id in checkout data');
+
+    const { data: m, error } = await supabase
+      .from('merchants')
+      .select(
+        'id,businessname:business_name,phone,address,latitude,longitude,gstenabled:gst_enabled,gstpercentage:gst_percentage'
+      )
+      .eq('id', merchantId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!m) throw new Error('Merchant not found / not accessible (RLS?)');
+
+    setMerchant(m as any);
+
+    const addresses = await locationService.getSavedAddresses(user!.id);
+    setSavedAddresses(addresses);
+
+    const defaultAddr = (addresses as any[])?.find((a) => a?.isdefault) || addresses?.[0] || null;
+
+    if (defaultAddr) {
+      await handleAddressSelection(defaultAddr, merchantId);
+    } else {
+      setSelectedAddress(null);
+    }
+
+    await deliveryFeeService.loadConfig();
+  } catch (e: any) {
+    console.error('Failed to load checkout data:', e);
+    toast.error(e?.message || 'Failed to load checkout data');
+  } finally {
+    setLoading(false);
   }
+};
 
-  const rebuilt = {
-    cart,
-    promoCode: null,
-    promoDiscount: 0,
-    // optionally set deliveryFee/distance/tax later after merchant/address loads
-  };
+function getMerchantId(cart: any): string | null {
+  return cart?.merchant_id ?? cart?.merchantid ?? cart?.merchantId ?? null;
+}
 
-  sessionStorage.setItem('checkout_data', JSON.stringify(rebuilt));
-  setCartData(rebuilt as any);
-  // continue with merchant load etc.
-  return;
+  const computeDistanceAndFee = async (addr: SavedAddress, merchantId?: string) => {
+  let m = merchant;
+
+if ((!m || m.latitude == null || m.longitude == null) && merchantId) {
+  const { data: m2, error: e2 } = await supabase
+    .from('merchants')
+    .select('id,businessname:business_name,phone,address,latitude,longitude,gstenabled:gst_enabled,gstpercentage:gst_percentage')
+    .eq('id', merchantId)
+    .maybeSingle();
+
+  if (e2) throw e2;
+  if (m2) {
+    m = m2 as any;
+    setMerchant(m2 as any);
+  }
 }
 
 
-      const data = JSON.parse(stored) as CheckoutStored;
-      setCartData(data);
+  const mLat = Number((m as any)?.latitude);
+  const mLon = Number((m as any)?.longitude);
+  const aLat = Number((addr as any)?.latitude);
+  const aLon = Number((addr as any)?.longitude);
 
-      if (data?.cart?.merchant_id) {
-        const { data: m, error } = await supabase
-          .from('merchants')
-          .select('id,business_name,phone,address,latitude,longitude,gst_enabled,gst_percentage')
-          .eq('id', data.cart.merchant_id)
-          .single();
+  if (![mLat, mLon, aLat, aLon].every(Number.isFinite)) {
+    setDeliveryDistance(0);
+    setDeliveryFee(0);
+    setDeliveryBreakdown('');
+    return;
+  }
 
-        if (error) throw error;
-        setMerchant(m as any);
-      }
+ // ROAD distance first
+try {
+  const distanceKm = await getRoadDistanceKmViaApi(mLat, mLon, aLat, aLon);
+  const quote = calculateDeliveryFeeByDistance(distanceKm);
 
-      const addresses = await locationService.getSavedAddresses(user!.id);
-      setSavedAddresses(addresses);
+  setDeliveryDistance(quote.distanceKm);
+  setDeliveryFee(quote.fee);
+  setDeliveryBreakdown(`Road mean distance: ${quote.breakdown}`);
+  return;
+} catch (e: any) {
+  console.error('Road distance failed:', e);
+}
 
-      const defaultAddr = addresses.find((a: any) => a.is_default || a.isdefault) || addresses[0] || null;
-      if (defaultAddr) {
-        await handleAddressSelection(defaultAddr, data?.cart?.merchant_id);
-      } else {
-        setSelectedAddress(null);
-      }
+// fallback (aerial)
+const feeData = deliveryFeeService.calculateDeliveryFeeFromMerchant(mLat, mLon, aLat, aLon);
+setDeliveryDistance(feeData.distance);
+setDeliveryFee(feeData.fee);
+setDeliveryBreakdown(`Aerial distance: ${feeData.breakdown}`);
+};
 
-      await deliveryFeeService.loadConfig();
-    } catch (e: any) {
-      console.error('Failed to load checkout data:', e);
-      toast.error(e?.message || 'Failed to load checkout data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const computeDistanceAndFee = async (addr: SavedAddress, merchantId?: string) => {
-    let m = merchant;
-
-    if ((!m || !m.latitude || !m.longitude) && merchantId) {
-      const { data: m2 } = await supabase
-        .from('merchants')
-        .select('id,business_name,phone,address,latitude,longitude,gst_enabled,gst_percentage')
-        .eq('id', merchantId)
-        .single();
-      if (m2) {
-        m = m2 as any;
-        setMerchant(m2 as any);
-      }
-    }
-
-    const mLat = Number(m?.latitude);
-    const mLon = Number(m?.longitude);
-    const aLat = Number((addr as any).latitude);
-    const aLon = Number((addr as any).longitude);
-
-    if (!Number.isFinite(mLat) || !Number.isFinite(mLon) || !Number.isFinite(aLat) || !Number.isFinite(aLon)) {
-      setDeliveryDistance(0);
-      setDeliveryFee(0);
-      setDeliveryBreakdown('');
-      return;
-    }
-
-    const feeData = deliveryFeeService.calculateDeliveryFeeFromMerchant(mLat, mLon, aLat, aLon);
-    setDeliveryDistance(feeData.distance);
-    setDeliveryFee(feeData.fee);
-    setDeliveryBreakdown(feeData.breakdown);
-  };
 
   const handleAddressSelection = async (addr: SavedAddress, merchantId?: string) => {
     setSelectedAddress(addr);
-    await computeDistanceAndFee(addr, merchantId || cartData?.cart?.merchant_id);
+    await computeDistanceAndFee(addr, merchantId || getMerchantId(cartData?.cart) || undefined);
   };
 
   const handleAddressSelect = (addressData: any) => {
