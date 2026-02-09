@@ -156,6 +156,30 @@ export type DeliveryFeeQuote = {
  * - ₹50 if distance <= 3km
  * - If outside 3km: ₹50 + ₹15 per km beyond 3km
  */
+export async function getRoadDistanceKmViaApi(
+  merchantLat: number,
+  merchantLon: number,
+  customerLat: number,
+  customerLon: number
+): Promise<number> {
+  const res = await fetch('/api/delivery/road-distance', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ merchantLat, merchantLon, customerLat, customerLon }),
+  });
+
+  const data: any = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    throw new Error(data?.error || 'Road distance API failed');
+  }
+
+  const km = Number(data?.distanceKm);
+  if (!Number.isFinite(km)) throw new Error('Invalid road distance');
+  return km;
+}
+
+
 export function calculateDeliveryFeeByDistance(distanceKm: number): DeliveryFeeQuote {
   const d = Math.max(0, Number(distanceKm) || 0);
 
@@ -163,7 +187,6 @@ export function calculateDeliveryFeeByDistance(distanceKm: number): DeliveryFeeQ
   const within3kmFee = 50;
   const perKm = 15;
 
-  // <= 3km => flat ₹50
   if (d <= baseKm) {
     return {
       distanceKm: round2(d),
@@ -172,17 +195,14 @@ export function calculateDeliveryFeeByDistance(distanceKm: number): DeliveryFeeQ
     };
   }
 
-  // > 3km => ₹15/km from 1km (no ₹50), fractional km allowed
-  const billableKm = d;              // fractional allowed
-  const fee = billableKm * perKm;
+  const fee = d * perKm;
 
   return {
     distanceKm: round2(d),
     fee: round2(fee),
-    breakdown: `${round2(billableKm)}km × ₹${perKm} = ₹${round2(fee)} (outside ${baseKm}km, no ₹50)`,
+    breakdown: `${round2(d)}km × ₹${perKm} = ₹${round2(fee)} (outside ${baseKm}km, no ₹${within3kmFee})`,
   };
 }
-
 
 class LocationService {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

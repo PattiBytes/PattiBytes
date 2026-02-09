@@ -11,6 +11,7 @@ import { cartService } from '@/services/cart';
 import { deliveryFeeService } from '@/services/deliveryFee';
 import { promoCodeService, type PromoCode } from '@/services/promoCodes';
 import { locationService } from '@/services/location';
+import { calculateDeliveryFeeByDistance, getRoadDistanceKmViaApi } from '@/services/location';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import Image from 'next/image';
 import {
@@ -54,8 +55,38 @@ export default function CartPage() {
   const [applyingPromo, setApplyingPromo] = useState(false);
   const [showPromoList, setShowPromoList] = useState(false);
   const [availablePromos, setAvailablePromos] = useState<PromoCode[]>([]);
+const [merchantGeo, setMerchantGeo] = useState<MerchantGeoMini | null>(null);
 
   const [merchantTax, setMerchantTax] = useState<MerchantTaxMini | null>(null);
+type MerchantGeoMini = {
+  id: string;
+  latitude: number | null;
+  longitude: number | null;
+};
+useEffect(() => {
+  async function loadMerchantGeo() {
+    if (!cart?.merchant_id) {
+      setMerchantGeo(null);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('merchants')
+      .select('id, latitude, longitude')
+      .eq('id', cart.merchant_id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Failed to load merchant geo:', error);
+      setMerchantGeo(null);
+      return;
+    }
+
+    setMerchantGeo((data as MerchantGeoMini) ?? null);
+  }
+
+  loadMerchantGeo();
+}, [cart?.merchant_id]);
 
   // 1) Auth gate + initial loads
   useEffect(() => {
@@ -104,28 +135,59 @@ setMerchantTax((data as MerchantTaxMini) ?? null);
   }, [cart?.merchant_id]);
 
   const loadDeliveryFee = async () => {
-    try {
-      await deliveryFeeService.loadConfig();
+  try {
+    await deliveryFeeService.loadConfig();
 
-      const addresses = await locationService.getSavedAddresses(user!.id);
-      let lat = 31.3260; // Default Patti coordinates
-      let lon = 74.8560;
+    // 1) Get customer address (default or first)
+    const addresses = await locationService.getSavedAddresses(user!.id);
+    const addr = (addresses?.find((a) => a.isdefault) || addresses?.[0]) ?? null;
 
-      if (addresses && addresses.length > 0) {
-        const defaultAddr = addresses.find((a) => a.isdefault) || addresses[0];
-        lat = defaultAddr.latitude;
-        lon = defaultAddr.longitude;
-      }
-
-      const feeData = deliveryFeeService.calculateDeliveryFee(lat, lon);
-      setDeliveryFee(feeData.fee);
-      setDeliveryDistance(feeData.distance);
-      setDeliveryBreakdown(feeData.breakdown);
-    } catch (error) {
-      console.error('Failed to calculate delivery fee:', error);
-      setDeliveryFee(10);
+    if (!addr?.latitude || !addr?.longitude) {
+      setDeliveryFee(0);
+      setDeliveryDistance(0);
+      setDeliveryBreakdown('No delivery address found');
+      return;
     }
-  };
+
+    // 2) Get merchant lat/lon (must exist)
+    const mLat = Number(merchantGeo?.latitude);
+    const mLon = Number(merchantGeo?.longitude);
+    const aLat = Number(addr.latitude);
+    const aLon = Number(addr.longitude);
+
+    if (![mLat, mLon, aLat, aLon].every(Number.isFinite)) {
+      setDeliveryFee(0);
+      setDeliveryDistance(0);
+      setDeliveryBreakdown('Merchant location missing');
+      return;
+    }
+
+    // 3) Road mean distance via your API route
+    const roadKm = await getRoadDistanceKmViaApi(mLat, mLon, aLat, aLon);
+
+    // 4) Fee rule (<=3km => 50, else => 15/km from 1km)
+    const quote = calculateDeliveryFeeByDistance(roadKm);
+
+    setDeliveryFee(quote.fee);
+    setDeliveryDistance(quote.distanceKm);
+    setDeliveryBreakdown(`Road mean distance: ${quote.breakdown}`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
+    console.error('Failed to calculate road delivery fee:', error);
+    setDeliveryFee(0);
+    setDeliveryDistance(0);
+    setDeliveryBreakdown(error?.message || 'Road distance failed');
+  }
+};
+useEffect(() => {
+  if (!user) return;
+  if (!cart?.merchant_id) return;
+  if (!merchantGeo) return;
+
+  loadDeliveryFee();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [user?.id, cart?.merchant_id, merchantGeo?.latitude, merchantGeo?.longitude, cart?.subtotal]);
+
 
   const loadAvailablePromos = async () => {
     try {
