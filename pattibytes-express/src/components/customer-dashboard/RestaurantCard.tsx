@@ -1,18 +1,24 @@
+// RestaurantCard.tsx
 'use client';
 
 import Image from 'next/image';
-import { Clock, MapPin, Star } from 'lucide-react';
+import { Clock, MapPin, Star, BadgePercent } from 'lucide-react';
 import type { Merchant } from './types';
 import { formatCurrencyINR, parseCuisineList } from './utils';
+import type { OfferBadge } from './offers';
 
 export default function RestaurantCard({
   restaurant,
   menuCount,
   onOpen,
+  offer,
+  onOpenOffer,
 }: {
   restaurant: Merchant;
   menuCount?: number;
   onOpen: () => void;
+  offer?: OfferBadge | null;
+  onOpenOffer?: (focusItemId: string, promoId?: string) => void;
 }) {
   const cuisines = parseCuisineList(restaurant.cuisine_types);
   const banner = restaurant.banner_url || '';
@@ -21,11 +27,18 @@ export default function RestaurantCard({
   const rating = Number(restaurant.average_rating || 0);
   const totalReviews = Number(restaurant.total_reviews || 0);
 
+  const label = String(offer?.label || '').trim();
+  const subLabel = String(offer?.subLabel || '').trim();
+
   return (
-    <button
-      type="button"
+    <article
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
-      className="bg-white rounded-2xl shadow hover:shadow-xl transition-all overflow-hidden text-left"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onOpen();
+      }}
+      className="bg-white rounded-2xl shadow hover:shadow-xl transition-all overflow-hidden text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
     >
       <div className="relative w-full h-40 sm:h-44 bg-gray-100">
         {banner ? (
@@ -38,6 +51,39 @@ export default function RestaurantCard({
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-orange-400 to-pink-500" />
+        )}
+
+        {/* Offer badge (now safe: button inside article/div, not inside button) */}
+        {!!label && (
+          <div className="absolute top-3 left-3">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (offer?.focusItemId && onOpenOffer) onOpenOffer(offer.focusItemId, offer.promoId);
+                else onOpen();
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full bg-black/75 backdrop-blur px-3 py-1.5 text-white shadow"
+              title="View offer items"
+            >
+              <BadgePercent className="w-4 h-4" />
+              <span className="text-xs font-extrabold max-w-[220px] truncate">{label}</span>
+              {offer?.auto && (
+                <span className="ml-1 text-[10px] font-extrabold bg-white/20 px-2 py-0.5 rounded-full">
+                  AUTO
+                </span>
+              )}
+            </button>
+
+            {!!subLabel && (
+              <div
+                title={subLabel}
+                className="mt-1 text-[11px] font-bold text-white rounded-full px-3 py-1 w-fit max-w-[260px] truncate bg-black/55"
+              >
+                {subLabel}
+              </div>
+            )}
+          </div>
         )}
 
         {!!logo && (
@@ -57,10 +103,7 @@ export default function RestaurantCard({
       </div>
 
       <div className="p-3 sm:p-4">
-        <h3
-          className="font-bold text-sm sm:text-base text-gray-900 truncate"
-          title={restaurant.business_name}
-        >
+        <h3 className="font-bold text-sm sm:text-base text-gray-900 truncate" title={restaurant.business_name}>
           {restaurant.business_name}
         </h3>
 
@@ -104,6 +147,6 @@ export default function RestaurantCard({
           </div>
         </div>
       </div>
-    </button>
+    </article>
   );
 }
