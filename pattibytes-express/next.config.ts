@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
 
       // ✅ Pinterest images
       { protocol: 'https', hostname: 'i.pinimg.com', pathname: '/**' },
+      
 
       // Optional common CDNs (only add what you use)
       { protocol: 'https', hostname: 'images.unsplash.com', pathname: '/**' },

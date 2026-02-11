@@ -3,17 +3,25 @@
 import { Store } from 'lucide-react';
 import type { Merchant } from './types';
 import RestaurantCard from './RestaurantCard';
+import type { OfferBadge } from './offers';
 
 export default function RestaurantGrid({
   loading,
   restaurants,
   menuCountByMerchant,
   onOpenRestaurant,
+  offerByMerchant,
+
+  // NEW: open restaurant focused on item
+  onOpenRestaurantOffer,
 }: {
   loading: boolean;
   restaurants: Merchant[];
   menuCountByMerchant: Record<string, number>;
   onOpenRestaurant: (id: string) => void;
+  offerByMerchant?: Record<string, OfferBadge | null>;
+
+  onOpenRestaurantOffer?: (merchantId: string, focusItemId: string, promoId?: string) => void;
 }) {
   if (loading) {
     return (
@@ -39,11 +47,14 @@ export default function RestaurantGrid({
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
       {restaurants.map((r) => (
         <RestaurantCard
-          key={r.id}
-          restaurant={r}
-          menuCount={menuCountByMerchant[r.id]}
-          onOpen={() => onOpenRestaurant(r.id)}
-        />
+  key={r.id}
+  restaurant={r}
+  menuCount={menuCountByMerchant[r.id]}
+  offer={offerByMerchant?.[r.id] ?? null}
+  onOpen={() => onOpenRestaurant(r.id)}
+  onOpenOffer={(focusItemId, promoId) => onOpenRestaurantOffer?.(r.id, focusItemId, promoId)}
+/>
+
       ))}
     </div>
   );

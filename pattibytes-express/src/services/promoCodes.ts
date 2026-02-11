@@ -4,11 +4,16 @@ import { supabase } from '@/lib/supabase';
 export type DiscountType = 'percentage' | 'fixed';
 export type PromoScope = 'global' | 'merchant' | 'targets';
 
+export type DealType = 'cart_discount' | 'bxgy';
+export type BxgyDiscountType = 'free' | 'percentage' | 'fixed';
+export type BxgySelection = 'auto_cheapest' | 'customer_choice';
+
 export interface PromoCodeRow {
   id: string;
   code: string;
   description: string | null;
 
+  // Cart-discount fields
   discount_type: DiscountType;
   discount_value: number;
 
@@ -19,7 +24,6 @@ export interface PromoCodeRow {
   used_count: number | null;
 
   max_uses_per_user: number | null;
-
   is_active: boolean;
 
   valid_from: string | null; // timestamptz
@@ -35,6 +39,12 @@ export interface PromoCodeRow {
 
   created_at?: string | null;
   updated_at?: string | null;
+
+  // Offer fields
+  deal_type?: DealType; // default 'cart_discount'
+  deal_json?: any; // jsonb
+  auto_apply?: boolean;
+  priority?: number;
 }
 
 export type PromoCode = PromoCodeRow;
@@ -48,25 +58,40 @@ export interface PromoTargetRow {
   created_at: string;
 }
 
+export type BxgySide = 'buy' | 'get';
+
+export interface BxgyTargetRow {
+  id: string;
+  promo_code_id: string;
+  side: BxgySide;
+  menu_item_id: string | null;
+  category_id: string | null;
+  created_at: string;
+}
 export interface MenuItemLite {
   id: string;
   merchant_id: string;
   name: string;
   description?: string | null;
   price: number;
-  image_url?: string | null;
+
+  category?: string | null;
+  discount_percentage?: number | null;
+
+  category_id?: string | null;
   is_available?: boolean | null;
   is_veg?: boolean | null;
   preparation_time?: number | null;
-  category_id?: string | null;
+
+  image_url?: string | null;
 }
+
+
 
 export interface MerchantLite {
   id: string;
-  full_name: string | null;
-  email: string | null;
-  approval_status?: string | null;
-  is_active?: boolean | null;
+  user_id: string;
+  business_name: string;
 }
 
 export interface CartItemForPromo {
@@ -86,6 +111,11 @@ function isUuid(v: any) {
 
 function normalizeCode(v: any) {
   return String(v ?? '').trim().toUpperCase();
+}
+
+function clampNum(v: any, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 function formatErr(err: any) {
@@ -120,55 +150,191 @@ function isNowWithinTimeWindow(now: Date, start: string | null, end: string | nu
   return cur >= s || cur <= e; // overnight window
 }
 
-class PromoCodeService {
-  // ---------- Admin/Merchant ----------
-  async listMerchants(): Promise<MerchantLite[]> {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id,full_name,email,approval_status,is_active')
-      .eq('role', 'merchant')
-      .order('created_at', { ascending: false });
+export function toDateInputValue(iso: string | null | undefined) {
+  if (!iso) return '';
+  const s = String(iso);
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : '';
+}
+export async function listPromoCodes(params: {
+  merchantId?: string | null;
+  includeGlobal?: boolean;
+}): Promise<PromoCodeRow[]> {
+  const merchantId = params.merchantId ?? null;
+  const includeGlobal = params.includeGlobal ?? true;
 
-    if (error) throw error;
-    return (data ?? []) as MerchantLite[];
+  let qb = supabase
+    .from('promo_codes')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (merchantId) {
+    qb = includeGlobal
+      ? qb.or(`merchant_id.eq.${merchantId},merchant_id.is.null`)
+      : qb.eq('merchant_id', merchantId);
   }
+  // else: merchantId is null => return all promos (global + all merchants)
 
-  async searchMenuItems(params: {
-    merchantId: string;
-    query: string;
-    limit?: number;
-    includeUnavailable?: boolean;
-  }): Promise<MenuItemLite[]> {
-    const q = String(params.query || '').trim();
-    if (!q) return [];
+  const { data, error } = await qb;
+  if (error) throw error;
+  return (data ?? []) as PromoCodeRow[];
+}
+
+class PromoCodeService {
+  async listPromoCodes(params: {
+    merchantId?: string | null;
+    includeGlobal?: boolean;
+  }): Promise<PromoCodeRow[]> {
+    const merchantId = params.merchantId ?? null;
+    const includeGlobal = params.includeGlobal ?? true;
 
     let qb = supabase
-      .from('menu_items')
-      .select('id,merchant_id,name,description,price,image_url,is_available,is_veg,preparation_time,category_id')
-      .eq('merchant_id', params.merchantId)
-      .ilike('name', `%${q}%`)
-      .limit(params.limit ?? 10);
+      .from('promo_codes')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    if (!params.includeUnavailable) qb = qb.eq('is_available', true);
-
-    const { data, error } = await qb;
-    if (error) throw error;
-    return (data ?? []) as MenuItemLite[];
-  }
-
-  async listPromoCodes(params: { merchantId?: string | null; includeGlobal?: boolean }): Promise<PromoCodeRow[]> {
-    let qb = supabase.from('promo_codes').select('*').order('created_at', { ascending: false });
-
-    if (params.merchantId) {
-      qb = params.includeGlobal
-        ? qb.or(`merchant_id.eq.${params.merchantId},merchant_id.is.null`)
-        : qb.eq('merchant_id', params.merchantId);
+    if (merchantId) {
+      qb = includeGlobal
+        ? qb.or(`merchant_id.eq.${merchantId},merchant_id.is.null`)
+        : qb.eq('merchant_id', merchantId);
     }
 
     const { data, error } = await qb;
     if (error) throw error;
     return (data ?? []) as PromoCodeRow[];
+  }  
+  async getMerchantIdByUserId(userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('merchants')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.id ?? null;
+}
+  // ---------- Admin/Merchant ----------
+  async listMerchants(): Promise<MerchantLite[]> {
+  const { data, error } = await supabase
+    .from('merchants')
+    .select('id,user_id,business_name')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as MerchantLite[];
+}
+
+  async listMenuItems(params: {
+  merchantId: string;
+  limit?: number;
+  offset?: number;
+  includeUnavailable?: boolean;
+}): Promise<MenuItemLite[]> {
+  const merchantId = String(params.merchantId || '').trim();
+  if (!merchantId) return [];
+
+  const limit = Math.max(1, clampNum(params.limit, 200));
+  const offset = Math.max(0, clampNum(params.offset, 0));
+  const includeUnavailable = params.includeUnavailable ?? true;
+
+  let qb = supabase
+    .from('menu_items')
+    .select(
+      'id,merchant_id,name,description,price,category,discount_percentage,image_url,is_available,is_veg,preparation_time,category_id'
+    )
+    .eq('merchant_id', merchantId)
+    .order('name', { ascending: true })
+    .range(offset, offset + limit - 1);
+
+  if (!includeUnavailable) qb = qb.eq('is_available', true);
+
+  const { data, error } = await qb;
+  if (error) throw error;
+  return (data ?? []) as MenuItemLite[];
+}
+
+
+  /** Fetch ALL menu items for a merchant by paginating range(). */
+  async listAllMenuItems(params: {
+    merchantId: string;
+    includeUnavailable?: boolean;
+    pageSize?: number; // default 500
+    hardLimit?: number; // default 20000 safety
+  }): Promise<MenuItemLite[]> {
+    const merchantId = String(params.merchantId || '').trim();
+    if (!merchantId) return [];
+
+    const pageSize = Math.min(Math.max(params.pageSize ?? 500, 50), 1000);
+    const hardLimit = Math.min(Math.max(params.hardLimit ?? 20000, 1000), 100000);
+
+    let offset = 0;
+    const out: MenuItemLite[] = [];
+
+    while (true) {
+      const page = await this.listMenuItems({
+        merchantId,
+        limit: pageSize,
+        offset,
+        includeUnavailable: params.includeUnavailable ?? true,
+      });
+
+      out.push(...page);
+
+      if (page.length < pageSize) break;
+      offset += pageSize;
+
+      if (out.length >= hardLimit) break;
+    }
+
+    return out;
   }
+
+  /** Enhancement: if query empty, returns listMenuItems so picker can show items immediately. */
+  async searchMenuItems(params: {
+  merchantId: string;
+  query: string;
+  limit?: number;
+  includeUnavailable?: boolean;
+  offset?: number;
+}): Promise<MenuItemLite[]> {
+  const merchantId = String(params.merchantId || '').trim();
+  if (!merchantId) return [];
+
+  const q = String(params.query || '').trim();
+  const like = `%${q}%`;
+
+  let qb = supabase
+    .from('menu_items')
+    .select(
+      'id,merchant_id,name,description,price,category,discount_percentage,image_url,is_available,is_veg,preparation_time,category_id'
+    )
+    .eq('merchant_id', merchantId)
+    .or(`name.ilike.${like},description.ilike.${like},category.ilike.${like}`)
+    .limit(params.limit ?? 25);
+
+  if (!(params.includeUnavailable ?? true)) qb = qb.eq('is_available', true);
+
+  const { data, error } = await qb;
+  if (error) throw error;
+  return (data ?? []) as MenuItemLite[];
+}
+
+
+  async getMenuItemsByIds(ids: string[]): Promise<MenuItemLite[]> {
+  const clean = Array.from(new Set((ids || []).filter(isUuid)));
+  if (clean.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('menu_items')
+    .select(
+      'id,merchant_id,name,description,price,category,discount_percentage,image_url,is_available,is_veg,preparation_time,category_id'
+    )
+    .in('id', clean);
+
+  if (error) throw error;
+  return (data ?? []) as MenuItemLite[];
+}
+
 
   async getPromoTargets(promoCodeId: string): Promise<PromoTargetRow[]> {
     const { data, error } = await supabase
@@ -222,27 +388,99 @@ class PromoCodeService {
     if (insErr) throw insErr;
   }
 
-  async createPromoCode(payload: Partial<PromoCodeRow>): Promise<PromoCodeRow> {
-    const { data, error } = await supabase.from('promo_codes').insert(payload).select('*').single();
-    if (error) throw error;
-    return data as PromoCodeRow;
+  // ---------- BXGY targets ----------
+async getBxgyTargets(promoCodeId: string): Promise<BxgyTargetRow[]> {
+  const { data, error } = await supabase
+    .from('promo_bxgy_targets')
+    .select('id,promo_code_id,side,menu_item_id,category_id,created_at')
+    .eq('promo_code_id', promoCodeId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as BxgyTargetRow[];
+}
+
+async replaceBxgyTargets(params: {
+  promoCodeId: string;
+  merchantId?: string | null; // kept only to avoid changing callers; NOT stored in promo_bxgy_targets
+  buyMenuItemIds: string[];
+  getMenuItemIds: string[];
+}) {
+  const { promoCodeId, buyMenuItemIds, getMenuItemIds } = params;
+
+  const { error: delErr } = await supabase
+    .from('promo_bxgy_targets')
+    .delete()
+    .eq('promo_code_id', promoCodeId);
+
+  if (delErr) throw delErr;
+
+  const rows: Array<{
+    promo_code_id: string;
+    side: BxgySide;
+    menu_item_id: string;
+    category_id?: string | null;
+  }> = [];
+
+  for (const id of buyMenuItemIds || []) {
+    if (!isUuid(id)) continue;
+    rows.push({
+      promo_code_id: promoCodeId,
+      side: 'buy',
+      menu_item_id: id,
+      category_id: null,
+    });
   }
 
-  async updatePromoCode(id: string, payload: Partial<PromoCodeRow>): Promise<PromoCodeRow> {
-    const { data, error } = await supabase.from('promo_codes').update(payload).eq('id', id).select('*').single();
-    if (error) throw error;
-    return data as PromoCodeRow;
+  for (const id of getMenuItemIds || []) {
+    if (!isUuid(id)) continue;
+    rows.push({
+      promo_code_id: promoCodeId,
+      side: 'get',
+      menu_item_id: id,
+      category_id: null,
+    });
   }
 
-  async deletePromoCode(id: string) {
-    const { error } = await supabase.from('promo_codes').delete().eq('id', id);
-    if (error) throw error;
-  }
+  if (rows.length === 0) return;
 
-  async toggleActive(id: string, next: boolean) {
-    const { error } = await supabase.from('promo_codes').update({ is_active: next }).eq('id', id);
-    if (error) throw error;
-  }
+  const { error: insErr } = await supabase.from('promo_bxgy_targets').insert(rows);
+  if (insErr) throw insErr;
+}
+
+// ---------- CRUD ----------
+async createPromoCode(payload: Partial<PromoCodeRow>): Promise<PromoCodeRow> {
+  const { data, error } = await supabase
+    .from('promo_codes')
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as PromoCodeRow;
+}
+
+async updatePromoCode(id: string, payload: Partial<PromoCodeRow>): Promise<PromoCodeRow> {
+  const { data, error } = await supabase
+    .from('promo_codes')
+    .update(payload)
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data as PromoCodeRow;
+}
+
+async deletePromoCode(id: string) {
+  const { error } = await supabase.from('promo_codes').delete().eq('id', id);
+  if (error) throw error;
+}
+
+async toggleActive(id: string, next: boolean) {
+  const { error } = await supabase.from('promo_codes').update({ is_active: next }).eq('id', id);
+  if (error) throw error;
+}
 
   // ---------- Customer/cart ----------
   async getActivePromoCodes(params?: { merchantId?: string | null }): Promise<PromoCodeRow[]> {
@@ -251,11 +489,36 @@ class PromoCodeService {
     let qb = supabase
       .from('promo_codes')
       .select(
-        'id,code,description,discount_type,discount_value,min_order_amount,max_discount_amount,usage_limit,used_count,max_uses_per_user,is_active,valid_from,valid_until,valid_days,start_time,end_time,scope,merchant_id,created_by'
+        [
+          'id',
+          'code',
+          'description',
+          'discount_type',
+          'discount_value',
+          'min_order_amount',
+          'max_discount_amount',
+          'usage_limit',
+          'used_count',
+          'max_uses_per_user',
+          'is_active',
+          'valid_from',
+          'valid_until',
+          'valid_days',
+          'start_time',
+          'end_time',
+          'scope',
+          'merchant_id',
+          'created_by',
+          'deal_type',
+          'deal_json',
+          'auto_apply',
+          'priority',
+        ].join(',')
       )
       .eq('is_active', true)
       .or(`valid_from.is.null,valid_from.lte.${nowIso}`)
       .or(`valid_until.is.null,valid_until.gte.${nowIso}`)
+      .order('priority', { ascending: false })
       .order('valid_until', { ascending: true });
 
     if (params?.merchantId) {
@@ -264,14 +527,22 @@ class PromoCodeService {
 
     const { data, error } = await qb;
     if (error) throw error;
-    return (data ?? []) as PromoCodeRow[];
+    return (data ?? []) as unknown as PromoCodeRow[];
   }
 
-  // Overloads: (code, amount, userId, options?) OR ({...})
+  // Validate coupon-style cart discounts (NOT BXGY)
   async validatePromoCode(
-    code: string,
-    orderAmount: number,
-    userId: string,
+    params:
+      | {
+          code: string;
+          orderAmount: number;
+          userId: string;
+          merchantId?: string | null;
+          cartItems?: CartItemForPromo[];
+        }
+      | string,
+    orderAmount?: number,
+    userId?: string,
     options?: { merchantId?: string | null; cartItems?: CartItemForPromo[] }
   ): Promise<{
     valid: boolean;
@@ -279,71 +550,49 @@ class PromoCodeService {
     message: string;
     promoCode?: PromoCodeRow;
     eligibleAmount?: number;
-  }>;
-  async validatePromoCode(params: {
-    code: string;
-    orderAmount: number;
-    userId: string;
-    merchantId?: string | null;
-    cartItems?: CartItemForPromo[];
-  }): Promise<{
-    valid: boolean;
-    discount: number;
-    message: string;
-    promoCode?: PromoCodeRow;
-    eligibleAmount?: number;
-  }>;
-  async validatePromoCode(arg1: any, arg2?: any, arg3?: any, arg4?: any) {
-    const params: {
-      code: string;
-      orderAmount: number;
-      userId: string;
-      merchantId?: string | null;
-      cartItems?: CartItemForPromo[];
-    } =
-      typeof arg1 === 'object' && arg1
-        ? arg1
-        : { code: arg1, orderAmount: arg2, userId: arg3, ...(arg4 || {}) };
+  }> {
+    const p =
+      typeof params === 'object' && params
+        ? params
+        : { code: params as string, orderAmount: orderAmount as number, userId: userId as string, ...(options || {}) };
 
     try {
-      const promo = normalizeCode(params.code);
-      const amount = Number(params.orderAmount || 0);
+      const promo = normalizeCode(p.code);
+      const amount = Number(p.orderAmount || 0);
 
       if (!promo) return { valid: false, discount: 0, message: 'Enter a promo code' };
       if (!Number.isFinite(amount) || amount <= 0) return { valid: false, discount: 0, message: 'Cart total is invalid' };
-      if (!isUuid(params.userId)) return { valid: false, discount: 0, message: 'Please sign in to use a promo code' };
+      if (!isUuid(p.userId)) return { valid: false, discount: 0, message: 'Please sign in to use a promo code' };
 
-     const { data: promoCode, error } = await supabase
-  .from('promo_codes')
-  .select('*')
-  .ilike('code', promo) // <-- instead of .eq('code', promo)
-  .eq('is_active', true)
-  .maybeSingle();
-
+      const { data: promoCode, error } = await supabase
+        .from('promo_codes')
+        .select('*')
+        .ilike('code', promo)
+        .eq('is_active', true)
+        .maybeSingle();
 
       if (error) throw error;
       if (!promoCode) return { valid: false, discount: 0, message: 'Invalid promo code' };
+
+      const dealType = (promoCode.deal_type ?? 'cart_discount') as DealType;
+      if (dealType === 'bxgy') {
+        return { valid: false, discount: 0, message: 'This offer is applied automatically from offers, not as a coupon.' };
+      }
 
       const now = new Date();
 
       if (promoCode.valid_from) {
         const vf = new Date(promoCode.valid_from);
-        if (!Number.isNaN(vf.getTime()) && now < vf) {
-          return { valid: false, discount: 0, message: 'Promo code is not active yet' };
-        }
+        if (!Number.isNaN(vf.getTime()) && now < vf) return { valid: false, discount: 0, message: 'Promo code is not active yet' };
       }
       if (promoCode.valid_until) {
         const vu = new Date(promoCode.valid_until);
-        if (!Number.isNaN(vu.getTime()) && now > vu) {
-          return { valid: false, discount: 0, message: 'Promo code has expired' };
-        }
+        if (!Number.isNaN(vu.getTime()) && now > vu) return { valid: false, discount: 0, message: 'Promo code has expired' };
       }
 
       if (Array.isArray(promoCode.valid_days) && promoCode.valid_days.length > 0) {
         const today = dayNumberMon1Sun7(now);
-        if (!promoCode.valid_days.includes(today)) {
-          return { valid: false, discount: 0, message: 'Promo code is not available today' };
-        }
+        if (!promoCode.valid_days.includes(today)) return { valid: false, discount: 0, message: 'Promo code is not available today' };
       }
 
       if (!isNowWithinTimeWindow(now, promoCode.start_time, promoCode.end_time)) {
@@ -358,7 +607,7 @@ class PromoCodeService {
         return { valid: false, discount: 0, message: `Minimum order amount ₹${promoCode.min_order_amount} required` };
       }
 
-      const orderMerchantId = params.merchantId ?? null;
+      const orderMerchantId = p.merchantId ?? null;
 
       if (promoCode.scope === 'merchant') {
         if (!orderMerchantId || promoCode.merchant_id !== orderMerchantId) {
@@ -372,20 +621,16 @@ class PromoCodeService {
           .from('promo_usage')
           .select('id', { count: 'exact', head: true })
           .eq('promo_code_id', promoCode.id)
-          .eq('user_id', params.userId);
+          .eq('user_id', p.userId);
 
         if (cErr) throw cErr;
-        if ((count ?? 0) >= maxPerUser) {
-          return { valid: false, discount: 0, message: 'You have already used this promo code' };
-        }
+        if ((count ?? 0) >= maxPerUser) return { valid: false, discount: 0, message: 'You have already used this promo code' };
       }
 
       let eligibleAmount = amount;
 
       if (promoCode.scope === 'targets') {
-        if (!orderMerchantId) {
-          return { valid: false, discount: 0, message: 'Promo code is not valid for this order' };
-        }
+        if (!orderMerchantId) return { valid: false, discount: 0, message: 'Promo code is not valid for this order' };
 
         const targets = await this.getPromoTargets(promoCode.id);
         const menuTargets = new Set(targets.filter((t) => t.menu_item_id).map((t) => t.menu_item_id as string));
@@ -395,10 +640,8 @@ class PromoCodeService {
           return { valid: false, discount: 0, message: 'Promo code is not valid for this restaurant' };
         }
 
-        const items = params.cartItems ?? [];
-        if (items.length === 0) {
-          return { valid: false, discount: 0, message: 'Promo code requires item details' };
-        }
+        const items = p.cartItems ?? [];
+        if (items.length === 0) return { valid: false, discount: 0, message: 'Promo code requires item details' };
 
         let eligibleSubtotal = 0;
         for (const it of items) {
@@ -408,9 +651,7 @@ class PromoCodeService {
           if (hitMenu || hitCat) eligibleSubtotal += Number(it.unit_price || 0) * Number(it.qty || 0);
         }
 
-        if (eligibleSubtotal <= 0) {
-          return { valid: false, discount: 0, message: 'Promo code does not apply to items in your cart' };
-        }
+        if (eligibleSubtotal <= 0) return { valid: false, discount: 0, message: 'Promo code does not apply to items in your cart' };
 
         eligibleAmount = eligibleSubtotal;
       }
@@ -441,5 +682,6 @@ class PromoCodeService {
     }
   }
 }
+
 
 export const promoCodeService = new PromoCodeService();
