@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
- 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
@@ -28,7 +27,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useOrdersRealtime } from '@/hooks/useOrdersRealtime';
-import { calcGrowthPercent, computeOrderMetrics, netRevenueOfOrder, startOfDayISO } from '@/lib/analyticsKit';
+import { calcGrowthPercent, computeOrderMetrics, netRevenueOfOrder } from '@/lib/analyticsKit';
 
 type RecentOrderRow = {
   id: string;
@@ -57,6 +56,37 @@ function moneyINR(n: any) {
   } catch {
     return `₹${Math.round(v)}`;
   }
+}
+
+function getLocalDayRange(d = new Date()) {
+  const start = new Date(d);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 1);
+  return { start, end };
+}
+
+function isInRange(iso: string, start: Date, end: Date) {
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) && t >= start.getTime() && t < end.getTime();
+}
+
+function isProcessing(status: string) {
+  return ['confirmed', 'preparing', 'ready', 'picked_up', 'on_the_way'].includes(String(status || '').toLowerCase());
+}
+
+function getStatusColor(status: string) {
+  const colors: any = {
+    pending: 'bg-yellow-100 text-yellow-800',
+    confirmed: 'bg-blue-100 text-blue-800',
+    preparing: 'bg-purple-100 text-purple-800',
+    ready: 'bg-orange-100 text-orange-800',
+    picked_up: 'bg-indigo-100 text-indigo-800',
+    on_the_way: 'bg-indigo-100 text-indigo-800',
+    delivered: 'bg-green-100 text-green-800',
+    cancelled: 'bg-red-100 text-red-800',
+  };
+  return colors[String(status || '').toLowerCase()] || 'bg-gray-100 text-gray-800';
 }
 
 export default function AdminDashboardPage() {
@@ -145,51 +175,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const scheduleReload = () => {
-    if (reloadTimer.current) clearTimeout(reloadTimer.current);
-    reloadTimer.current = setTimeout(() => {
-      loadStats();
-      loadRecentOrders();
-    }, 350);
-  };
-
-  useOrdersRealtime({
-    enabled: !!user,
-    onInsert: async () => {
-      setPulseNewOrder(true);
-      setTimeout(() => setPulseNewOrder(false), 1200);
-
-      await playSound();
-      scheduleReload();
-    },
-    onAnyChange: () => {
-      scheduleReload();
-    },
-  });
-  
-// Add this polling effect (keep 5000; use 1000 only if you really need it)
-useEffect(() => {
-  if (!user) return;
-
-  const id = window.setInterval(() => {
-    loadStats();
-    loadRecentOrders();
-  }, 15000);
-
-  return () => window.clearInterval(id);
-   
-}, [user]);
-
-  useEffect(() => {
-    if (user) {
-      loadStats();
-      loadRecentOrders();
-    }
-    return () => {
-      if (reloadTimer.current) clearTimeout(reloadTimer.current);
-    };
-  }, [user]);
-
   const loadStats = async () => {
     try {
       setLoading(true);
@@ -204,8 +189,10 @@ useEffect(() => {
       if (ordersErr) throw ordersErr;
 
       const list: OrderForStats[] = (orders as any[]) || [];
-      const todayKey = startOfDayISO(new Date());
-      const todayOrdersList = list.filter((o) => String(o.created_at || '').startsWith(todayKey));
+
+      // ✅ Today orders (LOCAL day range)
+      const { start: todayStart, end: todayEnd } = getLocalDayRange(new Date());
+      const todayOrdersList = list.filter((o) => isInRange(String(o.created_at || ''), todayStart, todayEnd));
 
       const now = new Date();
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -281,22 +268,49 @@ useEffect(() => {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    const colors: any = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      confirmed: 'bg-blue-100 text-blue-800',
-      preparing: 'bg-purple-100 text-purple-800',
-      ready: 'bg-orange-100 text-orange-800',
-      picked_up: 'bg-indigo-100 text-indigo-800',
-      on_the_way: 'bg-indigo-100 text-indigo-800',
-      delivered: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800',
-    };
-    return colors[String(status || '').toLowerCase()] || 'bg-gray-100 text-gray-800';
+  const scheduleReload = () => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => {
+      loadStats();
+      loadRecentOrders();
+    }, 350);
   };
 
-  const isProcessing = (status: string) =>
-    ['confirmed', 'preparing', 'ready', 'picked_up', 'on_the_way'].includes(String(status || '').toLowerCase());
+  useOrdersRealtime({
+    enabled: !!user,
+    onInsert: async () => {
+      setPulseNewOrder(true);
+      setTimeout(() => setPulseNewOrder(false), 1200);
+
+      await playSound();
+      scheduleReload();
+    },
+    onAnyChange: () => {
+      scheduleReload();
+    },
+  });
+
+  // Polling safety (realtime can drop on some networks)
+  useEffect(() => {
+    if (!user) return;
+
+    const id = window.setInterval(() => {
+      loadStats();
+      loadRecentOrders();
+    }, 15000);
+
+    return () => window.clearInterval(id);
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      loadStats();
+      loadRecentOrders();
+    }
+    return () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    };
+  }, [user]);
 
   const filteredRecentOrders = useMemo(() => {
     if (recentFilter === 'all') return recentOrders;
@@ -321,9 +335,7 @@ useEffect(() => {
             <div className="flex items-center gap-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Admin Dashboard</h1>
               {pulseNewOrder && (
-                <span className="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-800">
-                  New order
-                </span>
+                <span className="text-xs font-bold px-2 py-1 rounded-full bg-green-100 text-green-800">New order</span>
               )}
             </div>
             <p className="text-sm text-gray-600 mt-1">Realtime platform metrics and activity</p>
@@ -368,9 +380,7 @@ useEffect(() => {
         {/* Sound blocked banner */}
         {soundEnabled && soundBlocked && (
           <div className="mb-4 p-3 rounded-xl border bg-yellow-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="text-sm text-yellow-900">
-              Sound is blocked by the browser until you click “Enable sound”.
-            </div>
+            <div className="text-sm text-yellow-900">Sound is blocked by the browser until you click “Enable sound”.</div>
             <button
               type="button"
               onClick={unlockSound}
@@ -424,8 +434,9 @@ useEffect(() => {
               <div className="bg-white rounded-xl border shadow-sm p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-gray-600">Orders</p>
-                    <p className="text-xl font-bold text-gray-900 mt-1">{stats.totalOrders}</p>
+                    <p className="text-xs text-gray-600">Orders (today)</p>
+                    <p className="text-xl font-bold text-gray-900 mt-1">{stats.todayOrders}</p>
+                    <p className="text-xs text-gray-500 mt-1">Total: {stats.totalOrders}</p>
                   </div>
                   <ShoppingBag className="text-purple-500" size={22} />
                 </div>
@@ -655,9 +666,7 @@ useEffect(() => {
                       <TrendingUp className="text-primary" size={18} />
                       <span className="font-semibold text-gray-900">Open Analytics</span>
                     </div>
-                    <div className="mt-1 text-xs text-gray-600">
-                      Revenue, top merchants, drivers
-                    </div>
+                    <div className="mt-1 text-xs text-gray-600">Revenue, top merchants, drivers</div>
                   </button>
                 </div>
               </div>
