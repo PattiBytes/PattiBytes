@@ -163,21 +163,31 @@ export function buildOfferBadgeFromPromo(params: {
   menuItemsById?: Record<string, MenuItemNameLite> | null;
 }): OfferBadge | null {
   const promo = params.promo;
-  const dealType: DealType = (promo.deal_type ?? 'cart_discount') as DealType;
+ const dealType: DealType = (promo.deal_type ?? 'cart_discount') as DealType;
 
-  // Base badge
-  const badge: OfferBadge = {
-    promoId: promo.id,
-    dealType,
-    auto: !!promo.auto_apply,
-    label: toStr(promo.code) || 'OFFER',
-    subLabel: toStr(promo.description) || undefined,
-  };
+const badge: OfferBadge = {
+  promoId: promo.id,
+  dealType,
+  auto: dealType === 'bxgy' ? true : !!promo.auto_apply,
+  label: toStr(promo.code) || 'OFFER',
+  subLabel: toStr(promo.description) || undefined,
+};
 
-  if (dealType !== 'bxgy') {
-    // cart_discount: keep description as sublabel, no item ids
-    return badge;
-  }
+
+ if (dealType !== 'bxgy') {
+  const dt = toStr(promo.discount_type).toLowerCase();
+  const dv = clampNum(promo.discount_value, 0);
+
+  badge.label =
+    dt === 'percentage' ? `${dv}% OFF` :
+    dt === 'fixed' ? `₹${dv} OFF` :
+    (toStr(promo.code) || 'OFFER');
+
+  // keep description as sublabel if present, else show code
+  badge.subLabel = badge.subLabel || (promo.code ? `Code: ${toStr(promo.code)}` : undefined);
+  return badge;
+}
+
 
   const deal: BxgyDealJson = (promo.deal_json || {}) as any;
   const buyQty = Math.max(1, clampNum(deal?.buy?.qty, 1));
