@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 
 import DashboardLayout from '@/components/layouts/DashboardLayout';
@@ -40,12 +40,9 @@ type SortKey = 'recommended' | 'price_low' | 'price_high';
 export default function RestaurantDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
-
   const { addToCart, itemCount } = useCart();
 
   const restaurantId = String((params as any)?.id || '');
-  const focusItemId = searchParams.get('item'); // ✅ from /customer/restaurant/:id?item=MENU_ITEM_ID
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [menuByCategory, setMenuByCategory] = useState<MenuByCategory>({});
@@ -83,15 +80,9 @@ export default function RestaurantDetailPage() {
       setRestaurant(restaurantData);
       setMenuByCategory(menu);
 
+      // Expand first category by default
       const categories = Object.keys(menu || {});
-
-      // ✅ If we came here from an offer click (?item=...), expand all categories so the item exists in DOM.
-      if (focusItemId) {
-        const next: Record<string, boolean> = {};
-        categories.forEach((c) => (next[c] = true));
-        setExpandedCategories(next);
-      } else if (categories.length > 0) {
-        // default: expand first category
+      if (categories.length > 0) {
         setExpandedCategories({ [categories[0]]: true });
       }
     } catch (error) {
@@ -123,9 +114,7 @@ export default function RestaurantDetailPage() {
       category: item.category,
       discount_percentage: item.discount_percentage,
       category_id: null,
-
-      // ✅ fix: keep the item id here so you can trace cart item -> menu item later
-      menu_item_id: String(item.id),
+      menu_item_id: ''
     };
 
     const success = addToCart(cartItem, restaurant?.business_name || 'Restaurant');
@@ -201,26 +190,6 @@ export default function RestaurantDetailPage() {
   const totalShownItems = useMemo(() => {
     return Object.values(filteredMenu).reduce((sum, items) => sum + (items?.length || 0), 0);
   }, [filteredMenu]);
-
-  // ✅ Scroll + highlight the item passed in query (?item=...)
-  useEffect(() => {
-    if (!focusItemId) return;
-    if (!menuByCategory || Object.keys(menuByCategory).length === 0) return;
-
-    const t = window.setTimeout(() => {
-      const el = document.getElementById(`menu-item-${focusItemId}`);
-      if (!el) return;
-
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('ring-2', 'ring-orange-400', 'rounded-2xl');
-
-      window.setTimeout(() => {
-        el.classList.remove('ring-2', 'ring-orange-400', 'rounded-2xl');
-      }, 2500);
-    }, 250);
-
-    return () => window.clearTimeout(t);
-  }, [focusItemId, menuByCategory]);
 
   if (loading) {
     return (
@@ -323,7 +292,7 @@ export default function RestaurantDetailPage() {
                       </h1>
 
                       <div className="flex flex-wrap gap-2 mb-3">
-                        {restaurant.cuisine_types?.slice(0, 6)?.map((cuisine: string, index: number) => (
+                        {restaurant.cuisine_types?.slice(0, 6)?.map((cuisine, index) => (
                           <span
                             key={index}
                             className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white text-xs font-semibold rounded-full"
@@ -357,7 +326,9 @@ export default function RestaurantDetailPage() {
                       >
                         View full menu
                       </button>
-                      <div className="text-white/80 text-xs font-semibold">{totalShownItems} items shown</div>
+                      <div className="text-white/80 text-xs font-semibold">
+                        {totalShownItems} items shown
+                      </div>
                     </div>
                   </div>
 
@@ -491,7 +462,7 @@ export default function RestaurantDetailPage() {
             </div>
           </div>
 
-          {/* Category chips */}
+          {/* Category chips (sticky-ish) */}
           {categories.length > 0 && (
             <div className="mb-4">
               <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
@@ -528,7 +499,7 @@ export default function RestaurantDetailPage() {
                     onClick={() => toggleCategory(category)}
                     className="w-full px-5 md:px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex itemsz-center gap-3 min-w-0">
                       <h2 className="text-lg md:text-xl font-extrabold text-gray-900 truncate">{category}</h2>
                       <span className="px-3 py-1 bg-primary/10 text-primary text-xs md:text-sm font-extrabold rounded-full">
                         {items.length} items
@@ -552,11 +523,7 @@ export default function RestaurantDetailPage() {
                         const itemImgSrc = getSafeImageSrc(item.image_url);
 
                         return (
-                          <div
-                            key={item.id}
-                            id={`menu-item-${item.id}`} // ✅ required for scroll-to-item
-                            className="p-4 md:p-6 hover:bg-gray-50 transition-colors"
-                          >
+                          <div key={item.id} className="p-4 md:p-6 hover:bg-gray-50 transition-colors">
                             <div className="flex gap-4">
                               {/* Item Image */}
                               <div className="relative w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden flex-shrink-0 bg-gray-100 border border-gray-200">
@@ -605,7 +572,9 @@ export default function RestaurantDetailPage() {
                                     </div>
 
                                     {item.description && (
-                                      <p className="text-sm text-gray-600 line-clamp-2 mb-2">{item.description}</p>
+                                      <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                                        {item.description}
+                                      </p>
                                     )}
 
                                     <div className="flex items-center gap-2">
