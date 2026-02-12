@@ -47,14 +47,13 @@ export default function RestaurantGrid({
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
       {restaurants.map((r) => (
         <RestaurantCard
-  key={r.id}
-  restaurant={r}
-  menuCount={menuCountByMerchant[r.id]}
-  offer={offerByMerchant?.[r.id] ?? null}
-  onOpen={() => onOpenRestaurant(r.id)}
-  onOpenOffer={(focusItemId, promoId) => onOpenRestaurantOffer?.(r.id, focusItemId, promoId)}
-/>
-
+          key={r.id}
+          restaurant={r}
+          menuCount={menuCountByMerchant[r.id] ?? 0}
+          offer={offerByMerchant?.[r.id] ?? null}
+          onOpen={() => onOpenRestaurant(r.id)}
+          onOpenOffer={(focusItemId, promoId) => onOpenRestaurantOffer?.(r.id, focusItemId, promoId)}
+        />
       ))}
     </div>
   );
