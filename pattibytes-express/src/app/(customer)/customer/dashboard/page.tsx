@@ -47,9 +47,8 @@ import CuisineFilters from '@/components/customer-dashboard/CuisineFilters';
 import RestaurantGrid from '@/components/customer-dashboard/RestaurantGrid';
 
 import type { AddressPick } from '@/components/AddressAutocomplete';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { OfferBadge, PromoCodeRow, BxgyTargetRow } from '@/components/customer-dashboard/offers';
-import { isPromoActiveNow } from '@/components/customer-dashboard/offers';
+import type { OfferBadge, PromoCodeRow, BxgyTargetRow, MenuItemNameLite } from '@/components/customer-dashboard/offers';
+import { buildOfferBadgeFromPromo, isPromoActiveNow } from '@/components/customer-dashboard/offers';
 
 const BOTTOM_NAV_PX = 96;
 
@@ -263,6 +262,7 @@ export default function CustomerDashboardPage() {
   // Trending dishes
   const [trending, setTrending] = useState<TrendingDish[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(false);
+const [offerByMerchant, setOfferByMerchant] = useState<Record<string, OfferBadge | null>>({});
 
   const [brand, setBrand] = useState({
     title: 'Presented by Pattibytes',
@@ -292,125 +292,186 @@ export default function CustomerDashboardPage() {
   const showMenuImages = useMemo(() => {
     return Boolean((appSettings as any)?.show_menu_images ?? true);
   }, [appSettings]);
+const PROMO_TABLE = 'promo_codes';
+const BXGY_TABLE = 'promo_bxgy_targets';
+const MENU_TABLE = 'menu_items';
 
-  // CustomerDashboardPage (or CustomerRestaurantsPage) — add state:
-const [offerByMerchant, setOfferByMerchant] = useState<Record<string, OfferBadge | null>>({});
-
-function pickName(names: string[]) {
-  if (names.length <= 1) return names[0] || '';
-  return `${names[0]} +${names.length - 1}`;
-}
-
-function buildBxgyLabel(promo: any, buyNames: string[], getNames: string[]): OfferBadge {
-  const discType = String(promo.deal_json?.get?.discount?.type ?? 'free'); // free|percentage|fixed
-  const discVal = Number(promo.deal_json?.get?.discount?.value ?? 0);
-  const disc =
-    discType === 'free' ? 'FREE' : discType === 'percentage' ? `${discVal}% OFF` : `₹${discVal} OFF`;
-
-  const buy = pickName(buyNames);
-  const get = pickName(getNames);
-
-  // ✅ what you want
-  if (buy && get) return { label: `Buy ${buy} Get ${get} ${disc}`, subLabel: 'Offer', auto: Boolean(promo.auto_apply) };
-
-  // fallback
-  const buyQty = Number(promo.deal_json?.buy?.qty ?? 1);
-  const getQty = Number(promo.deal_json?.get?.qty ?? 1);
-  return { label: `Buy ${buyQty} Get ${getQty} ${disc}`, subLabel: 'Offer', auto: Boolean(promo.auto_apply) };
-}
+const merchantIdsKey = useMemo(() => {
+  const ids = filteredRestaurants.slice(0, 60).map((r: any) => String(r.id)).filter(Boolean);
+  ids.sort();
+  return ids.join(',');
+}, [filteredRestaurants]);
 
 useEffect(() => {
-  const run = async () => {
-    const merchantIds = filteredRestaurants.slice(0, 60).map((r) => String(r.id)).filter(Boolean);
-    if (!merchantIds.length) return setOfferByMerchant({});
+  let cancelled = false;
 
-    // ✅ correct table + fields
-    const { data: promoRows, error: promoErr } = await supabase
-      .from('promo_codes')
-      .select(
-        'id,scope,merchant_id,deal_type,deal_json,discount_type,discount_value,min_order_amount,is_active,valid_from,valid_until,valid_days,valid_time_start,valid_time_end,start_time,end_time,auto_apply,priority'
-      )
-      .eq('is_active', true)
-      .eq('scope', 'merchant')
-      .in('merchant_id', merchantIds)
-      .order('priority', { ascending: false })
-      .order('valid_until', { ascending: true });
-
-    if (promoErr) return setOfferByMerchant({});
-
-    const now = new Date();
-    const promos = (promoRows ?? []).filter((p: any) => isPromoActiveNow(p, now));
-
-    // pick best per merchant
-    const bestByMerchant: Record<string, any> = {};
-    for (const p of promos) {
-      const mid = String(p.merchant_id || '');
-      if (!mid) continue;
-      if (!bestByMerchant[mid]) bestByMerchant[mid] = p;
+  const loadOffersForGrid = async () => {
+    const merchantIds = merchantIdsKey ? merchantIdsKey.split(',').filter(Boolean) : [];
+    if (!merchantIds.length) {
+      setOfferByMerchant({});
+      return;
     }
 
-    const chosen = Object.values(bestByMerchant);
-    const bxgyIds = chosen.filter((p: any) => p.deal_type === 'bxgy').map((p: any) => p.id);
-
-    // ✅ correct targets table + fields
-    let targets: any[] = [];
-    if (bxgyIds.length) {
-      const { data: tRows } = await supabase
-        .from('promo_bxgy_targets')
-        .select('id,promo_code_id,side,menu_item_id,category_id,created_at')
-        .in('promo_code_id', bxgyIds);
-
-      targets = tRows ?? [];
-    }
-
-    // ✅ correct menu items table + fields
-    const menuItemIds = Array.from(new Set(targets.map((t) => t.menu_item_id).filter(Boolean).map(String)));
-    const menuNameById = new Map<string, string>();
-
-    if (menuItemIds.length) {
-      const { data: items } = await supabase
-        .from('menu_items')
-        .select('id,name')
-        .in('id', menuItemIds)
-        .limit(500);
-
-      (items ?? []).forEach((it: any) => menuNameById.set(String(it.id), String(it.name || 'Item')));
-    }
-
-    // build offers
-    const out: Record<string, OfferBadge | null> = {};
-    for (const mid of merchantIds) {
-      const promo = bestByMerchant[mid];
-      if (!promo) { out[mid] = null; continue; }
-
-      if (promo.deal_type === 'bxgy') {
-        const ts = targets.filter((t) => t.promo_code_id === promo.id);
-
-        const buyNames = Array.from(
-          new Set(ts.filter((t) => t.side === 'buy').map((t) => menuNameById.get(String(t.menu_item_id)) || '').filter(Boolean))
-        );
-        const getNames = Array.from(
-          new Set(ts.filter((t) => t.side === 'get').map((t) => menuNameById.get(String(t.menu_item_id)) || '').filter(Boolean))
-        );
-
-        out[mid] = buildBxgyLabel(promo, buyNames, getNames);
-      } else {
-        const dt = String(promo.discount_type ?? 'percentage');
-        const dv = Number(promo.discount_value ?? 0);
-        if (!dv) { out[mid] = null; continue; }
-
-        const label = dt === 'percentage' ? `${dv}% OFF` : `₹${dv} OFF`;
-        const min = Number(promo.min_order_amount ?? 0);
-
-        out[mid] = { label, subLabel: min > 0 ? `Min ₹${min}` : undefined, auto: Boolean(promo.auto_apply) };
+    const cacheKey = `offers:grid:v1:${merchantIdsKey}`;
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === 'object') setOfferByMerchant(parsed);
       }
-    }
+    } catch {}
 
-    setOfferByMerchant(out);
+    try {
+      // 1) Fetch promos for these merchants
+      const promoSelect = [
+        'id',
+        'code',
+        'description',
+        'scope',
+        'merchant_id',
+        'deal_type',
+        'deal_json',
+        'discount_type',
+        'discount_value',
+        'min_order_amount',
+        'max_discount_amount',
+        'auto_apply',
+        'priority',
+        'is_active',
+        'valid_from',
+        'valid_until',
+        'valid_days',
+        'valid_time_start',
+        'valid_time_end',
+        'start_time',
+        'end_time',
+      ].join(',');
+
+      const promosRes = await supabase
+        .from(PROMO_TABLE)
+        .select(promoSelect)
+        .in('merchant_id', merchantIds)
+        .eq('is_active', true);
+
+      if (promosRes.error) throw promosRes.error;
+
+      const promos = (promosRes.data || []) as unknown as PromoCodeRow[];
+      const now = new Date();
+
+      // 2) Pick best promo per merchant (active now + priority + auto_apply)
+      const bestPromoByMerchant = new Map<string, PromoCodeRow>();
+
+      const score = (p: PromoCodeRow) => {
+        const auto = p.auto_apply ? 1 : 0;
+        const pr = Number.isFinite(Number(p.priority)) ? Number(p.priority) : 9999; // smaller = better
+        const bxgy = p.deal_type === 'bxgy' ? 1 : 0;
+        // sort: auto first, then priority asc, then bxgy first
+        return { auto, pr, bxgy };
+      };
+
+      const compare = (a: PromoCodeRow, b: PromoCodeRow) => {
+        const sa = score(a);
+        const sb = score(b);
+        if (sa.auto !== sb.auto) return sb.auto - sa.auto;
+        if (sa.pr !== sb.pr) return sa.pr - sb.pr;
+        if (sa.bxgy !== sb.bxgy) return sb.bxgy - sa.bxgy;
+        return String(a.code || '').localeCompare(String(b.code || ''));
+      };
+
+      const grouped = new Map<string, PromoCodeRow[]>();
+      for (const p of promos) {
+        const mid = String(p.merchant_id || '').trim();
+        if (!mid) continue;
+        if (!isPromoActiveNow(p, now)) continue;
+
+        if (!grouped.has(mid)) grouped.set(mid, []);
+        grouped.get(mid)!.push(p);
+      }
+
+      for (const [mid, list] of grouped.entries()) {
+        list.sort(compare);
+        bestPromoByMerchant.set(mid, list[0]);
+      }
+
+      // 3) Fetch BXGY targets for selected BXGY promos
+      const selectedPromos = Array.from(bestPromoByMerchant.values());
+      const bxgyPromoIds = selectedPromos.filter((p) => p.deal_type === 'bxgy').map((p) => p.id);
+
+      const targetsByPromo = new Map<string, BxgyTargetRow[]>();
+
+      if (bxgyPromoIds.length) {
+        const targetsRes = await supabase
+          .from(BXGY_TABLE)
+          .select('id,promo_code_id,side,menu_item_id,category_id,created_at')
+          .in('promo_code_id', bxgyPromoIds);
+
+        if (targetsRes.error) throw targetsRes.error;
+
+        const targets = (targetsRes.data || []) as BxgyTargetRow[];
+        for (const t of targets) {
+          const pid = String(t.promo_code_id || '').trim();
+          if (!pid) continue;
+          if (!targetsByPromo.has(pid)) targetsByPromo.set(pid, []);
+          targetsByPromo.get(pid)!.push(t);
+        }
+      }
+
+      // 4) Fetch menu item names for all target item ids
+      const allItemIds = new Set<string>();
+      for (const list of targetsByPromo.values()) {
+        for (const t of list) {
+          if (t.menu_item_id) allItemIds.add(String(t.menu_item_id));
+        }
+      }
+
+      const menuItemsById: Record<string, MenuItemNameLite> = {};
+      if (allItemIds.size) {
+        const ids = Array.from(allItemIds);
+        const menuRes = await supabase.from(MENU_TABLE).select('id,name').in('id', ids).limit(2000);
+        if (menuRes.error) throw menuRes.error;
+
+        for (const it of menuRes.data || []) {
+          const id = String((it as any)?.id || '').trim();
+          const name = String((it as any)?.name || '').trim();
+          if (id) menuItemsById[id] = { id, name };
+        }
+      }
+
+      // 5) Build OfferBadge per merchant
+      const out: Record<string, OfferBadge | null> = {};
+      for (const mid of merchantIds) {
+        const p = bestPromoByMerchant.get(mid) || null;
+        if (!p) {
+          out[mid] = null;
+          continue;
+        }
+
+        const badge = buildOfferBadgeFromPromo({
+          promo: p,
+          bxgyTargets: targetsByPromo.get(p.id) || [],
+          menuItemsById,
+        });
+
+        out[mid] = badge;
+      }
+
+      if (cancelled) return;
+
+      setOfferByMerchant(out);
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify(out));
+      } catch {}
+    } catch {
+      if (!cancelled) setOfferByMerchant({});
+    }
   };
 
-  run();
-}, [filteredRestaurants]);
+  loadOffersForGrid();
+
+  return () => {
+    cancelled = true;
+  };
+}, [merchantIdsKey]);
 
   // App settings
   useEffect(() => {
@@ -554,6 +615,13 @@ useEffect(() => {
       popupTimer.current = null;
     };
   }, [announcement?.enabled, announcement?.type, announcement?.dismiss_key, announcement?.start_at, announcement?.end_at]);
+
+  const onOpenRestaurantOffer = (merchantId: string, focusItemId: string, promoId?: string) => {
+  const q = new URLSearchParams();
+  if (focusItemId) q.set('item', focusItemId);
+  if (promoId) q.set('promo', promoId);
+  router.push(`/customer/restaurant/${merchantId}?${q.toString()}`);
+};
 
   // Saved addresses + initial location
   useEffect(() => {
@@ -1443,20 +1511,14 @@ useEffect(() => {
                 </div>
 
                 <div className="mt-3">
-               <RestaurantGrid
+                 <RestaurantGrid
   loading={loadingRestaurants}
   restaurants={filteredRestaurants}
   menuCountByMerchant={menuCountByMerchant}
-  offerByMerchant={offerByMerchant}
   onOpenRestaurant={(id) => router.push(`/customer/restaurant/${id}`)}
-  onOpenRestaurantOffer={(merchantId, focusItemId, promoId) => {
-  const qs = new URLSearchParams();
-  qs.set('item', focusItemId);
-  if (promoId) qs.set('promo', promoId);
-  router.push(`/customer/restaurant/${merchantId}?${qs.toString()}`);
-}}
+  offerByMerchant={offerByMerchant}
+  onOpenRestaurantOffer={onOpenRestaurantOffer}
 />
-
 
                 </div>
               </div>
