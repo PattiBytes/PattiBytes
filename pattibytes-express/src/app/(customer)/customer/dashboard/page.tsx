@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
@@ -323,35 +324,36 @@ useEffect(() => {
 
     try {
       // 1) Fetch promos for these merchants
-      const promoSelect = [
-        'id',
-        'code',
-        'description',
-        'scope',
-        'merchant_id',
-        'deal_type',
-        'deal_json',
-        'discount_type',
-        'discount_value',
-        'min_order_amount',
-        'max_discount_amount',
-        'auto_apply',
-        'priority',
-        'is_active',
-        'valid_from',
-        'valid_until',
-        'valid_days',
-        'valid_time_start',
-        'valid_time_end',
-        'start_time',
-        'end_time',
-      ].join(',');
+     const promoSelect = [
+  'id',
+  'code',
+  'description',
+  'scope',
+  'merchant_id',
+  'deal_type',
+  'deal_json',
+  'discount_type',
+  'discount_value',
+  'min_order_amount',
+  'max_discount_amount',
+  'auto_apply',
+  'priority',
+  'is_active',
+  'valid_from',
+  'valid_until',
+  'valid_days',
+  'start_time',
+  'end_time',
+].join(',');
 
-      const promosRes = await supabase
-        .from(PROMO_TABLE)
-        .select(promoSelect)
-        .in('merchant_id', merchantIds)
-        .eq('is_active', true);
+
+     const inList = merchantIds.join(',');
+const promosRes = await supabase
+  .from('promo_codes')
+  .select(promoSelect)
+  .eq('is_active', true)
+  .or(`merchant_id.in.(${inList}),merchant_id.is.null`);
+
 
       if (promosRes.error) throw promosRes.error;
 
@@ -380,12 +382,17 @@ useEffect(() => {
 
       const grouped = new Map<string, PromoCodeRow[]>();
       for (const p of promos) {
-        const mid = String(p.merchant_id || '').trim();
-        if (!mid) continue;
-        if (!isPromoActiveNow(p, now)) continue;
+       for (const mid of merchantIds) {
+  const candidates = promos
+    .filter((p) => (p.merchant_id === mid || p.merchant_id == null))
+    .filter((p) => isPromoActiveNow(p, now))
+    // safety: merchant-scoped must match merchant
+    .filter((p) => p.scope !== 'merchant' || p.merchant_id === mid);
 
-        if (!grouped.has(mid)) grouped.set(mid, []);
-        grouped.get(mid)!.push(p);
+  candidates.sort(compare);
+  bestPromoByMerchant.set(mid, candidates[0]);
+}
+
       }
 
       for (const [mid, list] of grouped.entries()) {
@@ -460,11 +467,17 @@ useEffect(() => {
       setOfferByMerchant(out);
       try {
         sessionStorage.setItem(cacheKey, JSON.stringify(out));
-      } catch {}
+      } catch (e: any) {
+  console.error('loadOffersForGrid failed:', e?.message ?? e, e);
+  if (!cancelled) setOfferByMerchant({});
+}
+
     } catch {
       if (!cancelled) setOfferByMerchant({});
     }
+    
   };
+  
 
   loadOffersForGrid();
 
@@ -1040,7 +1053,7 @@ useEffect(() => {
           sessionStorage.setItem(cacheKey, JSON.stringify(merged));
         } catch {}
       }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     } catch (e) {
       // If this throws “relationship not found”, you need the FK.
       if (!cancelled) setTrending([]);
