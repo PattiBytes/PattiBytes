@@ -40,23 +40,13 @@ import { deliveryFeeService } from '@/services/deliveryFee';
 type CheckoutStored = {
   cart: {
     merchant_id: string;
-    merchantname?: string;
-    items: any;
+    merchant_name?: string;
+    items: any[];
     subtotal: number;
   };
   promoCode?: string | null;
   promoDiscount?: number;
-  // NEW: auto / offer data from CartPage
-  offerCode?: string | null;
-  offerDiscount?: number;
-  offerLines?: {
-    menuItemId: string;
-    name: string;
-    qty: number;
-    label?: string;
-  }[];
 };
-
 
 type MerchantMini = {
   id: string;
@@ -159,49 +149,26 @@ export default function CheckoutPage() {
     postal_code: '',
   });
 
-  const items = cartData?.cart?.items ?? [];
+  const items = cartData?.cart?.items || [];
 
-const computedSubtotal = useMemo(() => {
-  const s = Number(cartData?.cart?.subtotal);
-  if (Number.isFinite(s) && s > 0) return round2(s);
+  const computedSubtotal = useMemo(() => {
+    const s = Number(cartData?.cart?.subtotal);
+    if (Number.isFinite(s) && s > 0) return round2(s);
 
-  const sum = items.reduce((acc: number, it: any) => {
-    const price = Number(it?.price ?? 0);
-    const qty = Number(it?.quantity ?? 0);
-    const disc = Number(it?.discountpercentage ?? it?.discount_percentage ?? 0);
-    const effective = disc > 0 ? price * (1 - disc / 100) : price;
-    return acc + effective * qty;
-  }, 0);
-  return round2(sum);
-}, [cartData?.cart?.subtotal, items]);
-
-// Manual promo from checkoutData
-const manualPromoDiscount = useMemo(
-  () => round2(Number(cartData?.promoDiscount ?? 0)),
-  [cartData?.promoDiscount]
-);
-const manualPromoCode = cartData?.promoCode ?? null;
-
-// Auto “offer” (BXGY) from CartPage
-const offerDiscount = useMemo(
-  () => round2(Number(cartData?.offerDiscount ?? 0)),
-  [cartData?.offerDiscount]
-);
-const offerCode = cartData?.offerCode ?? null;
-const offerLines = cartData?.offerLines ?? [];
-
-// Decide which discount is actually applied (manual promo wins)
-const effectiveDiscount = manualPromoCode ? manualPromoDiscount : offerDiscount;
-const effectiveCode = manualPromoCode || offerCode || null;
-
+    const sum = items.reduce((acc: number, it: any) => {
+      const price = Number(it?.price || 0);
+      const qty = Number(it?.quantity || 0);
+      const disc = Number(it?.discount_percentage || it?.discountpercentage || 0);
+      const effective = disc > 0 ? price * (1 - disc / 100) : price;
+      return acc + effective * qty;
+    }, 0);
+    return round2(sum);
+  }, [cartData?.cart?.subtotal, items]);
 
   const promoDiscount = useMemo(() => round2(Number(cartData?.promoDiscount || 0)), [cartData?.promoDiscount]);
   const promoCode = cartData?.promoCode ?? null;
 
- const taxableBase = useMemo(
-  () => Math.max(0, computedSubtotal - effectiveDiscount),
-  [computedSubtotal, effectiveDiscount]
-);
+  const taxableBase = useMemo(() => Math.max(0, computedSubtotal - promoDiscount), [computedSubtotal, promoDiscount]);
 
   const gstEnabled = useMemo(() => !!merchant?.gst_enabled, [merchant?.gst_enabled]);
   const gstPct = useMemo(() => Number(merchant?.gst_percentage ?? 0), [merchant?.gst_percentage]);
@@ -599,13 +566,15 @@ setDeliveryBreakdown(`Aerial distance: ${feeData.breakdown}`);
         items: cartData.cart.items,
 
         subtotal: round2(computedSubtotal),
-  discount: round2(effectiveDiscount),
-  deliveryfee: round2(deliveryFee),
-  tax: round2(tax),
-  totalamount: round2(finalTotal),
-  paymentmethod: paymentMethod,
-  paymentstatus: 'pending',
-  promocode: effectiveCode ?? null,
+        discount: round2(promoDiscount),
+        delivery_fee: round2(deliveryFee),
+        tax: round2(tax),
+        total_amount: round2(finalTotal),
+
+        payment_method: paymentMethod,
+        payment_status: 'pending',
+
+        promo_code: promoCode || null,
 
         delivery_address: fullDeliveryAddress,
         delivery_latitude: Number((selectedAddress as any).latitude),
@@ -948,44 +917,18 @@ cartService.clearCart(); // removes pattibytes_cart and dispatches cartUpdated
             <div className="bg-white rounded-xl shadow-lg p-6 sticky top-6">
               <h2 className="text-xl font-bold mb-4">Order Summary</h2>
 
-             <div className="space-y-3 mb-4 pb-4 border-b max-h-52 overflow-y-auto">
-  {/* Normal cart items */}
-  {items.map((item: any) => (
-    <div key={item.id} className="flex justify-between text-sm gap-3">
-      <span className="text-gray-600 flex-1">
-        {item.name} × {item.quantity}
-      </span>
-      <span className="font-semibold">
-        ₹{(Number(item.price ?? 0) * Number(item.quantity ?? 0)).toFixed(2)}
-      </span>
-    </div>
-  ))}
-
-  {/* Auto-applied BXGY / offer free lines */}
-  {!manualPromoCode && offerLines.length > 0 && (
-    <div className="pt-2 space-y-2">
-      {offerLines.map((l) => (
-        <div key={l.menuItemId} className="flex justify-between text-sm gap-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="text-gray-700 truncate">
-                {l.name} × {l.qty}
-              </span>
-              <span className="text-[11px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
-                OFFER
-              </span>
-              <span className="text-[11px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
-                {l.label || 'FREE'}
-              </span>
-            </div>
-          </div>
-          <span className="font-semibold text-gray-900">₹0.00</span>
-        </div>
-      ))}
-    </div>
-  )}
-</div>
-
+              <div className="space-y-3 mb-4 pb-4 border-b max-h-52 overflow-y-auto">
+                {items.map((item: any) => (
+                  <div key={item.id} className="flex justify-between text-sm gap-3">
+                    <span className="text-gray-600 flex-1">
+                      {item.name} × {item.quantity}
+                    </span>
+                    <span className="font-semibold">
+                      ₹{(Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
 
               <div className="space-y-2 mb-4 pb-4 border-b text-sm">
                 <div className="flex justify-between">
@@ -993,17 +936,12 @@ cartService.clearCart(); // removes pattibytes_cart and dispatches cartUpdated
                   <span className="font-semibold">₹{computedSubtotal.toFixed(2)}</span>
                 </div>
 
-              {effectiveDiscount > 0 && (
-  <div className="flex justify-between text-green-600">
-    <span>
-      {manualPromoCode
-        ? `Promo Discount${effectiveCode ? ` (${effectiveCode})` : ''}`
-        : `Offer Discount${effectiveCode ? ` (${effectiveCode})` : ''}`}
-    </span>
-    <span className="font-semibold">-₹{effectiveDiscount.toFixed(2)}</span>
-  </div>
-)}
-
+                {promoDiscount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Promo Discount {promoCode ? `(${promoCode})` : ''}</span>
+                    <span className="font-semibold">-₹{promoDiscount.toFixed(2)}</span>
+                  </div>
+                )}
 
                 <div className="flex justify-between">
                   <span className="text-gray-600">Delivery Fee</span>
