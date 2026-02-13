@@ -89,7 +89,13 @@ export type SaveAddressInput = Partial<{
   // legacy / page-level variants
   user_id: string;
 }>;
-
+export type DeliveryFeeCalcOptions = {
+  enabled?: boolean;              // if false => fee = 0
+  baseKm?: number;                // default 3
+  baseFee?: number;               // default 50 (will come from app_settings)
+  perKmBeyondBase?: number;        // default 15
+  rounding?: 'ceil' | 'exact';     // "starting from 1km" => ceil
+};
 export interface MerchantRow {
   id: string;
   user_id: string;
@@ -154,7 +160,7 @@ export type DeliveryFeeQuote = {
 /**
  * Delivery fee rule (as requested):
  * - ₹50 if distance <= 3km
- * - If outside 3km: ₹50 + ₹15 per km beyond 3km
+ * - If outside 3km: ₹₹15 per km beyond 3km starting from 1km
  */
 export async function getRoadDistanceKmViaApi(
   merchantLat: number,
@@ -180,27 +186,38 @@ export async function getRoadDistanceKmViaApi(
 }
 
 
-export function calculateDeliveryFeeByDistance(distanceKm: number): DeliveryFeeQuote {
+export function calculateDeliveryFeeByDistance(
+  distanceKm: number,
+  opts: DeliveryFeeCalcOptions = {}
+): DeliveryFeeQuote {
+  const enabled = opts.enabled ?? true;
+  if (!enabled) {
+    return { distanceKm: 0, fee: 0, breakdown: 'Delivery fee disabled' };
+  }
+
   const d = Math.max(0, Number(distanceKm) || 0);
 
-  const baseKm = 3;
-  const within3kmFee = 50;
-  const perKm = 15;
+  const baseKm = opts.baseKm ?? 3;
+  const baseFee = opts.baseFee ?? 50;
+  const perKm = opts.perKmBeyondBase ?? 15;
+  const rounding = opts.rounding ?? 'ceil';
 
   if (d <= baseKm) {
     return {
       distanceKm: round2(d),
-      fee: within3kmFee,
-      breakdown: `Up to ${baseKm}km: ₹${within3kmFee}`,
+      fee: round2(baseFee),
+      breakdown: `Up to ${baseKm}km: ₹${round2(baseFee)}`,
     };
   }
 
-  const fee = d * perKm;
+  const extra = Math.max(0, d - baseKm);
+  const billableExtra = rounding === 'ceil' ? Math.ceil(extra) : extra;
+  const fee = baseFee + billableExtra * perKm;
 
   return {
     distanceKm: round2(d),
     fee: round2(fee),
-    breakdown: `${round2(d)}km × ₹${perKm} = ₹${round2(fee)} (outside ${baseKm}km, no ₹${within3kmFee})`,
+    breakdown: `₹${round2(baseFee)} + ${billableExtra}km × ₹${perKm} = ₹${round2(fee)}`,
   };
 }
 

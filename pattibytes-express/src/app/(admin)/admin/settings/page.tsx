@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
@@ -31,9 +31,16 @@ import {
   KeyRound,
   Calendar,
   Image as ImageIcon,
+  Truck,
+  Settings2,
+  Copy,
+  CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useRouter } from 'next/navigation';
+
+const TABLE = 'app_settings'; // change to 'appsettings' if that's your real table
 
 type CustomLink = {
   id: string;
@@ -55,35 +62,73 @@ type Announcement = {
   start_at?: string; // ISO
   end_at?: string; // ISO
   dismissible: boolean;
-  dismiss_key: string; // change to re-show popup after edits
+  dismiss_key: string;
+};
+
+type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+
+type DeliveryFeeSchedule = {
+  timezone: string;
+  weekly: Record<DayKey, { enabled: boolean; fee: number }>;
+  overrides: Array<any>;
+  ui?: {
+    show_to_customer?: boolean; // if false: still charge but hide line item (later used in cart/checkout)
+  };
 };
 
 interface Settings {
   id?: string;
+
   app_name: string;
   support_email: string;
   support_phone: string;
   business_address: string;
+
   facebook_url: string;
   instagram_url: string;
   twitter_url: string;
   youtube_url: string;
   website_url: string;
+
   delivery_fee: number;
   min_order_amount: number;
   tax_percentage: number;
-  custom_links?: CustomLink[];
 
-  // ✅ NEW
-  announcement?: Announcement;
-  show_menu_images?: boolean;
+  custom_links: CustomLink[];
+
+  announcement: Announcement;
+  show_menu_images: boolean;
+
+  // Delivery fee controls
+  delivery_fee_enabled: boolean;
+  delivery_fee_schedule: DeliveryFeeSchedule;
 }
+
+const DAYS: Array<{ key: DayKey; label: string }> = [
+  { key: 'mon', label: 'Mon' },
+  { key: 'tue', label: 'Tue' },
+  { key: 'wed', label: 'Wed' },
+  { key: 'thu', label: 'Thu' },
+  { key: 'fri', label: 'Fri' },
+  { key: 'sat', label: 'Sat' },
+  { key: 'sun', label: 'Sun' },
+];
 
 function uid() {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `id_${Math.random().toString(16).slice(2)}_${Date.now()}`;
 }
+
+const asNum = (v: any, fallback = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const asBool = (v: any, fallback = false) => {
+  if (v === null || v === undefined) return fallback;
+  return Boolean(v);
+};
 
 function normalizeMaybeMarkdownUrl(v: any) {
   const s = String(v ?? '').trim();
@@ -100,7 +145,6 @@ function normalizeHttpUrl(v: string) {
 }
 
 function toIsoOrEmptyFromDatetimeLocal(v: string) {
-  // input like: "2026-02-06T17:30"
   const s = String(v || '').trim();
   if (!s) return '';
   const d = new Date(s);
@@ -112,7 +156,6 @@ function toDatetimeLocalFromIso(iso?: string) {
   if (!s) return '';
   const d = new Date(s);
   if (!Number.isFinite(d.getTime())) return '';
-  // convert to local datetime-local format (no seconds)
   const pad = (n: number) => String(n).padStart(2, '0');
   const yyyy = d.getFullYear();
   const mm = pad(d.getMonth() + 1);
@@ -156,6 +199,58 @@ function defaultAnnouncement(): Announcement {
   };
 }
 
+function defaultDeliveryFeeSchedule(defaultFee = 40): DeliveryFeeSchedule {
+  return {
+    timezone: 'Asia/Kolkata',
+    weekly: {
+      mon: { enabled: true, fee: defaultFee },
+      tue: { enabled: true, fee: defaultFee },
+      wed: { enabled: true, fee: defaultFee },
+      thu: { enabled: true, fee: defaultFee },
+      fri: { enabled: true, fee: defaultFee },
+      sat: { enabled: true, fee: defaultFee },
+      sun: { enabled: false, fee: 0 },
+    },
+    overrides: [],
+    ui: { show_to_customer: true },
+  };
+}
+
+function parseSchedule(v: any, fallbackFee: number): DeliveryFeeSchedule {
+  try {
+    if (!v) return defaultDeliveryFeeSchedule(fallbackFee);
+    const obj = typeof v === 'string' ? JSON.parse(v) : v;
+    const base = defaultDeliveryFeeSchedule(fallbackFee);
+
+    const weekly = { ...base.weekly, ...(obj?.weekly || {}) };
+    // Ensure all keys exist + numbers
+    for (const { key } of DAYS) {
+      weekly[key] = {
+        enabled: asBool(weekly[key]?.enabled, true),
+        fee: Math.max(0, asNum(weekly[key]?.fee, fallbackFee)),
+      };
+    }
+
+    const ui = { ...base.ui, ...(obj?.ui || {}) };
+
+    return {
+      timezone: String(obj?.timezone || base.timezone),
+      weekly,
+      overrides: Array.isArray(obj?.overrides) ? obj.overrides : [],
+      ui,
+    };
+  } catch {
+    return defaultDeliveryFeeSchedule(fallbackFee);
+  }
+}
+
+function dayKeyForNow(timezone: string): DayKey {
+  // Use Intl for timezone-safe weekday
+  const short = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: timezone }).format(new Date());
+  const k = short.toLowerCase().slice(0, 3);
+  return (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].includes(k) ? k : 'mon') as DayKey;
+}
+
 export default function SettingsPage() {
   const { logout } = useAuth();
   const router = useRouter();
@@ -163,24 +258,32 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [settings, setSettings] = useState<Settings>({
-    app_name: 'PattiBytes Express',
-    support_email: 'support@pattibytes.com',
-    support_phone: '+91 98765 43210',
-    business_address: 'Ludhiana, Punjab, India',
-    facebook_url: '',
-    instagram_url: '',
-    twitter_url: '',
-    youtube_url: '',
-    website_url: '',
-    delivery_fee: 40,
-    min_order_amount: 100,
-    tax_percentage: 5,
-    custom_links: [],
+  const [settings, setSettings] = useState<Settings>(() => {
+    const fallbackFee = 40;
+    return {
+      app_name: 'PattiBytes Express',
+      support_email: 'support@pattibytes.com',
+      support_phone: '+91 98765 43210',
+      business_address: 'Ludhiana, Punjab, India',
 
-    // ✅ NEW defaults
-    announcement: defaultAnnouncement(),
-    show_menu_images: true,
+      facebook_url: '',
+      instagram_url: '',
+      twitter_url: '',
+      youtube_url: '',
+      website_url: '',
+
+      delivery_fee: fallbackFee,
+      min_order_amount: 100,
+      tax_percentage: 0,
+
+      custom_links: [],
+
+      announcement: defaultAnnouncement(),
+      show_menu_images: true,
+
+      delivery_fee_enabled: true,
+      delivery_fee_schedule: defaultDeliveryFeeSchedule(fallbackFee),
+    };
   });
 
   // New custom link draft
@@ -196,70 +299,102 @@ export default function SettingsPage() {
   // Announcement uploads
   const [uploadingAnnouncementImage, setUploadingAnnouncementImage] = useState(false);
 
+  const ann = settings.announcement || defaultAnnouncement();
+
+  const todayKey = useMemo(() => {
+    const tz = settings.delivery_fee_schedule?.timezone || 'Asia/Kolkata';
+    return dayKeyForNow(tz);
+  }, [settings.delivery_fee_schedule?.timezone]);
+
+  const todayRule = useMemo(() => {
+    const schedule = settings.delivery_fee_schedule || defaultDeliveryFeeSchedule(settings.delivery_fee);
+    const rule = schedule.weekly?.[todayKey] || { enabled: true, fee: settings.delivery_fee };
+    return { key: todayKey, ...rule };
+  }, [settings.delivery_fee_schedule, settings.delivery_fee, todayKey]);
+
   useEffect(() => {
     loadSettings();
+     
   }, []);
 
   const loadSettings = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase.from('app_settings').select('*').single();
+      const { data, error } = await supabase.from(TABLE).select('*').single();
 
       // No rows
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
+        const fallbackFee = asNum((data as any).delivery_fee, 40);
+
         const customLinksRaw = Array.isArray((data as any).custom_links) ? (data as any).custom_links : [];
         const annRaw = (data as any).announcement;
 
-        const ann: Announcement = {
+        const normalizedAnn: Announcement = {
           ...defaultAnnouncement(),
           ...(annRaw && typeof annRaw === 'object' ? annRaw : {}),
         };
 
+        const schedule = parseSchedule((data as any).delivery_fee_schedule, fallbackFee);
+
+        // Backward compatibility: if you later add a direct column, prefer it
+        const showToCustomerFromColumn = (data as any).delivery_fee_show_to_customer;
+        if (showToCustomerFromColumn !== undefined) {
+          schedule.ui = { ...(schedule.ui || {}), show_to_customer: asBool(showToCustomerFromColumn, true) };
+        }
+
         setSettings({
-          id: data.id,
-          app_name: data.app_name || 'PattiBytes Express',
-          support_email: normalizeMaybeMarkdownUrl(data.support_email || ''),
-          support_phone: data.support_phone || '',
-          business_address: data.business_address || '',
-          facebook_url: normalizeMaybeMarkdownUrl(data.facebook_url || ''),
-          instagram_url: normalizeMaybeMarkdownUrl(data.instagram_url || ''),
-          twitter_url: normalizeMaybeMarkdownUrl(data.twitter_url || ''),
-          youtube_url: normalizeMaybeMarkdownUrl(data.youtube_url || ''),
-          website_url: normalizeMaybeMarkdownUrl(data.website_url || ''),
-          delivery_fee: Number(data.delivery_fee ?? 40),
-          min_order_amount: Number(data.min_order_amount ?? 100),
-          tax_percentage: Number(data.tax_percentage ?? 5),
+          id: (data as any).id,
+          app_name: String((data as any).app_name || 'PattiBytes Express'),
+
+          support_email: normalizeMaybeMarkdownUrl((data as any).support_email || ''),
+          support_phone: String((data as any).support_phone || ''),
+          business_address: String((data as any).business_address || ''),
+
+          facebook_url: normalizeMaybeMarkdownUrl((data as any).facebook_url || ''),
+          instagram_url: normalizeMaybeMarkdownUrl((data as any).instagram_url || ''),
+          twitter_url: normalizeMaybeMarkdownUrl((data as any).twitter_url || ''),
+          youtube_url: normalizeMaybeMarkdownUrl((data as any).youtube_url || ''),
+          website_url: normalizeMaybeMarkdownUrl((data as any).website_url || ''),
+
+          delivery_fee: fallbackFee,
+          min_order_amount: asNum((data as any).min_order_amount, 100),
+          tax_percentage: asNum((data as any).tax_percentage, 0),
+
           custom_links: customLinksRaw
             .map((x: any) => ({
               id: String(x?.id || uid()),
               title: String(x?.title || ''),
               url: normalizeMaybeMarkdownUrl(x?.url || ''),
               logo_url: normalizeMaybeMarkdownUrl(x?.logo_url || ''),
-              enabled: Boolean(x?.enabled ?? true),
+              enabled: asBool(x?.enabled, true),
             }))
             .filter((x: CustomLink) => x.title || x.url || x.logo_url),
 
-          // ✅ NEW
           announcement: {
-            ...ann,
-            type: ann.type === 'popup' ? 'popup' : 'banner',
-            enabled: Boolean(ann.enabled),
-            title: String(ann.title || ''),
-            message: String(ann.message || ''),
-            image_url: String(ann.image_url || ''),
-            link_url: String(ann.link_url || ''),
-            start_at: String(ann.start_at || ''),
-            end_at: String(ann.end_at || ''),
-            dismissible: Boolean(ann.dismissible ?? true),
-            dismiss_key: String(ann.dismiss_key || 'v1'),
+            ...normalizedAnn,
+            type: normalizedAnn.type === 'popup' ? 'popup' : 'banner',
+            enabled: asBool(normalizedAnn.enabled, false),
+            title: String(normalizedAnn.title || ''),
+            message: String(normalizedAnn.message || ''),
+            image_url: String(normalizedAnn.image_url || ''),
+            link_url: String(normalizedAnn.link_url || ''),
+            start_at: String(normalizedAnn.start_at || ''),
+            end_at: String(normalizedAnn.end_at || ''),
+            dismissible: asBool((normalizedAnn as any).dismissible, true),
+            dismiss_key: String((normalizedAnn as any).dismiss_key || 'v1'),
           },
-          show_menu_images: Boolean((data as any).show_menu_images ?? true),
+
+          show_menu_images: asBool((data as any).show_menu_images, true),
+
+          delivery_fee_enabled: asBool((data as any).delivery_fee_enabled, true),
+          delivery_fee_schedule: schedule,
         });
       }
-    } catch (error) {
-      console.error('Failed to load settings:', error);
-      toast.error('Failed to load settings');
+    } catch (e: any) {
+      console.error('Failed to load settings:', e);
+      toast.error(e?.message || 'Failed to load settings');
     } finally {
       setLoading(false);
     }
@@ -287,6 +422,7 @@ export default function SettingsPage() {
       title: draft.title.trim(),
       url: normalizeHttpUrl(draft.url.trim()),
       logo_url: normalizeMaybeMarkdownUrl(draft.logo_url.trim()),
+      enabled: Boolean(draft.enabled),
     };
 
     setSettings((prev) => ({
@@ -365,29 +501,63 @@ export default function SettingsPage() {
     }
   };
 
+  const setAllDays = (enabled: boolean, fee?: number) => {
+    setSettings((p) => {
+      const schedule = p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee);
+      const nextWeekly: any = { ...schedule.weekly };
+      for (const { key } of DAYS) {
+        nextWeekly[key] = {
+          enabled,
+          fee: Math.max(0, fee !== undefined ? fee : asNum(nextWeekly[key]?.fee, p.delivery_fee)),
+        };
+      }
+      return {
+        ...p,
+        delivery_fee_schedule: { ...schedule, weekly: nextWeekly },
+      };
+    });
+  };
+
+  const copyDayToAll = (from: DayKey) => {
+    setSettings((p) => {
+      const schedule = p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee);
+      const src = schedule.weekly[from];
+      const nextWeekly: any = { ...schedule.weekly };
+      for (const { key } of DAYS) {
+        nextWeekly[key] = { ...src };
+      }
+      return { ...p, delivery_fee_schedule: { ...schedule, weekly: nextWeekly } };
+    });
+    toast.success('Copied to all days');
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      const ann = settings.announcement || defaultAnnouncement();
+      const schedule = settings.delivery_fee_schedule || defaultDeliveryFeeSchedule(settings.delivery_fee);
 
-      const payload: Settings = {
+      const payload: any = {
         ...settings,
-        
+
         support_email: normalizeMaybeMarkdownUrl(settings.support_email),
         facebook_url: normalizeMaybeMarkdownUrl(settings.facebook_url),
         instagram_url: normalizeMaybeMarkdownUrl(settings.instagram_url),
         twitter_url: normalizeMaybeMarkdownUrl(settings.twitter_url),
         youtube_url: normalizeMaybeMarkdownUrl(settings.youtube_url),
         website_url: normalizeMaybeMarkdownUrl(settings.website_url),
+
+        delivery_fee: Math.max(0, asNum(settings.delivery_fee, 0)),
+        min_order_amount: Math.max(0, asNum(settings.min_order_amount, 0)),
+        tax_percentage: Math.max(0, asNum(settings.tax_percentage, 0)),
+
         custom_links: (settings.custom_links || []).map((x) => ({
           ...x,
-          title: x.title.trim(),
-          url: normalizeHttpUrl(x.url.trim()),
-          logo_url: normalizeMaybeMarkdownUrl(x.logo_url),
+          title: String(x.title || '').trim(),
+          url: normalizeHttpUrl(String(x.url || '').trim()),
+          logo_url: normalizeMaybeMarkdownUrl(x.logo_url || ''),
           enabled: Boolean(x.enabled),
         })),
 
-        // ✅ NEW: keep announcement clean
         announcement: {
           enabled: Boolean(ann.enabled),
           type: ann.type === 'popup' ? 'popup' : 'banner',
@@ -400,37 +570,45 @@ export default function SettingsPage() {
           dismissible: Boolean(ann.dismissible),
           dismiss_key: String(ann.dismiss_key || 'v1').trim() || 'v1',
         },
-        show_menu_images: Boolean(settings.show_menu_images ?? true),
-        
+
+        show_menu_images: Boolean(settings.show_menu_images),
+
+        delivery_fee_enabled: Boolean(settings.delivery_fee_enabled),
+        delivery_fee_schedule: schedule,
+
+        // Optional direct column if you create it later; harmless if table has it, ignored if not used by RLS policy
+        delivery_fee_show_to_customer: asBool(schedule?.ui?.show_to_customer, true),
       };
 
-      const { error } = await supabase.from('app_settings').upsert(payload);
+      // Remove UI-only/unsafe keys if needed
+      // (Keeping payload id is fine for upsert; Supabase will update the single row by id)
+      const { error } = await supabase.from(TABLE).upsert(payload);
       if (error) throw error;
 
       toast.success('Settings saved successfully!');
-    } catch (error: any) {
-      console.error('Failed to save settings:', error);
-      toast.error(error.message || 'Failed to save settings');
+    } catch (e: any) {
+      console.error('Failed to save settings:', e);
+      toast.error(e?.message || 'Failed to save settings');
     } finally {
       setSaving(false);
     }
   };
 
-  const ann = settings.announcement || defaultAnnouncement();
-
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="max-w-5xl mx-auto px-4 py-8">
           <div className="bg-gray-200 h-96 rounded-lg animate-pulse" />
         </div>
       </DashboardLayout>
     );
   }
 
+  const showToCustomer = asBool(settings.delivery_fee_schedule?.ui?.show_to_customer, true);
+
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">App Settings</h1>
@@ -508,7 +686,237 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* ✅ NEW: Announcements */}
+          {/* Delivery Fee Controls */}
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Truck size={20} className="text-primary" />
+              Delivery Fee Controls
+            </h2>
+
+            <div className="rounded-2xl border bg-gradient-to-br from-orange-50 to-white p-4 space-y-4">
+              <div className="flex flex-wrap items-center gap-3 justify-between">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <label className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                    <input
+                      type="checkbox"
+                      checked={settings.delivery_fee_enabled}
+                      onChange={(e) => setSettings((p) => ({ ...p, delivery_fee_enabled: e.target.checked }))}
+                    />
+                    Enable delivery fee
+                  </label>
+
+                  <label className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                    <input
+                      type="checkbox"
+                      checked={showToCustomer}
+                      disabled={!settings.delivery_fee_enabled}
+                      onChange={(e) =>
+                        setSettings((p) => ({
+                          ...p,
+                          delivery_fee_schedule: {
+                            ...(p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee)),
+                            ui: {
+                              ...((p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee)).ui || {}),
+                              show_to_customer: e.target.checked,
+                            },
+                          },
+                        }))
+                      }
+                    />
+                    Show fee to customer
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs">
+                  {settings.delivery_fee_enabled ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-700 font-semibold">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Enabled
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-200 text-gray-700 font-semibold">
+                      <AlertTriangle className="w-4 h-4" />
+                      Disabled (fee will be 0)
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-3">
+                <NumberField
+                  label="Default fee (₹) (fallback)"
+                  value={settings.delivery_fee}
+                  onChange={(n) => {
+                    setSettings((p) => {
+                      const nextFee = Math.max(0, n);
+                      // If weekly fees were never set properly, keep them in sync lightly by not overriding.
+                      return { ...p, delivery_fee: nextFee };
+                    });
+                  }}
+                  min={0}
+                />
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <Settings2 className="w-4 h-4" />
+                    Timezone
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.delivery_fee_schedule?.timezone || 'Asia/Kolkata'}
+                    onChange={(e) =>
+                      setSettings((p) => ({
+                        ...p,
+                        delivery_fee_schedule: {
+                          ...(p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee)),
+                          timezone: e.target.value || 'Asia/Kolkata',
+                        },
+                      }))
+                    }
+                    placeholder="Asia/Kolkata"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="text-[11px] text-gray-600 mt-1">Used for day-wise automation.</p>
+                </div>
+
+                <div className="rounded-xl border bg-white p-3">
+                  <p className="text-xs text-gray-600 font-semibold">Today’s rule</p>
+                  <p className="text-sm font-extrabold text-gray-900 mt-1">
+                    {todayRule.key.toUpperCase()} • {todayRule.enabled ? `₹${todayRule.fee}` : 'Disabled'}
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    {showToCustomer ? 'Shown to customer' : 'Hidden (will be adjusted in totals)'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAllDays(true, settings.delivery_fee)}
+                  disabled={!settings.delivery_fee_enabled}
+                  className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Enable all days (use default fee)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAllDays(false, 0)}
+                  className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold inline-flex items-center gap-2"
+                >
+                  <EyeOff className="w-4 h-4" />
+                  Disable all days
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => copyDayToAll('mon')}
+                  disabled={!settings.delivery_fee_enabled}
+                  className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50"
+                  title="Copy Monday settings to all days"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy Monday to all
+                </button>
+              </div>
+
+              {/* Weekly schedule table */}
+              <div className="rounded-2xl border bg-white overflow-hidden">
+                <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
+                  <p className="font-bold text-gray-900 text-sm">Weekly schedule</p>
+                  <p className="text-xs text-gray-600">
+                    Day-wise fee is the base fee you’ll use in distance calculation (we’ll wire this in cart/checkout).
+                  </p>
+                </div>
+
+                <div className="divide-y">
+                  {DAYS.map(({ key, label }) => {
+                    const schedule = settings.delivery_fee_schedule || defaultDeliveryFeeSchedule(settings.delivery_fee);
+                    const rule = schedule.weekly?.[key] || { enabled: true, fee: settings.delivery_fee };
+
+                    return (
+                      <div key={key} className="px-4 py-3 grid grid-cols-12 gap-2 items-center">
+                        <div className="col-span-2 font-bold text-gray-900">{label}</div>
+
+                        <label className="col-span-4 flex items-center gap-2 text-sm text-gray-700 font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={!!rule.enabled}
+                            disabled={!settings.delivery_fee_enabled}
+                            onChange={(e) =>
+                              setSettings((p) => {
+                                const sch = p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee);
+                                return {
+                                  ...p,
+                                  delivery_fee_schedule: {
+                                    ...sch,
+                                    weekly: {
+                                      ...sch.weekly,
+                                      [key]: { ...sch.weekly[key], enabled: e.target.checked },
+                                    },
+                                  },
+                                };
+                              })
+                            }
+                          />
+                          Enabled
+                        </label>
+
+                        <div className="col-span-6">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              value={asNum(rule.fee, settings.delivery_fee)}
+                              disabled={!settings.delivery_fee_enabled || !rule.enabled}
+                              onChange={(e) => {
+                                const fee = Math.max(0, asNum(e.target.value, 0));
+                                setSettings((p) => {
+                                  const sch = p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee);
+                                  return {
+                                    ...p,
+                                    delivery_fee_schedule: {
+                                      ...sch,
+                                      weekly: { ...sch.weekly, [key]: { ...sch.weekly[key], fee } },
+                                    },
+                                  };
+                                });
+                              }}
+                              className="w-full px-3 py-2 border rounded-xl text-sm"
+                              placeholder="Fee"
+                            />
+                            <button
+                              type="button"
+                              className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold"
+                              onClick={() => copyDayToAll(key)}
+                              disabled={!settings.delivery_fee_enabled}
+                              title="Copy this day to all days"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          {key === 'sun' ? (
+                            <p className="text-[11px] text-gray-500 mt-1">Tip: Keep Sunday disabled for “free delivery day”.</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {!showToCustomer ? (
+                <div className="rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">
+                  Delivery fee will be charged but hidden from customers; in cart/checkout we’ll show a higher “Item Total”
+                  and omit the “Delivery Fee” line item.
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Announcements */}
           <div>
             <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
               <Megaphone size={20} className="text-primary" />
@@ -611,7 +1019,7 @@ export default function SettingsPage() {
                     </button>
                   </div>
                   <p className="text-[11px] text-gray-600 mt-1">
-                    Change this when you update announcement content (so users see it again).
+                    Change this when you update announcement content so users see it again.
                   </p>
                 </div>
               </div>
@@ -696,6 +1104,7 @@ export default function SettingsPage() {
               <div className="grid md:grid-cols-2 gap-3 items-start">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Image (optional)</label>
+
                   <div className="flex items-center gap-3">
                     <div className="w-16 h-16 rounded-xl border bg-white overflow-hidden flex items-center justify-center">
                       {ann.image_url ? (
@@ -744,9 +1153,7 @@ export default function SettingsPage() {
                   <div className="rounded-xl border bg-gray-900 text-white p-3">
                     <div className="font-extrabold">{ann.title || 'Announcement title'}</div>
                     <div className="text-sm text-white/90 mt-1">{ann.message || 'Announcement message...'}</div>
-                    {!!ann.link_url && (
-                      <div className="text-xs text-white/80 mt-2 underline break-all">{ann.link_url}</div>
-                    )}
+                    {!!ann.link_url && <div className="text-xs text-white/80 mt-2 underline break-all">{ann.link_url}</div>}
                   </div>
                 </div>
               </div>
@@ -865,11 +1272,7 @@ export default function SettingsPage() {
 
                   <div className="sm:col-span-2 flex items-center justify-between gap-3">
                     <label className="flex items-center gap-2 text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={draft.enabled}
-                        onChange={(e) => setDraft((p) => ({ ...p, enabled: e.target.checked }))}
-                      />
+                      <input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft((p) => ({ ...p, enabled: e.target.checked }))} />
                       Enabled
                     </label>
 
@@ -887,17 +1290,15 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Existing links list */}
+            {/* Existing links */}
             <div className="mt-4 space-y-3">
-              {(settings.custom_links || []).length === 0 ? (
+              {settings.custom_links.length === 0 ? (
                 <div className="text-sm text-gray-600 bg-gray-50 border rounded-2xl p-4">No custom links yet.</div>
               ) : (
-                (settings.custom_links || []).map((l, idx) => (
+                settings.custom_links.map((l, idx) => (
                   <div
                     key={l.id}
-                    className={`border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between ${
-                      l.enabled ? 'bg-white' : 'bg-gray-50'
-                    }`}
+                    className={`border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between ${l.enabled ? 'bg-white' : 'bg-gray-50'}`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-12 h-12 rounded-xl border bg-white overflow-hidden flex items-center justify-center shrink-0">
@@ -946,7 +1347,7 @@ export default function SettingsPage() {
                       <button
                         type="button"
                         onClick={() => moveCustomLink(l.id, 'down')}
-                        disabled={idx === (settings.custom_links || []).length - 1}
+                        disabled={idx === settings.custom_links.length - 1}
                         className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50"
                       >
                         <ArrowDown size={16} />
@@ -968,7 +1369,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* ✅ Optional: Menu images toggle */}
+          {/* Performance */}
           <div>
             <h2 className="text-xl font-bold text-gray-900 mb-4">Performance</h2>
             <div className="rounded-2xl border bg-white p-4">
@@ -989,26 +1390,27 @@ export default function SettingsPage() {
           {/* Order Settings */}
           <div>
             <h2 className="text-xl font-bold text-gray-900 mb-4">Order Settings</h2>
+
             <div className="grid md:grid-cols-3 gap-4">
-              <NumberField
-                label="Delivery Fee (₹)"
-                value={settings.delivery_fee}
-                onChange={(n) => setSettings({ ...settings, delivery_fee: n })}
-                min={0}
-              />
               <NumberField
                 label="Min Order Amount (₹)"
                 value={settings.min_order_amount}
-                onChange={(n) => setSettings({ ...settings, min_order_amount: n })}
+                onChange={(n) => setSettings({ ...settings, min_order_amount: Math.max(0, n) })}
                 min={0}
               />
               <NumberField
                 label="Tax Percentage (%)"
                 value={settings.tax_percentage}
-                onChange={(n) => setSettings({ ...settings, tax_percentage: n })}
+                onChange={(n) => setSettings({ ...settings, tax_percentage: Math.max(0, n) })}
                 min={0}
                 max={100}
               />
+              <div className="rounded-xl border bg-gray-50 p-4">
+                <p className="text-xs text-gray-600 font-semibold">Note</p>
+                <p className="text-sm text-gray-800 mt-1">
+                  Delivery fee amount here is the default/fallback. When enabled, your cart/checkout will compute distance by road first and then apply fee rules.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -1023,6 +1425,13 @@ export default function SettingsPage() {
               {saving ? 'Saving...' : 'Save Settings'}
             </button>
           </div>
+
+          <div className="text-xs text-gray-500">
+            <p className="flex items-center gap-2">
+              <Truck className="w-4 h-4" />
+              Current: delivery is {settings.delivery_fee_enabled ? 'enabled' : 'disabled'}, today({todayKey}) is {todayRule.enabled ? `₹${todayRule.fee}` : 'disabled'}.
+            </p>
+          </div>
         </div>
       </div>
     </DashboardLayout>
@@ -1036,7 +1445,7 @@ function Field({
   onChange,
   placeholder,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string;
   onChange: (v: string) => void;
@@ -1077,7 +1486,7 @@ function NumberField({
       <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
       <input
         type="number"
-        value={value}
+        value={Number.isFinite(value) ? value : 0}
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary"
         min={min}

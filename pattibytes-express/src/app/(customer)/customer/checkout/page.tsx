@@ -10,6 +10,7 @@ import { locationService, type SavedAddress } from '@/services/location';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import { cartService } from '@/services/cart';
+import { appSettingsService } from '@/services/appSettings';
 import { calculateDeliveryFeeByDistance, getRoadDistanceKmViaApi } from '@/services/location';
 
 import {
@@ -65,6 +66,17 @@ type LiveLocation = {
   accuracy?: number;
   updated_at: string;
 };
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -179,6 +191,10 @@ export default function CheckoutPage() {
   }, [gstEnabled, gstPct, taxableBase]);
 
   const finalTotal = useMemo(() => round2(taxableBase + deliveryFee + tax), [taxableBase, deliveryFee, tax]);
+// near other state:
+ 
+const [showDeliveryFeeRow, setShowDeliveryFeeRow] = useState(true);
+const policyRef = useRef<{ enabled: boolean; showToCustomer: boolean; baseFee: number } | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -198,7 +214,7 @@ export default function CheckoutPage() {
   setLoading(true);
 
   try {
-    const stored = sessionStorage.getItem('checkoutdata');
+    const stored = sessionStorage.getItem('checkout_data');
 
     let checkout: CheckoutStored | null = null;
 
@@ -210,6 +226,9 @@ export default function CheckoutPage() {
         router.push('/customer/cart');
         return;
       }
+const policy = await appSettingsService.getDeliveryPolicyNow();
+policyRef.current = policy;
+setShowDeliveryFeeRow(!!policy.showToCustomer);
 
       const rebuilt: CheckoutStored = {
         cart: cart as any,
@@ -217,7 +236,7 @@ export default function CheckoutPage() {
         promoDiscount: 0,
       };
 
-      sessionStorage.setItem('checkoutdata', JSON.stringify(rebuilt));
+      sessionStorage.setItem('checkout_data', JSON.stringify(rebuilt));
       checkout = rebuilt;
     } else {
       checkout = JSON.parse(stored) as CheckoutStored;
@@ -229,17 +248,16 @@ export default function CheckoutPage() {
     if (!merchantId) throw new Error('Missing merchant id in checkout data');
 
     const { data: m, error } = await supabase
-      .from('merchants')
-      .select(
-        'id,businessname:business_name,phone,address,latitude,longitude,gstenabled:gst_enabled,gstpercentage:gst_percentage'
-      )
-      .eq('id', merchantId)
-      .maybeSingle();
+  .from('merchants')
+  .select('id,business_name,phone,address,latitude,longitude,gst_enabled,gst_percentage')
+  .eq('id', merchantId)
+  .maybeSingle();
 
-    if (error) throw error;
-    if (!m) throw new Error('Merchant not found / not accessible (RLS?)');
+if (error) throw error;
+if (!m) throw new Error('Merchant not found / not accessible (RLS?)');
 
-    setMerchant(m as any);
+setMerchant(m as any);
+
 
     const addresses = await locationService.getSavedAddresses(user!.id);
     setSavedAddresses(addresses);
@@ -266,24 +284,35 @@ function getMerchantId(cart: any): string | null {
 }
 
   const computeDistanceAndFee = async (addr: SavedAddress, merchantId?: string) => {
+    
+  const policy = policyRef.current ?? (await appSettingsService.getDeliveryPolicyNow());
+  policyRef.current = policy;
+  setShowDeliveryFeeRow(!!policy.showToCustomer);
+
+  if (!policy.enabled) {
+    setDeliveryDistance(0);
+    setDeliveryFee(0);
+    setDeliveryBreakdown('Delivery fee disabled');
+    return;
+  }
   let m = merchant;
 
 if ((!m || m.latitude == null || m.longitude == null) && merchantId) {
-  const { data: m2, error: e2 } = await supabase
-    .from('merchants')
-    .select('id,businessname:business_name,phone,address,latitude,longitude,gstenabled:gst_enabled,gstpercentage:gst_percentage')
-    .eq('id', merchantId)
-    .maybeSingle();
+ const { data: m2, error: e2 } = await supabase
+  .from('merchants')
+  .select('id,business_name,phone,address,latitude,longitude,gst_enabled,gst_percentage')
+  .eq('id', merchantId)
+  .maybeSingle();
 
-  if (e2) throw e2;
-  if (m2) {
-    m = m2 as any;
-    setMerchant(m2 as any);
-  }
+if (e2) throw e2;
+if (m2) {
+  m = m2 as any;
+  setMerchant(m2 as any);
+}
 }
 
 
-  const mLat = Number((m as any)?.latitude);
+ const mLat = Number((m as any)?.latitude);
   const mLon = Number((m as any)?.longitude);
   const aLat = Number((addr as any)?.latitude);
   const aLon = Number((addr as any)?.longitude);
@@ -295,24 +324,37 @@ if ((!m || m.latitude == null || m.longitude == null) && merchantId) {
     return;
   }
 
- // ROAD distance first
-try {
-  const distanceKm = await getRoadDistanceKmViaApi(mLat, mLon, aLat, aLon);
-  const quote = calculateDeliveryFeeByDistance(distanceKm);
+  try {
+    const distanceKm = await getRoadDistanceKmViaApi(mLat, mLon, aLat, aLon);
+    const quote = calculateDeliveryFeeByDistance(distanceKm, {
+      enabled: policy.enabled,
+      baseFee: policy.baseFee, // <-- from app_settings (delivery_fee or schedule)
+      baseKm: 3,
+      perKmBeyondBase: 15,
+      rounding: 'ceil',
+    });
+
+    setDeliveryDistance(quote.distanceKm);
+    setDeliveryFee(quote.fee);
+    setDeliveryBreakdown(`Road distance: ${quote.breakdown}`);
+    return;
+  } catch (e: any) {
+    console.error('Road distance failed', e);
+    // fallback aerial (see next section)
+  }
+
+const aerialKm = haversineKm(mLat, mLon, aLat, aLon);
+  const quote = calculateDeliveryFeeByDistance(aerialKm, {
+    enabled: policy.enabled,
+    baseFee: policy.baseFee,
+    baseKm: 3,
+    perKmBeyondBase: 15,
+    rounding: 'ceil',
+  });
 
   setDeliveryDistance(quote.distanceKm);
   setDeliveryFee(quote.fee);
-  setDeliveryBreakdown(`Road mean distance: ${quote.breakdown}`);
-  return;
-} catch (e: any) {
-  console.error('Road distance failed:', e);
-}
-
-// fallback (aerial)
-const feeData = deliveryFeeService.calculateDeliveryFeeFromMerchant(mLat, mLon, aLat, aLon);
-setDeliveryDistance(feeData.distance);
-setDeliveryFee(feeData.fee);
-setDeliveryBreakdown(`Aerial distance: ${feeData.breakdown}`);
+  setDeliveryBreakdown(`Aerial distance: ${quote.breakdown}`);
 };
 
 
@@ -351,7 +393,7 @@ setDeliveryBreakdown(`Aerial distance: ${feeData.breakdown}`);
 
     try {
       const saved = await locationService.saveAddress({
-        userId: user.id,
+        user_id: user.id,       // or customer_id: user.id
         label: newAddress.label,
         address: newAddress.address,
         latitude: newAddress.latitude,
@@ -936,10 +978,22 @@ cartService.clearCart(); // removes pattibytes_cart and dispatches cartUpdated
                   </div>
                 )}
 
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Delivery Fee</span>
-                  <span className="font-semibold">₹{deliveryFee.toFixed(2)}</span>
-                </div>
+             {showDeliveryFeeRow && (
+  <>
+    <div className="flex justify-between">
+      <span className="text-gray-600">Delivery Fee</span>
+      <span className="font-semibold">₹{deliveryFee.toFixed(2)}</span>
+    </div>
+
+    {deliveryBreakdown && (
+      <p className="text-xs text-gray-500">
+        {deliveryDistance > 0 ? `${deliveryDistance.toFixed(2)} km • ` : ''}
+        {deliveryBreakdown}
+      </p>
+    )}
+  </>
+)}
+
 
                 <p className="text-xs text-gray-500">
                   {deliveryDistance > 0 ? `${deliveryDistance.toFixed(2)} km • ` : ''}
