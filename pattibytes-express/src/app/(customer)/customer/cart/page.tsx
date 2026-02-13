@@ -1,19 +1,25 @@
-
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { toast } from 'react-toastify';
 import { supabase } from '@/lib/supabase';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
-import { cartService } from '@/services/cart';
-import { deliveryFeeService } from '@/services/deliveryFee';
-import { promoCodeService, type PromoCode } from '@/services/promoCodes';
-import { locationService } from '@/services/location';
-import { calculateDeliveryFeeByDistance, getRoadDistanceKmViaApi } from '@/services/location';
+
 import DashboardLayout from '@/components/layouts/DashboardLayout';
-import Image from 'next/image';
+import { cartService } from '@/services/cart';
+import { promoCodeService, type PromoCode } from '@/services/promoCodes';
+import { appSettingsService } from '@/services/appSettings';
+import {
+  locationService,
+  type SavedAddress,
+  calculateDeliveryFeeByDistance,
+  getRoadDistanceKmViaApi,
+} from '@/services/location'; // these are in your services bundle [file:2]
+
 import {
   ShoppingCart,
   Trash2,
@@ -29,12 +35,17 @@ import {
   X,
   Check,
 } from 'lucide-react';
-import { toast } from 'react-toastify';
 
 type MerchantTaxMini = {
   id: string;
   gstenabled: boolean | null;
   gstpercentage: number | null;
+};
+
+type MerchantGeoMini = {
+  id: string;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export default function CartPage() {
@@ -55,138 +66,142 @@ export default function CartPage() {
   const [applyingPromo, setApplyingPromo] = useState(false);
   const [showPromoList, setShowPromoList] = useState(false);
   const [availablePromos, setAvailablePromos] = useState<PromoCode[]>([]);
-const [merchantGeo, setMerchantGeo] = useState<MerchantGeoMini | null>(null);
 
+  const [merchantGeo, setMerchantGeo] = useState<MerchantGeoMini | null>(null);
+  const [showDeliveryFee, setShowDeliveryFee] = useState(true);
   const [merchantTax, setMerchantTax] = useState<MerchantTaxMini | null>(null);
-type MerchantGeoMini = {
-  id: string;
-  latitude: number | null;
-  longitude: number | null;
-};
-useEffect(() => {
-  async function loadMerchantGeo() {
-    if (!cart?.merchant_id) {
-      setMerchantGeo(null);
-      return;
-    }
 
-    const { data, error } = await supabase
-      .from('merchants')
-      .select('id, latitude, longitude')
-      .eq('id', cart.merchant_id)
-      .maybeSingle();
+  const [defaultAddr, setDefaultAddr] = useState<SavedAddress | null>(null);
 
-    if (error) {
-      console.error('Failed to load merchant geo:', error);
-      setMerchantGeo(null);
-      return;
-    }
-
-    setMerchantGeo((data as MerchantGeoMini) ?? null);
-  }
-
-  loadMerchantGeo();
-}, [cart?.merchant_id]);
-
-  // 1) Auth gate + initial loads
+  // Auth gate + initial loads (ONLY promos here)
   useEffect(() => {
     if (!user) {
       router.push('/login');
       return;
     }
-
-    loadDeliveryFee();
     loadAvailablePromos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [user, router]);
 
-  // 2) Load merchant GST settings whenever merchant changes
+  // Merchant geo
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    let cancelled = false;
+    (async () => {
+      if (!cart?.merchant_id) {
+        setMerchantGeo(null);
+        return;
+      }
+      const { data, error } = await supabase
+        .from('merchants')
+        .select('id, latitude, longitude')
+        .eq('id', cart.merchant_id)
+        .maybeSingle();
 
-    async function loadMerchantTax() {
+      if (error) {
+        console.error('Failed to load merchant geo:', error);
+        setMerchantGeo(null);
+        return;
+      }
+      setMerchantGeo((data as MerchantGeoMini) ?? null);
+    })();
+  }, [cart?.merchant_id]);
+
+  // Merchant GST
+  useEffect(() => {
+    (async () => {
       if (!cart?.merchant_id) {
         setMerchantTax(null);
         return;
       }
 
-     const { data, error } = await supabase
-  .from('merchants')
-  .select('id, gstenabled:gst_enabled, gstpercentage:gst_percentage')
-  .eq('id', cart.merchant_id)
-  .maybeSingle();
+      const { data, error } = await supabase
+        .from('merchants')
+        .select('id, gstenabled:gst_enabled, gstpercentage:gst_percentage')
+        .eq('id', cart.merchant_id)
+        .maybeSingle();
 
-if (error) {
-  console.error('Failed to load merchant tax config:', error);
-  setMerchantTax(null);
-  return;
-}
-
-setMerchantTax((data as MerchantTaxMini) ?? null);
-
-    }
-
-    loadMerchantTax();
-
-    return () => {
-      cancelled = true;
-    };
+      if (error) {
+        console.error('Failed to load merchant tax config:', error);
+        setMerchantTax(null);
+        return;
+      }
+      setMerchantTax((data as MerchantTaxMini) ?? null);
+    })();
   }, [cart?.merchant_id]);
 
-  const loadDeliveryFee = async () => {
-  try {
-    await deliveryFeeService.loadConfig();
+  // Default address
+  useEffect(() => {
+    if (!user?.id) return;
 
-    // 1) Get customer address (default or first)
-    const addresses = await locationService.getSavedAddresses(user!.id);
-    const addr = (addresses?.find((a) => a.isdefault) || addresses?.[0]) ?? null;
+    (async () => {
+      try {
+        const a = await locationService.getDefaultAddress(user.id);
+        setDefaultAddr(a);
+      } catch {
+        setDefaultAddr(null);
+      }
+    })();
+  }, [user?.id]);
 
-    if (!addr?.latitude || !addr?.longitude) {
+
+    const loadDeliveryFee = useCallback(async () => {
+    try {
+      const policy = await appSettingsService.getDeliveryPolicyNow();
+      setShowDeliveryFee(policy.showToCustomer);
+
+      if (!policy.enabled) {
+        setDeliveryFee(0);
+        setDeliveryDistance(0);
+        setDeliveryBreakdown('Delivery disabled');
+        return;
+      }
+
+      if (!defaultAddr) {
+        setDeliveryFee(0);
+        setDeliveryDistance(0);
+        setDeliveryBreakdown('No default address set');
+        return;
+      }
+
+      const mLat = Number(merchantGeo?.latitude);
+      const mLon = Number(merchantGeo?.longitude);
+      const aLat = Number(defaultAddr.latitude);
+      const aLon = Number(defaultAddr.longitude);
+
+      if (![mLat, mLon, aLat, aLon].every(Number.isFinite)) {
+        setDeliveryFee(0);
+        setDeliveryDistance(0);
+        setDeliveryBreakdown('Merchant/customer location missing');
+        return;
+      }
+
+      const roadKm = await getRoadDistanceKmViaApi(mLat, mLon, aLat, aLon);
+      const quote = calculateDeliveryFeeByDistance(roadKm, {
+        enabled: policy.enabled,
+        baseFee: policy.baseFee,
+        baseKm: 3,
+        perKmBeyondBase: 15,
+        rounding: 'ceil',
+      });
+
+      setDeliveryFee(quote.fee);
+      setDeliveryDistance(quote.distanceKm);
+      setDeliveryBreakdown(`Road distance: ${quote.breakdown}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (e: any) {
       setDeliveryFee(0);
       setDeliveryDistance(0);
-      setDeliveryBreakdown('No delivery address found');
-      return;
+      setDeliveryBreakdown(e?.message ?? 'Delivery fee calc failed');
     }
+  }, [defaultAddr, merchantGeo, setDeliveryFee, setDeliveryDistance]);
 
-    // 2) Get merchant lat/lon (must exist)
-    const mLat = Number(merchantGeo?.latitude);
-    const mLon = Number(merchantGeo?.longitude);
-    const aLat = Number(addr.latitude);
-    const aLon = Number(addr.longitude);
+  useEffect(() => {
+    if (!user?.id) return;
+    if (!cart?.merchant_id) return;
+    if (!merchantGeo) return;
+    if (!defaultAddr) return;
 
-    if (![mLat, mLon, aLat, aLon].every(Number.isFinite)) {
-      setDeliveryFee(0);
-      setDeliveryDistance(0);
-      setDeliveryBreakdown('Merchant location missing');
-      return;
-    }
-
-    // 3) Road mean distance via your API route
-    const roadKm = await getRoadDistanceKmViaApi(mLat, mLon, aLat, aLon);
-
-    // 4) Fee rule (<=3km => 50, else => 15/km from 1km)
-    const quote = calculateDeliveryFeeByDistance(roadKm);
-
-    setDeliveryFee(quote.fee);
-    setDeliveryDistance(quote.distanceKm);
-    setDeliveryBreakdown(`Road mean distance: ${quote.breakdown}`);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    console.error('Failed to calculate road delivery fee:', error);
-    setDeliveryFee(0);
-    setDeliveryDistance(0);
-    setDeliveryBreakdown(error?.message || 'Road distance failed');
-  }
-};
-useEffect(() => {
-  if (!user) return;
-  if (!cart?.merchant_id) return;
-  if (!merchantGeo) return;
-
-  loadDeliveryFee();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [user?.id, cart?.merchant_id, merchantGeo?.latitude, merchantGeo?.longitude, cart?.subtotal]);
+    loadDeliveryFee();
+  }, [user?.id, cart?.merchant_id, cart?.subtotal, merchantGeo, defaultAddr, loadDeliveryFee]);
 
 
   const loadAvailablePromos = async () => {
@@ -361,6 +376,18 @@ useEffect(() => {
       </DashboardLayout>
     );
   }
+function getSafeImageSrc(url?: string | null) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    // Block google search pages (not an image) + anything non-http(s)
+    if (!['http:', 'https:'].includes(u.protocol)) return null;
+    if (u.hostname === 'www.google.com') return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
 
   const itemDiscountSavings = cart.items.reduce((total: number, item) => {
     if (item.discount_percentage) {
@@ -420,19 +447,21 @@ useEffect(() => {
                   const itemPrice = calculateItemPrice(item.price, item.discount_percentage);
                   const totalItemPrice = itemPrice * item.quantity;
                   const hasDiscount = item.discount_percentage && item.discount_percentage > 0;
-
+const img = getSafeImageSrc(item.image_url);
                   return (
                     <div key={item.id} className="p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex gap-4">
                         {item.image_url ? (
                           <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
-                            <Image
-                              src={item.image_url}
-                              alt={item.name}
-                              fill
-                              sizes="96px"
-                              className="object-cover"
-                            />
+                          {img ? (
+  <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+    <Image src={img} alt={item.name} fill sizes="96px" className="object-cover" />
+  </div>
+) : (
+  <div className="w-20 h-20 md:w-24 md:h-24 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+    <ShoppingCart className="w-8 h-8 text-gray-400" />
+  </div>
+)}
                           </div>
                         ) : (
                           <div className="w-20 h-20 md:w-24 md:h-24 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
@@ -646,16 +675,19 @@ useEffect(() => {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-gray-600" />
-                      <span className="text-gray-600">Delivery Fee</span>
-                    </div>
-                    <span className="font-semibold text-gray-900">₹{deliveryFee.toFixed(2)}</span>
-                  </div>
-                  {deliveryBreakdown && (
-                    <p className="text-xs text-gray-500 pl-4">{deliveryBreakdown}</p>
-                  )}
+                 {showDeliveryFee && (
+  <>
+    <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center gap-1">
+        <MapPin className="w-3 h-3 text-gray-600" />
+        <span className="text-gray-600">Delivery Fee</span>
+      </div>
+      <span className="font-semibold text-gray-900">₹{deliveryFee.toFixed(2)}</span>
+    </div>
+    {deliveryBreakdown && <p className="text-xs text-gray-500 pl-4">{deliveryBreakdown}</p>}
+  </>
+)}
+
 
                   <div className="flex items-center justify-between text-sm">
                    <span className="text-gray-600">
