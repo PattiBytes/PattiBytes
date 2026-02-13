@@ -995,11 +995,6 @@ cartService.clearCart(); // removes pattibytes_cart and dispatches cartUpdated
 )}
 
 
-                <p className="text-xs text-gray-500">
-                  {deliveryDistance > 0 ? `${deliveryDistance.toFixed(2)} km • ` : ''}
-                  {deliveryBreakdown}
-                </p>
-
                 <div className="flex justify-between">
                   <span className="text-gray-600">
                     GST {gstEnabled && gstPct > 0 ? `(${gstPct}%)` : '(0%)'}

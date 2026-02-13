@@ -20,14 +20,13 @@ export type AppSettingsRow = {
   tax_percentage: number | string | null;
 
   custom_links: unknown | null;
-
   customer_search_radius_km: number | string | null;
 
   announcement: unknown | null;
   show_menu_images: boolean | string | null;
 
   delivery_fee_enabled: boolean | string | null;
-  delivery_fee_schedule: unknown | null;
+  delivery_fee_schedule: unknown | null; // keep json/jsonb flexible
   delivery_fee_show_to_customer: boolean | string | null;
 
   created_at: string | null;
@@ -50,7 +49,6 @@ function asBool(v: unknown, fallback: boolean): boolean {
   return fallback;
 }
 
-// Supabase may return json/jsonb already parsed, but sometimes you may have strings
 function asJson<T = unknown>(v: unknown, fallback: T): T {
   if (v == null) return fallback;
   if (typeof v === 'string') {
@@ -63,10 +61,6 @@ function asJson<T = unknown>(v: unknown, fallback: T): T {
   return v as T;
 }
 
-/**
- * Your app has one latest config row (you insert/update it).
- * maybeSingle() prevents 406 when table is empty.
- */
 export async function getAppConfigRow(): Promise<AppSettingsRow | null> {
   const { data, error } = await supabase
     .from('app_settings')
@@ -106,14 +100,10 @@ export async function getAppConfigRow(): Promise<AppSettingsRow | null> {
 
 export async function getCustomerSearchRadiusKm(): Promise<number> {
   const row = await getAppConfigRow();
-  const n = asNumber(row?.customer_search_radius_km, 25); // your DB example uses 25
+  const n = asNumber(row?.customer_search_radius_km, 25);
   return n > 0 ? n : 25;
 }
 
-/**
- * Brand/social links are direct columns in your table.
- * (Also supports custom_links JSON array if you want to use it in UI.)
- */
 export async function getBrandLinks(): Promise<{
   app_name: string;
   facebook_url: string;
@@ -124,7 +114,6 @@ export async function getBrandLinks(): Promise<{
   custom_links: any[];
 }> {
   const row = await getAppConfigRow();
-
   return {
     app_name: String(row?.app_name ?? ''),
     facebook_url: String(row?.facebook_url ?? ''),
@@ -136,14 +125,17 @@ export async function getBrandLinks(): Promise<{
   };
 }
 
-/**
- * Used in paste.txt CartPage: appSettingsService.getDeliveryPolicyNow()
- */
 export type DeliveryPolicy = {
   enabled: boolean;
   showToCustomer: boolean;
-  baseFee: number; // your fee calculator expects baseFee
-  schedule: any; // keep as any unless you want strict typing for weekly structure
+
+  // Your rule (fixed):
+  baseKm: number;              // 3
+  baseFee: number;             // from settings
+  perKm: number;               // 15
+  rounding: 'ceil' | 'exact';  // 'ceil' (first km after 3km starts charging)
+
+  schedule: any;
 };
 
 export async function getDeliveryPolicyNow(): Promise<DeliveryPolicy> {
@@ -152,20 +144,21 @@ export async function getDeliveryPolicyNow(): Promise<DeliveryPolicy> {
   const enabled = asBool(row?.delivery_fee_enabled, true);
   const showToCustomer = asBool(row?.delivery_fee_show_to_customer, true);
 
-  // If you want schedule-based fees later, read from delivery_fee_schedule JSON
   const schedule = asJson<any>(row?.delivery_fee_schedule, null);
 
-  // Fallback: if schedule exists and contains ui.base_fee you can use it,
-  // otherwise fall back to delivery_fee column, else 0.
+  // Fixed rule defaults
+  const baseKm = 3;
+  const perKm = 15;
+  const rounding: 'ceil' | 'exact' = 'ceil';
+
+  // baseFee from schedule.ui.base_fee first, else delivery_fee column
   const baseFee =
     schedule && typeof schedule === 'object'
       ? asNumber((schedule as any)?.ui?.base_fee, asNumber(row?.delivery_fee, 0))
       : asNumber(row?.delivery_fee, 0);
 
-  return { enabled, showToCustomer, baseFee, schedule };
+  return { enabled, showToCustomer, baseKm, baseFee, perKm, rounding, schedule };
 }
-
-
 
 export const appSettingsService = {
   getAppConfigRow,
