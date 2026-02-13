@@ -1,4 +1,3 @@
-// RestaurantCard.tsx
 'use client';
 
 import Image from 'next/image';
@@ -6,6 +5,7 @@ import { Clock, MapPin, Star, BadgePercent } from 'lucide-react';
 import type { Merchant } from './types';
 import { formatCurrencyINR, parseCuisineList } from './utils';
 import type { OfferBadge } from './offers';
+import { formatOfferSubLabel } from './offers';
 
 export default function RestaurantCard({
   restaurant,
@@ -28,7 +28,9 @@ export default function RestaurantCard({
   const totalReviews = Number(restaurant.total_reviews || 0);
 
   const label = String(offer?.label || '').trim();
-  const subLabel = String(offer?.subLabel || '').trim();
+
+  // NEW: if offer has item names, auto-build sublabel
+  const computedSubLabel = String(formatOfferSubLabel(offer) || offer?.subLabel || '').trim();
 
   return (
     <article
@@ -53,7 +55,6 @@ export default function RestaurantCard({
           <div className="w-full h-full bg-gradient-to-br from-orange-400 to-pink-500" />
         )}
 
-        {/* Offer badge (now safe: button inside article/div, not inside button) */}
         {!!label && (
           <div className="absolute top-3 left-3">
             <button
@@ -75,12 +76,12 @@ export default function RestaurantCard({
               )}
             </button>
 
-            {!!subLabel && (
+            {!!computedSubLabel && (
               <div
-                title={subLabel}
+                title={computedSubLabel}
                 className="mt-1 text-[11px] font-bold text-white rounded-full px-3 py-1 w-fit max-w-[260px] truncate bg-black/55"
               >
-                {subLabel}
+                {computedSubLabel}
               </div>
             )}
           </div>
@@ -107,9 +108,7 @@ export default function RestaurantCard({
           {restaurant.business_name}
         </h3>
 
-        {!!restaurant.address && (
-          <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">{restaurant.address}</p>
-        )}
+        {!!restaurant.address && <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">{restaurant.address}</p>}
 
         {cuisines.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-3">
