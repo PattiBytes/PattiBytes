@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
 
@@ -627,28 +626,54 @@ class PromoCodeService {
   }
 
   // -------- Customer / active promos --------
- async getActivePromoCodes(params?: { merchantId?: string | null }) {
-  let qb = supabase
-    .from('promo_codes')
-    .select('id,code,description,discount_type,discount_value,min_order_amount,max_discount_amount,usage_limit,used_count,max_uses_per_user,is_active,valid_from,valid_until,valid_days,start_time,end_time,scope,merchant_id,created_by,deal_type,deal_json,auto_apply,priority')
-    .eq('is_active', true)
-    .order('priority', { ascending: false })
-    .order('valid_until', { ascending: true });
+  async getActivePromoCodes(params?: {
+    merchantId?: string | null;
+  }): Promise<PromoCodeRow[]> {
+    const nowIso = new Date().toISOString();
 
-  if (params?.merchantId) {
-    qb = qb.or(`merchant_id.eq.${params.merchantId},merchant_id.is.null`);
+    let qb = supabase
+      .from('promo_codes')
+      .select(
+        [
+          'id',
+          'code',
+          'description',
+          'discount_type',
+          'discount_value',
+          'min_order_amount',
+          'max_discount_amount',
+          'usage_limit',
+          'used_count',
+          'max_uses_per_user',
+          'is_active',
+          'valid_from',
+          'valid_until',
+          'valid_days',
+          'start_time',
+          'end_time',
+          'scope',
+          'merchant_id',
+          'created_by',
+          'deal_type',
+          'deal_json',
+          'auto_apply',
+          'priority',
+        ].join(',')
+      )
+      .eq('is_active', true)
+      .or(`valid_from.is.null,valid_from.lte.${nowIso}`)
+      .or(`valid_until.is.null,valid_until.gte.${nowIso}`)
+      .order('priority', { ascending: false })
+      .order('valid_until', { ascending: true });
+
+    if (params?.merchantId) {
+      qb = qb.or(`merchant_id.eq.${params.merchantId},merchant_id.is.null`);
+    }
+
+    const { data, error } = await qb;
+    if (error) throw error;
+    return (data ?? []) as unknown as PromoCodeRow[];
   }
-
-  const { data, error } = await qb;
-  if (error) throw error;
-
-  // filter in JS for correctness (including overnight times)
-  const now = new Date();
-  return (data ?? []).filter((p: any) => {
-    // reuse your existing validation logic (valid_from, valid_until, valid_days, start_time/end_time)
-    return true; // implement isPromoActiveNowSnakeCase(p, now)
-  });
-}
 
   // -------- Customer / validation (cart-discount only) --------
   async validatePromoCode(
