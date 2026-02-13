@@ -278,18 +278,6 @@ export default function RestaurantDetailPage() {
     });
     return m;
   }, [allMenuItems]);
-const formatErr = (err: any) => {
-  if (!err) return { message: 'Unknown error', raw: err };
-  if (err instanceof Error) return { message: err.message, stack: err.stack };
-  return {
-    message: err?.message ?? String(err),
-    code: err?.code,
-    details: err?.details,
-    hint: err?.hint,
-    status: err?.status,
-    raw: err,
-  };
-};
 
   const loadOffers = async () => {
     if (!restaurantId) return;
@@ -301,11 +289,12 @@ const formatErr = (err: any) => {
       // 1) Fetch active promos for this merchant + global (merchantid is null)
       // NOTE: Using column names used in your existing promo service snippets: promocodes.merchantid, isactive, etc. [file:1]
       const { data: promoRows, error: promoErr } = await supabase
-        .from('promo_codes')
-.select('id,code,description,discount_type,discount_value,min_order_amount,max_discount_amount,usage_limit,used_count,is_active,valid_from,valid_until,valid_days,start_time,end_time,scope,merchant_id,deal_type,deal_json,auto_apply,priority')
-.eq('is_active', true)
-.or(`merchant_id.eq.${restaurantId},merchant_id.is.null`)
-
+        .from('promocodes')
+        .select(
+          'id,code,description,discounttype,discountvalue,minorderamount,maxdiscountamount,usagelimit,usedcount,isactive,validfrom,validuntil,validdays,starttime,endtime,scope,merchantid,menuitemids,categoryids,dealtype,dealjson,autoapply,priority'
+        )
+        .eq('isactive', true)
+        .or(`merchantid.eq.${restaurantId},merchantid.is.null`);
 
       if (promoErr) throw promoErr;
 
@@ -323,10 +312,9 @@ const formatErr = (err: any) => {
       let bxgyTargetsByPromo = new Map<string, BxgyTargetRow[]>();
       if (bxgyIds.length > 0) {
         const { data: targetRows, error: tErr } = await supabase
-         .from('promo_bxgy_targets')
-.select('id,promo_code_id,side,menu_item_id,category_id,created_at')
-.in('promo_code_id', bxgyIds)
-
+          .from('promobxgytargets')
+          .select('id,promocodeid,side,menuitemid,categoryid,createdat')
+          .in('promocodeid', bxgyIds);
 
         if (tErr) throw tErr;
 
@@ -422,13 +410,24 @@ const formatErr = (err: any) => {
         .map(toOfferUI)
         .sort((a, b) => (b.priority - a.priority) || (a.autoApply === b.autoApply ? 0 : a.autoApply ? -1 : 1));
 
+const formatErr = (err: any) => {
+  if (!err) return { message: 'Unknown error', raw: err };
+  if (err instanceof Error) return { message: err.message, stack: err.stack };
+  return {
+    message: err?.message ?? String(err),
+    code: err?.code,
+    details: err?.details,
+    hint: err?.hint,
+    status: err?.status,
+    raw: err,
+  };
+};
       if (reqId !== offersReqId.current) return;
       setOffers(ui);
    } catch (e: any) {
   console.error('Failed to load offers:', formatErr(e));
   if (reqId === offersReqId.current) setOffers([]);
-}
- finally {
+} finally {
       if (reqId === offersReqId.current) setOffersLoading(false);
     }
   };
