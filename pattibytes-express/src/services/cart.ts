@@ -1,4 +1,3 @@
- 
 import { supabase } from '@/lib/supabase';
 
 export interface CartItem {
@@ -16,8 +15,6 @@ export interface CartItem {
 }
 
 export interface Cart {
-  // keep both shapes so older code using merchantid still works
-  merchantid: string;
   merchant_id: string;
   merchant_name: string;
   items: CartItem[];
@@ -30,11 +27,12 @@ class CartService {
 
   getCart(): Cart | null {
     if (typeof window === 'undefined') return null;
-
+    
     try {
       const cartData = localStorage.getItem(this.CART_KEY);
       if (!cartData) return null;
-      return JSON.parse(cartData) as Cart;
+      
+      return JSON.parse(cartData);
     } catch (error) {
       console.error('Failed to get cart:', error);
       return null;
@@ -43,9 +41,10 @@ class CartService {
 
   saveCart(cart: Cart): void {
     if (typeof window === 'undefined') return;
-
+    
     try {
       localStorage.setItem(this.CART_KEY, JSON.stringify(cart));
+      // Dispatch custom event for cart updates
       window.dispatchEvent(new CustomEvent('cartUpdated', { detail: cart }));
     } catch (error) {
       console.error('Failed to save cart:', error);
@@ -60,16 +59,13 @@ class CartService {
       return false;
     }
 
-    const newCart: Cart =
-      cart ||
-      ({
-        merchantid: item.merchant_id, // <-- FIX: required field
-        merchant_id: item.merchant_id,
-        merchant_name: merchantName,
-        items: [],
-        subtotal: 0,
-        total: 0,
-      } satisfies Cart);
+    const newCart: Cart = cart || {
+      merchant_id: item.merchant_id,
+      merchant_name: merchantName,
+      items: [],
+      subtotal: 0,
+      total: 0,
+    };
 
     // Check if item exists
     const existingItemIndex = newCart.items.findIndex((i) => i.id === item.id);
@@ -124,7 +120,7 @@ class CartService {
 
   clearCart(): void {
     if (typeof window === 'undefined') return;
-
+    
     localStorage.removeItem(this.CART_KEY);
     window.dispatchEvent(new CustomEvent('cartUpdated', { detail: null }));
   }
@@ -132,7 +128,7 @@ class CartService {
   getItemCount(): number {
     const cart = this.getCart();
     if (!cart) return 0;
-
+    
     return cart.items.reduce((total, item) => total + item.quantity, 0);
   }
 
@@ -155,19 +151,18 @@ class CartService {
     if (!cart) return { valid: true };
 
     try {
-      const ids = cart.items.map((i) => i.menu_item_id || i.id);
+      // Fetch current menu items to verify prices and availability
       const { data: menuItems, error } = await supabase
         .from('menu_items')
         .select('id, price, is_available, discount_percentage')
-        .in('id', ids);
+        .in('id', cart.items.map(i => i.id));
 
       if (error) throw error;
 
-      const menuItemsMap = new Map((menuItems ?? []).map((item) => [item.id, item]));
+      const menuItemsMap = new Map(menuItems?.map(item => [item.id, item]) || []);
 
       for (const cartItem of cart.items) {
-        const key = cartItem.menu_item_id || cartItem.id;
-        const currentItem = menuItemsMap.get(key);
+        const currentItem = menuItemsMap.get(cartItem.id);
 
         if (!currentItem) {
           return {

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
@@ -91,7 +90,7 @@ function formatFullAddress(a: SavedAddress) {
 
   return lines.join('\n');
 }
- 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getMerchantId(cart: any): string | null {
   // support both shapes
   return (
@@ -299,17 +298,11 @@ if ((!m || m.latitude == null || m.longitude == null) && merchantId) {
  // ROAD distance first
 try {
   const distanceKm = await getRoadDistanceKmViaApi(mLat, mLon, aLat, aLon);
- const quote = await deliveryFeeService.quoteFromCoords({
-  merchantLat: mLat,
-  merchantLon: mLon,
-  customerLat: aLat,
-  customerLon: aLon,
-});
+  const quote = calculateDeliveryFeeByDistance(distanceKm);
 
-setDeliveryDistance(quote.distanceKm);
-setDeliveryFee(quote.fee);
-setDeliveryBreakdown(quote.breakdown);
-
+  setDeliveryDistance(quote.distanceKm);
+  setDeliveryFee(quote.fee);
+  setDeliveryBreakdown(`Road mean distance: ${quote.breakdown}`);
   return;
 } catch (e: any) {
   console.error('Road distance failed:', e);
@@ -595,7 +588,7 @@ setDeliveryBreakdown(`Aerial distance: ${feeData.breakdown}`);
       const { data: order, error: orderError } = await supabase.from('orders').insert(orderData).select().single();
       if (orderError) throw new Error(orderError.message || 'Failed to create order');
 
-      sessionStorage.removeItem('checkoutdata');
+      sessionStorage.removeItem('checkout_data');
 cartService.clearCart(); // removes pattibytes_cart and dispatches cartUpdated
 
 
