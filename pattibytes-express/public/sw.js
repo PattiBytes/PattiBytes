@@ -1,97 +1,167 @@
-const CACHE_NAME = 'pattibytes-express-v2';
-const urlsToCache = [
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* pattibytes-express service worker (safe caching) */
+
+const CACHE_NAME = 'pattibytes-express-v3'; // bump to force update
+const APP_SHELL_CACHE = CACHE_NAME;
+
+const APP_SHELL_URLS = [
   '/',
   '/icon-192.png',
   '/icon-512.png',
   '/favicon.ico',
 ];
 
-// Install
+// ---- helpers ----
+const isSameOrigin = (url) => url.origin === self.location.origin;
+
+const isApiRequest = (url) => isSameOrigin(url) && url.pathname.startsWith('/api/');
+
+const isAuthPage = (url) =>
+  isSameOrigin(url) &&
+  (url.pathname.startsWith('/login') ||
+    url.pathname.startsWith('/signup') ||
+    url.pathname.startsWith('/auth/'));
+
+const isNextStaticAsset = (url) =>
+  isSameOrigin(url) && (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/assets/'));
+
+const isStaticPublicAsset = (url) =>
+  isSameOrigin(url) &&
+  (url.pathname.startsWith('/icon-') ||
+    url.pathname === '/favicon.ico' ||
+    url.pathname.endsWith('.png') ||
+    url.pathname.endsWith('.jpg') ||
+    url.pathname.endsWith('.jpeg') ||
+    url.pathname.endsWith('.webp') ||
+    url.pathname.endsWith('.svg') ||
+    url.pathname.endsWith('.gif'));
+
+const isAudio = (url) => url.pathname.startsWith('/sounds/') || url.pathname.endsWith('.mp3');
+
+// Cache-first for static assets (safe)
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+
+  const resp = await fetch(request);
+  // Cache only ok GET responses
+  if (request.method === 'GET' && resp && resp.ok) {
+    const copy = resp.clone();
+    const cache = await caches.open(APP_SHELL_CACHE);
+    cache.put(request, copy);
+  }
+  return resp;
+}
+
+// Network-first for navigations (prevents stale app shell after deployments)
+async function networkFirstNavigation(request) {
+  try {
+    const resp = await fetch(request);
+    // Optionally update cached "/" so offline fallback stays fresh
+    if (resp && resp.ok) {
+      const cache = await caches.open(APP_SHELL_CACHE);
+      cache.put('/', resp.clone());
+    }
+    return resp;
+  } catch (e) {
+    // Offline fallback to cached app shell
+    const cached = await caches.match('/');
+    if (cached) return cached;
+    throw e;
+  }
+}
+
+// ---- lifecycle ----
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache);
-    })
+    (async () => {
+      const cache = await caches.open(APP_SHELL_CACHE);
+      await cache.addAll(APP_SHELL_URLS);
+      await self.skipWaiting();
+    })()
   );
-  self.skipWaiting();
 });
 
-// Activate
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : Promise.resolve())));
+      await self.clients.claim();
+    })()
   );
-  self.clients.claim();
 });
 
-// Fetch
+// ---- fetch ----
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+  const req = event.request;
 
-  // ✅ Don't cache audio (avoids ERR_CACHE_OPERATION_NOT_SUPPORTED)
-  if (url.pathname.startsWith('/sounds/') || url.pathname.endsWith('.mp3')) {
-    event.respondWith(fetch(event.request));
+  // Only handle GET; never interfere with POST/PUT/DELETE (important for checkout)
+  if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
+
+  // Don’t cache audio
+  if (isAudio(url)) {
+    event.respondWith(fetch(req));
     return;
   }
 
+  // ✅ NEVER cache API routes (prevents stale cart/menu/merchant data)
+  if (isApiRequest(url)) {
+    event.respondWith(fetch(req));
+    return;
+  }
+
+  // ✅ NEVER cache auth pages (prevents stale login screens / redirect loops)
+  if (isAuthPage(url)) {
+    event.respondWith(fetch(req));
+    return;
+  }
+
+  // ✅ Navigations: network-first, offline fallback
+  if (req.mode === 'navigate') {
+    event.respondWith(networkFirstNavigation(req));
+    return;
+  }
+
+  // Static assets: cache-first
+  if (isNextStaticAsset(url) || isStaticPublicAsset(url)) {
+    event.respondWith(cacheFirst(req));
+    return;
+  }
+
+  // Default: network-first-ish (try network, fallback cache)
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return (
-        cached ||
-        fetch(event.request).then((resp) => {
-          // Cache only successful basic GET responses
-          if (event.request.method === 'GET' && resp && resp.ok && resp.type === 'basic') {
-            const copy = resp.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return resp;
-        })
-      );
-    })
+    (async () => {
+      try {
+        return await fetch(req);
+      } catch (e) {
+        const cached = await caches.match(req);
+        if (cached) return cached;
+        throw e;
+      }
+    })()
   );
 });
 
-
-// Push notification
+// ---- push notifications (single listener) ----
 self.addEventListener('push', (event) => {
-  const data = event.data ? event.data.json() : {};
-  const title = data.title || 'PattiBytes Express';
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (_) {}
+
+  const title = payload.title || 'PattiBytes Express';
   const options = {
-    body: data.body || 'You have a new notification',
+    body: payload.body || 'You have a new notification',
     icon: '/icon-192.png',
     badge: '/icon-192.png',
     vibrate: [200, 100, 200],
-    tag: data.tag || 'notification',
-    data: data.data || {},
-    requireInteraction: data.requireInteraction || false,
-    actions: data.actions || []
-  };
-
-  event.waitUntil(
-    self.registration.showNotification(title, options)
-  );
-});
-
-// Notification click
-self.addEventListener('push', (event) => {
-  let payload = {};
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  try { payload = event.data ? event.data.json() : {}; } catch (_) {}
-
-  const title = payload.title || 'New notification';
-  const options = {
-    body: payload.body || '',
+    tag: payload.tag || 'notification',
     data: payload.data || {},
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    requireInteraction: Boolean(payload.requireInteraction),
+    actions: Array.isArray(payload.actions) ? payload.actions : [],
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
@@ -99,14 +169,24 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification?.data?.url || '/';
+  const targetUrl = event.notification?.data?.url || '/';
 
   event.waitUntil(
-    clients.matchAll({ type: 'window' }).then((clientList) => {
+    (async () => {
+      const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+
       for (const client of clientList) {
-        if ('focus' in client) return client.focus();
+        // If already open, focus and navigate
+        if ('focus' in client) {
+          try {
+            await client.focus();
+            if ('navigate' in client) await client.navigate(targetUrl);
+          } catch (_) {}
+          return;
+        }
       }
-      return clients.openWindow(url);
-    })
+
+      await clients.openWindow(targetUrl);
+    })()
   );
 });
