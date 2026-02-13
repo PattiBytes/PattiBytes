@@ -182,8 +182,8 @@ export default function CartPage() {
   const loadAvailablePromos = async () => {
   try {
     if (!merchantId) return setAvailablePromos([]);
-   const promos = await promoCodeService.getActivePromoCodes({ merchantId });
-setAvailablePromos(promos);
+    const promos = await promoCodeService.getActivePromoCodes({ merchantId });
+    setAvailablePromos(promos);
   } catch (error) {
     console.error('Failed to load promo codes', error);
   }
@@ -364,9 +364,6 @@ setAvailablePromos(promos);
           const bxgyTargets = await promoCodeService.getBxgyTargets(p.id);
           const buyTargets = (bxgyTargets || []).filter((t: any) => t.side === 'buy');
           const getTargets = (bxgyTargets || []).filter((t: any) => t.side === 'get');
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getItemDiscPct = (item: any) =>
-  Number(item?.discount_percentage ?? item?.discountpercentage ?? 0);
 
           if (buyTargets.length === 0 || getTargets.length === 0) continue;
 
@@ -499,10 +496,7 @@ const getItemDiscPct = (item: any) =>
   };
 
   // ---------- Effective discount (manual promo wins) ----------
-const effectiveDiscount = appliedPromo?.code
-  ? promoDiscount
-  : Number(autoApplied?.discount || 0);
-
+  const effectiveDiscount = appliedPromo?.code ? promoDiscount : autoApplied.discount;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const effectiveCode = appliedPromo?.code ? appliedPromo.code : autoApplied.promo?.code || null;
 
@@ -537,21 +531,17 @@ const effectiveDiscount = appliedPromo?.code
     }
 
     const checkoutPayload = {
-  cart: {
-    merchant_id: merchantId,
-    merchant_name: merchantName,
-    items: cart.items,
-    subtotal: cart.subtotal,
-  },
+      cart: {
+        merchant_id: merchantId,
+        merchant_name: merchantName,
+        items: cart.items,
+        subtotal: cart.subtotal,
+      },
+      promoCode: appliedPromo?.code ?? null,
+      promoDiscount,
+    };
 
-  promoCode: appliedPromo?.code ?? autoApplied?.promo?.code ?? null,
-  promoDiscount: effectiveDiscount,
-
-  // optional but recommended (so checkout can render “OFFER” lines)
-  offerLines: appliedPromo?.code ? [] : (autoApplied?.lines ?? []),
-};
-sessionStorage.setItem('checkoutdata', JSON.stringify(checkoutPayload));
-
+    sessionStorage.setItem('checkoutdata', JSON.stringify(checkoutPayload));
     router.push('/customer/checkout');
   } catch (error) {
     console.error('Checkout error', error);
