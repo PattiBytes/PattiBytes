@@ -16,6 +16,10 @@ function toNumber(v: any) {
   return Number.isFinite(n) ? n : null;
 }
 
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Partial<Body>;
@@ -25,33 +29,33 @@ export async function POST(req: Request) {
     const customerLat = toNumber(body.customerLat);
     const customerLon = toNumber(body.customerLon);
 
-    if (
-      merchantLat == null ||
-      merchantLon == null ||
-      customerLat == null ||
-      customerLon == null
-    ) {
+    if (merchantLat == null || merchantLon == null || customerLat == null || customerLon == null) {
       return NextResponse.json({ error: 'Invalid coordinates' }, { status: 400 });
     }
 
-    const key = process.env.NEXT_PUBLIC_LOCATIONIQ_API_KEY;
+    const key = process.env.LOCATIONIQ_API_KEY;
     if (!key) {
-      // This is exactly what you are seeing right now.
       return NextResponse.json({ error: 'Missing LOCATIONIQ_API_KEY' }, { status: 500 });
     }
 
-    const base = process.env.LOCATIONIQ_DIRECTIONS_BASE_URL || 'https://us1.locationiq.com';
+    const base = process.env.LOCATIONIQ_DIRECTIONS_BASE_URL ?? 'https://us1.locationiq.com';
+    const alternatives = 3;
 
     const url =
       `${base}/v1/directions/driving/` +
       `${merchantLon},${merchantLat};${customerLon},${customerLat}` +
       `?key=${encodeURIComponent(key)}` +
-      `&overview=false&steps=false` +
-      `&alternatives=3`;
+      `&overview=false&steps=false&alternatives=${alternatives}`;
 
-    const res = await fetch(url, { cache: 'no-store' });
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 12000);
 
-    // safer parsing (LocationIQ can return non-JSON sometimes)
+    const res = await fetch(url, {
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    }).finally(() => clearTimeout(t));
+
     const raw = await res.text();
     let data: any = null;
     try {
@@ -62,36 +66,46 @@ export async function POST(req: Request) {
 
     if (!res.ok) {
       return NextResponse.json(
-        { error: 'Routing failed', status: res.status, details: data },
+        {
+          error: 'Routing failed',
+          upstreamStatus: res.status,
+          // keep details for debugging (LocationIQ error msg usually here)
+          details: data,
+          // helpful to confirm we hit the right endpoint
+          meta: { base, alternatives },
+        },
         { status: 502 }
       );
     }
 
-    // OSRM-style: routes[].distance is meters [web:19]
     const routes = Array.isArray(data?.routes) ? data.routes : [];
     const metersList = routes
       .map((r: any) => Number(r?.distance))
       .filter((n: number) => Number.isFinite(n) && n > 0);
 
     if (!metersList.length) {
-      return NextResponse.json(
-        { error: 'Routing response missing distance', details: data },
-        { status: 502 }
-      );
+      return NextResponse.json({ error: 'Routing response missing distance', details: data }, { status: 502 });
     }
 
-    // Mean distance of all returned routes
-    const metersMean =
-      metersList.reduce((a: number, b: number) => a + b, 0) / metersList.length;
+    // ✅ Mean distance if multiple routes exist
+    const metersMean = metersList.reduce((a: number, b: number) => a + b, 0) / metersList.length;
 
-    const distanceKm = Math.round((metersMean / 1000) * 100) / 100;
+    // Exact for calculations (don’t round early)
+    const distanceKmRaw = metersMean / 1000;
+
+    // Rounded only for display
+    const distanceKm = round2(distanceKmRaw);
 
     return NextResponse.json({
       distanceKm,
+      distanceKmRaw,
       metersMean,
+      metersMin: Math.min(...metersList),
+      metersMax: Math.max(...metersList),
       routesCount: metersList.length,
     });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Server error' }, { status: 500 });
+    const msg = e?.name === 'AbortError' ? 'Routing request timed out' : e?.message;
+    return NextResponse.json({ error: msg || 'Server error' }, { status: 500 });
   }
 }

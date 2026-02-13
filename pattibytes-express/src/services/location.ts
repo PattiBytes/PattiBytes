@@ -90,12 +90,14 @@ export type SaveAddressInput = Partial<{
   user_id: string;
 }>;
 export type DeliveryFeeCalcOptions = {
-  enabled?: boolean;              // if false => fee = 0
-  baseKm?: number;                // default 3
-  baseFee?: number;               // default 50 (will come from app_settings)
-  perKmBeyondBase?: number;        // default 15
-  rounding?: 'ceil' | 'exact';     // "starting from 1km" => ceil
+  enabled?: boolean;
+  baseKm?: number;                 // default 3
+  baseFee?: number;                // default 50
+  perKmBeyondBase?: number;         // default 15
+  rounding?: 'ceil' | 'exact';      // used only for beyond_base mode (old)
+  beyondMode?: 'beyond_base' | 'from_0km'; // NEW
 };
+
 export interface MerchantRow {
   id: string;
   user_id: string;
@@ -168,22 +170,36 @@ export async function getRoadDistanceKmViaApi(
   customerLat: number,
   customerLon: number
 ): Promise<number> {
-  const res = await fetch('/api/delivery/road-distance', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ merchantLat, merchantLon, customerLat, customerLon }),
-  });
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), 12000);
 
-  const data: any = await res.json().catch(() => null);
+  try {
+    const res = await fetch('/api/delivery/road-distance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      signal: controller.signal,
+      body: JSON.stringify({ merchantLat, merchantLon, customerLat, customerLon }),
+    });
 
-  if (!res.ok) {
-    throw new Error(data?.error || 'Road distance API failed');
+    const data: any = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      throw new Error(
+        data?.error ||
+          `Road distance failed (status ${res.status})`
+      );
+    }
+
+    const km = Number(data?.distanceKmRaw ?? data?.distanceKm);
+
+    if (!Number.isFinite(km) || km <= 0) throw new Error('Invalid road distance');
+    return km;
+  } finally {
+    clearTimeout(t);
   }
-
-  const km = Number(data?.distanceKm);
-  if (!Number.isFinite(km)) throw new Error('Invalid road distance');
-  return km;
 }
+
 
 
 export function calculateDeliveryFeeByDistance(
@@ -191,15 +207,16 @@ export function calculateDeliveryFeeByDistance(
   opts: DeliveryFeeCalcOptions = {}
 ): DeliveryFeeQuote {
   const enabled = opts.enabled ?? true;
-  if (!enabled) {
-    return { distanceKm: 0, fee: 0, breakdown: 'Delivery fee disabled' };
-  }
+  if (!enabled) return { distanceKm: 0, fee: 0, breakdown: 'Delivery fee disabled' };
 
   const d = Math.max(0, Number(distanceKm) || 0);
 
   const baseKm = opts.baseKm ?? 3;
   const baseFee = opts.baseFee ?? 50;
   const perKm = opts.perKmBeyondBase ?? 15;
+
+  // NEW: choose how to charge once outside baseKm
+  const beyondMode = opts.beyondMode ?? 'from_0km'; // <- set default to your NEW rule
   const rounding = opts.rounding ?? 'ceil';
 
   if (d <= baseKm) {
@@ -210,6 +227,17 @@ export function calculateDeliveryFeeByDistance(
     };
   }
 
+  // NEW RULE: once > baseKm, ignore baseFee and charge from 0km
+  if (beyondMode === 'from_0km') {
+    const fee = d * perKm;
+    return {
+      distanceKm: round2(d),
+      fee: round2(fee),
+      breakdown: `${round2(d)}km × ₹${perKm} = ₹${round2(fee)}`,
+    };
+  }
+
+  // OLD RULE (keep available if needed): baseFee + extraKm*perKm
   const extra = Math.max(0, d - baseKm);
   const billableExtra = rounding === 'ceil' ? Math.ceil(extra) : extra;
   const fee = baseFee + billableExtra * perKm;
@@ -220,6 +248,7 @@ export function calculateDeliveryFeeByDistance(
     breakdown: `₹${round2(baseFee)} + ${billableExtra}km × ₹${perKm} = ₹${round2(fee)}`,
   };
 }
+
 
 class LocationService {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
