@@ -1331,14 +1331,16 @@ export default function CustomerDashboardPage() {
                 ))}
               </div>
             ) : activeOrders.length === 0 ? (
-              <div className="rounded-2xl border-2 border-dashed border-gray-300 bg-white/80 p-6 text-center">
-                <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                  <ShoppingBag className="w-8 h-8 text-gray-400" />
-                </div>
-                <p className="text-sm text-gray-900 font-bold">No active orders right now</p>
-                <p className="text-xs text-gray-600 mt-1">Place an order and track it here</p>
-              </div>
-            ) : (
+  <div className="rounded-xl border-2 border-dashed border-gray-300 bg-white/80 px-4 py-3 flex items-center gap-3">
+    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center flex-shrink-0">
+      <ShoppingBag className="w-5 h-5 text-gray-400" />
+    </div>
+    <div className="min-w-0 flex-1">
+      <p className="text-sm text-gray-900 font-bold">No active orders</p>
+      <p className="text-xs text-gray-600">Place an order to track here</p>
+    </div>
+  </div>
+) : (
               <div className="space-y-3">
                 {activeOrders.map((o) => {
                   const total = o.total_amount || 0;
@@ -1459,107 +1461,113 @@ export default function CustomerDashboardPage() {
 
                          {/* NEW: TRENDING & OFFERS HERO SECTION */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Trending Dishes (ULTRA ENHANCED) */}
-            <div className="bg-gradient-to-br from-orange-50 via-pink-50 to-purple-50 rounded-3xl shadow-2xl border-2 border-primary p-5 animate-in slide-in-from-left duration-700">
-              <div className="flex items-center justify-between gap-2 mb-4">
-                <div className="min-w-0">
-                  <h3 className="text-lg font-black text-gray-900 truncate inline-flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center shadow-lg animate-pulse">
-                      <Flame className="w-5 h-5 text-white" />
-                    </div>
-                    Trending Now
-                  </h3>
-                  <p className="text-xs text-gray-700 leading-4 mt-1 font-bold flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3" />
-                    Most ordered in last 7 days
-                  </p>
-                </div>
+          {/* NEW: TRENDING DISHES - OPTIMIZED */}
+<div className="bg-gradient-to-br from-orange-50 via-pink-50 to-purple-50 rounded-3xl shadow-2xl border-2 border-primary p-5 animate-in slide-in-from-left duration-700">
+  <div className="flex items-center justify-between gap-2 mb-4">
+    <div className="min-w-0">
+      <h3 className="text-lg font-black text-gray-900 truncate inline-flex items-center gap-2">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center shadow-lg animate-pulse">
+          <Flame className="w-5 h-5 text-white" />
+        </div>
+        Trending Now
+      </h3>
+      <p className="text-xs text-gray-700 leading-4 mt-1 font-bold flex items-center gap-1">
+        <TrendingUp className="w-3 h-3" />
+        Most ordered in last 7 days
+      </p>
+    </div>
+    <button
+      type="button"
+      onClick={() => {
+        setTrendingLoading(true);
+        setTimeout(() => setTrendingLoading(false), 250);
+      }}
+      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border-2 border-primary bg-white hover:bg-orange-50 text-xs font-bold text-gray-900 transition-all hover:scale-105 shadow-md"
+      title="Refresh"
+    >
+      <RefreshCcw className={`w-4 h-4 ${trendingLoading ? 'animate-spin' : ''}`} />
+    </button>
+  </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTrendingLoading(true);
-                    setTimeout(() => setTrendingLoading(false), 250);
+  {trendingLoading ? (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="h-32 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse" />
+      ))}
+    </div>
+  ) : trending.length === 0 ? (
+    <div className="rounded-xl border-2 border-dashed border-gray-300 bg-white/80 px-4 py-3 flex items-center gap-3">
+      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center flex-shrink-0">
+        <Zap className="w-5 h-5 text-gray-400" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-gray-900 font-bold">Trending will appear soon</p>
+        <p className="text-xs text-gray-600">After some orders are placed</p>
+      </div>
+    </div>
+  ) : (
+    <div className="flex gap-3 overflow-x-auto no-scrollbar py-1">
+      {trending.map((d, index) => {
+        const img = String(d.image_url || '').trim();
+        const price = finalPrice(d.price, d.discount_percentage);
+
+        return (
+          <button
+            key={d.id}
+            type="button"
+            onClick={() => router.push(`/customer/restaurant/${d.merchant_id}?item=${d.id}`)}
+            className="min-w-[160px] max-w-[160px] text-left bg-white border-2 border-gray-200 rounded-2xl shadow-lg hover:shadow-2xl hover:border-primary hover:scale-105 transition-all duration-300 overflow-hidden animate-in fade-in slide-in-from-bottom flex-shrink-0"
+            style={{ animationDelay: `${index * 80}ms` }}
+          >
+            {/* Image Section - Smaller */}
+            <div className="h-20 bg-gradient-to-br from-gray-100 to-gray-200 relative">
+              {showMenuImages && img ? (
+                <img
+                  src={img}
+                  alt={d.name}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = 'none';
                   }}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border-2 border-primary bg-white hover:bg-orange-50 text-xs font-bold text-gray-900 transition-all hover:scale-105 shadow-md"
-                  title="Refresh"
-                >
-                  <RefreshCcw className={`w-4 h-4 ${trendingLoading ? 'animate-spin' : ''}`} />
-                </button>
-              </div>
-
-              {trendingLoading ? (
-                <div className="grid grid-cols-2 gap-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="h-32 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse" />
-                  ))}
-                </div>
-              ) : trending.length === 0 ? (
-                <div className="rounded-2xl border-2 border-dashed border-gray-300 bg-white/80 p-6 text-center">
-                  <Zap className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                  <p className="text-sm text-gray-900 font-bold">Trending will appear soon</p>
-                  <p className="text-xs text-gray-600 mt-1">After some orders are placed</p>
-                </div>
+                />
               ) : (
-                <div className="flex gap-3 overflow-x-auto no-scrollbar py-1">
-                  {trending.map((d, index) => {
-                    const img = String(d.image_url || '').trim();
-                    const price = finalPrice(d.price, d.discount_percentage);
-
-                    return (
-                      <button
-                        key={d.id}
-                        type="button"
-                        onClick={() => router.push(`/customer/restaurant/${d.merchant_id}?item=${d.id}`)}
-                        className="min-w-[200px] max-w-[200px] text-left bg-white border-2 border-gray-200 rounded-2xl shadow-lg hover:shadow-2xl hover:border-primary hover:scale-105 transition-all duration-300 overflow-hidden animate-in fade-in slide-in-from-bottom"
-                        style={{ animationDelay: `${index * 100}ms` }}
-                      >
-                        <div className="h-28 bg-gradient-to-br from-gray-100 to-gray-200 relative">
-                          {showMenuImages && img ? (
-                            <img
-                              src={img}
-                              alt={d.name}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                (e.currentTarget as HTMLImageElement).style.display = 'none';
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              <ImageIcon className="w-8 h-8" />
-                            </div>
-                          )}
-                          {d.discount_percentage && d.discount_percentage > 0 && (
-                            <div className="absolute top-2 right-2 px-2 py-1 rounded-lg bg-red-500 text-white text-xs font-black shadow-lg">
-                              {d.discount_percentage}% OFF
-                            </div>
-                          )}
-                          <div className="absolute bottom-2 left-2 px-2 py-1 rounded-lg bg-primary text-white text-xs font-black shadow-lg flex items-center gap-1">
-                            <Flame className="w-3 h-3" />#{index + 1}
-                          </div>
-                        </div>
-
-                        <div className="p-3">
-                          <div className="text-xs text-gray-600 font-bold truncate">{d.merchantName}</div>
-                          <div className="font-black text-gray-900 truncate text-sm mt-0.5">{d.name}</div>
-                          <div className="mt-2 flex items-center justify-between">
-                            <div className="text-base font-black bg-gradient-to-r from-primary to-pink-600 bg-clip-text text-transparent">
-                              ₹{price.toFixed(0)}
-                            </div>
-                            <div className="text-xs font-black text-primary flex items-center gap-1">
-                              <TrendingUp className="w-3 h-3" />
-                              {d.totalQty}+ orders
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                <div className="w-full h-full flex items-center justify-center text-gray-400">
+                  <ImageIcon className="w-6 h-6" />
                 </div>
               )}
+              {d.discount_percentage && d.discount_percentage > 0 && (
+                <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-red-500 text-white text-xs font-black shadow-lg">
+                  {d.discount_percentage}%
+                </div>
+              )}
+              <div className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-primary text-white text-xs font-black shadow-lg flex items-center gap-0.5">
+                <Flame className="w-2.5 h-2.5" />#{index + 1}
+              </div>
             </div>
+
+            {/* Content Section - Compact */}
+            <div className="p-2.5">
+              <div className="text-xs text-gray-600 font-bold truncate mb-0.5">{d.merchantName}</div>
+              <div className="font-black text-gray-900 truncate text-sm">{d.name}</div>
+              <div className="mt-1.5 flex items-center justify-between">
+                <div className="text-sm font-black bg-gradient-to-r from-primary to-pink-600 bg-clip-text text-transparent">
+                  ₹{price.toFixed(0)}
+                </div>
+                <div className="text-xs font-black text-primary flex items-center gap-0.5">
+                  <TrendingUp className="w-3 h-3" />
+                  {d.totalQty}
+                </div>
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  )}
+</div>
+
 
             {/* HOT OFFERS (NEW ULTRA ENHANCED) */}
             <div className="bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-3xl shadow-2xl border-2 border-green-400 p-5 animate-in slide-in-from-right duration-700">
