@@ -536,6 +536,16 @@ useEffect(() => {
                 <span className="px-2 py-1 rounded-full bg-gray-100">Month: {stats.monthOrders}</span>
               </div>
             </div>
+<div>
+            <button
+  onClick={() => router.push('/admin/orders/new')}
+  className="w-full bg-gray-50 hover:bg-gray-100 rounded-xl p-3 text-left border"
+>
+  <div className="font-semibold text-gray-900">Create Order</div>
+  <div className="text-xs text-gray-600">Manual order + invoice printing</div>
+</button>
+<span className="text-xs text-gray-500 mt-1 block"></span>
+</div>
 
             {/* Recent Orders (compact + filter chips) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">

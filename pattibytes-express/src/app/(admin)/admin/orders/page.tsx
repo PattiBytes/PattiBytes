@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Download,
   Bell,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   User,
 } from 'lucide-react';
 import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
@@ -365,14 +366,14 @@ export default function AdminOrdersPage() {
               <Download size={16} />
               Export CSV
             </button>
+           
             <button
-              onClick={loadDrivers}
-              disabled={driversLoading}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 font-semibold disabled:opacity-50"
-            >
-              <User size={16} />
-              {driversLoading ? 'Loading…' : `Drivers (${drivers.length})`}
-            </button>
+  onClick={() => router.push('/admin/orders/new')}
+  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 font-semibold"
+>
+  Create Order
+</button>
+
           </div>
         </div>
 
