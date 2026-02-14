@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
@@ -47,7 +48,7 @@ import CuisineFilters from '@/components/customer-dashboard/CuisineFilters';
 import RestaurantGrid from '@/components/customer-dashboard/RestaurantGrid';
 
 import type { AddressPick } from '@/components/AddressAutocomplete';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+ 
 import type { OfferBadge, PromoCodeRow, BxgyTargetRow } from '@/components/customer-dashboard/offers';
 import { isPromoActiveNow } from '@/components/customer-dashboard/offers';
 
@@ -972,7 +973,7 @@ useEffect(() => {
           sessionStorage.setItem(cacheKey, JSON.stringify(merged));
         } catch {}
       }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     } catch (e) {
       // If this throws “relationship not found”, you need the FK.
       if (!cancelled) setTrending([]);
@@ -1061,17 +1062,35 @@ useEffect(() => {
     } catch {}
   };
 
-  return (
-    <AppShell title={appSettings?.app_name || 'Pattibytes Express'}>
-      <div
-        className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-pink-50"
-        style={{ paddingBottom: `calc(${BOTTOM_NAV_PX}px + env(safe-area-inset-bottom))` }}
-      >
-        <div className="mx-auto w-full max-w-7xl px-2.5 sm:px-3.5 md:px-5 lg:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
-          <DashboardHeader firstName={firstName} radiusKm={searchRadiusKm} />
+ return (
+  <AppShell title={appSettings?.app_name || 'Pattibytes Express'}>
+    <div
+      className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-pink-50"
+      style={{ paddingBottom: `calc(${BOTTOM_NAV_PX}px + env(safe-area-inset-bottom))` }}
+    >
+      <div className="mx-auto w-full max-w-7xl px-2.5 sm:px-3.5 md:px-5 lg:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
+        {/* Top: Location + Search */}
+        <LocationBar
+          address={location?.address || ''}
+          radiusKm={searchRadiusKm}
+          locationLoading={locationLoading}
+          onOpenSaved={() => {
+            setShowLocationModal(true);
+            setShowLocationSearch(false);
+          }}
+          onOpenSearch={() => {
+            setShowLocationModal(true);
+            setShowLocationSearch(true);
+          }}
+          onDetect={getCurrentLocation}
+        />
 
-          {/* NEW: Banner announcement */}
-          {bannerVisible && isAnnouncementActive(announcement) && (announcement?.type || 'banner') === 'banner' && (
+       
+
+        {/* NEW: Banner announcement (UNCHANGED) */}
+        {bannerVisible &&
+          isAnnouncementActive(announcement) &&
+          (announcement?.type || 'banner') === 'banner' && (
             <div className="rounded-2xl border border-orange-200 bg-orange-50 px-3 py-2.5">
               <div className="flex items-start gap-3">
                 <div className="shrink-0 mt-0.5">
@@ -1126,7 +1145,228 @@ useEffect(() => {
             </div>
           )}
 
-          {/* Presented by + quick actions */}
+        {/* Active orders (2nd) */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-2 mb-2.5">
+            <div className="min-w-0">
+              <h3 className="text-sm font-extrabold text-gray-900 truncate">Active orders</h3>
+              <p className="text-[11px] text-gray-600 leading-4">Quick access to what’s in progress.</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={loadOrdersAndStats}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-800 transition"
+                title="Refresh"
+              >
+                <RefreshCcw className="w-4 h-4" />
+                <span className="hidden sm:inline">{loadingActiveOrders ? 'Refreshing…' : 'Refresh'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push('/customer/orders')}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-primary text-white hover:bg-orange-600 text-xs font-semibold transition"
+              >
+                <Receipt className="w-4 h-4" />
+                View
+              </button>
+            </div>
+          </div>
+
+          {loadingActiveOrders ? (
+            <div className="space-y-2">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="h-14 rounded-xl bg-gray-100 animate-pulse" />
+              ))}
+            </div>
+          ) : activeOrders.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3 text-center">
+              <p className="text-xs text-gray-700 font-semibold">No active orders right now.</p>
+              <p className="text-[11px] text-gray-600 mt-1">Place an order and it will appear here.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {activeOrders.map((o) => {
+                const total = o.total_amount || 0;
+                const created = o.created_at || null;
+
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => router.push(`/customer/orders/${o.id}`)}
+                    className="w-full text-left rounded-xl border border-gray-200 hover:border-primary/30 hover:bg-orange-50/40 transition px-3 py-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-extrabold text-gray-900 truncate">
+                          {o.merchantName || 'Restaurant'} • Order #{o.ordernumber ?? o.id.slice(0, 6)}
+                        </p>
+                        <p className="text-[11px] text-gray-600 mt-0.5 truncate">
+                          Status: {String(o.status || 'pending').toLowerCase()} • {tinyTime(created)}
+                        </p>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-extrabold text-primary">₹{toMoney(total)}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">Tap to track</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+ <SearchBox
+          query={searchQuery}
+          setQuery={setSearchQueryDebounced}
+          restaurants={filteredRestaurants}
+          menuItems={menuItems}
+          onOpen={onOpenSearchResult}
+        />
+        {/* Filters (3rd) */}
+        <CuisineFilters selected={selectedFilter} onSelect={setSelectedFilter} />
+
+        {/* Restaurants (4th) */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4">
+          <div className="flex items-end justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-extrabold text-gray-900 truncate">
+                {selectedFilter === 'all' ? 'Restaurants near you' : selectedFilter}
+              </h2>
+              <p className="text-[11px] text-gray-600">
+                {filteredRestaurants.length} found • within {searchRadiusKm}km
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => router.push('/customer/cart')}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-800 transition"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                Cart
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push('/customer/orders')}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-900 text-white hover:bg-black text-xs font-semibold transition"
+              >
+                <Truck className="w-4 h-4" />
+                Orders
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <RestaurantGrid
+              loading={loadingRestaurants}
+              restaurants={filteredRestaurants}
+              menuCountByMerchant={menuCountByMerchant}
+              offerByMerchant={offerByMerchant}
+              onOpenRestaurant={(id) => router.push(`/customer/restaurant/${id}`)}
+              onOpenRestaurantOffer={(merchantId, focusItemId, promoId) => {
+                const qs = new URLSearchParams();
+                qs.set('item', focusItemId);
+                if (promoId) qs.set('promo', promoId);
+                router.push(`/customer/restaurant/${merchantId}?${qs.toString()}`);
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Trending dishes (5th) */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-2 mb-2.5">
+            <div className="min-w-0">
+              <h3 className="text-sm font-extrabold text-gray-900 truncate inline-flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary" />
+                Trending dishes
+              </h3>
+              <p className="text-[11px] text-gray-600 leading-4">Most ordered in last 7 days (nearby).</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setTrendingLoading(true);
+                setTimeout(() => setTrendingLoading(false), 250);
+              }}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-800 transition"
+              title="Refresh"
+            >
+              <RefreshCcw className="w-4 h-4" />
+              Refresh
+            </button>
+          </div>
+
+          {trendingLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />
+              ))}
+            </div>
+          ) : trending.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3 text-center">
+              <p className="text-xs text-gray-700 font-semibold">Trending will appear after some orders.</p>
+            </div>
+          ) : (
+            <div className="flex gap-3 overflow-x-auto no-scrollbar py-1">
+              {trending.map((d) => {
+                const img = String(d.image_url || '').trim();
+                const price = finalPrice(d.price, d.discount_percentage);
+
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => router.push(`/customer/restaurant/${d.merchant_id}?item=${d.id}`)}
+                    className="min-w-[220px] max-w-[220px] text-left bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md hover:border-primary/30 transition overflow-hidden"
+                  >
+                    <div className="h-24 bg-gray-100 relative">
+                      {showMenuImages && img ? (
+                        <img
+                          src={img}
+                          alt={d.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-3">
+                      <div className="text-xs text-gray-600 font-semibold truncate">{d.merchantName}</div>
+                      <div className="font-extrabold text-gray-900 truncate">{d.name}</div>
+                      <div className="mt-1 flex items-center justify-between">
+                        <div className="text-sm font-extrabold text-gray-900">₹{price.toFixed(0)}</div>
+                        <div className="text-[11px] font-bold text-primary">
+                          {d.totalQty}+ orders <ArrowRight className="inline w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Everything else (bottom) */}
+        <div className="space-y-3 sm:space-y-4">
+          {/* Presented by + quick actions (moved here, unchanged markup) */}
           <div className="bg-white/90 backdrop-blur rounded-2xl shadow-sm border border-gray-100 px-3 py-2.5">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -1163,7 +1403,7 @@ useEffect(() => {
 
                   <button
                     type="button"
-                                        onClick={() => {
+                    onClick={() => {
                       const email = appSettings?.support_email || 'pbexpress38@gmail.com';
                       window.location.href = `mailto:${email}?subject=Collaboration%20Query&body=Hi%20team,%20`;
                     }}
@@ -1172,26 +1412,27 @@ useEffect(() => {
                   >
                     Email us
                   </button>
-{!!appSettings?.support_phone && (() => {
-  const phone = String(appSettings.support_phone).replace(/\D/g, ''); // digits only
-  if (!phone) return null;
 
-  return (
-    <a
-      href={`https://wa.me/${phone}`}
-      className="text-[11px] px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-semibold transition"
-      title="Chat on WhatsApp"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      WhatsApp us
-    </a>
-  );
-})()}
+                  {!!appSettings?.support_phone &&
+                    (() => {
+                      const phone = String(appSettings.support_phone).replace(/\D/g, '');
+                      if (!phone) return null;
 
+                      return (
+                        <a
+                          href={`https://wa.me/${phone}`}
+                          className="text-[11px] px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 font-semibold transition"
+                          title="Chat on WhatsApp"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          WhatsApp us
+                        </a>
+                      );
+                    })()}
+
+                  <div id="collaboration" />
                 </div>
-
-                <div id="collaboration" />
               </div>
 
               {/* socials */}
@@ -1226,284 +1467,7 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Location */}
-          <LocationBar
-            address={location?.address || ''}
-            radiusKm={searchRadiusKm}
-            locationLoading={locationLoading}
-            onOpenSaved={() => {
-              setShowLocationModal(true);
-              setShowLocationSearch(false);
-            }}
-            onOpenSearch={() => {
-              setShowLocationModal(true);
-              setShowLocationSearch(true);
-            }}
-            onDetect={getCurrentLocation}
-          />
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
-            <div className="lg:col-span-8 space-y-3 sm:space-y-4">
-              <SearchBox query={searchQuery} setQuery={setSearchQueryDebounced} restaurants={filteredRestaurants} menuItems={menuItems} onOpen={onOpenSearchResult} />
-
-              <StatsCards restaurantsCount={filteredRestaurants.length} totalOrders={stats.totalOrders} activeOrders={stats.activeOrders} totalSpent={stats.totalSpent} />
-
-              {/* Trending dishes */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4">
-                <div className="flex items-center justify-between gap-2 mb-2.5">
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-extrabold text-gray-900 truncate inline-flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-primary" />
-                      Trending dishes
-                    </h3>
-                    <p className="text-[11px] text-gray-600 leading-4">Most ordered in last 7 days (nearby).</p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTrendingLoading(true);
-                      setTimeout(() => setTrendingLoading(false), 250);
-                    }}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-800 transition"
-                    title="Refresh"
-                  >
-                    <RefreshCcw className="w-4 h-4" />
-                    Refresh
-                  </button>
-                </div>
-
-                {trendingLoading ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />
-                    ))}
-                  </div>
-                ) : trending.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3 text-center">
-                    <p className="text-xs text-gray-700 font-semibold">Trending will appear after some orders.</p>
-                  </div>
-                ) : (
-                  <div className="flex gap-3 overflow-x-auto no-scrollbar py-1">
-                    {trending.map((d) => {
-                      const img = String(d.image_url || '').trim();
-                      const price = finalPrice(d.price, d.discount_percentage);
-
-                      return (
-                        <button
-                          key={d.id}
-                          type="button"
-                          onClick={() => router.push(`/customer/restaurant/${d.merchant_id}?item=${d.id}`)}
-                          className="min-w-[220px] max-w-[220px] text-left bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md hover:border-primary/30 transition overflow-hidden"
-                        >
-                          <div className="h-24 bg-gray-100 relative">
-                            {showMenuImages && img ? (
-                              <img
-                                src={img}
-                                alt={d.name}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                referrerPolicy="no-referrer"
-                                onError={(e) => {
-                                  (e.currentTarget as HTMLImageElement).style.display = 'none';
-                                }}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                <ImageIcon className="w-6 h-6" />
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="p-3">
-                            <div className="text-xs text-gray-600 font-semibold truncate">{d.merchantName}</div>
-                            <div className="font-extrabold text-gray-900 truncate">{d.name}</div>
-                            <div className="mt-1 flex items-center justify-between">
-                              <div className="text-sm font-extrabold text-gray-900">₹{price.toFixed(0)}</div>
-                              <div className="text-[11px] font-bold text-primary">
-                                {d.totalQty}+ orders <ArrowRight className="inline w-3.5 h-3.5" />
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Active orders */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4">
-                <div className="flex items-center justify-between gap-2 mb-2.5">
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-extrabold text-gray-900 truncate">Active orders</h3>
-                    <p className="text-[11px] text-gray-600 leading-4">Quick access to what’s in progress.</p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={loadOrdersAndStats}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-800 transition"
-                      title="Refresh"
-                    >
-                      <RefreshCcw className="w-4 h-4" />
-                      <span className="hidden sm:inline">{loadingActiveOrders ? 'Refreshing…' : 'Refresh'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => router.push('/customer/orders')}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-primary text-white hover:bg-orange-600 text-xs font-semibold transition"
-                    >
-                      <Receipt className="w-4 h-4" />
-                      View
-                    </button>
-                  </div>
-                </div>
-
-                {loadingActiveOrders ? (
-                  <div className="space-y-2">
-                    {Array.from({ length: 2 }).map((_, i) => (
-                      <div key={i} className="h-14 rounded-xl bg-gray-100 animate-pulse" />
-                    ))}
-                  </div>
-                ) : activeOrders.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3 text-center">
-                    <p className="text-xs text-gray-700 font-semibold">No active orders right now.</p>
-                    <p className="text-[11px] text-gray-600 mt-1">Place an order and it will appear here.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {activeOrders.map((o) => {
-                      const total = o.total_amount || 0;
-                      const created = o.created_at || null;
-
-                      return (
-                        <button
-                          key={o.id}
-                          type="button"
-                          onClick={() => router.push(`/customer/orders/${o.id}`)}
-                          className="w-full text-left rounded-xl border border-gray-200 hover:border-primary/30 hover:bg-orange-50/40 transition px-3 py-2.5"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-xs font-extrabold text-gray-900 truncate">
-                                {o.merchantName || 'Restaurant'} • Order #{o.ordernumber ?? o.id.slice(0, 6)}
-                              </p>
-                              <p className="text-[11px] text-gray-600 mt-0.5 truncate">
-                                Status: {String(o.status || 'pending').toLowerCase()} • {tinyTime(created)}
-                              </p>
-                            </div>
-
-                            <div className="text-right shrink-0">
-                              <p className="text-xs font-extrabold text-primary">₹{toMoney(total)}</p>
-                              <p className="text-[11px] text-gray-500 mt-0.5">Tap to track</p>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <CuisineFilters selected={selectedFilter} onSelect={setSelectedFilter} />
-
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-4">
-                <div className="flex items-end justify-between gap-2">
-                  <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base font-extrabold text-gray-900 truncate">
-                      {selectedFilter === 'all' ? 'Restaurants near you' : selectedFilter}
-                    </h2>
-                    <p className="text-[11px] text-gray-600">
-                      {filteredRestaurants.length} found • within {searchRadiusKm}km
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => router.push('/customer/cart')}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-800 transition"
-                    >
-                      <ShoppingBag className="w-4 h-4" />
-                      Cart
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => router.push('/customer/orders')}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-900 text-white hover:bg-black text-xs font-semibold transition"
-                    >
-                      <Truck className="w-4 h-4" />
-                      Orders
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-3">
-               <RestaurantGrid
-  loading={loadingRestaurants}
-  restaurants={filteredRestaurants}
-  menuCountByMerchant={menuCountByMerchant}
-  offerByMerchant={offerByMerchant}
-  onOpenRestaurant={(id) => router.push(`/customer/restaurant/${id}`)}
-  onOpenRestaurantOffer={(merchantId, focusItemId, promoId) => {
-  const qs = new URLSearchParams();
-  qs.set('item', focusItemId);
-  if (promoId) qs.set('promo', promoId);
-  router.push(`/customer/restaurant/${merchantId}?${qs.toString()}`);
-}}
-/>
-
-
-                </div>
-              </div>
-            </div>
-
-            {/* Right rail */}
-            <div className="hidden lg:block lg:col-span-4 space-y-3">
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                <p className="text-sm font-extrabold text-gray-900">Quick links</p>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => router.push('/customer/cart')}
-                    className="px-3 py-2.5 rounded-xl bg-orange-50 text-primary font-semibold text-xs hover:bg-orange-100 transition"
-                  >
-                    Open cart
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => router.push('/customer/orders')}
-                    className="px-3 py-2.5 rounded-xl bg-gray-100 text-gray-900 font-semibold text-xs hover:bg-gray-200 transition"
-                  >
-                    My orders
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => router.push('/customer/profile')}
-                    className="px-3 py-2.5 rounded-xl bg-gray-100 text-gray-900 font-semibold text-xs hover:bg-gray-200 transition"
-                  >
-                    Profile
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => router.push('/customer/notifications')}
-                    className="px-3 py-2.5 rounded-xl bg-gray-100 text-gray-900 font-semibold text-xs hover:bg-gray-200 transition"
-                  >
-                    Alerts
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-orange-500 via-pink-500 to-purple-500 rounded-2xl shadow-lg p-4 text-white">
-                <p className="text-sm font-extrabold">Tip</p>
-                <p className="text-[12px] text-white/90 mt-1">Search dishes first—results load only when you type (faster on mobile).</p>
-              </div>
-            </div>
-          </div>
 
           <div className="pt-1 text-center">
             <p className="text-[11px] text-gray-600">
@@ -1519,82 +1483,85 @@ useEffect(() => {
             </p>
           </div>
         </div>
+      </div>
 
-        {/* NEW: Popup announcement */}
-        {isAnnouncementActive(announcement) && (announcement?.type || 'banner') === 'popup' && popupOpen && (
-          <div className="fixed inset-0 z-[9999]">
-            <div
-              className="absolute inset-0 bg-black/50"
-              onClick={() => {
-                if (announcement?.dismissible === false) return;
-                closePopup('manual');
-              }}
-              aria-hidden="true"
-            />
-            <div className="absolute inset-0 flex items-center justify-center p-4">
-              <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
-                {!!String(announcement?.image_url || '').trim() && (
-                  <div className="h-40 bg-gray-100">
-                    <img
-                      src={String(announcement?.image_url || '')}
-                      alt="Announcement"
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
-                    />
-                  </div>
+      {/* NEW: Popup announcement (UNCHANGED) */}
+      {isAnnouncementActive(announcement) && (announcement?.type || 'banner') === 'popup' && popupOpen && (
+        <div className="fixed inset-0 z-[9999]">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => {
+              if (announcement?.dismissible === false) return;
+              closePopup('manual');
+            }}
+            aria-hidden="true"
+          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+              {!!String(announcement?.image_url || '').trim() && (
+                <div className="h-40 bg-gray-100">
+                  <img
+                    src={String(announcement?.image_url || '')}
+                    alt="Announcement"
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+                  />
+                </div>
+              )}
+
+              <div className="p-4">
+                <div className="text-lg font-extrabold text-gray-900">
+                  {String(announcement?.title || 'Announcement')}
+                </div>
+                {!!String(announcement?.message || '').trim() && (
+                  <div className="text-sm text-gray-700 mt-2">{String(announcement?.message || '')}</div>
                 )}
 
-                <div className="p-4">
-                  <div className="text-lg font-extrabold text-gray-900">{String(announcement?.title || 'Announcement')}</div>
-                  {!!String(announcement?.message || '').trim() && (
-                    <div className="text-sm text-gray-700 mt-2">{String(announcement?.message || '')}</div>
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  {!!String(announcement?.link_url || '').trim() && (
+                    <a
+                      href={normalizeHttpUrl(announcement?.link_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-xl bg-primary text-white font-extrabold hover:bg-orange-600"
+                    >
+                      Open
+                    </a>
                   )}
 
-                  <div className="mt-4 flex items-center justify-end gap-2">
-                    {!!String(announcement?.link_url || '').trim() && (
-                      <a
-                        href={normalizeHttpUrl(announcement?.link_url)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-4 py-2 rounded-xl bg-primary text-white font-extrabold hover:bg-orange-600"
-                      >
-                        Open
-                      </a>
-                    )}
-
-                    {announcement?.dismissible !== false ? (
-                      <button
-                        type="button"
-                        onClick={() => closePopup('manual')}
-                        className="px-4 py-2 rounded-xl border bg-white font-extrabold hover:bg-gray-50"
-                      >
-                        Close
-                      </button>
-                    ) : null}
-                  </div>
-
-                  <p className="text-[11px] text-gray-500 mt-3">
-                    This popup auto-hides after a few seconds (or you can close it).
-                  </p>
+                  {announcement?.dismissible !== false ? (
+                    <button
+                      type="button"
+                      onClick={() => closePopup('manual')}
+                      className="px-4 py-2 rounded-xl border bg-white font-extrabold hover:bg-gray-50"
+                    >
+                      Close
+                    </button>
+                  ) : null}
                 </div>
+
+                <p className="text-[11px] text-gray-500 mt-3">
+                  This popup auto-hides after a few seconds (or you can close it).
+                </p>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <LocationModal
-          open={showLocationModal}
-          title="Choose location"
-          savedAddresses={savedAddresses}
-          showSearch={showLocationSearch}
-          onClose={() => setShowLocationModal(false)}
-          onToggleSearch={() => setShowLocationSearch((v) => !v)}
-          onPickAddressSearch={handlePickSearch}
-          onPickSaved={handlePickSaved}
-        />
-      </div>
-    </AppShell>
-  );
+      <LocationModal
+        open={showLocationModal}
+        title="Choose location"
+        savedAddresses={savedAddresses}
+        showSearch={showLocationSearch}
+        onClose={() => setShowLocationModal(false)}
+        onToggleSearch={() => setShowLocationSearch((v) => !v)}
+        onPickAddressSearch={handlePickSearch}
+        onPickSaved={handlePickSaved}
+      />
+    </div>
+  </AppShell>
+);
 }
