@@ -384,54 +384,7 @@ export default function RestaurantDetailPage() {
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="max-w-7xl mx-auto px-4 py-6 pb-28 md:pb-8">
-          {/* Restaurant Info Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            {restaurant.phone && (
-              <div className="bg-white rounded-2xl shadow p-4 flex items-center gap-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Phone className="w-6 h-6 text-blue-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-600">Contact</p>
-                  <p className="font-semibold text-gray-900 truncate">{restaurant.phone}</p>
-                </div>
-              </div>
-            )}
-
-            {restaurant.email && (
-              <div className="bg-white rounded-2xl shadow p-4 flex items-center gap-3">
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Mail className="w-6 h-6 text-green-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-600">Email</p>
-                  <p className="font-semibold text-gray-900 truncate">{restaurant.email}</p>
-                </div>
-              </div>
-            )}
-
-            {restaurant.address && (
-              <div className="bg-white rounded-2xl shadow p-4 flex items-center gap-3">
-                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <MapPin className="w-6 h-6 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-600">Address</p>
-                  <p className="font-semibold text-gray-900 line-clamp-2 text-sm">{restaurant.address}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Description */}
-          {restaurant.description && (
-            <div className="bg-white rounded-2xl shadow p-6 mb-6">
-              <h2 className="text-lg font-extrabold text-gray-900 mb-2">About</h2>
-              <p className="text-gray-700 leading-relaxed">{restaurant.description}</p>
-            </div>
-          )}
+        
 
           {/* Controls row */}
           <div className="bg-white rounded-2xl shadow p-4 mb-4">
@@ -664,6 +617,59 @@ export default function RestaurantDetailPage() {
           </div>
         </div>
 
+                           {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 py-6 pb-28 md:pb-8">
+          {/* Restaurant Info Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+
+             {/* Description */}
+          {restaurant.description && (
+            <div className="bg-white rounded-2xl shadow p-6 mb-6">
+              <h2 className="text-lg font-extrabold text-gray-900 mb-2">About</h2>
+              <p className="text-gray-700 leading-relaxed">{restaurant.description}</p>
+            </div>
+          )}
+
+            {restaurant.phone && (
+              <div className="bg-white rounded-2xl shadow p-4 flex items-center gap-3">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Phone className="w-6 h-6 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-600">Contact</p>
+                  <p className="font-semibold text-gray-900 truncate">{restaurant.phone}</p>
+                </div>
+              </div>
+            )}
+
+            {restaurant.email && (
+              <div className="bg-white rounded-2xl shadow p-4 flex items-center gap-3">
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Mail className="w-6 h-6 text-green-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-600">Email</p>
+                  <p className="font-semibold text-gray-900 truncate">{restaurant.email}</p>
+                </div>
+              </div>
+            )}
+
+            {restaurant.address && (
+              <div className="bg-white rounded-2xl shadow p-4 flex items-center gap-3">
+                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <MapPin className="w-6 h-6 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-600">Address</p>
+                  <p className="font-semibold text-gray-900 line-clamp-2 text-sm">{restaurant.address}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+         
+
+          
         {/* Floating Cart Button (Mobile) */}
         {itemCount > 0 && (
           <div className="fixed bottom-4 left-4 right-4 md:hidden z-50">
