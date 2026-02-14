@@ -36,8 +36,6 @@ import {
   Gift,
   Sparkles,
   ChevronRight,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Zap,
   Percent,
   Store,
 } from 'lucide-react';
@@ -122,9 +120,17 @@ export default function RestaurantDetailPage() {
     loadRestaurantDetails();
     loadTrendingItems();
     loadOfferItems();
-    loadRecommendedRestaurants();
+    // ✅ Don't call loadRecommendedRestaurants here - restaurant is not loaded yet
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurantId]);
+
+  // ✅ NEW: Load recommended when restaurant data is available
+  useEffect(() => {
+    if (restaurant) {
+      loadRecommendedRestaurants();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restaurant]);
 
   const loadRestaurantDetails = async () => {
     setLoading(true);
@@ -173,7 +179,11 @@ export default function RestaurantDetailPage() {
         .eq('menu_items.merchant_id', restaurantId)
         .limit(5000);
 
-      if (oiRes.error) throw oiRes.error;
+      if (oiRes.error) {
+        console.error('Trending items error:', oiRes.error);
+        setTrending([]);
+        return;
+      }
 
       const qtyByItem = new Map<string, number>();
       for (const r of oiRes.data || []) {
@@ -190,6 +200,7 @@ export default function RestaurantDetailPage() {
 
       const topItemIds = top.map((x) => x.menu_item_id);
       if (!topItemIds.length) {
+        console.log('No trending items found');
         setTrending([]);
         return;
       }
@@ -200,7 +211,11 @@ export default function RestaurantDetailPage() {
         .in('id', topItemIds)
         .limit(100);
 
-      if (itemsRes.error) throw itemsRes.error;
+      if (itemsRes.error) {
+        console.error('Menu items fetch error:', itemsRes.error);
+        setTrending([]);
+        return;
+      }
 
       const itemMap = new Map<string, any>();
       (itemsRes.data || []).forEach((it: any) => itemMap.set(String(it.id), it));
@@ -223,6 +238,7 @@ export default function RestaurantDetailPage() {
         })
         .filter(Boolean) as TrendingItem[];
 
+      console.log('✅ Loaded trending items:', merged.length);
       setTrending(merged);
     } catch (e) {
       console.error('Failed to load trending:', e);
@@ -247,7 +263,11 @@ export default function RestaurantDetailPage() {
         .eq('deal_type', 'bxgy')
         .limit(10);
 
-      if (promoErr) throw promoErr;
+      if (promoErr) {
+        console.error('Promo codes error:', promoErr);
+        setOffers([]);
+        return;
+      }
 
       const now = new Date();
       const activePromos = (promoRows ?? []).filter((p: any) => {
@@ -258,6 +278,7 @@ export default function RestaurantDetailPage() {
       });
 
       if (!activePromos.length) {
+        console.log('No active offers found');
         setOffers([]);
         return;
       }
@@ -317,6 +338,7 @@ export default function RestaurantDetailPage() {
         });
       }
 
+      console.log('✅ Loaded offers:', offerItems.length);
       setOffers(offerItems);
     } catch (e) {
       console.error('Failed to load offers:', e);
@@ -328,14 +350,17 @@ export default function RestaurantDetailPage() {
 
   // NEW: Load recommended restaurants (same cuisine, nearby)
   const loadRecommendedRestaurants = async () => {
-    if (!restaurant) return;
+    if (!restaurant) {
+      console.log('❌ Restaurant not loaded yet, skipping recommendations');
+      return;
+    }
 
     setRecommendedLoading(true);
     try {
       const cuisines = restaurant.cuisine_types || [];
       if (!cuisines.length) {
-        setRecommended([]);
-        return;
+        console.log('No cuisine types, showing all active restaurants');
+        // ✅ Show some restaurants even without cuisine match
       }
 
       const { data, error } = await supabase
@@ -345,13 +370,19 @@ export default function RestaurantDetailPage() {
         .neq('id', restaurantId)
         .limit(20);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Recommended restaurants error:', error);
+        setRecommended([]);
+        return;
+      }
 
-      // Filter by similar cuisine
-      const similar = (data || []).filter((m: any) => {
-        const mCuisines = Array.isArray(m.cuisine_types) ? m.cuisine_types : [];
-        return mCuisines.some((c: string) => cuisines.includes(c));
-      });
+      // Filter by similar cuisine (or show all if no cuisines)
+      const similar = cuisines.length
+        ? (data || []).filter((m: any) => {
+            const mCuisines = Array.isArray(m.cuisine_types) ? m.cuisine_types : [];
+            return mCuisines.some((c: string) => cuisines.includes(c));
+          })
+        : data || [];
 
       // Add distance if we have restaurant coords
       const withDistance = similar.map((m: any) => {
@@ -387,6 +418,7 @@ export default function RestaurantDetailPage() {
       // Sort by distance, take top 8
       const sorted = withDistance.sort((a, b) => a.distance_km - b.distance_km).slice(0, 8);
 
+      console.log('✅ Loaded recommended restaurants:', sorted.length);
       setRecommended(sorted);
     } catch (e) {
       console.error('Failed to load recommended:', e);
@@ -708,9 +740,7 @@ export default function RestaurantDetailPage() {
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="max-w-7xl mx-auto px-4 py-6 pb-28 md:pb-8 space-y-6">
-        
+      
 
           {/* Controls row (ENHANCED) */}
           <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 p-4 mb-4 animate-in slide-in-from-top duration-500">
@@ -779,7 +809,7 @@ export default function RestaurantDetailPage() {
                     key={cat}
                     onClick={() => scrollToCategory(cat)}
                     className="whitespace-nowrap px-4 py-2 rounded-full bg-white border-2 border-gray-200 shadow-sm hover:shadow-lg hover:border-primary font-black text-gray-800 transition-all hover:scale-105 animate-in fade-in"
-                    style={{animationDelay: `${idx * 50}ms`}}
+                    style={{ animationDelay: `${idx * 50}ms` }}
                   >
                     {cat}
                   </button>
@@ -806,7 +836,7 @@ export default function RestaurantDetailPage() {
                     categoryRefs.current[category] = el;
                   }}
                   className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden animate-in slide-in-from-bottom duration-500 hover:shadow-2xl transition-all"
-                  style={{animationDelay: `${catIdx * 100}ms`}}
+                  style={{ animationDelay: `${catIdx * 100}ms` }}
                 >
                   {/* Category Header (ENHANCED) */}
                   <button
@@ -841,7 +871,7 @@ export default function RestaurantDetailPage() {
                             key={item.id}
                             id={`menu-item-${item.id}`}
                             className="p-4 md:p-6 hover:bg-gradient-to-r hover:from-orange-50 hover:to-pink-50 transition-all animate-in fade-in"
-                            style={{animationDelay: `${itemIdx * 50}ms`}}
+                            style={{ animationDelay: `${itemIdx * 50}ms` }}
                           >
                             <div className="flex gap-4">
                               {/* Item Image (ENHANCED) */}
@@ -943,100 +973,67 @@ export default function RestaurantDetailPage() {
             )}
           </div>
 
-          {/* NEW: SPECIAL OFFERS SECTION */}
-          {!offersLoading && offers.length > 0 && (
-            <div className="bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-3xl shadow-2xl border-2 border-green-400 p-5 animate-in slide-in-from-right duration-700">
-              <div className="flex items-center justify-between gap-2 mb-4">
-                <div className="min-w-0">
-                  <h3 className="text-lg font-black text-gray-900 truncate inline-flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg animate-bounce">
-                      <Gift className="w-5 h-5 text-white" />
-                    </div>
-                    Special Offers
-                  </h3>
-                  <p className="text-xs text-gray-700 leading-4 mt-1 font-bold flex items-center gap-1">
-                    <Percent className="w-3 h-3" />
-                    Buy items to get amazing deals!
-                  </p>
-                </div>
-              </div>
+            {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 py-6 pb-28 md:pb-8 space-y-6">
+          {/* Restaurant Info Cards */}
 
-              <div className="flex gap-3 overflow-x-auto no-scrollbar py-1">
-                {offers.map((offer, index) => {
-                  const img = String(offer.buyItemImage || '').trim();
-                  const qty = quantities[offer.buyItemId] || 1;
-
-                  return (
-                    <div
-                      key={offer.id}
-                      className="min-w-[220px] max-w-[220px] text-left bg-white border-2 border-gray-200 rounded-2xl shadow-lg hover:shadow-2xl hover:border-green-500 transition-all duration-300 overflow-hidden animate-in fade-in slide-in-from-bottom"
-                      style={{ animationDelay: `${index * 100}ms` }}
-                    >
-                      <div className="h-28 bg-gradient-to-br from-green-100 via-emerald-100 to-teal-100 relative">
-                        {img ? (
-                          <img
-                            src={img}
-                            alt={offer.buyItemName}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                            onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Sparkles className="w-12 h-12 text-green-500 animate-pulse" />
-                          </div>
-                        )}
-                        <div className="absolute top-2 right-2 px-2 py-1 rounded-lg bg-red-500 text-white text-xs font-black shadow-lg animate-pulse">
-                          OFFER
-                        </div>
-                      </div>
-
-                      <div className="p-3">
-                        <div className="font-black text-gray-900 text-sm truncate mb-1">{offer.buyItemName}</div>
-                        <div className="text-xs text-green-700 font-bold mb-2">{offer.offerLabel}</div>
-                        <div className="text-base font-black bg-gradient-to-r from-primary to-pink-600 bg-clip-text text-transparent mb-3">
-                          ₹{offer.buyItemPrice.toFixed(0)}
-                        </div>
-
-                        {/* Quantity selector */}
-                        <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 mb-3">
-                          <button
-                            onClick={() => updateQuantity(offer.buyItemId, -1)}
-                            className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg transition-all disabled:opacity-40"
-                            disabled={qty <= 1}
-                          >
-                            <Minus className="w-3 h-3 text-gray-700" />
-                          </button>
-                          <span className="flex-1 text-center font-black text-gray-900 text-sm">{qty}</span>
-                          <button
-                            onClick={() => updateQuantity(offer.buyItemId, 1)}
-                            className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg transition-all disabled:opacity-40"
-                            disabled={qty >= 10}
-                          >
-                            <Plus className="w-3 h-3 text-gray-700" />
-                          </button>
-                        </div>
-
-                        <button
-                          onClick={() => handleAddOfferToCart(offer)}
-                          className="w-full px-3 py-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-black text-center shadow-md hover:shadow-xl transition-all hover:scale-105"
-                        >
-                          Add to Cart
-                        </button>
-
-                        <div className="mt-2 text-center text-xs font-bold text-gray-600">
-                          CODE: {offer.promoCode}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+             {/* Description */}
+          {restaurant.description && (
+            <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 p-6 animate-in fade-in duration-500">
+              <h2 className="text-lg font-black text-gray-900 mb-2 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" />
+                About
+              </h2>
+              <p className="text-gray-700 leading-relaxed font-semibold">{restaurant.description}</p>
             </div>
           )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {restaurant.phone && (
+              <div className="bg-white rounded-2xl shadow-lg border-2 border-blue-100 p-4 flex items-center gap-3 hover:shadow-xl hover:border-blue-300 transition-all hover:scale-105 animate-in fade-in duration-500">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Phone className="w-6 h-6 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-600 font-bold">Contact</p>
+                  <p className="font-black text-gray-900 truncate">{restaurant.phone}</p>
+                </div>
+              </div>
+            )}
 
-  {/* NEW: TRENDING ITEMS (if available) */}
+            {restaurant.email && (
+              <div
+                className="bg-white rounded-2xl shadow-lg border-2 border-green-100 p-4 flex items-center gap-3 hover:shadow-xl hover:border-green-300 transition-all hover:scale-105 animate-in fade-in duration-500"
+                style={{ animationDelay: '100ms' }}
+              >
+                <div className="w-12 h-12 bg-gradient-to-br from-green-100 to-green-200 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Mail className="w-6 h-6 text-green-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-600 font-bold">Email</p>
+                  <p className="font-black text-gray-900 truncate">{restaurant.email}</p>
+                </div>
+              </div>
+            )}
+
+            {restaurant.address && (
+              <div
+                className="bg-white rounded-2xl shadow-lg border-2 border-orange-100 p-4 flex items-center gap-3 hover:shadow-xl hover:border-orange-300 transition-all hover:scale-105 animate-in fade-in duration-500"
+                style={{ animationDelay: '200ms' }}
+              >
+                <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center flex-shrink-0">
+                  <MapPin className="w-6 h-6 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-600 font-bold">Address</p>
+                  <p className="font-black text-gray-900 line-clamp-2 text-sm">{restaurant.address}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+       
+
+          {/* ✅ NEW: TRENDING ITEMS (MOVED HERE - AT TOP, AFTER DESCRIPTION) */}
           {!trendingLoading && trending.length > 0 && (
             <div className="bg-gradient-to-br from-orange-50 via-pink-50 to-purple-50 rounded-3xl shadow-2xl border-2 border-primary p-5 animate-in slide-in-from-left duration-700">
               <div className="flex items-center justify-between gap-2 mb-4">
@@ -1122,59 +1119,98 @@ export default function RestaurantDetailPage() {
             </div>
           )}
 
-            {/* Description */}
-          {restaurant.description && (
-            <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 p-6 animate-in fade-in duration-500">
-              <h2 className="text-lg font-black text-gray-900 mb-2 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-primary" />
-                About
-              </h2>
-              <p className="text-gray-700 leading-relaxed font-semibold">{restaurant.description}</p>
+          {/* ✅ NEW: SPECIAL OFFERS SECTION (AT BOTTOM) */}
+          {!offersLoading && offers.length > 0 && (
+            <div className="bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 rounded-3xl shadow-2xl border-2 border-green-400 p-5 animate-in slide-in-from-right duration-700">
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="min-w-0">
+                  <h3 className="text-lg font-black text-gray-900 truncate inline-flex items-center gap-2">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg animate-bounce">
+                      <Gift className="w-5 h-5 text-white" />
+                    </div>
+                    Special Offers
+                  </h3>
+                  <p className="text-xs text-gray-700 leading-4 mt-1 font-bold flex items-center gap-1">
+                    <Percent className="w-3 h-3" />
+                    Buy items to get amazing deals!
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 overflow-x-auto no-scrollbar py-1">
+                {offers.map((offer, index) => {
+                  const img = String(offer.buyItemImage || '').trim();
+                  const qty = quantities[offer.buyItemId] || 1;
+
+                  return (
+                    <div
+                      key={offer.id}
+                      className="min-w-[220px] max-w-[220px] text-left bg-white border-2 border-gray-200 rounded-2xl shadow-lg hover:shadow-2xl hover:border-green-500 transition-all duration-300 overflow-hidden animate-in fade-in slide-in-from-bottom"
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      <div className="h-28 bg-gradient-to-br from-green-100 via-emerald-100 to-teal-100 relative">
+                        {img ? (
+                          <img
+                            src={img}
+                            alt={offer.buyItemName}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Sparkles className="w-12 h-12 text-green-500 animate-pulse" />
+                          </div>
+                        )}
+                        <div className="absolute top-2 right-2 px-2 py-1 rounded-lg bg-red-500 text-white text-xs font-black shadow-lg animate-pulse">
+                          OFFER
+                        </div>
+                      </div>
+
+                      <div className="p-3">
+                        <div className="font-black text-gray-900 text-sm truncate mb-1">{offer.buyItemName}</div>
+                        <div className="text-xs text-green-700 font-bold mb-2 line-clamp-2">{offer.offerLabel}</div>
+                        <div className="text-base font-black bg-gradient-to-r from-primary to-pink-600 bg-clip-text text-transparent mb-3">
+                          ₹{offer.buyItemPrice.toFixed(0)}
+                        </div>
+
+                        {/* Quantity selector */}
+                        <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1 mb-3">
+                          <button
+                            onClick={() => updateQuantity(offer.buyItemId, -1)}
+                            className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg transition-all disabled:opacity-40"
+                            disabled={qty <= 1}
+                          >
+                            <Minus className="w-3 h-3 text-gray-700" />
+                          </button>
+                          <span className="flex-1 text-center font-black text-gray-900 text-sm">{qty}</span>
+                          <button
+                            onClick={() => updateQuantity(offer.buyItemId, 1)}
+                            className="w-7 h-7 flex items-center justify-center hover:bg-white rounded-lg transition-all disabled:opacity-40"
+                            disabled={qty >= 10}
+                          >
+                            <Plus className="w-3 h-3 text-gray-700" />
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => handleAddOfferToCart(offer)}
+                          className="w-full px-3 py-2 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-black text-center shadow-md hover:shadow-xl transition-all hover:scale-105"
+                        >
+                          Add to Cart
+                        </button>
+
+                        <div className="mt-2 text-center text-xs font-bold text-gray-600">CODE: {offer.promoCode}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
-          {/* Restaurant Info Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {restaurant.phone && (
-              <div className="bg-white rounded-2xl shadow-lg border-2 border-blue-100 p-4 flex items-center gap-3 hover:shadow-xl hover:border-blue-300 transition-all hover:scale-105 animate-in fade-in duration-500">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Phone className="w-6 h-6 text-blue-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-600 font-bold">Contact</p>
-                  <p className="font-black text-gray-900 truncate">{restaurant.phone}</p>
-                </div>
-              </div>
-            )}
-
-            {restaurant.email && (
-              <div className="bg-white rounded-2xl shadow-lg border-2 border-green-100 p-4 flex items-center gap-3 hover:shadow-xl hover:border-green-300 transition-all hover:scale-105 animate-in fade-in duration-500" style={{animationDelay: '100ms'}}>
-                <div className="w-12 h-12 bg-gradient-to-br from-green-100 to-green-200 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Mail className="w-6 h-6 text-green-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-600 font-bold">Email</p>
-                  <p className="font-black text-gray-900 truncate">{restaurant.email}</p>
-                </div>
-              </div>
-            )}
-
-            {restaurant.address && (
-              <div className="bg-white rounded-2xl shadow-lg border-2 border-orange-100 p-4 flex items-center gap-3 hover:shadow-xl hover:border-orange-300 transition-all hover:scale-105 animate-in fade-in duration-500" style={{animationDelay: '200ms'}}>
-                <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center flex-shrink-0">
-                  <MapPin className="w-6 h-6 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-600 font-bold">Address</p>
-                  <p className="font-black text-gray-900 line-clamp-2 text-sm">{restaurant.address}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-        
-
-          {/* NEW: RECOMMENDED RESTAURANTS */}
+          {/* ✅ NEW: RECOMMENDED RESTAURANTS (AT BOTTOM) */}
           {!recommendedLoading && recommended.length > 0 && (
             <div className="bg-white rounded-3xl shadow-2xl border-2 border-gray-200 p-5 animate-in slide-in-from-bottom duration-700">
               <div className="flex items-center justify-between gap-2 mb-4">
