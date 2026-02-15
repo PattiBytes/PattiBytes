@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
@@ -299,68 +300,71 @@ export default function CustomerProfilePage() {
             </form>
           </div>
 
-          {/* Request Panel Access */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Request Panel Access</h2>
-            <p className="text-gray-600 mb-6">
-              Want to become a merchant or delivery driver? Request access below.
-            </p>
+        {/* ✅ COMMENTED OUT - Request Panel Access Section Hidden from Users */}
+{/*
+<div className="bg-white rounded-lg shadow p-6">
+  <h2 className="text-xl font-bold text-gray-900 mb-6">Request Panel Access</h2>
+  <p className="text-gray-600 mb-6">
+    Want to become a merchant or delivery driver? Request access below.
+  </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <button
-                onClick={() => handleRequestAccess('merchant')}
-                className="bg-orange-50 border-2 border-orange-200 rounded-lg p-6 hover:bg-orange-100 transition-colors text-left"
-              >
-                <Briefcase className="text-orange-600 mb-3" size={32} />
-                <h3 className="font-bold text-gray-900 mb-2">Merchant Panel</h3>
-                <p className="text-sm text-gray-600">
-                  Manage your restaurant and orders
-                </p>
-              </button>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <button
+      onClick={() => handleRequestAccess('merchant')}
+      className="bg-orange-50 border-2 border-orange-200 rounded-lg p-6 hover:bg-orange-100 transition-colors text-left"
+    >
+      <Briefcase className="text-orange-600 mb-3" size={32} />
+      <h3 className="font-bold text-gray-900 mb-2">Merchant Panel</h3>
+      <p className="text-sm text-gray-600">
+        Manage your restaurant and orders
+      </p>
+    </button>
 
-              <button
-                onClick={() => handleRequestAccess('driver')}
-                className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 hover:bg-blue-100 transition-colors text-left"
-              >
-                <Bike className="text-blue-600 mb-3" size={32} />
-                <h3 className="font-bold text-gray-900 mb-2">Driver Panel</h3>
-                <p className="text-sm text-gray-600">
-                  Deliver orders and earn money
-                </p>
-              </button>
-            </div>
+    <button
+      onClick={() => handleRequestAccess('driver')}
+      className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 hover:bg-blue-100 transition-colors text-left"
+    >
+      <Bike className="text-blue-600 mb-3" size={32} />
+      <h3 className="font-bold text-gray-900 mb-2">Driver Panel</h3>
+      <p className="text-sm text-gray-600">
+        Deliver orders and earn money
+      </p>
+    </button>
+  </div>
 
-            {accessRequests.length > 0 && (
+  {accessRequests.length > 0 && (
+    <div>
+      <h3 className="font-bold text-gray-900 mb-4">Your Requests</h3>
+      <div className="space-y-3">
+        {accessRequests.map((request) => (
+          <div
+            key={request.id}
+            className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+          >
+            <div className="flex items-center gap-3">
+              {getStatusIcon(request.status)}
               <div>
-                <h3 className="font-bold text-gray-900 mb-4">Your Requests</h3>
-                <div className="space-y-3">
-                  {accessRequests.map((request) => (
-                    <div
-                      key={request.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        {getStatusIcon(request.status)}
-                        <div>
-                          <p className="font-medium text-gray-900 capitalize">
-                            {request.requested_role} Panel
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            {new Date(request.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${getStatusColor(request.status)}`}>
-                        {request.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <p className="font-medium text-gray-900 capitalize">
+                  {request.requested_role} Panel
+                </p>
+                <p className="text-sm text-gray-600">
+                  {new Date(request.created_at).toLocaleDateString()}
+                </p>
               </div>
-            )}
+            </div>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold capitalize ${getStatusColor(request.status)}`}>
+              {request.status}
+            </span>
           </div>
-        </div>
+        ))}
       </div>
+    </div>
+  )}
+</div>
+*/}
+
+</div>
+</div>
     </DashboardLayout>
   );
 }
