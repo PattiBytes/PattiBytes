@@ -21,6 +21,9 @@ import {
   Bell,
   Zap,
   TrendingUp,
+  Trash2,
+  AlertTriangle,
+  Shield,
 } from 'lucide-react';
 import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
 import { toast } from 'react-toastify';
@@ -46,14 +49,12 @@ interface Order {
   customer_phone?: string | null;
   profiles?: { full_name: string | null };
   merchants?: { business_name: string | null };
-  customerName?: string; // ✅ Processed name
+  customerName?: string;
 }
 
 const ACTIVE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'assigned', 'picked_up'];
 
-// ✅ FIXED: Handle null user_id for walk-in orders
 async function sendDbNotification(userId: string | null, title: string, message: string, type: string, data?: any) {
-  // Skip if no user_id (walk-in orders)
   if (!userId) {
     console.log('⚠️ Skipping notification: No user_id (walk-in order)');
     return true;
@@ -148,6 +149,12 @@ export default function AdminOrdersPage() {
 
   const [notifyingOrderId, setNotifyingOrderId] = useState<string | null>(null);
   const [assigningOrderId, setAssigningOrderId] = useState<string | null>(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+
+  // ✅ Check if user is admin/superadmin
+  const isAdmin = useMemo(() => {
+    return (user as any)?.role === 'admin' || (user as any)?.role === 'superadmin';
+  }, [user]);
 
   useEffect(() => {
     if (!user) {
@@ -209,12 +216,10 @@ export default function AdminOrdersPage() {
 
       const rows = (data || []) as any[];
 
-      // ✅ FIXED: Process customer names for walk-in orders
       const processedOrders = rows.map((order) => {
         let customerName = 'Unknown';
 
         if (!order.customer_id) {
-          // Walk-in order - extract name from customer_notes
           if (order.customer_notes) {
             if (order.customer_notes.includes('Walk-in:')) {
               customerName = order.customer_notes
@@ -230,7 +235,6 @@ export default function AdminOrdersPage() {
             customerName = 'Walk-in Customer';
           }
         } else {
-          // Regular customer with profile
           customerName = order.profiles?.full_name || 'Unknown';
         }
 
@@ -350,12 +354,10 @@ export default function AdminOrdersPage() {
         .eq('order_id', order.id)
         .eq('driver_id', driverId);
 
-      // ✅ Always notify driver
       await sendDbNotification(driverId, 'Order Assigned', `You are assigned for order #${order.id.slice(0, 8)}.`, 'delivery', {
         order_id: order.id,
       });
 
-      // ✅ Only notify customer if they have user_id
       if (order.customer_id) {
         await sendDbNotification(order.customer_id, 'Driver Assigned', `A driver has been assigned to your order #${order.id.slice(0, 8)}.`, 'order', {
           order_id: order.id,
@@ -372,6 +374,125 @@ export default function AdminOrdersPage() {
       toast.error(e?.message || 'Failed to assign driver');
     } finally {
       setAssigningOrderId(null);
+    }
+  };
+
+  // ✅ DELETE ORDER FUNCTION
+  const deleteOrder = async (order: Order) => {
+    // Check admin permission
+    if (!isAdmin) {
+      toast.error('Only admins can delete orders');
+      return;
+    }
+
+    // Enhanced confirmation dialog
+    const confirmed = window.confirm(
+      `⚠️ DELETE ORDER PERMANENTLY\n\n` +
+      `Order ID: #${order.id.slice(0, 8)}\n` +
+      `Customer: ${order.customerName || 'Unknown'}\n` +
+      `Restaurant: ${order.merchants?.business_name || 'N/A'}\n` +
+      `Amount: ₹${Number(order.total_amount || 0).toFixed(2)}\n` +
+      `Status: ${order.status}\n\n` +
+      `⚠️ THIS ACTION CANNOT BE UNDONE!\n\n` +
+      `This will delete:\n` +
+      `• The order from database\n` +
+      `• All driver assignments\n` +
+      `• Related notifications\n\n` +
+      `Are you absolutely sure?`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingOrderId(order.id);
+    try {
+      console.log('🗑️ Starting order deletion:', order.id);
+
+      // 1. Delete driver assignments (if any)
+      if (order.driver_id || ACTIVE_STATUSES.includes(order.status)) {
+        const { error: assignError } = await supabase
+          .from('driver_assignments')
+          .delete()
+          .eq('order_id', order.id);
+
+        if (assignError) {
+          console.warn('Failed to delete assignments:', assignError);
+        } else {
+          console.log('✅ Deleted driver assignments');
+        }
+      }
+
+      // 2. Delete related notifications (optional - depends on your schema)
+      try {
+        const { error: notifError } = await supabase
+          .from('notifications')
+          .delete()
+          .or(`data->>order_id.eq.${order.id}`);
+
+        if (notifError) {
+          console.warn('Failed to delete notifications:', notifError);
+        } else {
+          console.log('✅ Deleted related notifications');
+        }
+      } catch (e) {
+        console.warn('Notification deletion skipped:', e);
+      }
+
+      // 3. Delete the order itself
+      const { error: orderError } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', order.id);
+
+      if (orderError) throw orderError;
+
+      console.log('✅ Order deleted from database');
+
+      // 4. Notify customer (if not walk-in)
+      if (order.customer_id) {
+        await sendDbNotification(
+          order.customer_id,
+          '❌ Order Deleted',
+          `Your order #${order.id.slice(0, 8)} (₹${Number(order.total_amount || 0).toFixed(2)}) has been deleted by admin.`,
+          'order',
+          { 
+            order_id: order.id, 
+            deleted_at: new Date().toISOString(),
+            reason: 'Admin deletion'
+          }
+        );
+        console.log('✅ Customer notified');
+      }
+
+      // 5. Notify driver (if assigned)
+      if (order.driver_id) {
+        await sendDbNotification(
+          order.driver_id,
+          '❌ Order Cancelled',
+          `Order #${order.id.slice(0, 8)} has been deleted by admin. You are no longer assigned.`,
+          'delivery',
+          { 
+            order_id: order.id, 
+            deleted_at: new Date().toISOString() 
+          }
+        );
+        console.log('✅ Driver notified');
+      }
+
+      // 6. Update local state with smooth removal
+      setOrders((prev) => prev.filter((o) => o.id !== order.id));
+
+      toast.success('✅ Order deleted successfully');
+
+      // 7. Reload after animation
+      setTimeout(() => {
+        loadOrders();
+      }, 500);
+
+    } catch (e: any) {
+      console.error('❌ Failed to delete order:', e);
+      toast.error(e?.message || 'Failed to delete order');
+    } finally {
+      setDeletingOrderId(null);
     }
   };
 
@@ -401,14 +522,16 @@ export default function AdminOrdersPage() {
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6">
-        {/* ✅ Animated Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 animate-fade-in">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
               <Zap className="text-primary animate-pulse" size={32} />
               All Orders
             </h1>
-            <p className="text-xs sm:text-sm text-gray-600 mt-1">Assign a driver or notify available drivers.</p>
+            <p className="text-xs sm:text-sm text-gray-600 mt-1 flex items-center gap-2">
+              {isAdmin && <Shield size={14} className="text-green-600" />}
+              Assign drivers, notify drivers, or delete orders {isAdmin && '(Admin)'}
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -436,7 +559,6 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        {/* ✅ Animated Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6">
           <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-md p-4 sm:p-6 hover:shadow-xl transition-all duration-300 hover:scale-105 animate-slide-up" style={{ animationDelay: '0ms' }}>
             <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-2">
@@ -468,7 +590,6 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        {/* ✅ Animated Filters */}
         <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 mb-6 animate-fade-in" style={{ animationDelay: '400ms' }}>
           <div className="grid md:grid-cols-2 gap-3 sm:gap-4">
             <div className="relative">
@@ -503,7 +624,6 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        {/* ✅ Animated Orders Table */}
         <div className="bg-white rounded-2xl shadow-md overflow-hidden animate-fade-in" style={{ animationDelay: '500ms' }}>
           <div className="overflow-x-auto">
             <table className="w-full hidden md:table">
@@ -520,7 +640,13 @@ export default function AdminOrdersPage() {
 
               <tbody className="divide-y">
                 {filteredOrders.map((o, index) => (
-                  <tr key={o.id} className="hover:bg-orange-50 transition-all duration-200 animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
+                  <tr 
+                    key={o.id} 
+                    className={`hover:bg-orange-50 transition-all duration-200 animate-fade-in ${
+                      deletingOrderId === o.id ? 'opacity-50 bg-red-50' : ''
+                    }`}
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
                     <td className="px-6 py-4 text-sm font-bold text-gray-900">#{o.id.slice(0, 8)}</td>
                     <td className="px-6 py-4 text-sm text-gray-700">
                       <div className="flex items-center gap-2">
@@ -539,7 +665,8 @@ export default function AdminOrdersPage() {
                       <div className="flex flex-wrap gap-2">
                         <button
                           onClick={() => router.push(`/admin/orders/${o.id}`)}
-                          className="inline-flex items-center gap-1 text-primary hover:text-orange-600 font-semibold transition-all hover:scale-110"
+                          disabled={deletingOrderId === o.id}
+                          className="inline-flex items-center gap-1 text-primary hover:text-orange-600 font-semibold transition-all hover:scale-110 disabled:opacity-50"
                         >
                           <Eye size={16} />
                           View
@@ -547,7 +674,7 @@ export default function AdminOrdersPage() {
 
                         <button
                           onClick={() => notifyAllDrivers(o)}
-                          disabled={notifyingOrderId === o.id}
+                          disabled={notifyingOrderId === o.id || deletingOrderId === o.id}
                           className="inline-flex items-center gap-1 text-purple-700 hover:text-purple-900 font-semibold disabled:opacity-50 transition-all hover:scale-110"
                         >
                           <Bell size={16} className={notifyingOrderId === o.id ? 'animate-bounce' : ''} />
@@ -556,14 +683,14 @@ export default function AdminOrdersPage() {
 
                         <select
                           defaultValue=""
-                          disabled={assigningOrderId === o.id || driversLoading}
+                          disabled={assigningOrderId === o.id || driversLoading || deletingOrderId === o.id}
                           onChange={(e) => {
                             const id = e.target.value;
                             if (!id) return;
                             assignDriver(o, id);
                             e.currentTarget.value = '';
                           }}
-                          className="px-3 py-2 rounded-xl border border-gray-300 hover:border-primary transition-all"
+                          className="px-3 py-2 rounded-xl border border-gray-300 hover:border-primary transition-all disabled:opacity-50"
                         >
                           <option value="">Assign…</option>
                           {drivers.map((d) => (
@@ -572,6 +699,19 @@ export default function AdminOrdersPage() {
                             </option>
                           ))}
                         </select>
+
+                        {/* Delete Button - Only for Admins */}
+                        {isAdmin && (
+                          <button
+                            onClick={() => deleteOrder(o)}
+                            disabled={deletingOrderId === o.id}
+                            className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 font-semibold disabled:opacity-50 transition-all hover:scale-110"
+                            title="Delete Order (Admin Only)"
+                          >
+                            <Trash2 size={16} className={deletingOrderId === o.id ? 'animate-spin' : ''} />
+                            {deletingOrderId === o.id ? 'Deleting…' : 'Delete'}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -579,10 +719,16 @@ export default function AdminOrdersPage() {
               </tbody>
             </table>
 
-            {/* ✅ Animated Mobile cards */}
+            {/* Mobile cards */}
             <div className="md:hidden divide-y">
               {filteredOrders.map((o, index) => (
-                <div key={o.id} className="p-4 hover:bg-orange-50 transition-all duration-200 animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
+                <div 
+                  key={o.id} 
+                  className={`p-4 hover:bg-orange-50 transition-all duration-200 animate-fade-in ${
+                    deletingOrderId === o.id ? 'opacity-50 bg-red-50' : ''
+                  }`}
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-bold text-gray-900">#{o.id.slice(0, 8)}</p>
@@ -600,7 +746,8 @@ export default function AdminOrdersPage() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       onClick={() => router.push(`/admin/orders/${o.id}`)}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-primary text-white font-semibold transition-all hover:scale-105 hover:shadow-lg"
+                      disabled={deletingOrderId === o.id}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-primary text-white font-semibold transition-all hover:scale-105 hover:shadow-lg disabled:opacity-50"
                     >
                       <Eye size={16} />
                       View
@@ -608,7 +755,7 @@ export default function AdminOrdersPage() {
 
                     <button
                       onClick={() => notifyAllDrivers(o)}
-                      disabled={notifyingOrderId === o.id}
+                      disabled={notifyingOrderId === o.id || deletingOrderId === o.id}
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-purple-600 text-white font-semibold disabled:opacity-50 transition-all hover:scale-105 hover:shadow-lg"
                     >
                       <Bell size={16} className={notifyingOrderId === o.id ? 'animate-bounce' : ''} />
@@ -617,14 +764,14 @@ export default function AdminOrdersPage() {
 
                     <select
                       defaultValue=""
-                      disabled={assigningOrderId === o.id || driversLoading}
+                      disabled={assigningOrderId === o.id || driversLoading || deletingOrderId === o.id}
                       onChange={(e) => {
                         const id = e.target.value;
                         if (!id) return;
                         assignDriver(o, id);
                         e.currentTarget.value = '';
                       }}
-                      className="px-3 py-2 rounded-xl border border-gray-300 transition-all"
+                      className="px-3 py-2 rounded-xl border border-gray-300 transition-all disabled:opacity-50"
                     >
                       <option value="">Assign…</option>
                       {drivers.map((d) => (
@@ -633,6 +780,18 @@ export default function AdminOrdersPage() {
                         </option>
                       ))}
                     </select>
+
+                    {/* Delete Button for Mobile - Only for Admins */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => deleteOrder(o)}
+                        disabled={deletingOrderId === o.id}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-red-600 text-white font-semibold disabled:opacity-50 transition-all hover:scale-105 hover:shadow-lg"
+                      >
+                        <Trash2 size={16} className={deletingOrderId === o.id ? 'animate-spin' : ''} />
+                        {deletingOrderId === o.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -646,9 +805,31 @@ export default function AdminOrdersPage() {
             </div>
           )}
         </div>
+
+        {/* Warning Banner - Only for Admins */}
+        {isAdmin && (
+          <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 animate-fade-in">
+            <AlertTriangle className="text-red-600 shrink-0 mt-0.5" size={20} />
+            <div className="text-sm text-red-800">
+              <p className="font-semibold flex items-center gap-2">
+                <Shield size={16} />
+                Admin Deletion Warning
+              </p>
+              <p className="mt-1">
+                Order deletion is <strong>permanent and irreversible</strong>. This action will:
+              </p>
+              <ul className="mt-2 ml-4 list-disc space-y-1">
+                <li>Remove the order from the database</li>
+                <li>Delete all driver assignments</li>
+                <li>Delete related notifications</li>
+                <li>Notify customer and driver (if applicable)</li>
+              </ul>
+              <p className="mt-2 font-semibold">⚠️ Use this feature responsibly!</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ✅ Add Custom CSS for Animations */}
       <style jsx global>{`
         @keyframes fade-in {
           from {
