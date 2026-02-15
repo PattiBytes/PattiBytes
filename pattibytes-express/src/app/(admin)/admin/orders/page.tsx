@@ -24,6 +24,8 @@ import {
   Trash2,
   AlertTriangle,
   Shield,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  Edit3,
 } from 'lucide-react';
 import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
 import { toast } from 'react-toastify';
@@ -45,6 +47,7 @@ interface Order {
   payment_method: string;
   payment_status: string;
   created_at: string;
+  updated_at?: string | null;
   customer_notes?: string | null;
   customer_phone?: string | null;
   profiles?: { full_name: string | null };
@@ -53,6 +56,7 @@ interface Order {
 }
 
 const ACTIVE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'assigned', 'picked_up'];
+const ALL_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'assigned', 'picked_up', 'delivered', 'cancelled'];
 
 async function sendDbNotification(userId: string | null, title: string, message: string, type: string, data?: any) {
   if (!userId) {
@@ -140,7 +144,6 @@ export default function AdminOrdersPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [drivers, setDrivers] = useState<DriverRow[]>([]);
-  const [driversLoading, setDriversLoading] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -148,10 +151,9 @@ export default function AdminOrdersPage() {
   const [stats, setStats] = useState({ total: 0, active: 0, completed: 0, revenue: 0 });
 
   const [notifyingOrderId, setNotifyingOrderId] = useState<string | null>(null);
-  const [assigningOrderId, setAssigningOrderId] = useState<string | null>(null);
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
 
-  // ✅ Check if user is admin/superadmin
   const isAdmin = useMemo(() => {
     return (user as any)?.role === 'admin' || (user as any)?.role === 'superadmin';
   }, [user]);
@@ -204,6 +206,7 @@ export default function AdminOrdersPage() {
           payment_method,
           payment_status,
           created_at,
+          updated_at,
           customer_notes,
           customer_phone,
           profiles:customer_id (full_name),
@@ -268,7 +271,6 @@ export default function AdminOrdersPage() {
   };
 
   const loadDrivers = async () => {
-    setDriversLoading(true);
     try {
       const list = await loadAvailableDriversStrict();
       setDrivers(list);
@@ -276,13 +278,11 @@ export default function AdminOrdersPage() {
       console.error('Failed to load drivers:', e);
       toast.error('Failed to load drivers');
       setDrivers([]);
-    } finally {
-      setDriversLoading(false);
     }
   };
 
   const exportToCSV = () => {
-    const headers = ['Order ID', 'Customer', 'Restaurant', 'Amount', 'Status', 'Payment', 'Date'];
+    const headers = ['Order ID', 'Customer', 'Restaurant', 'Amount', 'Status', 'Payment', 'Created At', 'Updated At'];
     const csvData = filteredOrders.map((o) => [
       o.id,
       o.customerName || 'N/A',
@@ -291,6 +291,7 @@ export default function AdminOrdersPage() {
       o.status,
       o.payment_status,
       new Date(o.created_at).toLocaleString(),
+      o.updated_at ? new Date(o.updated_at).toLocaleString() : 'N/A',
     ]);
 
     const csv = [headers.join(','), ...csvData.map((row) => row.join(','))].join('\n');
@@ -335,57 +336,69 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const assignDriver = async (order: Order, driverId: string) => {
-    if (!driverId) return;
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
 
-    setAssigningOrderId(order.id);
+  const getTimeDiff = (created: string, updated?: string | null) => {
+    if (!updated) return '';
+    const diff = new Date(updated).getTime() - new Date(created).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ${minutes % 60}m`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h`;
+  };
+
+  // ✅ UPDATE ORDER STATUS FUNCTION
+  const updateOrderStatus = async (order: Order, newStatus: string) => {
+    if (order.status === newStatus) return;
+
+    setUpdatingOrderId(order.id);
     try {
       const nowIso = new Date().toISOString();
-
-      const patch: any = { driver_id: driverId, updated_at: nowIso };
-      if (order.status === 'ready') patch.status = 'assigned';
+      const patch: any = { status: newStatus, updated_at: nowIso };
 
       const { error } = await supabase.from('orders').update(patch).eq('id', order.id);
       if (error) throw error;
 
-      await supabase
-        .from('driver_assignments')
-        .update({ status: 'accepted', responded_at: nowIso } as any)
-        .eq('order_id', order.id)
-        .eq('driver_id', driverId);
-
-      await sendDbNotification(driverId, 'Order Assigned', `You are assigned for order #${order.id.slice(0, 8)}.`, 'delivery', {
-        order_id: order.id,
-      });
-
+      // Notify customer (if not walk-in)
       if (order.customer_id) {
-        await sendDbNotification(order.customer_id, 'Driver Assigned', `A driver has been assigned to your order #${order.id.slice(0, 8)}.`, 'order', {
-          order_id: order.id,
-          driver_id: driverId,
-        });
-      } else {
-        console.log('⚠️ Walk-in order - skipping customer notification');
+        await sendDbNotification(
+          order.customer_id,
+          'Order Status Updated',
+          `Your order #${order.id.slice(0, 8)} is now ${newStatus.replace('_', ' ')}.`,
+          'order',
+          { order_id: order.id, status: newStatus }
+        );
       }
 
-      toast.success('Driver assigned');
+      toast.success(`Status updated to ${newStatus}`);
       await loadOrders();
     } catch (e: any) {
       console.error(e);
-      toast.error(e?.message || 'Failed to assign driver');
+      toast.error(e?.message || 'Failed to update status');
     } finally {
-      setAssigningOrderId(null);
+      setUpdatingOrderId(null);
     }
   };
 
-  // ✅ DELETE ORDER FUNCTION
   const deleteOrder = async (order: Order) => {
-    // Check admin permission
     if (!isAdmin) {
       toast.error('Only admins can delete orders');
       return;
     }
 
-    // Enhanced confirmation dialog
     const confirmed = window.confirm(
       `⚠️ DELETE ORDER PERMANENTLY\n\n` +
       `Order ID: #${order.id.slice(0, 8)}\n` +
@@ -394,10 +407,6 @@ export default function AdminOrdersPage() {
       `Amount: ₹${Number(order.total_amount || 0).toFixed(2)}\n` +
       `Status: ${order.status}\n\n` +
       `⚠️ THIS ACTION CANNOT BE UNDONE!\n\n` +
-      `This will delete:\n` +
-      `• The order from database\n` +
-      `• All driver assignments\n` +
-      `• Related notifications\n\n` +
       `Are you absolutely sure?`
     );
 
@@ -405,89 +414,42 @@ export default function AdminOrdersPage() {
 
     setDeletingOrderId(order.id);
     try {
-      console.log('🗑️ Starting order deletion:', order.id);
-
-      // 1. Delete driver assignments (if any)
       if (order.driver_id || ACTIVE_STATUSES.includes(order.status)) {
-        const { error: assignError } = await supabase
-          .from('driver_assignments')
-          .delete()
-          .eq('order_id', order.id);
-
-        if (assignError) {
-          console.warn('Failed to delete assignments:', assignError);
-        } else {
-          console.log('✅ Deleted driver assignments');
-        }
+        await supabase.from('driver_assignments').delete().eq('order_id', order.id);
       }
 
-      // 2. Delete related notifications (optional - depends on your schema)
       try {
-        const { error: notifError } = await supabase
-          .from('notifications')
-          .delete()
-          .or(`data->>order_id.eq.${order.id}`);
-
-        if (notifError) {
-          console.warn('Failed to delete notifications:', notifError);
-        } else {
-          console.log('✅ Deleted related notifications');
-        }
+        await supabase.from('notifications').delete().or(`data->>order_id.eq.${order.id}`);
       } catch (e) {
         console.warn('Notification deletion skipped:', e);
       }
 
-      // 3. Delete the order itself
-      const { error: orderError } = await supabase
-        .from('orders')
-        .delete()
-        .eq('id', order.id);
-
+      const { error: orderError } = await supabase.from('orders').delete().eq('id', order.id);
       if (orderError) throw orderError;
 
-      console.log('✅ Order deleted from database');
-
-      // 4. Notify customer (if not walk-in)
       if (order.customer_id) {
         await sendDbNotification(
           order.customer_id,
           '❌ Order Deleted',
-          `Your order #${order.id.slice(0, 8)} (₹${Number(order.total_amount || 0).toFixed(2)}) has been deleted by admin.`,
+          `Your order #${order.id.slice(0, 8)} has been deleted by admin.`,
           'order',
-          { 
-            order_id: order.id, 
-            deleted_at: new Date().toISOString(),
-            reason: 'Admin deletion'
-          }
+          { order_id: order.id, deleted_at: new Date().toISOString(), reason: 'Admin deletion' }
         );
-        console.log('✅ Customer notified');
       }
 
-      // 5. Notify driver (if assigned)
       if (order.driver_id) {
         await sendDbNotification(
           order.driver_id,
           '❌ Order Cancelled',
-          `Order #${order.id.slice(0, 8)} has been deleted by admin. You are no longer assigned.`,
+          `Order #${order.id.slice(0, 8)} has been deleted by admin.`,
           'delivery',
-          { 
-            order_id: order.id, 
-            deleted_at: new Date().toISOString() 
-          }
+          { order_id: order.id, deleted_at: new Date().toISOString() }
         );
-        console.log('✅ Driver notified');
       }
 
-      // 6. Update local state with smooth removal
       setOrders((prev) => prev.filter((o) => o.id !== order.id));
-
       toast.success('✅ Order deleted successfully');
-
-      // 7. Reload after animation
-      setTimeout(() => {
-        loadOrders();
-      }, 500);
-
+      setTimeout(() => loadOrders(), 500);
     } catch (e: any) {
       console.error('❌ Failed to delete order:', e);
       toast.error(e?.message || 'Failed to delete order');
@@ -510,8 +472,8 @@ export default function AdminOrdersPage() {
     const cfg = map[status] || map.pending;
     const Icon = cfg.icon;
     return (
-      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${cfg.color} transition-all`}>
-        <Icon size={14} />
+      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${cfg.color}`}>
+        <Icon size={12} />
         {status}
       </span>
     );
@@ -521,120 +483,122 @@ export default function AdminOrdersPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 animate-fade-in">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4 animate-fade-in">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
-              <Zap className="text-primary animate-pulse" size={32} />
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <Zap className="text-primary animate-pulse" size={24} />
               All Orders
             </h1>
-            <p className="text-xs sm:text-sm text-gray-600 mt-1 flex items-center gap-2">
-              {isAdmin && <Shield size={14} className="text-green-600" />}
-              Assign drivers, notify drivers, or delete orders {isAdmin && '(Admin)'}
+            <p className="text-xs text-gray-600 mt-0.5 flex items-center gap-1">
+              {isAdmin && <Shield size={12} className="text-green-600" />}
+              Manage orders {isAdmin && '(Admin)'}
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 font-semibold transition-all hover:scale-105 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-semibold transition-all hover:scale-105 disabled:opacity-50"
             >
-              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
               Refresh
             </button>
             <button
               onClick={exportToCSV}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-orange-600 font-semibold transition-all hover:scale-105 hover:shadow-lg"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-orange-600 font-semibold transition-all hover:scale-105"
             >
-              <Download size={16} />
-              Export CSV
+              <Download size={14} />
+              Export
             </button>
             <button
               onClick={() => router.push('/admin/orders/new')}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl hover:bg-gray-800 font-semibold transition-all hover:scale-105 hover:shadow-lg"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 font-semibold transition-all hover:scale-105"
             >
-              Create Order
+              Create
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6">
-          <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-md p-4 sm:p-6 hover:shadow-xl transition-all duration-300 hover:scale-105 animate-slide-up" style={{ animationDelay: '0ms' }}>
-            <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-2">
-              <Package size={16} className="text-gray-400" />
-              Total Orders
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4">
+          <div className="bg-gradient-to-br from-white to-gray-50 rounded-lg shadow p-3 hover:shadow-lg transition-all animate-slide-up" style={{ animationDelay: '0ms' }}>
+            <p className="text-xs text-gray-600 flex items-center gap-1">
+              <Package size={14} className="text-gray-400" />
+              Total
             </p>
-            <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-2">{stats.total}</p>
+            <p className="text-lg sm:text-xl font-bold text-gray-900 mt-1">{stats.total}</p>
           </div>
-          <div className="bg-gradient-to-br from-yellow-50 to-white rounded-2xl shadow-md p-4 sm:p-6 hover:shadow-xl transition-all duration-300 hover:scale-105 animate-slide-up" style={{ animationDelay: '100ms' }}>
-            <p className="text-xs sm:text-sm text-yellow-700 flex items-center gap-2">
-              <Clock size={16} className="text-yellow-500" />
-              Active Orders
+          <div className="bg-gradient-to-br from-yellow-50 to-white rounded-lg shadow p-3 hover:shadow-lg transition-all animate-slide-up" style={{ animationDelay: '50ms' }}>
+            <p className="text-xs text-yellow-700 flex items-center gap-1">
+              <Clock size={14} className="text-yellow-500" />
+              Active
             </p>
-            <p className="text-xl sm:text-2xl font-bold text-yellow-600 mt-2">{stats.active}</p>
+            <p className="text-lg sm:text-xl font-bold text-yellow-600 mt-1">{stats.active}</p>
           </div>
-          <div className="bg-gradient-to-br from-green-50 to-white rounded-2xl shadow-md p-4 sm:p-6 hover:shadow-xl transition-all duration-300 hover:scale-105 animate-slide-up" style={{ animationDelay: '200ms' }}>
-            <p className="text-xs sm:text-sm text-green-700 flex items-center gap-2">
-              <CheckCircle size={16} className="text-green-500" />
-              Completed
+          <div className="bg-gradient-to-br from-green-50 to-white rounded-lg shadow p-3 hover:shadow-lg transition-all animate-slide-up" style={{ animationDelay: '100ms' }}>
+            <p className="text-xs text-green-700 flex items-center gap-1">
+              <CheckCircle size={14} className="text-green-500" />
+              Done
             </p>
-            <p className="text-xl sm:text-2xl font-bold text-green-600 mt-2">{stats.completed}</p>
+            <p className="text-lg sm:text-xl font-bold text-green-600 mt-1">{stats.completed}</p>
           </div>
-          <div className="bg-gradient-to-br from-orange-50 to-white rounded-2xl shadow-md p-4 sm:p-6 col-span-2 lg:col-span-1 hover:shadow-xl transition-all duration-300 hover:scale-105 animate-slide-up" style={{ animationDelay: '300ms' }}>
-            <p className="text-xs sm:text-sm text-orange-700 flex items-center gap-2">
-              <TrendingUp size={16} className="text-primary" />
-              Total Revenue
+          <div className="bg-gradient-to-br from-orange-50 to-white rounded-lg shadow p-3 col-span-2 lg:col-span-1 hover:shadow-lg transition-all animate-slide-up" style={{ animationDelay: '150ms' }}>
+            <p className="text-xs text-orange-700 flex items-center gap-1">
+              <TrendingUp size={14} className="text-primary" />
+              Revenue
             </p>
-            <p className="text-xl sm:text-2xl font-bold text-primary mt-2">₹{stats.revenue.toFixed(2)}</p>
+            <p className="text-lg sm:text-xl font-bold text-primary mt-1">₹{stats.revenue.toFixed(2)}</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 mb-6 animate-fade-in" style={{ animationDelay: '400ms' }}>
-          <div className="grid md:grid-cols-2 gap-3 sm:gap-4">
+        {/* Filters */}
+        <div className="bg-white rounded-lg shadow p-3 mb-4 animate-fade-in" style={{ animationDelay: '200ms' }}>
+          <div className="grid md:grid-cols-2 gap-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors" size={18} />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
               <input
                 type="text"
                 placeholder="Search orders…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               />
             </div>
 
             <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent appearance-none transition-all"
+                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent appearance-none"
               >
-                <option value="all">All</option>
-                <option value="pending">pending</option>
-                <option value="confirmed">confirmed</option>
-                <option value="preparing">preparing</option>
-                <option value="ready">ready</option>
-                <option value="assigned">assigned</option>
-                <option value="picked_up">picked_up</option>
-                <option value="delivered">delivered</option>
-                <option value="cancelled">cancelled</option>
+                <option value="all">All Statuses</option>
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
               </select>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-md overflow-hidden animate-fade-in" style={{ animationDelay: '500ms' }}>
+        {/* Orders Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden animate-fade-in" style={{ animationDelay: '250ms' }}>
           <div className="overflow-x-auto">
-            <table className="w-full hidden md:table">
+            {/* Desktop Table */}
+            <table className="w-full hidden lg:table text-sm">
               <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Restaurant</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Order</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Restaurant</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Updated</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
 
@@ -642,74 +606,86 @@ export default function AdminOrdersPage() {
                 {filteredOrders.map((o, index) => (
                   <tr 
                     key={o.id} 
-                    className={`hover:bg-orange-50 transition-all duration-200 animate-fade-in ${
+                    className={`hover:bg-orange-50 transition-all animate-fade-in ${
                       deletingOrderId === o.id ? 'opacity-50 bg-red-50' : ''
                     }`}
-                    style={{ animationDelay: `${index * 50}ms` }}
+                    style={{ animationDelay: `${index * 30}ms` }}
                   >
-                    <td className="px-6 py-4 text-sm font-bold text-gray-900">#{o.id.slice(0, 8)}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">
-                      <div className="flex items-center gap-2">
+                    <td className="px-3 py-2">
+                      <p className="text-sm font-bold text-gray-900">#{o.id.slice(0, 8)}</p>
+                      {o.driver_id && (
+                        <p className="text-xs text-green-600 flex items-center gap-0.5 mt-0.5">
+                          <Truck size={10} />
+                          Driver
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1">
                         {!o.customer_id && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold animate-pulse">
+                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold">
                             🚶
                           </span>
                         )}
-                        <span>{o.customerName || 'Unknown'}</span>
+                        <span className="text-sm">{o.customerName || 'Unknown'}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{o.merchants?.business_name || 'N/A'}</td>
-                    <td className="px-6 py-4 text-sm font-semibold text-gray-900">₹{Number(o.total_amount || 0).toFixed(2)}</td>
-                    <td className="px-6 py-4">{getStatusBadge(o.status)}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-2">
+                    <td className="px-3 py-2 text-sm">{o.merchants?.business_name || 'N/A'}</td>
+                    <td className="px-3 py-2 text-sm font-semibold">₹{Number(o.total_amount || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2">{getStatusBadge(o.status)}</td>
+                    <td className="px-3 py-2">
+                      <div className="text-xs text-gray-900">{formatDate(o.created_at).split(',')[0]}</div>
+                      <div className="text-xs text-gray-500">{formatDate(o.created_at).split(',')[1]}</div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="text-xs text-gray-900">{formatDate(o.updated_at).split(',')[0]}</div>
+                      {o.updated_at && (
+                        <div className="text-xs text-blue-600 flex items-center gap-0.5">
+                          <Clock size={9} />
+                          {getTimeDiff(o.created_at, o.updated_at)} ago
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-1">
                         <button
                           onClick={() => router.push(`/admin/orders/${o.id}`)}
                           disabled={deletingOrderId === o.id}
-                          className="inline-flex items-center gap-1 text-primary hover:text-orange-600 font-semibold transition-all hover:scale-110 disabled:opacity-50"
+                          className="inline-flex items-center gap-0.5 px-2 py-1 text-xs text-primary hover:text-orange-600 font-semibold transition-all hover:scale-105 disabled:opacity-50 border border-primary rounded"
                         >
-                          <Eye size={16} />
+                          <Eye size={12} />
                           View
                         </button>
 
                         <button
                           onClick={() => notifyAllDrivers(o)}
                           disabled={notifyingOrderId === o.id || deletingOrderId === o.id}
-                          className="inline-flex items-center gap-1 text-purple-700 hover:text-purple-900 font-semibold disabled:opacity-50 transition-all hover:scale-110"
+                          className="inline-flex items-center gap-0.5 px-2 py-1 text-xs text-purple-700 hover:text-purple-900 font-semibold disabled:opacity-50 transition-all hover:scale-105 border border-purple-300 rounded"
                         >
-                          <Bell size={16} className={notifyingOrderId === o.id ? 'animate-bounce' : ''} />
-                          {notifyingOrderId === o.id ? 'Notifying…' : 'Notify'}
+                          <Bell size={12} className={notifyingOrderId === o.id ? 'animate-bounce' : ''} />
+                          {notifyingOrderId === o.id ? '...' : 'Notify'}
                         </button>
 
                         <select
-                          defaultValue=""
-                          disabled={assigningOrderId === o.id || driversLoading || deletingOrderId === o.id}
-                          onChange={(e) => {
-                            const id = e.target.value;
-                            if (!id) return;
-                            assignDriver(o, id);
-                            e.currentTarget.value = '';
-                          }}
-                          className="px-3 py-2 rounded-xl border border-gray-300 hover:border-primary transition-all disabled:opacity-50"
+                          value={o.status}
+                          disabled={updatingOrderId === o.id || deletingOrderId === o.id}
+                          onChange={(e) => updateOrderStatus(o, e.target.value)}
+                          className="px-2 py-1 text-xs rounded border border-gray-300 hover:border-primary transition-all disabled:opacity-50 font-semibold"
                         >
-                          <option value="">Assign…</option>
-                          {drivers.map((d) => (
-                            <option key={d.id} value={d.id}>
-                              {d.full_name || 'Driver'} {d.phone ? `- ${d.phone}` : ''}
-                            </option>
+                          {ALL_STATUSES.map((s) => (
+                            <option key={s} value={s}>{s}</option>
                           ))}
                         </select>
 
-                        {/* Delete Button - Only for Admins */}
                         {isAdmin && (
                           <button
                             onClick={() => deleteOrder(o)}
                             disabled={deletingOrderId === o.id}
-                            className="inline-flex items-center gap-1 text-red-600 hover:text-red-800 font-semibold disabled:opacity-50 transition-all hover:scale-110"
-                            title="Delete Order (Admin Only)"
+                            className="inline-flex items-center gap-0.5 px-2 py-1 text-xs text-red-600 hover:text-red-800 font-semibold disabled:opacity-50 transition-all hover:scale-105 border border-red-300 rounded"
+                            title="Delete Order"
                           >
-                            <Trash2 size={16} className={deletingOrderId === o.id ? 'animate-spin' : ''} />
-                            {deletingOrderId === o.id ? 'Deleting…' : 'Delete'}
+                            <Trash2 size={12} className={deletingOrderId === o.id ? 'animate-spin' : ''} />
+                            {deletingOrderId === o.id ? '...' : 'Del'}
                           </button>
                         )}
                       </div>
@@ -719,77 +695,95 @@ export default function AdminOrdersPage() {
               </tbody>
             </table>
 
-            {/* Mobile cards */}
-            <div className="md:hidden divide-y">
+            {/* Mobile/Tablet Cards */}
+            <div className="lg:hidden divide-y">
               {filteredOrders.map((o, index) => (
                 <div 
                   key={o.id} 
-                  className={`p-4 hover:bg-orange-50 transition-all duration-200 animate-fade-in ${
+                  className={`p-3 hover:bg-orange-50 transition-all animate-fade-in ${
                     deletingOrderId === o.id ? 'opacity-50 bg-red-50' : ''
                   }`}
-                  style={{ animationDelay: `${index * 50}ms` }}
+                  style={{ animationDelay: `${index * 30}ms` }}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
-                      <p className="font-bold text-gray-900">#{o.id.slice(0, 8)}</p>
-                      <p className="text-xs text-gray-600 mt-1">
+                      <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                        #{o.id.slice(0, 8)}
+                        {o.driver_id && (
+                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold flex items-center gap-0.5">
+                            <Truck size={9} />
+                            Driver
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-600 mt-0.5">
                         {!o.customer_id && '🚶 '}
                         {o.customerName || 'Unknown'} • {o.merchants?.business_name || 'N/A'}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-primary">₹{Number(o.total_amount || 0).toFixed(2)}</p>
-                      <div className="mt-1">{getStatusBadge(o.status)}</div>
+                      <p className="text-sm font-bold text-primary">₹{Number(o.total_amount || 0).toFixed(2)}</p>
+                      <div className="mt-0.5">{getStatusBadge(o.status)}</div>
                     </div>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  {/* Timestamps */}
+                  <div className="grid grid-cols-2 gap-1.5 mb-2 text-xs">
+                    <div className="bg-gray-50 rounded p-1.5">
+                      <p className="text-gray-500 font-medium">Created</p>
+                      <p className="text-gray-900 font-semibold">{formatDate(o.created_at)}</p>
+                    </div>
+                    <div className="bg-blue-50 rounded p-1.5">
+                      <p className="text-gray-500 font-medium">Updated</p>
+                      <p className="text-gray-900 font-semibold">{formatDate(o.updated_at)}</p>
+                      {o.updated_at && (
+                        <p className="text-blue-600 text-xs flex items-center gap-0.5">
+                          <Clock size={9} />
+                          {getTimeDiff(o.created_at, o.updated_at)} ago
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-wrap gap-1.5">
                     <button
                       onClick={() => router.push(`/admin/orders/${o.id}`)}
                       disabled={deletingOrderId === o.id}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-primary text-white font-semibold transition-all hover:scale-105 hover:shadow-lg disabled:opacity-50"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg bg-primary text-white font-semibold transition-all hover:scale-105 disabled:opacity-50"
                     >
-                      <Eye size={16} />
+                      <Eye size={12} />
                       View
                     </button>
 
                     <button
                       onClick={() => notifyAllDrivers(o)}
                       disabled={notifyingOrderId === o.id || deletingOrderId === o.id}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-purple-600 text-white font-semibold disabled:opacity-50 transition-all hover:scale-105 hover:shadow-lg"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg bg-purple-600 text-white font-semibold disabled:opacity-50 transition-all hover:scale-105"
                     >
-                      <Bell size={16} className={notifyingOrderId === o.id ? 'animate-bounce' : ''} />
-                      {notifyingOrderId === o.id ? 'Notifying…' : 'Notify'}
+                      <Bell size={12} className={notifyingOrderId === o.id ? 'animate-bounce' : ''} />
+                      {notifyingOrderId === o.id ? 'Notifying' : 'Notify'}
                     </button>
 
                     <select
-                      defaultValue=""
-                      disabled={assigningOrderId === o.id || driversLoading || deletingOrderId === o.id}
-                      onChange={(e) => {
-                        const id = e.target.value;
-                        if (!id) return;
-                        assignDriver(o, id);
-                        e.currentTarget.value = '';
-                      }}
-                      className="px-3 py-2 rounded-xl border border-gray-300 transition-all disabled:opacity-50"
+                      value={o.status}
+                      disabled={updatingOrderId === o.id || deletingOrderId === o.id}
+                      onChange={(e) => updateOrderStatus(o, e.target.value)}
+                      className="px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 disabled:opacity-50 font-semibold flex-1"
                     >
-                      <option value="">Assign…</option>
-                      {drivers.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.full_name || 'Driver'}
-                        </option>
+                      {ALL_STATUSES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
 
-                    {/* Delete Button for Mobile - Only for Admins */}
                     {isAdmin && (
                       <button
                         onClick={() => deleteOrder(o)}
                         disabled={deletingOrderId === o.id}
-                        className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-red-600 text-white font-semibold disabled:opacity-50 transition-all hover:scale-105 hover:shadow-lg"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg bg-red-600 text-white font-semibold disabled:opacity-50 transition-all hover:scale-105"
                       >
-                        <Trash2 size={16} className={deletingOrderId === o.id ? 'animate-spin' : ''} />
-                        {deletingOrderId === o.id ? 'Deleting…' : 'Delete'}
+                        <Trash2 size={12} className={deletingOrderId === o.id ? 'animate-spin' : ''} />
+                        {deletingOrderId === o.id ? 'Deleting' : 'Delete'}
                       </button>
                     )}
                   </div>
@@ -800,31 +794,22 @@ export default function AdminOrdersPage() {
 
           {filteredOrders.length === 0 && (
             <div className="text-center py-12 animate-fade-in">
-              <Package size={48} className="mx-auto text-gray-400 mb-4 animate-bounce" />
-              <p className="text-gray-600">No orders found</p>
+              <Package size={40} className="mx-auto text-gray-400 mb-3 animate-bounce" />
+              <p className="text-sm text-gray-600">No orders found</p>
             </div>
           )}
         </div>
 
-        {/* Warning Banner - Only for Admins */}
+        {/* Warning Banner */}
         {isAdmin && (
-          <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 animate-fade-in">
-            <AlertTriangle className="text-red-600 shrink-0 mt-0.5" size={20} />
-            <div className="text-sm text-red-800">
-              <p className="font-semibold flex items-center gap-2">
-                <Shield size={16} />
-                Admin Deletion Warning
+          <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2 animate-fade-in">
+            <AlertTriangle className="text-red-600 shrink-0" size={18} />
+            <div className="text-xs text-red-800">
+              <p className="font-semibold flex items-center gap-1 mb-1">
+                <Shield size={14} />
+                Admin Warning
               </p>
-              <p className="mt-1">
-                Order deletion is <strong>permanent and irreversible</strong>. This action will:
-              </p>
-              <ul className="mt-2 ml-4 list-disc space-y-1">
-                <li>Remove the order from the database</li>
-                <li>Delete all driver assignments</li>
-                <li>Delete related notifications</li>
-                <li>Notify customer and driver (if applicable)</li>
-              </ul>
-              <p className="mt-2 font-semibold">⚠️ Use this feature responsibly!</p>
+              <p>Order deletion is permanent. Use responsibly!</p>
             </div>
           </div>
         )}
@@ -834,7 +819,7 @@ export default function AdminOrdersPage() {
         @keyframes fade-in {
           from {
             opacity: 0;
-            transform: translateY(10px);
+            transform: translateY(8px);
           }
           to {
             opacity: 1;
@@ -845,7 +830,7 @@ export default function AdminOrdersPage() {
         @keyframes slide-up {
           from {
             opacity: 0;
-            transform: translateY(20px);
+            transform: translateY(15px);
           }
           to {
             opacity: 1;
@@ -854,11 +839,11 @@ export default function AdminOrdersPage() {
         }
 
         .animate-fade-in {
-          animation: fade-in 0.5s ease-out forwards;
+          animation: fade-in 0.4s ease-out forwards;
         }
 
         .animate-slide-up {
-          animation: slide-up 0.6s ease-out forwards;
+          animation: slide-up 0.5s ease-out forwards;
         }
       `}</style>
     </DashboardLayout>
