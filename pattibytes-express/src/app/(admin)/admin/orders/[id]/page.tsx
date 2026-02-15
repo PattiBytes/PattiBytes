@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
+import { sendNotification } from '@/lib/notificationHelper';
 
 import {
   ArrowLeft,
@@ -463,10 +464,19 @@ function normalizeOrder(orderRow: any, cols: OrdersCols): OrderNormalized {
   };
 }
 
-function buildInvoiceHtml(order: OrderNormalized, customer: ProfileMini | null, merchant: MerchantInfo | null) {
-  const customerName = customer?.full_name ?? customer?.fullname ?? 'NA';
-  const merchantName = merchant?.business_name ?? merchant?.businessname ?? 'PattiBytes Express';
-  const orderNo = Number(order.orderNumber || 0);
+function buildInvoiceHtml(
+  order: OrderNormalized,
+  customer: ProfileMini | null,
+  merchant: MerchantInfo | null
+) {
+  // ✅ FIXED: Handle walk-in customers
+  const customerName = customer?.fullname ?? customer?.full_name ?? 
+    (order.customerNotes?.includes('Walk-in:') 
+      ? order.customerNotes.replace('Walk-in:', '').trim()
+      : order.customerNotes?.split('\n')[0] || 'Walk-in Customer');
+  
+  const merchantName = merchant?.businessname ?? merchant?.business_name ?? 'PattiBytes Express';
+  const orderNo = Number(order.orderNumber) || 0;
 
   const rows = (order.items ?? [])
     .map((it, idx) => {
@@ -685,38 +695,7 @@ export default function AdminOrderDetailPage() {
     return { elapsedMinutes, estimatedMinutes, actualMinutes };
   }, [order?.createdAt, order?.estimatedDeliveryTime, order?.actualDeliveryTime]);
 
-const sendNotification = async (userId: string, title: string, message: string, type: string, data?: any) => {
-  // Try your newer schema first: user_id, is_read, body (matches your sample rows).
-  try {
-    const { error } = await supabase.from('notifications').insert({
-      user_id: userId,
-      title,
-      message,
-      body: message,
-      type,
-      data: data ?? null,
-      is_read: false,
-    });
 
-    if (!error) return true;
-
-    // Fallback: older schema (what your file currently uses).
-    const { error: error2 } = await supabase.from('notifications').insert({
-      userid: userId,
-      title,
-      message,
-      type,
-      data: data ?? null,
-      isread: false,
-    });
-
-    if (error2) throw error2;
-    return true;
-  } catch (e) {
-    console.error('Notification error', e);
-    return false;
-  }
-};
 
 
   const loadAvailableDrivers = async () => {
@@ -784,52 +763,61 @@ const sendNotification = async (userId: string, title: string, message: string, 
   };
 
   const updateStatus = async (newStatus: string) => {
-    if (!order) return;
+  if (!order) return;
+  setUpdating(true);
+  try {
+    const nowIso = new Date().toISOString();
+    const patch: any = {
+      status: newStatus,
+      [cols.updatedAt]: nowIso,
+    };
 
-    setUpdating(true);
-    try {
-      const nowIso = new Date().toISOString();
+    if (newStatus === 'cancelled') {
+      const reason = window.prompt('Cancellation reason (optional):', order.cancellationReason ?? '') ?? '';
+      patch[cols.cancellationReason] = reason.trim() || null;
+      patch[cols.cancelledBy] = (user as any)?.role ?? 'admin';
+    }
 
-      const patch: any = {
-        status: newStatus,
-        [cols.updatedAt]: nowIso,
-      };
+    if (newStatus === 'delivered') {
+      patch[cols.actualDeliveryTime] = nowIso;
+      patch[cols.paymentStatus] = 'paid';
+    }
 
-      if (newStatus === 'cancelled') {
-        const reason = window.prompt('Cancellation reason (optional):', order.cancellationReason ?? '') ?? '';
-        patch[cols.cancellationReason] = reason.trim() || null;
-        patch[cols.cancelledBy] = (user as any)?.role ?? 'admin';
-      }
+    const { error } = await supabase.from('orders').update(patch).eq('id', order.id);
+    if (error) throw error;
 
-      if (newStatus === 'delivered') {
-        patch[cols.actualDeliveryTime] = nowIso;
-        patch[cols.paymentStatus] = 'paid';
-      }
-
-      const { error } = await supabase.from('orders').update(patch).eq('id', order.id);
-      if (error) throw error;
-
+    // ✅ Only send notification if customer_id exists
+    if (order.customerId) {
       await sendNotification(
         order.customerId,
         'Order Status Updated',
         `Your order #${order.orderNumber} is now ${newStatus.replaceAll('_', ' ')}`,
         'order',
-        { orderid: order.id, ordernumber: order.orderNumber, status: newStatus }
+        {
+          order_id: order.id,
+          order_number: order.orderNumber,
+          status: newStatus,
+        }
       );
-
-      if (newStatus === 'ready' && !order.driverId) {
-        await notifyDrivers();
-      }
-
-      toast.success('Status updated');
-      await loadAll();
-    } catch (e: any) {
-      console.error('Update status failed', e);
-      toast.error(e?.message || 'Failed to update status');
-    } finally {
-      setUpdating(false);
+    } else {
+      console.log('⚠️ Walk-in order - skipping customer notification');
     }
-  };
+
+    // Notify drivers when ready
+    if (newStatus === 'ready' && !order.driverId) {
+      await notifyDrivers();
+    }
+
+    toast.success('Status updated!');
+    await loadAll();
+  } catch (e: any) {
+    console.error('Update status failed:', e);
+    toast.error(e?.message || 'Failed to update status');
+  } finally {
+    setUpdating(false);
+  }
+};
+
 
   const saveExtraFields = async () => {
     if (!order) return;
@@ -925,52 +913,69 @@ const sendNotification = async (userId: string, title: string, message: string, 
   };
 
   const assignDriver = async (driverId: string) => {
-    if (!order || !driverId) return;
+  if (!order || !driverId) return;
+  setAssigning(true);
+  try {
+    const nowIso = new Date().toISOString();
+    const patch: any = {
+      [cols.driverId]: driverId,
+      [cols.updatedAt]: nowIso,
+    };
 
-    setAssigning(true);
-    try {
-      const nowIso = new Date().toISOString();
+    if (order.status === 'ready') {
+      patch.status = 'assigned';
+    }
 
-      const patch: any = {
-        [cols.driverId]: driverId,
-        [cols.updatedAt]: nowIso,
-      };
-      if (order.status === 'ready') patch.status = 'assigned';
+    const { error } = await supabase.from('orders').update(patch).eq('id', order.id);
+    if (error) throw error;
 
-      const { error } = await supabase.from('orders').update(patch).eq('id', order.id);
-      if (error) throw error;
+    // Update driver assignments
+    await supabase
+      .from('driver_assignments')
+      .update({
+        status: 'accepted',
+        responded_at: nowIso,
+      })
+      .eq('order_id', order.id)
+      .eq('driver_id', driverId);
 
-      await supabase
-        .from('driverassignments')
-        .update({ status: 'accepted', respondedat: nowIso })
-        .eq('orderid', order.id)
-        .eq('driverid', driverId);
+    // ✅ Always notify driver (they have user_id)
+    await sendNotification(
+      driverId,
+      'Order Assigned',
+      `You have been assigned to deliver order #${order.orderNumber}.`,
+      'delivery',
+      {
+        order_id: order.id,
+        order_number: order.orderNumber,
+      }
+    );
 
-      await sendNotification(
-        driverId,
-        'Order Assigned',
-        `You have been assigned to deliver order #${order.orderNumber}.`,
-        'delivery',
-        { orderid: order.id, ordernumber: order.orderNumber }
-      );
-
+    // ✅ Only notify customer if they have user_id
+    if (order.customerId) {
       await sendNotification(
         order.customerId,
         'Driver Assigned',
         `A delivery partner has been assigned to your order #${order.orderNumber}.`,
         'order',
-        { orderid: order.id, ordernumber: order.orderNumber, driverid: driverId }
+        {
+          order_id: order.id,
+          order_number: order.orderNumber,
+          driver_id: driverId,
+        }
       );
-
-      toast.success('Driver assigned');
-      await loadAll();
-    } catch (e: any) {
-      console.error('Assign driver failed', e);
-      toast.error(e?.message || 'Failed to assign driver');
-    } finally {
-      setAssigning(false);
     }
-  };
+
+    toast.success('Driver assigned!');
+    await loadAll();
+  } catch (e: any) {
+    console.error('Assign driver failed:', e);
+    toast.error(e?.message || 'Failed to assign driver');
+  } finally {
+    setAssigning(false);
+  }
+};
+
 
   const emailCustomer = () => {
     const email = customer?.email;
@@ -1426,39 +1431,77 @@ const sendNotification = async (userId: string, title: string, message: string, 
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow p-4 sm:p-6">
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <User className="text-primary" size={18} />
-                Customer
-              </h3>
+            {/* Customer Section - FIXED for walk-in orders */}
+<div className="bg-white rounded-2xl shadow p-4 sm:p-6">
+  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+    <User className="text-primary" size={18} />
+    Customer
+  </h3>
 
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <p className="font-semibold text-gray-900 truncate">{customer?.full_name ?? customer?.fullname ?? 'NA'}</p>
-                <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${badge.color}`}>
-                  <TrustIcon size={14} />
-                  <span className="text-xs font-bold">{badge.text}</span>
-                </div>
-              </div>
+  {/* ✅ NEW: Check if walk-in order */}
+  {!order.customerId ? (
+    <>
+      <div className="flex items-center gap-2 mb-3">
+        <div className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold">
+          
+        </div>
+      </div>
+      <p className="font-semibold text-gray-900">
+        {order.customerNotes?.includes('Walk-in:') 
+          ? order.customerNotes.replace('Walk-in:', '').trim() 
+          : order.customerNotes || 'Walk-in Customer'}
+      </p>
+      {order.customerPhone && (
+        <a
+          href={`tel:${order.customerPhone}`}
+          className="text-sm text-primary hover:underline inline-flex items-center gap-2 mt-2"
+        >
+          <Phone size={16} className="text-gray-600" />
+          {order.customerPhone}
+        </a>
+      )}
+    </>
+  ) : (
+    <>
+      {/* Regular customer with account */}
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <p className="font-semibold text-gray-900 truncate">
+          {customer?.fullname ?? customer?.full_name ?? 'Customer'}
+        </p>
+        <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${badge.color}`}>
+          <TrustIcon size={14} />
+          <span className="text-xs font-bold">{badge.text}</span>
+        </div>
+      </div>
+      {(customer?.phone || order.customerPhone) && (
+        <a
+          href={`tel:${order.customerPhone ?? customer?.phone}`}
+          className="text-sm text-primary hover:underline inline-flex items-center gap-2"
+        >
+          <Phone size={16} className="text-gray-600" />
+          {order.customerPhone ?? customer?.phone}
+        </a>
+      )}
+      {customer?.email && (
+        <p className="text-xs text-gray-500 mt-1">{customer.email}</p>
+      )}
+    </>
+  )}
 
-              {(customer?.phone || order.customerPhone) && (
-                <a
-                  href={`tel:${order.customerPhone ?? customer?.phone}`}
-                  className="text-sm text-primary hover:underline inline-flex items-center gap-2"
-                >
-                  <Phone size={16} className="text-gray-600" />
-                  {order.customerPhone ?? customer?.phone}
-                </a>
-              )}
 
-              <div className="mt-4 pt-4 border-t">
-                <p className="text-xs font-semibold text-gray-600 mb-1">Delivery address</p>
-                <p className="text-sm text-gray-800 whitespace-pre-line">{order.deliveryAddress ?? 'NA'}</p>
-
-                <p className="text-xs text-gray-500 mt-2">
-                  Distance: {order.deliveryDistanceKm == null ? 'NA' : Number(order.deliveryDistanceKm).toFixed(2)} km
-                </p>
-              </div>
-            </div>
+               <div className="mt-4 pt-4 border-t">
+    <p className="text-xs font-semibold text-gray-600 mb-1">Delivery address</p>
+    <p className="text-sm text-gray-800 whitespace-pre-line">
+      {order.deliveryAddress ?? 'NA'}
+    </p>
+    <p className="text-xs text-gray-500 mt-2">
+      Distance:{' '}
+      {order.deliveryDistanceKm !== null
+        ? `${Number(order.deliveryDistanceKm).toFixed(2)} km`
+        : 'NA'}
+    </p>
+  </div>
+</div>
 
             <div className="bg-white rounded-2xl shadow p-4 sm:p-6">
               <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
