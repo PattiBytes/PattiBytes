@@ -639,27 +639,34 @@ export default function AdminCreateOrderPage() {
     toast.success(`Promo code applied! Discount: ${toINR(discAmount)}`);
   };
 
-  const ensureCustomerFields = () => {
-    if (customerMode === 'existing') {
-      if (!customerId) throw new Error('Select an existing customer');
-      return {
-        customer_id: customerId,
-        customer_phone: selectedCustomer?.phone ?? '',
-        customer_notes: customerNotes || null,
-      };
-    }
-
-    // Walk-in mode - set to null (nullable column required)
-    const name = walkinName.trim();
-    const phone = walkinPhone.trim();
-    if (!name && !phone) throw new Error('Enter walk-in customer name or phone');
-
+ const ensureCustomerFields = () => {
+  if (customerMode === 'existing') {
+    if (!customerId) throw new Error('Select an existing customer');
     return {
-      customer_id: null, // Must be nullable in DB
-      customer_phone: phone || null,
-      customer_notes: name ? `[Walk-in] ${name}${customerNotes ? '\n' + customerNotes : ''}` : (customerNotes || null),
+      customer_id: customerId,
+      customer_phone: selectedCustomer?.phone ?? '',
+      customer_notes: customerNotes || null,
     };
+  }
+
+  // ✅ Walk-in mode - improved data storage
+  const name = walkinName.trim();
+  const phone = walkinPhone.trim();
+
+  if (!name && !phone) {
+    throw new Error('Enter walk-in customer name or phone');
+  }
+
+  return {
+    customer_id: null, // ✅ NULL for walk-in
+    customer_phone: phone || null,
+    // ✅ Store name in customer_notes with clear format
+    customer_notes: name 
+      ? `Walk-in: ${name}${customerNotes ? '\n' + customerNotes : ''}`
+      : customerNotes || null,
   };
+};
+
 
   const createOrder = async (opts?: { openAfter?: boolean }) => {
     try {
