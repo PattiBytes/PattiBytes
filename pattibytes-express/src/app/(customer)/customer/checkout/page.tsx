@@ -194,7 +194,10 @@ export default function CheckoutPage() {
 // near other state:
  
 const [showDeliveryFeeRow, setShowDeliveryFeeRow] = useState(true);
-const policyRef = useRef<{ enabled: boolean; showToCustomer: boolean; baseFee: number } | null>(null);
+const policyRef = useRef<{
+  baseRadiusKm: number;
+  perKmFeeAfterBase: number; enabled: boolean; showToCustomer: boolean; baseFee: number 
+} | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -326,11 +329,13 @@ if (m2) {
 
   try {
     const distanceKm = await getRoadDistanceKmViaApi(mLat, mLon, aLat, aLon);
+    
+    // ✅ Use fetched values instead of hardcoded
     const quote = calculateDeliveryFeeByDistance(distanceKm, {
       enabled: policy.enabled,
-      baseFee: policy.baseFee, // <-- from app_settings (delivery_fee or schedule)
-      baseKm: 3,
-      perKmBeyondBase: 10,
+      baseFee: policy.baseFee,
+      baseKm: policy.baseRadiusKm,        // ✅ From settings
+      perKmBeyondBase: policy.perKmFeeAfterBase,  // ✅ From settings
       rounding: 'ceil',
     });
 
@@ -340,23 +345,22 @@ if (m2) {
     return;
   } catch (e: any) {
     console.error('Road distance failed', e);
-    // fallback aerial (see next section)
+    
+    // Fallback to aerial
+    const aerialKm = haversineKm(mLat, mLon, aLat, aLon);
+    const quote = calculateDeliveryFeeByDistance(aerialKm, {
+      enabled: policy.enabled,
+      baseFee: policy.baseFee,
+      baseKm: policy.baseRadiusKm,        // ✅ From settings
+      perKmBeyondBase: policy.perKmFeeAfterBase,  // ✅ From settings
+      rounding: 'ceil',
+    });
+
+    setDeliveryDistance(quote.distanceKm);
+    setDeliveryFee(quote.fee);
+    setDeliveryBreakdown(`Aerial distance: ${quote.breakdown}`);
   }
-
-const aerialKm = haversineKm(mLat, mLon, aLat, aLon);
-  const quote = calculateDeliveryFeeByDistance(aerialKm, {
-    enabled: policy.enabled,
-    baseFee: policy.baseFee,
-    baseKm: 3,
-    perKmBeyondBase: 10,
-    rounding: 'ceil',
-  });
-
-  setDeliveryDistance(quote.distanceKm);
-  setDeliveryFee(quote.fee);
-  setDeliveryBreakdown(`Aerial distance: ${quote.breakdown}`);
 };
-
 
   const handleAddressSelection = async (addr: SavedAddress, merchantId?: string) => {
     setSelectedAddress(addr);

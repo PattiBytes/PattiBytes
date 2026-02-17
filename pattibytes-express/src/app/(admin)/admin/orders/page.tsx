@@ -35,6 +35,7 @@ type DriverRow = { id: string; full_name: string | null; phone: string | null };
 
 interface Order {
   id: string;
+   order_number?: string | number | null;
   customer_id: string | null;
   merchant_id: string;
   driver_id?: string | null;
@@ -186,31 +187,32 @@ export default function AdminOrdersPage() {
   }, [orders, statusFilter, searchQuery]);
 
   const loadOrders = async () => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      const { data, error } = await supabase
-        .from('orders')
-        .select(
-          `
-          id,
-          customer_id,
-          merchant_id,
-          driver_id,
-          items,
-          subtotal,
-          delivery_fee,
-          tax,
-          total_amount,
-          status,
-          payment_method,
-          payment_status,
-          created_at,
-          updated_at,
-          customer_notes,
-          customer_phone,
-          profiles:customer_id (full_name),
-          merchants:merchant_id (business_name)
+    const { data, error } = await supabase
+      .from('orders')
+      .select(
+        `
+        id,
+        order_number,
+        customer_id,
+        merchant_id,
+        driver_id,
+        items,
+        subtotal,
+        delivery_fee,
+        tax,
+        total_amount,
+        status,
+        payment_method,
+        payment_status,
+        created_at,
+        updated_at,
+        customer_notes,
+        customer_phone,
+        profiles:customer_id (full_name),
+        merchants:merchant_id (business_name)
         `
         )
         .order('created_at', { ascending: false });
@@ -281,28 +283,30 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const exportToCSV = () => {
-    const headers = ['Order ID', 'Customer', 'Restaurant', 'Amount', 'Status', 'Payment', 'Created At', 'Updated At'];
-    const csvData = filteredOrders.map((o) => [
-      o.id,
-      o.customerName || 'N/A',
-      o.merchants?.business_name || 'N/A',
-      o.total_amount,
-      o.status,
-      o.payment_status,
-      new Date(o.created_at).toLocaleString(),
-      o.updated_at ? new Date(o.updated_at).toLocaleString() : 'N/A',
-    ]);
+ const exportToCSV = () => {
+  const headers = ['Order Number', 'Order ID', 'Customer', 'Restaurant', 'Amount', 'Status', 'Payment', 'Created At', 'Updated At'];
+  const csvData = filteredOrders.map((o) => [
+    String(o.order_number ?? '').trim() || o.id.slice(0, 8),  // ✅ Add order_number
+    o.id,
+    o.customerName || 'N/A',
+    o.merchants?.business_name || 'N/A',
+    o.total_amount,
+    o.status,
+    o.payment_status,
+    new Date(o.created_at).toLocaleString(),
+    o.updated_at ? new Date(o.updated_at).toLocaleString() : 'N/A',
+  ]);
 
-    const csv = [headers.join(','), ...csvData.map((row) => row.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `orders-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    toast.success('Orders exported successfully!');
-  };
+  const csv = [headers.join(','), ...csvData.map((row) => row.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `orders-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  toast.success('Orders exported successfully!');
+};
+
 
   const notifyAllDrivers = async (order: Order) => {
     if (!drivers.length) await loadDrivers();
@@ -611,15 +615,21 @@ export default function AdminOrdersPage() {
                     }`}
                     style={{ animationDelay: `${index * 30}ms` }}
                   >
-                    <td className="px-3 py-2">
-                      <p className="text-sm font-bold text-gray-900">#{o.id.slice(0, 8)}</p>
-                      {o.driver_id && (
-                        <p className="text-xs text-green-600 flex items-center gap-0.5 mt-0.5">
-                          <Truck size={10} />
-                          Driver
-                        </p>
-                      )}
-                    </td>
+                   <td className="px-3 py-2">
+  <p className="text-sm font-bold text-gray-900">
+    #{String(o.order_number ?? '').trim() || o.id.slice(0, 8)}
+  </p>
+  {o.order_number && (
+    <p className="text-xs text-gray-500">ID: {o.id.slice(0, 8)}</p>
+  )}
+  {o.driver_id && (
+    <p className="text-xs text-green-600 flex items-center gap-0.5 mt-0.5">
+      <Truck size={10} />
+      Driver
+    </p>
+  )}
+</td>
+
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1">
                         {!o.customer_id && (
@@ -705,27 +715,31 @@ export default function AdminOrdersPage() {
                   }`}
                   style={{ animationDelay: `${index * 30}ms` }}
                 >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div>
-                      <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                        #{o.id.slice(0, 8)}
-                        {o.driver_id && (
-                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold flex items-center gap-0.5">
-                            <Truck size={9} />
-                            Driver
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-gray-600 mt-0.5">
-                        {!o.customer_id && '🚶 '}
-                        {o.customerName || 'Unknown'} • {o.merchants?.business_name || 'N/A'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-primary">₹{Number(o.total_amount || 0).toFixed(2)}</p>
-                      <div className="mt-0.5">{getStatusBadge(o.status)}</div>
-                    </div>
-                  </div>
+               <div className="flex items-start justify-between gap-2 mb-2">
+  <div>
+    <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+      #{String(o.order_number ?? '').trim() || o.id.slice(0, 8)}
+      {o.order_number && (
+        <span className="text-xs text-gray-500 font-normal">({o.id.slice(0, 8)})</span>
+      )}
+      {o.driver_id && (
+        <span className="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold flex items-center gap-0.5">
+          <Truck size={9} />
+          Driver
+        </span>
+      )}
+    </p>
+    <p className="text-xs text-gray-600 mt-0.5">
+      {!o.customer_id && '🚶 '}
+      {o.customerName || 'Unknown'} • {o.merchants?.business_name || 'N/A'}
+    </p>
+  </div>
+  <div className="text-right">
+    <p className="text-sm font-bold text-primary">₹{Number(o.total_amount || 0).toFixed(2)}</p>
+    <div className="mt-0.5">{getStatusBadge(o.status)}</div>
+  </div>
+</div>
+
 
                   {/* Timestamps */}
                   <div className="grid grid-cols-2 gap-1.5 mb-2 text-xs">

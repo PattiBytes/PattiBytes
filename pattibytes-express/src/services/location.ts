@@ -89,13 +89,14 @@ export type SaveAddressInput = Partial<{
   // legacy / page-level variants
   user_id: string;
 }>;
+
 export type DeliveryFeeCalcOptions = {
   enabled?: boolean;
-  baseKm?: number;                 // default 3
-  baseFee?: number;                // default 50
-  perKmBeyondBase?: number;         // default 15
-  rounding?: 'ceil' | 'exact';      // used only for beyond_base mode (old)
-  beyondMode?: 'beyond_base' | 'from_0km'; // NEW
+  baseKm?: number;          // ✅ Will come from base_delivery_radius_km
+  baseFee?: number;         // ✅ Will come from delivery_fee (schedule)
+  perKmBeyondBase?: number; // ✅ Will come from per_km_fee_beyond_base
+  rounding?: 'ceil' | 'exact';
+  beyondMode?: 'beyondbase' | 'from0km';
 };
 
 export interface MerchantRow {
