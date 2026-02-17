@@ -705,142 +705,81 @@ export default function MerchantOrderDetailPage() {
   };
 
   const loadAll = async () => {
-  if (!orderId || !user) return;
-  setLoading(true);
+    if (!orderId || !user) return;
+    setLoading(true);
 
-  try {
-    const merchantId = await resolveMerchantId();
-    if (!merchantId) {
-      toast.error('Merchant account not found');
-      router.push('/merchant/orders');
-      return;
-    }
-
-    // fetch order (RLS should protect; we also verify ownership)
-    const { data: orderRow, error } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
-    if (error) throw error;
-    if (!orderRow) {
-      toast.error('Order not found');
-      router.push('/merchant/orders');
-      return;
-    }
-
-    const detected = detectOrdersStyle(orderRow);
-    setStyle(detected);
-
-    const c = colsFor(detected);
-    const o = normalizeOrder(orderRow, c);
-
-    if (String(o.merchantId) !== String(merchantId)) {
-      toast.error('Order not found (or not yours)');
-      router.push('/merchant/orders');
-      return;
-    }
-
-    setOrder(o);
-
-    setEditPaymentStatus(String(o.paymentStatus || 'pending'));
-    setEditEstimated(toDatetimeLocalValue(o.estimatedDeliveryTime));
-    setEditActual(toDatetimeLocalValue(o.actualDeliveryTime));
-    setEditPrep(o.preparationTime == null ? '' : String(o.preparationTime));
-
-    // ✅ FIXED: Handle both regular and walk-in customers
-    if (!o.customerId || o.customerId.trim() === '') {
-      // Walk-in order - extract name from customer_notes
-      let customerName = 'Walk-in Customer';
-      
-      if (o.customerNotes) {
-        const notes = String(o.customerNotes).trim();
-        
-        if (notes.includes('Walk-in:')) {
-          // Format: "Walk-in: Name\nPhone: ..."
-          customerName = notes.replace('Walk-in:', '').split('\n')[0].trim();
-        } else if (notes.includes('Name:')) {
-          // Format: "Name: John\nPhone: ..."
-          const nameMatch = notes.match(/Name:\s*(.+?)(?:\n|$)/i);
-          customerName = nameMatch ? nameMatch[1].trim() : notes.split('\n')[0].trim();
-        } else {
-          // Just use first line
-          customerName = notes.split('\n')[0].trim() || 'Walk-in Customer';
-        }
-      } else if (o.customerPhone) {
-        customerName = `Walk-in (${o.customerPhone})`;
+    try {
+      const merchantId = await resolveMerchantId();
+      if (!merchantId) {
+        toast.error('Merchant account not found');
+        router.push('/merchant/orders');
+        return;
       }
 
-      // Create a mock customer profile for walk-in
-      setCustomer({
-        id: 'walk-in',
-        full_name: `🚶 ${customerName}`,
-        fullname: `🚶 ${customerName}`,
-        phone: o.customerPhone,
-        email: null,
-        trust_score: 5,
-        trustscore: 5,
-        account_status: 'active',
-        accountstatus: 'active',
-      });
-    } else {
-      // Regular customer - fetch from profiles
-      const { data: cst } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', o.customerId)
-        .maybeSingle();
-
-      if (cst) {
-        setCustomer(cst as any);
-      } else {
-        // Customer profile not found, create placeholder
-        setCustomer({
-          id: o.customerId,
-          full_name: 'Unknown Customer',
-          fullname: 'Unknown Customer',
-          phone: o.customerPhone,
-          email: null,
-          trust_score: 5,
-          trustscore: 5,
-          account_status: 'active',
-          accountstatus: 'active',
-        });
+      // fetch order (RLS should protect; we also verify ownership)
+      const { data: orderRow, error } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
+      if (error) throw error;
+      if (!orderRow) {
+        toast.error('Order not found');
+        router.push('/merchant/orders');
+        return;
       }
+
+      const detected = detectOrdersStyle(orderRow);
+      setStyle(detected);
+
+      const c = colsFor(detected);
+      const o = normalizeOrder(orderRow, c);
+
+      if (String(o.merchantId) !== String(merchantId)) {
+        toast.error('Order not found (or not yours)');
+        router.push('/merchant/orders');
+        return;
+      }
+
+      setOrder(o);
+
+      setEditPaymentStatus(String(o.paymentStatus || 'pending'));
+      setEditEstimated(toDatetimeLocalValue(o.estimatedDeliveryTime));
+      setEditActual(toDatetimeLocalValue(o.actualDeliveryTime));
+      setEditPrep(o.preparationTime == null ? '' : String(o.preparationTime));
+
+      const cst = await supabase.from('profiles').select('*').eq('id', o.customerId).maybeSingle();
+      setCustomer((cst.data as any) ?? null);
+    } catch (e: any) {
+      console.error('Failed to load order', e);
+      toast.error(e?.message || 'Failed to load order');
+      router.push('/merchant/orders');
+    } finally {
+      setLoading(false);
     }
-  } catch (e: any) {
-    console.error('Failed to load order', e);
-    toast.error(e?.message || 'Failed to load order');
-    router.push('/merchant/orders');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
-
- const updateStatus = async (newStatus: string) => {
-  if (!order) return;
-  if (!MERCHANT_STATUSES.includes(newStatus)) {
-    toast.error('Invalid status for merchant');
-    return;
-  }
-
-  setUpdating(true);
-  try {
-    const nowIso = new Date().toISOString();
-
-    const patch: any = {
-      status: newStatus,
-      [cols.updatedAt]: nowIso,
-    };
-
-    if (newStatus === 'cancelled') {
-      const reason = window.prompt('Cancellation reason (optional):', order.cancellationReason ?? '') ?? '';
-      patch[cols.cancellationReason] = reason.trim() || null;
-      patch[cols.cancelledBy] = (user as any)?.role ?? 'merchant';
+  const updateStatus = async (newStatus: string) => {
+    if (!order) return;
+    if (!MERCHANT_STATUSES.includes(newStatus)) {
+      toast.error('Invalid status for merchant');
+      return;
     }
 
-    const { error } = await supabase.from('orders').update(patch).eq('id', order.id);
-    if (error) throw error;
+    setUpdating(true);
+    try {
+      const nowIso = new Date().toISOString();
 
-    // ✅ Only send notification if it's a real customer (not walk-in)
-    if (order.customerId && order.customerId.trim() !== '') {
+      const patch: any = {
+        status: newStatus,
+        [cols.updatedAt]: nowIso,
+      };
+
+      if (newStatus === 'cancelled') {
+        const reason = window.prompt('Cancellation reason (optional):', order.cancellationReason ?? '') ?? '';
+        patch[cols.cancellationReason] = reason.trim() || null;
+        patch[cols.cancelledBy] = (user as any)?.role ?? 'merchant';
+      }
+
+      const { error } = await supabase.from('orders').update(patch).eq('id', order.id);
+      if (error) throw error;
+
       await sendNotification(
         order.customerId,
         'Order Status Updated',
@@ -848,22 +787,20 @@ export default function MerchantOrderDetailPage() {
         'order',
         { orderid: order.id, ordernumber: order.orderNumber, status: newStatus }
       );
+
+      if (newStatus === 'ready' && !order.driverId) {
+        await notifyDrivers();
+      }
+
+      toast.success('Status updated');
+      await loadAll();
+    } catch (e: any) {
+      console.error('Update status failed', e);
+      toast.error(e?.message || 'Failed to update status');
+    } finally {
+      setUpdating(false);
     }
-
-    if (newStatus === 'ready' && !order.driverId) {
-      await notifyDrivers();
-    }
-
-    toast.success('Status updated');
-    await loadAll();
-  } catch (e: any) {
-    console.error('Update status failed', e);
-    toast.error(e?.message || 'Failed to update status');
-  } finally {
-    setUpdating(false);
-  }
-};
-
+  };
 
   const saveExtraFields = async () => {
     if (!order) return;
@@ -1424,50 +1361,35 @@ const merchantTotal = useMemo(() => {
               </div>
             </div>
 
-           <div className="bg-white rounded-2xl shadow p-4 sm:p-6">
-  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-    <User className="text-primary" size={18} />
-    Customer
-  </h3>
+            <div className="bg-white rounded-2xl shadow p-4 sm:p-6">
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <User className="text-primary" size={18} />
+                Customer
+              </h3>
 
-  <div className="flex items-center justify-between gap-2 mb-3">
-    <p className="font-semibold text-gray-900 truncate">
-      {customer?.full_name ?? customer?.fullname ?? 'Unknown'}
-    </p>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <p className="font-semibold text-gray-900 truncate">{customer?.full_name ?? customer?.fullname ?? 'NA'}</p>
+                <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${badge.color}`}>
+                  <TrustIcon size={14} />
+                  <span className="text-xs font-bold">{badge.text}</span>
+                </div>
+              </div>
 
-    {/* ✅ Only show trust badge for non-walk-in customers */}
-    {customer?.id && customer.id !== 'walk-in' && (
-      <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${badge.color}`}>
-        <TrustIcon size={14} />
-        <span className="text-xs font-bold">{badge.text}</span>
-      </div>
-    )}
-  </div>
+              {(customer?.phone || order.customerPhone) && (
+                <a
+                  href={`tel:${order.customerPhone ?? customer?.phone}`}
+                  className="text-sm text-primary hover:underline inline-flex items-center gap-2"
+                >
+                  <Phone size={16} className="text-gray-600" />
+                  {order.customerPhone ?? customer?.phone}
+                </a>
+              )}
 
-  {(customer?.phone || order.customerPhone) && (
-    <a
-      href={`tel:${order.customerPhone ?? customer?.phone}`}
-      className="text-sm text-primary hover:underline inline-flex items-center gap-2"
-    >
-      <Phone size={16} className="text-gray-600" />
-      {order.customerPhone ?? customer?.phone}
-    </a>
-  )}
-
-  <div className="mt-4 pt-4 border-t">
-    <p className="text-xs font-semibold text-gray-600 mb-1">Delivery address</p>
-    <p className="text-sm text-gray-800 whitespace-pre-line">{order.deliveryAddress ?? 'NA'}</p>
-  </div>
-
-  {/* ✅ Show customer notes for walk-in orders */}
-  {order.customerNotes && customer?.id === 'walk-in' && (
-    <div className="mt-4 pt-4 border-t">
-      <p className="text-xs font-semibold text-gray-600 mb-1">Order notes</p>
-      <p className="text-sm text-gray-800 whitespace-pre-line">{order.customerNotes}</p>
-    </div>
-  )}
-</div>
-
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-xs font-semibold text-gray-600 mb-1">Delivery address</p>
+                <p className="text-sm text-gray-800 whitespace-pre-line">{order.deliveryAddress ?? 'NA'}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -103,31 +103,36 @@ export default function MerchantDashboardPage() {
 
 
   const fetchOrders = async (merchantId: string): Promise<OrderRow[]> => {
+    // Fix for your error: your schema does not have orders.total [file:13]
+    // Try total_amount first (matches your customer dashboard usage), fallback to total.
   const attempts = [
-    'id, status, created_at, total_amount, delivery_fee, customer_id, customer_notes, customer_phone',
-    'id, status, created_at, total, delivery_fee, customer_id, customer_notes, customer_phone',
-  ];
+  'id, status, created_at, total_amount, delivery_fee',
+  'id, status, created_at, total, delivery_fee',
+];
 
-  for (const selectStr of attempts) {
-    const { data, error } = await supabase
-      .from('orders')
-      .select(selectStr)
-      .eq('merchant_id', merchantId)
-      .order('created_at', { ascending: false })
-      .limit(200);
+    for (const selectStr of attempts) {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(selectStr)
+        .eq('merchant_id', merchantId)
+        .order('created_at', { ascending: false })
+        .limit(200);
 
-    if (!error) return data as unknown as OrderRow[];
+      if (!error) return (data || []) as unknown as OrderRow[];
 
-    const msg = error?.message;
-    if (msg.includes('does not exist') && (msg.includes('total_amount') || msg.includes('total'))) {
-      logger.error('Orders select failed, trying fallback:', selectStr, error);
-      continue;
+      const msg = error?.message || '';
+      // if column missing, try next select
+      if (msg.includes('does not exist') && (msg.includes('total_amount') || msg.includes('total'))) {
+        logger.error('Orders select failed, trying fallback', { selectStr, error });
+        continue;
+      }
+
+      // other errors should stop immediately
+      throw error;
     }
-    throw error;
-  }
-  return [];
-};
 
+    return [];
+  };
 
   const computeStats = (orders: OrderRow[]) => {
     const totalOrders = orders.length;
@@ -176,89 +181,44 @@ export default function MerchantDashboardPage() {
   };
 
   const loadMerchantData = async () => {
-  if (!user) return;
-  try {
-    setLoading(true);
+    if (!user) return;
 
-    const { data: merchantData, error } = await supabase
-      .from('merchants')
-      .select('id, business_name, is_active')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    try {
+      setLoading(true);
 
-    if (error) {
-      logger.error('Error loading merchant data:', error);
-      setHasMerchant(false);
-      setMerchant(null);
-      return;
+      const { data: merchantData, error } = await supabase
+        .from('merchants')
+        .select('id, business_name, is_active')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error) {
+        logger.error('Error loading merchant data', error);
+        setHasMerchant(false);
+        setMerchant(null);
+        return;
+      }
+
+      if (!merchantData) {
+        logger.info('No merchant profile found');
+        setHasMerchant(false);
+        setMerchant(null);
+        return;
+      }
+
+      setHasMerchant(true);
+      setMerchant(merchantData as Merchant);
+
+      const orders = await fetchOrders(merchantData.id);
+      computeStats(orders);
+      setRecentOrders(orders.slice(0, 8));
+    } catch (error: any) {
+      logger.error('Failed to load merchant data', error);
+      toast.error(error?.message || 'Failed to load merchant data');
+    } finally {
+      setLoading(false);
     }
-
-    if (!merchantData) {
-      logger.info('No merchant profile found');
-      setHasMerchant(false);
-      setMerchant(null);
-      return;
-    }
-
-    setHasMerchant(true);
-    setMerchant(merchantData as Merchant);
-
-    const orders = await fetchOrders(merchantData.id);
-    computeStats(orders);
-
-    // ✅ FIXED: Add customer names to recent orders
-    const recentOrdersList = orders.slice(0, 8);
-    const withCustomerNames = await Promise.all(
-      recentOrdersList.map(async (order: any) => {
-        let customerName = 'Unknown';
-
-        if (!order.customer_id) {
-          // Walk-in order
-          if (order.customer_notes) {
-            const notes = String(order.customer_notes).trim();
-            
-            if (notes.includes('Walk-in:')) {
-              customerName = notes.replace('Walk-in:', '').split('\n')[0].trim();
-            } else if (notes.includes('Name:')) {
-              const nameMatch = notes.match(/Name:\s*(.+?)(?:\n|$)/i);
-              customerName = nameMatch ? nameMatch[1].trim() : notes.split('\n')[0].trim();
-            } else {
-              customerName = notes.split('\n')[0].trim() || 'Walk-in Customer';
-            }
-          } else if (order.customer_phone) {
-            customerName = `Walk-in (${order.customer_phone})`;
-          } else {
-            customerName = 'Walk-in Customer';
-          }
-          
-          customerName = `🚶 ${customerName}`;
-        } else {
-          // Regular customer
-          const { data: customer } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', order.customer_id)
-            .maybeSingle();
-
-          customerName = customer?.full_name || 'Unknown';
-        }
-
-        return {
-          ...order,
-          customerName,
-        };
-      })
-    );
-
-    setRecentOrders(withCustomerNames);
-  } catch (error: any) {
-    logger.error('Failed to load merchant data:', error);
-    toast.error(error?.message || 'Failed to load merchant data');
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   const handleRefresh = async () => {
     if (!merchant?.id) return;
@@ -461,50 +421,46 @@ export default function MerchantDashboardPage() {
             </div>
           ) : (
             <div className="space-y-3">
-            {recentOrders.map((o) => {
-  const s = normalizeStatus(o.status);
-  const total = safeNumber(o.total_amount ?? (o as any).total ?? 0);
-  const del = safeNumber(o.delivery_fee ?? 0);
-  const amount = Math.max(0, total - del);
+              {recentOrders.map((o) => {
+                const s = normalizeStatus(o.status);
+               const total = safeNumber(o.total_amount ?? o.total ?? 0);
+const del = safeNumber(o.delivery_fee ?? 0);
+const amount = Math.max(0, total - del);
 
-  return (
-    <div
-      key={o.id}
-      className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border border-gray-100 rounded-2xl p-4 hover:bg-gray-50 transition-colors"
-    >
-      <div className="min-w-0">
-        <p className="font-bold text-gray-900 truncate">
-          Order #{o.id.slice(0, 8).toUpperCase()}
-        </p>
-        {/* ✅ ADD: Customer name display */}
-        <p className="text-xs text-gray-600 truncate mt-0.5">
-          {(o as any).customerName || 'Unknown'}
-        </p>
-        <p className="text-xs text-gray-500 mt-0.5">
-          {new Date(o.created_at).toLocaleString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </p>
-        <p className="text-sm mt-1">
-          <span className="font-semibold text-gray-700">Status: </span>
-          <span className="font-bold text-gray-900">{s || 'unknown'}</span>
-        </p>
-      </div>
-      <div className="flex items-center justify-between sm:justify-end gap-3">
-        <p className="font-bold text-gray-900">{formatCurrencyINR(amount)}</p>
-        <Link
-          href={`/merchant/orders/${o.id}`}
-          className="px-4 py-2 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-orange-600"
-        >
-          Open
-        </Link>
-      </div>
-    </div>
-  );
-})}
+
+                return (
+                  <div
+                    key={o.id}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border border-gray-100 rounded-2xl p-4 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-900 truncate">Order #{o.id.slice(0, 8).toUpperCase()}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {new Date(o.created_at).toLocaleString('en-IN', {
+                          day: '2-digit',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                      <p className="text-sm mt-1">
+                        <span className="font-semibold text-gray-700">Status:</span>{' '}
+                        <span className="font-bold text-gray-900">{s || 'unknown'}</span>
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-3">
+                      <p className="font-bold text-gray-900">{formatCurrencyINR(amount)}</p>
+                      <Link
+                        href={`/merchant/orders`}
+                        className="px-4 py-2 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-orange-600"
+                      >
+                        Open
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
