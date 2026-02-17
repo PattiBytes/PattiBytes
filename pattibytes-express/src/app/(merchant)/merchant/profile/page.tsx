@@ -11,6 +11,30 @@ import ImageUpload from '@/components/common/ImageUpload';
 import LocationPicker from '@/components/common/LocationPicker';
 import { LocationData } from '@/services/location';
 
+// ✅ ADD THESE HELPER FUNCTIONS
+function formatTimeDisplay(time: string): string {
+  if (!time) return '';
+  try {
+    const [hours, minutes] = time.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+  } catch {
+    return time;
+  }
+}
+
+function isOvernightShift(openingTime: string, closingTime: string): boolean {
+  if (!openingTime || !closingTime) return false;
+  try {
+    const [openHour] = openingTime.split(':').map(Number);
+    const [closeHour] = closingTime.split(':').map(Number);
+    return closeHour < openHour;
+  } catch {
+    return false;
+  }
+}
+
 export default function MerchantProfilePage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -18,24 +42,27 @@ export default function MerchantProfilePage() {
   const [merchantId, setMerchantId] = useState<string>('');
   const [location, setLocation] = useState<LocationData | null>(null);
 
-  const [formData, setFormData] = useState({
-    business_name: '',
-    business_type: 'Restaurant',
-    logo_url: '',
-    banner_url: '',
-    description: '',
-    cuisine_types: [] as string[],
-    phone: '',
-    email: '',
-    min_order_amount: 100,
-    delivery_radius_km: 5,
-    estimated_prep_time: 30,
-    is_active: true,
+ const [formData, setFormData] = useState({
+  business_name: '',
+  business_type: 'Restaurant',
+  logo_url: '',
+  banner_url: '',
+  description: '',
+  cuisine_types: [] as string[],
+  phone: '',
+  email: '',
+  min_order_amount: 100,
+  delivery_radius_km: 5,
+  estimated_prep_time: 30,
+  is_active: true,
+  gst_enabled: false,
+  gst_percentage: 5,
+  
+  // ✅ ADD THESE TWO LINES
+  opening_time: '',
+  closing_time: '',
+});
 
-    // NEW: GST controls
-    gst_enabled: false,
-    gst_percentage: 5,
-  });
 
   const cuisineOptions = [
     'Punjabi', 'North Indian', 'South Indian', 'Chinese',
@@ -99,25 +126,28 @@ const handleChangePassword = async () => {
       if (error) throw error;
 
       if (data) {
-        setMerchantId(data.id);
+  setMerchantId(data.id);
 
-        setFormData({
-          business_name: data.business_name || '',
-          business_type: data.business_type || 'Restaurant',
-          logo_url: data.logo_url || '',
-          banner_url: data.banner_url || '',
-          description: data.description || '',
-          cuisine_types: data.cuisine_types || [],
-          phone: data.phone || '',
-          email: data.email || '',
-          min_order_amount: data.min_order_amount || 100,
-          delivery_radius_km: data.delivery_radius_km || 5,
-          estimated_prep_time: data.estimated_prep_time || 30,
-          is_active: data.is_active ?? true,
-
-          gst_enabled: data.gst_enabled ?? false,
-          gst_percentage: Number(data.gst_percentage ?? 5),
-        });
+  setFormData({
+    business_name: data.business_name || '',
+    business_type: data.business_type || 'Restaurant',
+    logo_url: data.logo_url || '',
+    banner_url: data.banner_url || '',
+    description: data.description || '',
+    cuisine_types: data.cuisine_types || [],
+    phone: data.phone || '',
+    email: data.email || '',
+    min_order_amount: data.min_order_amount || 100,
+    delivery_radius_km: data.delivery_radius_km || 5,
+    estimated_prep_time: data.estimated_prep_time || 30,
+    is_active: data.is_active ?? true,
+    gst_enabled: data.gst_enabled ?? false,
+    gst_percentage: Number(data.gst_percentage ?? 5),
+    
+    // ✅ ADD THESE TWO LINES
+    opening_time: data.opening_time || '',
+    closing_time: data.closing_time || '',
+  });
 
         if (data.address && data.latitude && data.longitude) {
           setLocation({
@@ -169,36 +199,40 @@ const handleChangePassword = async () => {
       }
 
       const { error } = await supabase
-        .from('merchants')
-        .update({
-          business_name: formData.business_name,
-          business_type: formData.business_type,
-          logo_url: formData.logo_url,
-          banner_url: formData.banner_url,
-          description: formData.description,
-          cuisine_types: formData.cuisine_types,
-          phone: formData.phone,
-          email: formData.email,
+  .from('merchants')
+  .update({
+    business_name: formData.business_name,
+    business_type: formData.business_type,
+    logo_url: formData.logo_url,
+    banner_url: formData.banner_url,
+    description: formData.description,
+    cuisine_types: formData.cuisine_types,
+    phone: formData.phone,
+    email: formData.email,
 
-          address: location.address,
-          latitude: location.lat,
-          longitude: location.lon,
-          city: location.city || null,
-          state: location.state || null,
-          postal_code: location.postalcode || null,
+    address: location.address,
+    latitude: location.lat,
+    longitude: location.lon,
+    city: location.city || null,
+    state: location.state || null,
+    postal_code: location.postalcode || null,
 
-          min_order_amount: formData.min_order_amount,
-          delivery_radius_km: formData.delivery_radius_km,
-          estimated_prep_time: formData.estimated_prep_time,
-          is_active: formData.is_active,
+    min_order_amount: formData.min_order_amount,
+    delivery_radius_km: formData.delivery_radius_km,
+    estimated_prep_time: formData.estimated_prep_time,
+    is_active: formData.is_active,
 
-          // NEW: GST fields
-          gst_enabled: formData.gst_enabled,
-          gst_percentage: Number(formData.gst_percentage || 0),
+    gst_enabled: formData.gst_enabled,
+    gst_percentage: Number(formData.gst_percentage || 0),
 
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', merchantId);
+    // ✅ ADD THESE TWO LINES
+    opening_time: formData.opening_time || null,
+    closing_time: formData.closing_time || null,
+
+    updated_at: new Date().toISOString(),
+  })
+  .eq('id', merchantId);
+
 
       if (error) throw error;
 
@@ -403,6 +437,86 @@ const handleChangePassword = async () => {
                 </div>
               </div>
             </div>
+            {/* ✅ Operating Hours Section - ADD THIS */}
+<div>
+  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+    <Clock size={20} className="text-primary" />
+    Operating Hours
+  </h3>
+
+  <div className="rounded-lg border border-gray-200 p-4 space-y-4">
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+      <p className="text-sm text-blue-800">
+        <strong>💡 Tip:</strong> Leave both fields empty if your restaurant is open 24/7 or doesn&apos;t have fixed hours.
+      </p>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Opening Time */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Opening Time
+        </label>
+        <input
+          type="time"
+          value={formData.opening_time}
+          onChange={(e) => setFormData({ ...formData, opening_time: e.target.value })}
+          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          When your restaurant starts accepting orders
+        </p>
+      </div>
+
+      {/* Closing Time */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Closing Time
+        </label>
+        <input
+          type="time"
+          value={formData.closing_time}
+          onChange={(e) => setFormData({ ...formData, closing_time: e.target.value })}
+          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary"
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          When your restaurant stops accepting orders
+        </p>
+      </div>
+    </div>
+
+    {/* Preview Current Status */}
+    {formData.opening_time && formData.closing_time && (
+      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+        <p className="text-sm font-semibold text-gray-900 mb-2">
+          📅 Operating Schedule Preview:
+        </p>
+        <div className="text-sm text-gray-700 space-y-1">
+          <p>
+            • <strong>Opens:</strong> {formatTimeDisplay(formData.opening_time)}
+          </p>
+          <p>
+            • <strong>Closes:</strong> {formatTimeDisplay(formData.closing_time)}
+          </p>
+          {isOvernightShift(formData.opening_time, formData.closing_time) && (
+            <p className="text-orange-600 font-semibold mt-2">
+              ⚠️ Overnight shift detected (closes next day)
+            </p>
+          )}
+        </div>
+      </div>
+    )}
+
+    {!formData.opening_time && !formData.closing_time && (
+      <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+        <p className="text-sm text-green-800">
+          ✅ <strong>Always Open:</strong> Your restaurant will appear as open 24/7 to customers.
+        </p>
+      </div>
+    )}
+  </div>
+</div>
+
 
             {/* GST Settings (NEW) */}
             <div>

@@ -768,6 +768,8 @@ export default function CustomerDashboardPage() {
               'city',
               'state',
               'postal_code',
+              'opening_time',
+              'closing_time',
             ].join(',')
           )
           .eq('is_active', true);
