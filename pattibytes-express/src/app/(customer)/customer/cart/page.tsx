@@ -179,7 +179,7 @@ export default function CartPage() {
         enabled: policy.enabled,
         baseFee: policy.baseFee,
         baseKm: 3,
-        perKmBeyondBase: 15,
+        perKmBeyondBase: 10,
         rounding: 'ceil',
       });
 
