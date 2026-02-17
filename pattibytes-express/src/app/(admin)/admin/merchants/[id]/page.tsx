@@ -28,6 +28,7 @@ import MenuItemModal from '@/components/merchant/MenuItemModal';
 import ImageUpload from '@/components/common/ImageUpload';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import { MenuItem } from '@/types';
+import MapLocationPicker from '@/components/common/MapLocationPicker';
 
 type MerchantRow = {
   id: string;
@@ -114,6 +115,31 @@ function parseCuisineToText(v: any) {
   return '';
 }
 
+// ✅ ADD THESE HELPER FUNCTIONS
+function formatTimeDisplay(time: string): string {
+  if (!time) return '';
+  try {
+    const [hours, minutes] = time.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+  } catch {
+    return time;
+  }
+}
+
+function isOvernightShift(openingTime: string, closingTime: string): boolean {
+  if (!openingTime || !closingTime) return false;
+  try {
+    const [openHour] = openingTime.split(':').map(Number);
+    const [closeHour] = closingTime.split(':').map(Number);
+    return closeHour < openHour;
+  } catch {
+    return false;
+  }
+}
+
+
 function cuisineTextToArray(text: string): string[] {
   return (text || '')
     .split(',')
@@ -168,7 +194,8 @@ export default function AdminMerchantPage() {
   const [menuModalOpen, setMenuModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
 
-  const [showLocationModal, setShowLocationModal] = useState(false);
+const [showLocationModal, setShowLocationModal] = useState(false);
+const [locationPickerMode, setLocationPickerMode] = useState<'search' | 'map'>('search');
 
   const isAdmin = useMemo(() => user?.role === 'admin' || user?.role === 'superadmin', [user?.role]);
 
@@ -689,42 +716,155 @@ export default function AdminMerchantPage() {
                     </label>
                   </div>
                 </div>
+{/* ✅ Operating Hours Section - ADD THIS */}
+<div className="lg:col-span-2 rounded-2xl border p-4 bg-gradient-to-br from-white to-green-50">
+  <p className="text-sm font-bold text-gray-900">Operating Hours</p>
+  <p className="text-xs text-gray-600 mt-1">Leave empty if restaurant is open 24/7</p>
 
-                {/* Location modal */}
-                {showLocationModal && (
-                  <>
-                    <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowLocationModal(false)} />
-                    <div className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden">
-                      <div className="p-4 border-b flex items-center justify-between">
-                        <h3 className="font-bold text-gray-900">Update merchant location</h3>
-                        <button
-                          type="button"
-                          className="p-2 rounded-lg hover:bg-gray-100"
-                          onClick={() => setShowLocationModal(false)}
-                          aria-label="Close"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                      </div>
+  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+    {/* Opening Time */}
+    <div>
+      <label className="block text-sm font-semibold text-gray-700 mb-2">
+        Opening Time
+      </label>
+      <input
+        type="time"
+        className="w-full border rounded-xl px-3 py-2"
+        value={merchantForm.opening_time || ''}
+        onChange={(e) => setMerchantForm((p) => ({ ...(p as any), opening_time: e.target.value || null }))}
+      />
+      <p className="text-xs text-gray-500 mt-1">When restaurant starts accepting orders</p>
+    </div>
 
-                      <div className="p-4">
-                        <p className="text-sm text-gray-600 mb-3">Search and select the correct address.</p>
-                        <AddressAutocomplete
-                          onSelect={(loc: any) => {
-                            setMerchantForm((p) => ({
-                              ...(p as any),
-                              address: loc.address,
-                              latitude: loc.lat,
-                              longitude: loc.lon,
-                            }));
-                            toast.success('Location selected');
-                            setShowLocationModal(false);
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
+    {/* Closing Time */}
+    <div>
+      <label className="block text-sm font-semibold text-gray-700 mb-2">
+        Closing Time
+      </label>
+      <input
+        type="time"
+        className="w-full border rounded-xl px-3 py-2"
+        value={merchantForm.closing_time || ''}
+        onChange={(e) => setMerchantForm((p) => ({ ...(p as any), closing_time: e.target.value || null }))}
+      />
+      <p className="text-xs text-gray-500 mt-1">When restaurant stops accepting orders</p>
+    </div>
+  </div>
+
+  {/* Preview */}
+  {merchantForm.opening_time && merchantForm.closing_time && (
+    <div className="mt-3 bg-white rounded-lg p-3 border">
+      <p className="text-xs font-semibold text-gray-700 mb-1">Schedule Preview:</p>
+      <p className="text-sm text-gray-900">
+        <strong>{formatTimeDisplay(merchantForm.opening_time)}</strong> - <strong>{formatTimeDisplay(merchantForm.closing_time)}</strong>
+        {isOvernightShift(merchantForm.opening_time, merchantForm.closing_time) && (
+          <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
+            Overnight
+          </span>
+        )}
+      </p>
+    </div>
+  )}
+
+  {!merchantForm.opening_time && !merchantForm.closing_time && (
+    <div className="mt-3 bg-green-100 rounded-lg p-3 border border-green-200">
+      <p className="text-xs text-green-800">
+        ✅ <strong>Always Open:</strong> Restaurant appears as open 24/7
+      </p>
+    </div>
+  )}
+</div>
+
+              {/* ✅ Enhanced Location Modal with Map */}
+{showLocationModal && (
+  <>
+    <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowLocationModal(false)} />
+    <div className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+      <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white z-10">
+        <h3 className="font-bold text-gray-900">Update Merchant Location</h3>
+        <button
+          type="button"
+          className="p-2 rounded-lg hover:bg-gray-100"
+          onClick={() => setShowLocationModal(false)}
+          aria-label="Close"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="p-4">
+        {/* Tab Selector */}
+        <div className="flex gap-2 mb-4 bg-gray-100 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setLocationPickerMode('search')}
+            className={`flex-1 px-4 py-2 rounded-lg font-semibold transition ${
+              locationPickerMode === 'search'
+                ? 'bg-white text-primary shadow'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            🔍 Search Address
+          </button>
+          <button
+            type="button"
+            onClick={() => setLocationPickerMode('map')}
+            className={`flex-1 px-4 py-2 rounded-lg font-semibold transition ${
+              locationPickerMode === 'map'
+                ? 'bg-white text-primary shadow'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            🗺️ Pick on Map
+          </button>
+        </div>
+
+        {/* Search Mode */}
+        {locationPickerMode === 'search' && (
+          <div>
+            <p className="text-sm text-gray-600 mb-3">Search and select the correct address.</p>
+            <AddressAutocomplete
+              onSelect={(loc: any) => {
+                setMerchantForm((p) => ({
+                  ...(p as any),
+                  address: loc.address,
+                  latitude: loc.lat,
+                  longitude: loc.lon,
+                  city: loc.city || p?.city,
+                  state: loc.state || p?.state,
+                  postal_code: loc.postalcode || p?.postal_code,
+                }));
+                toast.success('Location selected');
+                setShowLocationModal(false);
+              }}
+            />
+          </div>
+        )}
+
+        {/* Map Mode */}
+        {locationPickerMode === 'map' && (
+          <MapLocationPicker
+            initialLat={merchantForm.latitude}
+            initialLon={merchantForm.longitude}
+            onSelect={(loc) => {
+              setMerchantForm((p) => ({
+                ...(p as any),
+                address: loc.address,
+                latitude: loc.lat,
+                longitude: loc.lon,
+                city: loc.city || p?.city,
+                state: loc.state || p?.state,
+                postal_code: loc.postalcode || p?.postal_code,
+              }));
+              setShowLocationModal(false);
+            }}
+          />
+        )}
+      </div>
+    </div>
+  </>
+)}
+
               </>
             )}
           </div>

@@ -29,7 +29,8 @@ export type Merchant = {
   city?: string | null;
   state?: string | null;
   postal_code?: string | null;
-
+ opening_time?: string | null;
+  closing_time?: string | null;
   // computed on client
   distance_km?: number;
 };
