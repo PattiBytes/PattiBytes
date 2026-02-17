@@ -590,8 +590,8 @@ export default function AdminCreateOrderPage() {
       const quote = calculateDeliveryFeeByDistance(km, {
         enabled: true,
         baseKm: 3,
-        baseFee: 50,
-        perKmBeyondBase: 15,
+        baseFee: 35,
+        perKmBeyondBase: 10,
         rounding: 'ceil' as any,
       });
 
