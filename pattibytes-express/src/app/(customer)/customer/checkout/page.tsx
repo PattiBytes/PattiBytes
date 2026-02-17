@@ -330,7 +330,7 @@ if (m2) {
       enabled: policy.enabled,
       baseFee: policy.baseFee, // <-- from app_settings (delivery_fee or schedule)
       baseKm: 3,
-      perKmBeyondBase: 15,
+      perKmBeyondBase: 10,
       rounding: 'ceil',
     });
 
@@ -348,7 +348,7 @@ const aerialKm = haversineKm(mLat, mLon, aLat, aLon);
     enabled: policy.enabled,
     baseFee: policy.baseFee,
     baseKm: 3,
-    perKmBeyondBase: 15,
+    perKmBeyondBase: 10,
     rounding: 'ceil',
   });
 
