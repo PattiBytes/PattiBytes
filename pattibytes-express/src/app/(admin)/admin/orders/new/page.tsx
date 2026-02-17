@@ -18,6 +18,7 @@ import { calculateDeliveryFeeByDistance, getRoadDistanceKmViaApi } from '@/servi
 
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import appSettingsService from '@/services/appSettings';
 
 // Types
 type MerchantRow = {
@@ -567,41 +568,47 @@ export default function AdminCreateOrderPage() {
     }
   };
 
-  const computeFeeFromDistance = async () => {
-    if (!merchant?.latitude || !merchant?.longitude) {
-      toast.error('Merchant coordinates missing');
-      return;
-    }
-    if (deliveryLat == null || deliveryLng == null) {
-      toast.error('Select delivery address first');
-      return;
-    }
+  // Find the computeFeeFromDistance function
+const computeFeeFromDistance = async () => {
+  if (!merchant?.latitude || !merchant?.longitude) {
+    toast.error('Merchant coordinates missing');
+    return;
+  }
+  if (deliveryLat === null || deliveryLng === null) {
+    toast.error('Select delivery address first');
+    return;
+  }
 
-    try {
-      const km = await getRoadDistanceKmViaApi(
-        Number(merchant.latitude),
-        Number(merchant.longitude),
-        Number(deliveryLat),
-        Number(deliveryLng)
-      );
+  try {
+    // ✅ Fetch settings
+    const policy = await appSettingsService.getDeliveryPolicyNow();
+    
+    const km = await getRoadDistanceKmViaApi(
+      Number(merchant.latitude),
+      Number(merchant.longitude),
+      Number(deliveryLat),
+      Number(deliveryLng)
+    );
 
-      setDeliveryDistanceKm(round2(km));
+    setDeliveryDistanceKm(round2(km));
 
-      const quote = calculateDeliveryFeeByDistance(km, {
-        enabled: true,
-        baseKm: 3,
-        baseFee: 35,
-        perKmBeyondBase: 10,
-        rounding: 'ceil' as any,
-      });
+    // ✅ Use fetched values
+    const quote = calculateDeliveryFeeByDistance(km, {
+      enabled: true,
+      baseKm: policy.baseRadiusKm,        // ✅ From settings
+      baseFee: policy.baseFee,
+      perKmBeyondBase: policy.perKmFeeAfterBase,  // ✅ From settings
+      rounding: 'ceil',
+    } as any);
 
-      setDeliveryFee(round2(quote.fee));
-      toast.success(`Distance: ${quote.distanceKm} km, Fee: ${toINR(quote.fee)}`);
-    } catch (e: any) {
-      console.error(e);
-      toast.error(e?.message ?? 'Distance/fee computation failed');
-    }
-  };
+    setDeliveryFee(round2(quote.fee));
+    toast.success(`Distance: ${quote.distanceKm} km, Fee: ₹${quote.fee}`);
+  } catch (e: any) {
+    console.error(e);
+    toast.error(e?.message ?? 'Distance/fee computation failed');
+  }
+};
+
 
   // Apply promo code
   const applyPromo = () => {

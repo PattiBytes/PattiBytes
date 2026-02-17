@@ -175,24 +175,26 @@ export default function CartPage() {
       }
 
       const roadKm = await getRoadDistanceKmViaApi(mLat, mLon, aLat, aLon);
-      const quote = calculateDeliveryFeeByDistance(roadKm, {
-        enabled: policy.enabled,
-        baseFee: policy.baseFee,
-        baseKm: 3,
-        perKmBeyondBase: 10,
-        rounding: 'ceil',
-      });
+    
+    // ✅ Use fetched values
+    const quote = calculateDeliveryFeeByDistance(roadKm, {
+      enabled: policy.enabled,
+      baseFee: policy.baseFee,
+      baseKm: policy.baseRadiusKm,        // ✅ From settings
+      perKmBeyondBase: policy.perKmFeeAfterBase,  // ✅ From settings
+      rounding: 'ceil',
+    });
 
-      setDeliveryFee(quote.fee);
-      setDeliveryDistance(quote.distanceKm);
-      setDeliveryBreakdown(`Road distance: ${quote.breakdown}`);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
-      setDeliveryFee(0);
-      setDeliveryDistance(0);
-      setDeliveryBreakdown(e?.message ?? 'Delivery fee calc failed');
-    }
-  }, [defaultAddr, merchantGeo, setDeliveryFee, setDeliveryDistance]);
+    setDeliveryFee(quote.fee);
+    setDeliveryDistance(quote.distanceKm);
+    setDeliveryBreakdown(`Road distance: ${quote.breakdown}`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (e: any) {
+    setDeliveryFee(0);
+    setDeliveryDistance(0);
+    setDeliveryBreakdown(e?.message ?? 'Delivery fee calc failed');
+  }
+}, [defaultAddr, merchantGeo, setDeliveryFee, setDeliveryDistance]);
 
   useEffect(() => {
     if (!user?.id) return;

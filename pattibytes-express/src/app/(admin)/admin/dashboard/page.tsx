@@ -276,25 +276,34 @@ const loadRecentOrders = async () => {
     const list = (orders as any[]) || [];
 
     // ✅ FIXED: Process customer names properly with correct column name
-    const withCustomers = await Promise.all(
+     const withCustomers = await Promise.all(
       list.map(async (order: any) => {
         let customer_name = 'Unknown';
 
         if (!order.customer_id) {
           // Walk-in order - extract name from customer_notes
           if (order.customer_notes) {
-            if (order.customer_notes.includes('Walk-in:')) {
-              customer_name = order.customer_notes
+            // Try to extract name from various formats
+            const notes = String(order.customer_notes).trim();
+            
+            if (notes.includes('Walk-in:')) {
+              // Format: "Walk-in: Name\nPhone: ..."
+              customer_name = notes
                 .replace('Walk-in:', '')
                 .split('\n')[0]
                 .trim();
+            } else if (notes.includes('Name:')) {
+              // Format: "Name: John\nPhone: ..."
+              const nameMatch = notes.match(/Name:\s*(.+?)(?:\n|$)/i);
+              customer_name = nameMatch ? nameMatch[1].trim() : notes.split('\n')[0].trim();
             } else {
-              customer_name = order.customer_notes.split('\n')[0].trim() || 'Walk-in';
+              // Just use first line
+              customer_name = notes.split('\n')[0].trim() || 'Walk-in Customer';
             }
           } else if (order.customer_phone) {
             customer_name = `Walk-in (${order.customer_phone})`;
           } else {
-            customer_name = 'Walk-in';
+            customer_name = 'Walk-in Customer';
           }
           
           // Add walk-in emoji indicator
@@ -312,7 +321,7 @@ const loadRecentOrders = async () => {
 
         return {
           ...order,
-          customer_name, // Use snake_case to match display
+          customer_name,
         };
       })
     );

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
+
 import Image from 'next/image';
 import {
   Save,
@@ -36,11 +37,18 @@ import {
   Copy,
   CheckCircle2,
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Store,
+  DollarSign,
+  MapPinned,
+  Ruler,
+  Navigation,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useRouter } from 'next/navigation';
 
-const TABLE = 'app_settings'; // change to 'appsettings' if that's your real table
+const TABLE = 'app_settings';
 
 type CustomLink = {
   id: string;
@@ -59,8 +67,8 @@ type Announcement = {
   message: string;
   image_url?: string;
   link_url?: string;
-  start_at?: string; // ISO
-  end_at?: string; // ISO
+  start_at?: string;
+  end_at?: string;
   dismissible: boolean;
   dismiss_key: string;
 };
@@ -72,14 +80,14 @@ type DeliveryFeeSchedule = {
   weekly: Record<DayKey, { enabled: boolean; fee: number }>;
   overrides: Array<any>;
   ui?: {
-    show_to_customer?: boolean; // if false: still charge but hide line item (later used in cart/checkout)
+    show_to_customer?: boolean;
   };
 };
 
 interface Settings {
   id?: string;
-
   app_name: string;
+   app_logo_url: string;
   support_email: string;
   support_phone: string;
   business_address: string;
@@ -94,12 +102,14 @@ interface Settings {
   min_order_amount: number;
   tax_percentage: number;
 
-  custom_links: CustomLink[];
+  // ✅ NEW: Delivery Area Configuration
+  base_delivery_radius_km: number; // Base area radius in km
+  per_km_fee_beyond_base: number; // Fee per km beyond base area
 
+  custom_links: CustomLink[];
   announcement: Announcement;
   show_menu_images: boolean;
 
-  // Delivery fee controls
   delivery_fee_enabled: boolean;
   delivery_fee_schedule: DeliveryFeeSchedule;
 }
@@ -223,7 +233,6 @@ function parseSchedule(v: any, fallbackFee: number): DeliveryFeeSchedule {
     const base = defaultDeliveryFeeSchedule(fallbackFee);
 
     const weekly = { ...base.weekly, ...(obj?.weekly || {}) };
-    // Ensure all keys exist + numbers
     for (const { key } of DAYS) {
       weekly[key] = {
         enabled: asBool(weekly[key]?.enabled, true),
@@ -245,7 +254,6 @@ function parseSchedule(v: any, fallbackFee: number): DeliveryFeeSchedule {
 }
 
 function dayKeyForNow(timezone: string): DayKey {
-  // Use Intl for timezone-safe weekday
   const short = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: timezone }).format(new Date());
   const k = short.toLowerCase().slice(0, 3);
   return (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].includes(k) ? k : 'mon') as DayKey;
@@ -262,9 +270,10 @@ export default function SettingsPage() {
     const fallbackFee = 40;
     return {
       app_name: 'PattiBytes Express',
+      app_logo_url: '',
       support_email: 'support@pattibytes.com',
       support_phone: '+91 98765 43210',
-      business_address: 'Ludhiana, Punjab, India',
+      business_address: 'Patti, Punjab, India',
 
       facebook_url: '',
       instagram_url: '',
@@ -276,8 +285,10 @@ export default function SettingsPage() {
       min_order_amount: 100,
       tax_percentage: 0,
 
-      custom_links: [],
+      base_delivery_radius_km: 5, // ✅ Default 5km base area
+      per_km_fee_beyond_base: 10, // ✅ Default ₹10/km beyond base
 
+      custom_links: [],
       announcement: defaultAnnouncement(),
       show_menu_images: true,
 
@@ -285,8 +296,58 @@ export default function SettingsPage() {
       delivery_fee_schedule: defaultDeliveryFeeSchedule(fallbackFee),
     };
   });
+  
+  function CollapsibleSection({
+  title,
+  icon,
+  expanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  icon: ReactNode;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200">
+      <button
+        onClick={onToggle}
+        className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          {icon}
+          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+        </div>
+        {expanded ? (
+          <ChevronUp size={20} className="text-gray-600" />
+        ) : (
+          <ChevronDown size={20} className="text-gray-600" />
+        )}
+      </button>
 
-  // New custom link draft
+      {expanded && <div className="px-6 py-5 border-t border-gray-100">{children}</div>}
+    </div>
+  );
+}
+
+
+  // Section collapse states
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    general: true,
+    delivery: true,
+    announcement: false,
+    social: false,
+    custom: false,
+    orders: false,
+    performance: false,
+  });
+
+  const toggleSection = (key: string) => {
+    setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const [draft, setDraft] = useState<CustomLink>({
     id: uid(),
     title: '',
@@ -295,9 +356,8 @@ export default function SettingsPage() {
     enabled: true,
   });
   const [uploadingLogo, setUploadingLogo] = useState(false);
-
-  // Announcement uploads
   const [uploadingAnnouncementImage, setUploadingAnnouncementImage] = useState(false);
+  const [uploadingAppLogo, setUploadingAppLogo] = useState(false);
 
   const ann = settings.announcement || defaultAnnouncement();
 
@@ -314,91 +374,93 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadSettings();
-     
   }, []);
 
-  const loadSettings = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.from(TABLE).select('*').single();
+ const loadSettings = async () => {
+  setLoading(true);
+  try {
+    const { data, error } = await supabase.from(TABLE).select('*').single();
 
-      // No rows
-      if (error && error.code !== 'PGRST116') throw error;
+    if (error && error.code !== 'PGRST116') throw error;
 
-      if (data) {
-        const fallbackFee = asNum((data as any).delivery_fee, 40);
+    if (data) {
+      const fallbackFee = asNum((data as any).delivery_fee, 40);
 
-        const customLinksRaw = Array.isArray((data as any).custom_links) ? (data as any).custom_links : [];
-        const annRaw = (data as any).announcement;
+      const customLinksRaw = Array.isArray((data as any).custom_links) ? (data as any).custom_links : [];
+      const annRaw = (data as any).announcement;
 
-        const normalizedAnn: Announcement = {
-          ...defaultAnnouncement(),
-          ...(annRaw && typeof annRaw === 'object' ? annRaw : {}),
-        };
+      const normalizedAnn: Announcement = {
+        ...defaultAnnouncement(),
+        ...(annRaw && typeof annRaw === 'object' ? annRaw : {}),
+      };
 
-        const schedule = parseSchedule((data as any).delivery_fee_schedule, fallbackFee);
+      const schedule = parseSchedule((data as any).delivery_fee_schedule, fallbackFee);
 
-        // Backward compatibility: if you later add a direct column, prefer it
-        const showToCustomerFromColumn = (data as any).delivery_fee_show_to_customer;
-        if (showToCustomerFromColumn !== undefined) {
-          schedule.ui = { ...(schedule.ui || {}), show_to_customer: asBool(showToCustomerFromColumn, true) };
-        }
-
-        setSettings({
-          id: (data as any).id,
-          app_name: String((data as any).app_name || 'PattiBytes Express'),
-
-          support_email: normalizeMaybeMarkdownUrl((data as any).support_email || ''),
-          support_phone: String((data as any).support_phone || ''),
-          business_address: String((data as any).business_address || ''),
-
-          facebook_url: normalizeMaybeMarkdownUrl((data as any).facebook_url || ''),
-          instagram_url: normalizeMaybeMarkdownUrl((data as any).instagram_url || ''),
-          twitter_url: normalizeMaybeMarkdownUrl((data as any).twitter_url || ''),
-          youtube_url: normalizeMaybeMarkdownUrl((data as any).youtube_url || ''),
-          website_url: normalizeMaybeMarkdownUrl((data as any).website_url || ''),
-
-          delivery_fee: fallbackFee,
-          min_order_amount: asNum((data as any).min_order_amount, 100),
-          tax_percentage: asNum((data as any).tax_percentage, 0),
-
-          custom_links: customLinksRaw
-            .map((x: any) => ({
-              id: String(x?.id || uid()),
-              title: String(x?.title || ''),
-              url: normalizeMaybeMarkdownUrl(x?.url || ''),
-              logo_url: normalizeMaybeMarkdownUrl(x?.logo_url || ''),
-              enabled: asBool(x?.enabled, true),
-            }))
-            .filter((x: CustomLink) => x.title || x.url || x.logo_url),
-
-          announcement: {
-            ...normalizedAnn,
-            type: normalizedAnn.type === 'popup' ? 'popup' : 'banner',
-            enabled: asBool(normalizedAnn.enabled, false),
-            title: String(normalizedAnn.title || ''),
-            message: String(normalizedAnn.message || ''),
-            image_url: String(normalizedAnn.image_url || ''),
-            link_url: String(normalizedAnn.link_url || ''),
-            start_at: String(normalizedAnn.start_at || ''),
-            end_at: String(normalizedAnn.end_at || ''),
-            dismissible: asBool((normalizedAnn as any).dismissible, true),
-            dismiss_key: String((normalizedAnn as any).dismiss_key || 'v1'),
-          },
-
-          show_menu_images: asBool((data as any).show_menu_images, true),
-
-          delivery_fee_enabled: asBool((data as any).delivery_fee_enabled, true),
-          delivery_fee_schedule: schedule,
-        });
+      const showToCustomerFromColumn = (data as any).delivery_fee_show_to_customer;
+      if (showToCustomerFromColumn !== undefined) {
+        schedule.ui = { ...(schedule.ui || {}), show_to_customer: asBool(showToCustomerFromColumn, true) };
       }
-    } catch (e: any) {
-      console.error('Failed to load settings:', e);
-      toast.error(e?.message || 'Failed to load settings');
-    } finally {
-      setLoading(false);
+
+      setSettings({
+        id: (data as any).id,
+        app_name: String((data as any).app_name || 'PattiBytes Express'),
+        app_logo_url: normalizeMaybeMarkdownUrl((data as any).app_logo_url || ''), // ✅ ADD THIS LINE
+
+        support_email: normalizeMaybeMarkdownUrl((data as any).support_email || ''),
+        support_phone: String((data as any).support_phone || ''),
+        business_address: String((data as any).business_address || ''),
+
+        facebook_url: normalizeMaybeMarkdownUrl((data as any).facebook_url || ''),
+        instagram_url: normalizeMaybeMarkdownUrl((data as any).instagram_url || ''),
+        twitter_url: normalizeMaybeMarkdownUrl((data as any).twitter_url || ''),
+        youtube_url: normalizeMaybeMarkdownUrl((data as any).youtube_url || ''),
+        website_url: normalizeMaybeMarkdownUrl((data as any).website_url || ''),
+
+        delivery_fee: fallbackFee,
+        min_order_amount: asNum((data as any).min_order_amount, 100),
+        tax_percentage: asNum((data as any).tax_percentage, 0),
+
+        base_delivery_radius_km: asNum((data as any).base_delivery_radius_km, 5),
+        per_km_fee_beyond_base: asNum((data as any).per_km_fee_beyond_base, 10),
+
+        custom_links: customLinksRaw
+          .map((x: any) => ({
+            id: String(x?.id || uid()),
+            title: String(x?.title || ''),
+            url: normalizeMaybeMarkdownUrl(x?.url || ''),
+            logo_url: normalizeMaybeMarkdownUrl(x?.logo_url || ''),
+            enabled: asBool(x?.enabled, true),
+          }))
+          .filter((x: CustomLink) => x.title || x.url || x.logo_url),
+
+        announcement: {
+          ...normalizedAnn,
+          type: normalizedAnn.type === 'popup' ? 'popup' : 'banner',
+          enabled: asBool(normalizedAnn.enabled, false),
+          title: String(normalizedAnn.title || ''),
+          message: String(normalizedAnn.message || ''),
+          image_url: String(normalizedAnn.image_url || ''),
+          link_url: String(normalizedAnn.link_url || ''),
+          start_at: String(normalizedAnn.start_at || ''),
+          end_at: String(normalizedAnn.end_at || ''),
+          dismissible: asBool((normalizedAnn as any).dismissible, true),
+          dismiss_key: String((normalizedAnn as any).dismiss_key || 'v1'),
+        },
+
+        show_menu_images: asBool((data as any).show_menu_images, true),
+
+        delivery_fee_enabled: asBool((data as any).delivery_fee_enabled, true),
+        delivery_fee_schedule: schedule,
+      });
     }
-  };
+  } catch (e: any) {
+    console.error('Failed to load settings:', e);
+    toast.error(e?.message || 'Failed to load settings');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleLogout = async () => {
     await logout();
@@ -518,6 +580,38 @@ export default function SettingsPage() {
     });
   };
 
+  // ✅ ADD THESE HANDLERS
+const onUploadAppLogo = async (file?: File | null) => {
+  if (!file) return;
+  
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    return toast.error('Please choose an image file (PNG, JPG, WEBP, SVG)');
+  }
+
+  // Check file size (2MB limit)
+  if (file.size > 2 * 1024 * 1024) {
+    return toast.error('File size must be less than 2MB');
+  }
+
+  setUploadingAppLogo(true);
+  try {
+    const url = await uploadToCloudinary(file);
+    setSettings((p) => ({ ...p, app_logo_url: url }));
+    toast.success('✅ App logo uploaded successfully!');
+  } catch (e: any) {
+    console.error('Logo upload error:', e);
+    toast.error(e?.message || 'Failed to upload logo');
+  } finally {
+    setUploadingAppLogo(false);
+  }
+};
+
+const removeAppLogo = () => {
+  setSettings((p) => ({ ...p, app_logo_url: '' }));
+  toast.success('Logo removed');
+};
+
   const copyDayToAll = (from: DayKey) => {
     setSettings((p) => {
       const schedule = p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee);
@@ -532,15 +626,16 @@ export default function SettingsPage() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    try {
-      const schedule = settings.delivery_fee_schedule || defaultDeliveryFeeSchedule(settings.delivery_fee);
+  setSaving(true);
+  try {
+    const schedule = settings.delivery_fee_schedule || defaultDeliveryFeeSchedule(settings.delivery_fee);
 
-      const payload: any = {
-        ...settings,
+    const payload: any = {
+      ...settings,
 
-        support_email: normalizeMaybeMarkdownUrl(settings.support_email),
-        facebook_url: normalizeMaybeMarkdownUrl(settings.facebook_url),
+      app_logo_url: normalizeMaybeMarkdownUrl(settings.app_logo_url), 
+      support_email: normalizeMaybeMarkdownUrl(settings.support_email),
+      facebook_url: normalizeMaybeMarkdownUrl(settings.facebook_url),
         instagram_url: normalizeMaybeMarkdownUrl(settings.instagram_url),
         twitter_url: normalizeMaybeMarkdownUrl(settings.twitter_url),
         youtube_url: normalizeMaybeMarkdownUrl(settings.youtube_url),
@@ -549,6 +644,10 @@ export default function SettingsPage() {
         delivery_fee: Math.max(0, asNum(settings.delivery_fee, 0)),
         min_order_amount: Math.max(0, asNum(settings.min_order_amount, 0)),
         tax_percentage: Math.max(0, asNum(settings.tax_percentage, 0)),
+
+        // ✅ Save new delivery area fields
+        base_delivery_radius_km: Math.max(0, asNum(settings.base_delivery_radius_km, 5)),
+        per_km_fee_beyond_base: Math.max(0, asNum(settings.per_km_fee_beyond_base, 10)),
 
         custom_links: (settings.custom_links || []).map((x) => ({
           ...x,
@@ -576,16 +675,13 @@ export default function SettingsPage() {
         delivery_fee_enabled: Boolean(settings.delivery_fee_enabled),
         delivery_fee_schedule: schedule,
 
-        // Optional direct column if you create it later; harmless if table has it, ignored if not used by RLS policy
         delivery_fee_show_to_customer: asBool(schedule?.ui?.show_to_customer, true),
       };
 
-      // Remove UI-only/unsafe keys if needed
-      // (Keeping payload id is fine for upsert; Supabase will update the single row by id)
       const { error } = await supabase.from(TABLE).upsert(payload);
       if (error) throw error;
 
-      toast.success('Settings saved successfully!');
+      toast.success('✅ Settings saved successfully!');
     } catch (e: any) {
       console.error('Failed to save settings:', e);
       toast.error(e?.message || 'Failed to save settings');
@@ -597,7 +693,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="max-w-5xl mx-auto px-4 py-8">
+        <div className="max-w-6xl mx-auto px-4 py-8">
           <div className="bg-gray-200 h-96 rounded-lg animate-pulse" />
         </div>
       </DashboardLayout>
@@ -608,323 +704,611 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-8">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">App Settings</h1>
-            <p className="text-gray-600 mt-1">Configure your application settings</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
+              <Settings2 size={28} className="text-primary" />
+              App Settings
+            </h1>
+            <p className="text-sm text-gray-600 mt-1">Configure your application</p>
           </div>
 
           <button
             onClick={handleLogout}
-            className="bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 font-medium flex items-center gap-2"
+            className="bg-red-600 text-white px-3 py-2 sm:px-4 sm:py-3 rounded-lg hover:bg-red-700 font-medium flex items-center gap-2 text-sm"
           >
-            <LogOut size={20} />
+            <LogOut size={18} />
             <span className="hidden sm:inline">Logout</span>
           </button>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg p-6 space-y-10 border">
-          {/* General Settings */}
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Globe size={24} className="text-primary" />
-              General Settings
-            </h2>
+        {/* Save Button (Top) */}
+        <div className="mb-4">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full bg-primary text-white px-6 py-3 rounded-xl hover:bg-orange-600 font-semibold flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg"
+          >
+            <Save size={20} />
+            {saving ? 'Saving...' : 'Save All Settings'}
+          </button>
+        </div>
 
-            <div className="grid gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">App Name</label>
-                <input
-                  type="text"
-                  value={settings.app_name}
-                  onChange={(e) => setSettings({ ...settings, app_name: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary"
-                />
-              </div>
+        <div className="space-y-4">
+          {/* ==================== GENERAL SETTINGS ==================== */}
+         <CollapsibleSection
+  title="General Settings"
+  icon={<Store size={20} className="text-primary" />}
+  expanded={expandedSections.general}
+  onToggle={() => toggleSection('general')}
+>
+  <div className="grid gap-6">
+    {/* App Name */}
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">App Name</label>
+      <input
+        type="text"
+        value={settings.app_name}
+        onChange={(e) => setSettings({ ...settings, app_name: e.target.value })}
+        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+        placeholder="Enter app name"
+      />
+    </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <Mail size={16} />
-                    Support Email
-                  </label>
-                  <input
-                    type="email"
-                    value={settings.support_email}
-                    onChange={(e) => setSettings({ ...settings, support_email: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary"
-                  />
-                </div>
+    {/* ✅ App Logo Upload Section */}
+    <div className="border-t pt-6">
+      <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+        <ImageIcon size={18} className="text-primary" />
+        App Logo
+      </label>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <Phone size={16} />
-                    Support Phone
-                  </label>
-                  <input
-                    type="tel"
-                    value={settings.support_phone}
-                    onChange={(e) => setSettings({ ...settings, support_phone: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-              </div>
+      {/* Logo Preview */}
+      {settings.app_logo_url && (
+        <div className="mb-4 flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+          <div className="relative w-20 h-20 rounded-full overflow-hidden ring-4 ring-primary/20 shadow-lg bg-white">
+            <Image
+              src={settings.app_logo_url}
+              alt="App Logo"
+              fill
+              className="object-cover p-1"
+              onError={() => setSettings((p) => ({ ...p, app_logo_url: '' }))}
+            />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-gray-900">Current Logo</p>
+            <p className="text-xs text-gray-600 truncate max-w-md">{settings.app_logo_url}</p>
+          </div>
+          <button
+            onClick={removeAppLogo}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all flex items-center gap-2 text-sm font-medium shadow-sm"
+          >
+            <Trash2 size={16} />
+            Remove
+          </button>
+        </div>
+      )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                  <MapPin size={16} />
-                  Business Address
-                </label>
-                <textarea
-                  value={settings.business_address}
-                  onChange={(e) => setSettings({ ...settings, business_address: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary"
-                />
-              </div>
+      {/* Upload Button */}
+      <div className="space-y-3">
+        <label
+          className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold cursor-pointer transition-all shadow-md ${
+            uploadingAppLogo
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-gradient-to-r from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white'
+          }`}
+        >
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+            onChange={(e) => onUploadAppLogo(e.target.files?.[0])}
+            disabled={uploadingAppLogo}
+            className="hidden"
+          />
+          {uploadingAppLogo ? (
+            <>
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Uploading...
+            </>
+          ) : (
+            <>
+              <Upload size={20} />
+              {settings.app_logo_url ? 'Change Logo' : 'Upload Logo'}
+            </>
+          )}
+        </label>
+
+        {/* Guidelines */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
+            <AlertTriangle size={16} />
+            Logo Guidelines
+          </h4>
+          <ul className="text-xs text-blue-800 space-y-1 ml-5 list-disc">
+            <li>
+              <strong>Size:</strong> 512x512px or larger (square format)
+            </li>
+            <li>
+              <strong>Formats:</strong> PNG (recommended), JPG, WEBP, or SVG
+            </li>
+            <li>
+              <strong>File size:</strong> Maximum 2MB
+            </li>
+            <li>
+              <strong>Background:</strong> Transparent PNG or white background works best
+            </li>
+            <li>
+              <strong>Display:</strong> Logo will appear in a circular frame
+            </li>
+          </ul>
+        </div>
+
+        {/* Success Message */}
+        {settings.app_logo_url && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2">
+            <CheckCircle2 size={18} className="text-green-600 shrink-0 mt-0.5" />
+            <div className="text-sm text-green-800">
+              <strong>Logo uploaded!</strong> Remember to click{' '}
+              <strong className="text-primary">&quot;Save All Settings&quot;</strong> button at the top to apply changes.
             </div>
           </div>
+        )}
+      </div>
+    </div>
 
-          {/* Delivery Fee Controls */}
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Truck size={20} className="text-primary" />
-              Delivery Fee Controls
-            </h2>
+    {/* Contact Information */}
+    <div className="grid md:grid-cols-2 gap-4 border-t pt-6">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+          <Mail size={16} />
+          Support Email
+        </label>
+        <input
+          type="email"
+          value={settings.support_email}
+          onChange={(e) => setSettings({ ...settings, support_email: e.target.value })}
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+          placeholder="support@example.com"
+        />
+      </div>
 
-            <div className="rounded-2xl border bg-gradient-to-br from-orange-50 to-white p-4 space-y-4">
-              <div className="flex flex-wrap items-center gap-3 justify-between">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <label className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+          <Phone size={16} />
+          Support Phone
+        </label>
+        <input
+          type="tel"
+          value={settings.support_phone}
+          onChange={(e) => setSettings({ ...settings, support_phone: e.target.value })}
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+          placeholder="+91 98765 43210"
+        />
+      </div>
+    </div>
+
+    {/* Business Address */}
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+        <MapPin size={16} />
+        Business Address
+      </label>
+      <textarea
+        value={settings.business_address}
+        onChange={(e) => setSettings({ ...settings, business_address: e.target.value })}
+        rows={3}
+        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none"
+        placeholder="Enter your business address"
+      />
+    </div>
+  </div>
+</CollapsibleSection>
+
+
+         {/* ==================== DELIVERY & PRICING ==================== */}
+<CollapsibleSection
+  title="Delivery & Pricing Configuration"
+  icon={<Truck size={20} className="text-primary" />}
+  expanded={expandedSections.delivery}
+  onToggle={() => toggleSection('delivery')}
+>
+  <div className="space-y-4 sm:space-y-6">
+    {/* Delivery Toggles */}
+    <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3 sm:gap-4 bg-gradient-to-r from-orange-50 to-yellow-50 p-4 rounded-lg border border-orange-200">
+      <label className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+        <input
+          type="checkbox"
+          checked={settings.delivery_fee_enabled}
+          onChange={(e) => setSettings((p) => ({ ...p, delivery_fee_enabled: e.target.checked }))}
+          className="w-4 h-4 rounded"
+        />
+        <span>Enable Delivery Fee</span>
+      </label>
+
+      <label className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+        <input
+          type="checkbox"
+          checked={showToCustomer}
+          disabled={!settings.delivery_fee_enabled}
+          onChange={(e) =>
+            setSettings((p) => ({
+              ...p,
+              delivery_fee_schedule: {
+                ...(p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee)),
+                ui: {
+                  ...((p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee)).ui || {}),
+                  show_to_customer: e.target.checked,
+                },
+              },
+            }))
+          }
+          className="w-4 h-4 rounded disabled:opacity-50"
+        />
+        <span>Show to Customers</span>
+      </label>
+
+      {settings.delivery_fee_enabled ? (
+        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-100 text-green-700 font-semibold text-xs sm:ml-auto">
+          <CheckCircle2 className="w-4 h-4" />
+          Active
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gray-200 text-gray-700 font-semibold text-xs sm:ml-auto">
+          <AlertTriangle className="w-4 h-4" />
+          Disabled
+        </span>
+      )}
+    </div>
+
+    {/* ✅ Delivery Area Configuration */}
+    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border-2 border-blue-200">
+      <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
+        <MapPinned size={18} className="text-blue-600 shrink-0" />
+        <span>Delivery Area Pricing</span>
+      </h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+        {/* Base Radius */}
+        <div className="bg-white rounded-lg p-3 sm:p-4 border shadow-sm">
+          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+            <Ruler size={16} className="text-blue-600 shrink-0" />
+            <span className="truncate">Base Delivery Radius (km)</span>
+          </label>
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            value={settings.base_delivery_radius_km}
+            onChange={(e) => setSettings({ ...settings, base_delivery_radius_km: Math.max(0, Number(e.target.value)) })}
+            className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-semibold text-base sm:text-lg"
+          />
+          <p className="text-xs text-gray-600 mt-2">
+            ✅ Within this radius, <strong>base delivery fee</strong> applies
+          </p>
+        </div>
+
+        {/* Per KM Fee */}
+        <div className="bg-white rounded-lg p-3 sm:p-4 border shadow-sm">
+          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+            <DollarSign size={16} className="text-green-600 shrink-0" />
+            <span className="truncate">Fee per KM (Beyond Base)</span>
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">₹</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={settings.per_km_fee_beyond_base}
+              onChange={(e) => setSettings({ ...settings, per_km_fee_beyond_base: Math.max(0, Number(e.target.value)) })}
+              className="w-full pl-8 pr-3 sm:pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 font-semibold text-base sm:text-lg"
+            />
+          </div>
+          <p className="text-xs text-gray-600 mt-2">
+            ✅ Additional fee per km beyond base radius
+          </p>
+        </div>
+      </div>
+
+      {/* Example Calculation */}
+      <div className="mt-3 sm:mt-4 bg-white rounded-lg p-3 sm:p-4 border-2 border-green-200">
+        <p className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
+          <Navigation size={16} className="text-green-600 shrink-0" />
+          <span>Pricing Example</span>
+        </p>
+        <div className="text-xs sm:text-sm text-gray-700 space-y-1">
+          <p className="break-words">
+            • <strong>Base area ({settings.base_delivery_radius_km}km):</strong> ₹{todayRule.fee} (base fee)
+          </p>
+          <p className="break-words">
+            • <strong>7km delivery (2km beyond):</strong> ₹{todayRule.fee} + (2 × ₹{settings.per_km_fee_beyond_base}) = <strong className="text-primary">₹{todayRule.fee + (2 * settings.per_km_fee_beyond_base)}</strong>
+          </p>
+          <p className="break-words">
+            • <strong>10km delivery (5km beyond):</strong> ₹{todayRule.fee} + (5 × ₹{settings.per_km_fee_beyond_base}) = <strong className="text-primary">₹{todayRule.fee + (5 * settings.per_km_fee_beyond_base)}</strong>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {/* Base Fee & Timezone */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+      {/* Base Delivery Fee */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Base Delivery Fee (₹)</label>
+        <input
+          type="number"
+          min={0}
+          value={settings.delivery_fee}
+          onChange={(e) => setSettings({ ...settings, delivery_fee: Math.max(0, Number(e.target.value)) })}
+          className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+        />
+        <p className="text-xs text-gray-600 mt-1">Used for day-wise schedule</p>
+      </div>
+
+      {/* Timezone */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+          <Settings2 className="w-4 h-4 shrink-0" />
+          <span>Timezone</span>
+        </label>
+        <input
+          type="text"
+          value={settings.delivery_fee_schedule?.timezone || 'Asia/Kolkata'}
+          onChange={(e) =>
+            setSettings((p) => ({
+              ...p,
+              delivery_fee_schedule: {
+                ...(p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee)),
+                timezone: e.target.value || 'Asia/Kolkata',
+              },
+            }))
+          }
+          placeholder="Asia/Kolkata"
+          className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-sm"
+        />
+      </div>
+
+      {/* Today's Rule */}
+      <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-3 sm:p-4 sm:col-span-2 lg:col-span-1">
+        <p className="text-xs text-gray-600 font-semibold">Today&apos;s Rule</p>
+        <p className="text-base sm:text-lg font-extrabold text-gray-900 mt-1">
+          {todayRule.key.toUpperCase()} • {todayRule.enabled ? `₹${todayRule.fee}` : 'Disabled'}
+        </p>
+        <p className="text-xs text-gray-600 mt-1">
+          {showToCustomer ? 'Visible to customers' : 'Hidden from customers'}
+        </p>
+      </div>
+    </div>
+
+    {/* Bulk Actions */}
+    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() => setAllDays(true, settings.delivery_fee)}
+        disabled={!settings.delivery_fee_enabled}
+        className="w-full sm:w-auto px-4 py-2 rounded-lg border-2 bg-white text-sm font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-green-50 hover:border-green-300 transition-colors"
+      >
+        <CheckCircle2 className="w-4 h-4 shrink-0" />
+        <span>Enable All Days</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setAllDays(false, 0)}
+        className="w-full sm:w-auto px-4 py-2 rounded-lg border-2 bg-white text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-red-50 hover:border-red-300 transition-colors"
+      >
+        <EyeOff className="w-4 h-4 shrink-0" />
+        <span>Disable All Days</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => copyDayToAll('mon')}
+        disabled={!settings.delivery_fee_enabled}
+        className="w-full sm:w-auto px-4 py-2 rounded-lg border-2 bg-white text-sm font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+        title="Copy Monday settings to all days"
+      >
+        <Copy className="w-4 h-4 shrink-0" />
+        <span>Copy Monday to All</span>
+      </button>
+    </div>
+
+    {/* Weekly Schedule */}
+    <div className="rounded-lg border overflow-hidden bg-white">
+      <div className="px-3 sm:px-4 py-3 border-b bg-gray-50">
+        <p className="font-bold text-gray-900 text-sm sm:text-base">Weekly Delivery Fee Schedule</p>
+      </div>
+
+      <div className="divide-y">
+        {DAYS.map(({ key, label }) => {
+          const schedule = settings.delivery_fee_schedule || defaultDeliveryFeeSchedule(settings.delivery_fee);
+          const rule = schedule.weekly?.[key] || { enabled: true, fee: settings.delivery_fee };
+
+          return (
+            <div 
+              key={key} 
+              className="px-3 sm:px-4 py-3 hover:bg-gray-50 transition-colors"
+            >
+              {/* Mobile Layout (< 640px) */}
+              <div className="flex flex-col gap-3 sm:hidden">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-gray-900 text-base">{label}</span>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 font-semibold">
                     <input
                       type="checkbox"
-                      checked={settings.delivery_fee_enabled}
-                      onChange={(e) => setSettings((p) => ({ ...p, delivery_fee_enabled: e.target.checked }))}
-                    />
-                    Enable delivery fee
-                  </label>
-
-                  <label className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                    <input
-                      type="checkbox"
-                      checked={showToCustomer}
+                      checked={!!rule.enabled}
                       disabled={!settings.delivery_fee_enabled}
                       onChange={(e) =>
-                        setSettings((p) => ({
+                        setSettings((p) => {
+                          const sch = p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee);
+                          return {
+                            ...p,
+                            delivery_fee_schedule: {
+                              ...sch,
+                              weekly: {
+                                ...sch.weekly,
+                                [key]: { ...sch.weekly[key], enabled: e.target.checked },
+                              },
+                            },
+                          };
+                        })
+                      }
+                      className="w-4 h-4 rounded"
+                    />
+                    <span>Enabled</span>
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    value={asNum(rule.fee, settings.delivery_fee)}
+                    disabled={!settings.delivery_fee_enabled || !rule.enabled}
+                    onChange={(e) => {
+                      const fee = Math.max(0, asNum(e.target.value, 0));
+                      setSettings((p) => {
+                        const sch = p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee);
+                        return {
                           ...p,
                           delivery_fee_schedule: {
-                            ...(p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee)),
-                            ui: {
-                              ...((p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee)).ui || {}),
-                              show_to_customer: e.target.checked,
+                            ...sch,
+                            weekly: { ...sch.weekly, [key]: { ...sch.weekly[key], fee } },
+                          },
+                        };
+                      });
+                    }}
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm font-semibold disabled:bg-gray-100"
+                    placeholder="Fee (₹)"
+                  />
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded-lg border bg-white text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
+                    onClick={() => copyDayToAll(key)}
+                    disabled={!settings.delivery_fee_enabled}
+                    title="Copy this day to all days"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+
+              {/* Desktop Layout (>= 640px) */}
+              <div className="hidden sm:grid sm:grid-cols-12 gap-3 items-center">
+                <div className="col-span-2 font-bold text-gray-900">{label}</div>
+
+                <label className="col-span-4 flex items-center gap-2 text-sm text-gray-700 font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={!!rule.enabled}
+                    disabled={!settings.delivery_fee_enabled}
+                    onChange={(e) =>
+                      setSettings((p) => {
+                        const sch = p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee);
+                        return {
+                          ...p,
+                          delivery_fee_schedule: {
+                            ...sch,
+                            weekly: {
+                              ...sch.weekly,
+                              [key]: { ...sch.weekly[key], enabled: e.target.checked },
                             },
                           },
-                        }))
-                      }
-                    />
-                    Show fee to customer
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-2 text-xs">
-                  {settings.delivery_fee_enabled ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-700 font-semibold">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Enabled
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-200 text-gray-700 font-semibold">
-                      <AlertTriangle className="w-4 h-4" />
-                      Disabled (fee will be 0)
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-3 gap-3">
-                <NumberField
-                  label="Default fee (₹) (fallback)"
-                  value={settings.delivery_fee}
-                  onChange={(n) => {
-                    setSettings((p) => {
-                      const nextFee = Math.max(0, n);
-                      // If weekly fees were never set properly, keep them in sync lightly by not overriding.
-                      return { ...p, delivery_fee: nextFee };
-                    });
-                  }}
-                  min={0}
-                />
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <Settings2 className="w-4 h-4" />
-                    Timezone
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.delivery_fee_schedule?.timezone || 'Asia/Kolkata'}
-                    onChange={(e) =>
-                      setSettings((p) => ({
-                        ...p,
-                        delivery_fee_schedule: {
-                          ...(p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee)),
-                          timezone: e.target.value || 'Asia/Kolkata',
-                        },
-                      }))
+                        };
+                      })
                     }
-                    placeholder="Asia/Kolkata"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary"
+                    className="w-4 h-4 rounded"
                   />
-                  <p className="text-[11px] text-gray-600 mt-1">Used for day-wise automation.</p>
-                </div>
+                  <span>Enabled</span>
+                </label>
 
-                <div className="rounded-xl border bg-white p-3">
-                  <p className="text-xs text-gray-600 font-semibold">Today’s rule</p>
-                  <p className="text-sm font-extrabold text-gray-900 mt-1">
-                    {todayRule.key.toUpperCase()} • {todayRule.enabled ? `₹${todayRule.fee}` : 'Disabled'}
-                  </p>
-                  <p className="text-[11px] text-gray-500 mt-1">
-                    {showToCustomer ? 'Shown to customer' : 'Hidden (will be adjusted in totals)'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAllDays(true, settings.delivery_fee)}
-                  disabled={!settings.delivery_fee_enabled}
-                  className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Enable all days (use default fee)
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setAllDays(false, 0)}
-                  className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold inline-flex items-center gap-2"
-                >
-                  <EyeOff className="w-4 h-4" />
-                  Disable all days
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => copyDayToAll('mon')}
-                  disabled={!settings.delivery_fee_enabled}
-                  className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50"
-                  title="Copy Monday settings to all days"
-                >
-                  <Copy className="w-4 h-4" />
-                  Copy Monday to all
-                </button>
-              </div>
-
-              {/* Weekly schedule table */}
-              <div className="rounded-2xl border bg-white overflow-hidden">
-                <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
-                  <p className="font-bold text-gray-900 text-sm">Weekly schedule</p>
-                  <p className="text-xs text-gray-600">
-                    Day-wise fee is the base fee you’ll use in distance calculation (we’ll wire this in cart/checkout).
-                  </p>
-                </div>
-
-                <div className="divide-y">
-                  {DAYS.map(({ key, label }) => {
-                    const schedule = settings.delivery_fee_schedule || defaultDeliveryFeeSchedule(settings.delivery_fee);
-                    const rule = schedule.weekly?.[key] || { enabled: true, fee: settings.delivery_fee };
-
-                    return (
-                      <div key={key} className="px-4 py-3 grid grid-cols-12 gap-2 items-center">
-                        <div className="col-span-2 font-bold text-gray-900">{label}</div>
-
-                        <label className="col-span-4 flex items-center gap-2 text-sm text-gray-700 font-semibold">
-                          <input
-                            type="checkbox"
-                            checked={!!rule.enabled}
-                            disabled={!settings.delivery_fee_enabled}
-                            onChange={(e) =>
-                              setSettings((p) => {
-                                const sch = p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee);
-                                return {
-                                  ...p,
-                                  delivery_fee_schedule: {
-                                    ...sch,
-                                    weekly: {
-                                      ...sch.weekly,
-                                      [key]: { ...sch.weekly[key], enabled: e.target.checked },
-                                    },
-                                  },
-                                };
-                              })
-                            }
-                          />
-                          Enabled
-                        </label>
-
-                        <div className="col-span-6">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              value={asNum(rule.fee, settings.delivery_fee)}
-                              disabled={!settings.delivery_fee_enabled || !rule.enabled}
-                              onChange={(e) => {
-                                const fee = Math.max(0, asNum(e.target.value, 0));
-                                setSettings((p) => {
-                                  const sch = p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee);
-                                  return {
-                                    ...p,
-                                    delivery_fee_schedule: {
-                                      ...sch,
-                                      weekly: { ...sch.weekly, [key]: { ...sch.weekly[key], fee } },
-                                    },
-                                  };
-                                });
-                              }}
-                              className="w-full px-3 py-2 border rounded-xl text-sm"
-                              placeholder="Fee"
-                            />
-                            <button
-                              type="button"
-                              className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold"
-                              onClick={() => copyDayToAll(key)}
-                              disabled={!settings.delivery_fee_enabled}
-                              title="Copy this day to all days"
-                            >
-                              Copy
-                            </button>
-                          </div>
-                          {key === 'sun' ? (
-                            <p className="text-[11px] text-gray-500 mt-1">Tip: Keep Sunday disabled for “free delivery day”.</p>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="col-span-6">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      value={asNum(rule.fee, settings.delivery_fee)}
+                      disabled={!settings.delivery_fee_enabled || !rule.enabled}
+                      onChange={(e) => {
+                        const fee = Math.max(0, asNum(e.target.value, 0));
+                        setSettings((p) => {
+                          const sch = p.delivery_fee_schedule || defaultDeliveryFeeSchedule(p.delivery_fee);
+                          return {
+                            ...p,
+                            delivery_fee_schedule: {
+                              ...sch,
+                              weekly: { ...sch.weekly, [key]: { ...sch.weekly[key], fee } },
+                            },
+                          };
+                        });
+                      }}
+                      className="flex-1 px-3 py-2 border rounded-lg text-sm font-semibold disabled:bg-gray-100"
+                      placeholder="Fee (₹)"
+                    />
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded-lg border bg-white text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap"
+                      onClick={() => copyDayToAll(key)}
+                      disabled={!settings.delivery_fee_enabled}
+                      title="Copy this day to all days"
+                    >
+                      Copy
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              {!showToCustomer ? (
-                <div className="rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">
-                  Delivery fee will be charged but hidden from customers; in cart/checkout we’ll show a higher “Item Total”
-                  and omit the “Delivery Fee” line item.
-                </div>
-              ) : null}
             </div>
-          </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+</CollapsibleSection>
 
-          {/* Announcements */}
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Megaphone size={20} className="text-primary" />
-              Announcements (Banner / Popup)
-            </h2>
 
-            <div className="rounded-2xl border bg-gradient-to-br from-orange-50 to-white p-4 space-y-4">
-              <div className="flex flex-wrap items-center gap-4">
+          {/* ==================== ORDER SETTINGS ==================== */}
+          <CollapsibleSection
+            title="Order Settings"
+            icon={<DollarSign size={20} className="text-primary" />}
+            expanded={expandedSections.orders}
+            onToggle={() => toggleSection('orders')}
+          >
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Order Amount (₹)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={settings.min_order_amount}
+                  onChange={(e) => setSettings({ ...settings, min_order_amount: Math.max(0, Number(e.target.value)) })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tax Percentage (%)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={settings.tax_percentage}
+                  onChange={(e) => setSettings({ ...settings, tax_percentage: Math.max(0, Math.min(100, Number(e.target.value))) })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* ==================== ANNOUNCEMENTS ==================== */}
+          <CollapsibleSection
+            title="Announcements (Banner/Popup)"
+            icon={<Megaphone size={20} className="text-primary" />}
+            expanded={expandedSections.announcement}
+            onToggle={() => toggleSection('announcement')}
+          >
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-4 bg-gradient-to-r from-orange-50 to-yellow-50 p-4 rounded-lg">
                 <label className="flex items-center gap-2 text-sm text-gray-700 font-semibold">
                   <input
                     type="checkbox"
@@ -935,6 +1319,7 @@ export default function SettingsPage() {
                         announcement: { ...(p.announcement || defaultAnnouncement()), enabled: e.target.checked },
                       }))
                     }
+                    className="w-4 h-4"
                   />
                   Enabled
                 </label>
@@ -949,10 +1334,10 @@ export default function SettingsPage() {
                         announcement: { ...(p.announcement || defaultAnnouncement()), type: e.target.value as any },
                       }))
                     }
-                    className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold"
+                    className="px-3 py-2 rounded-lg border bg-white text-sm font-semibold"
                   >
-                    <option value="banner">Top banner</option>
-                    <option value="popup">Popup modal</option>
+                    <option value="banner">Top Banner</option>
+                    <option value="popup">Popup Modal</option>
                   </select>
                 </div>
 
@@ -966,12 +1351,13 @@ export default function SettingsPage() {
                         announcement: { ...(p.announcement || defaultAnnouncement()), dismissible: e.target.checked },
                       }))
                     }
+                    className="w-4 h-4"
                   />
                   Dismissible
                 </label>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-3">
+              <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
                   <input
@@ -983,14 +1369,14 @@ export default function SettingsPage() {
                       }))
                     }
                     placeholder="e.g. Free delivery today!"
-                    className="w-full px-4 py-3 border rounded-xl"
+                    className="w-full px-4 py-3 border rounded-lg"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                     <KeyRound size={16} />
-                    Dismiss key (version)
+                    Dismiss Key (version)
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -1002,7 +1388,7 @@ export default function SettingsPage() {
                         }))
                       }
                       placeholder="v1"
-                      className="w-full px-4 py-3 border rounded-xl"
+                      className="flex-1 px-4 py-3 border rounded-lg"
                     />
                     <button
                       type="button"
@@ -1012,15 +1398,12 @@ export default function SettingsPage() {
                           announcement: { ...(p.announcement || defaultAnnouncement()), dismiss_key: `v${Date.now()}` },
                         }))
                       }
-                      className="px-4 py-3 rounded-xl bg-gray-900 text-white font-semibold"
-                      title="Generate a new key so popup shows again to users"
+                      className="px-4 py-3 rounded-lg bg-gray-900 text-white font-semibold"
+                      title="Generate new key"
                     >
                       New
                     </button>
                   </div>
-                  <p className="text-[11px] text-gray-600 mt-1">
-                    Change this when you update announcement content so users see it again.
-                  </p>
                 </div>
               </div>
 
@@ -1039,11 +1422,11 @@ export default function SettingsPage() {
                   }
                   rows={3}
                   placeholder="Short, clear message"
-                  className="w-full px-4 py-3 border rounded-xl"
+                  className="w-full px-4 py-3 border rounded-lg"
                 />
               </div>
 
-              <div className="grid md:grid-cols-2 gap-3">
+              <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                     <LinkIcon size={16} />
@@ -1058,14 +1441,14 @@ export default function SettingsPage() {
                       }))
                     }
                     placeholder="https://..."
-                    className="w-full px-4 py-3 border rounded-xl"
+                    className="w-full px-4 py-3 border rounded-lg"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                     <Calendar size={16} />
-                    Active window (optional)
+                    Active Window (optional)
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <input
@@ -1080,7 +1463,7 @@ export default function SettingsPage() {
                           },
                         }))
                       }
-                      className="w-full px-3 py-3 border rounded-xl text-sm"
+                      className="w-full px-3 py-3 border rounded-lg text-sm"
                     />
                     <input
                       type="datetime-local"
@@ -1094,34 +1477,26 @@ export default function SettingsPage() {
                           },
                         }))
                       }
-                      className="w-full px-3 py-3 border rounded-xl text-sm"
+                      className="w-full px-3 py-3 border rounded-lg text-sm"
                     />
                   </div>
-                  <p className="text-[11px] text-gray-600 mt-1">Start / End in your local time.</p>
                 </div>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-3 items-start">
+              <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Image (optional)</label>
-
                   <div className="flex items-center gap-3">
-                    <div className="w-16 h-16 rounded-xl border bg-white overflow-hidden flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-lg border bg-white overflow-hidden flex items-center justify-center">
                       {ann.image_url ? (
-                        <Image
-                          src={ann.image_url}
-                          alt="Announcement preview"
-                          width={64}
-                          height={64}
-                          className="object-cover w-full h-full"
-                        />
+                        <Image src={ann.image_url} alt="Announcement" width={64} height={64} className="object-cover w-full h-full" />
                       ) : (
                         <ImageIcon className="text-gray-400" />
                       )}
                     </div>
 
                     <div className="flex-1 space-y-2">
-                      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold cursor-pointer">
+                      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold cursor-pointer">
                         <Upload size={16} />
                         {uploadingAnnouncementImage ? 'Uploading…' : 'Upload'}
                         <input
@@ -1142,15 +1517,15 @@ export default function SettingsPage() {
                           }))
                         }
                         placeholder="Or paste image URL"
-                        className="w-full px-3 py-2 border rounded-xl text-sm bg-white"
+                        className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-xl border bg-white p-3">
+                <div className="rounded-lg border bg-white p-4">
                   <p className="text-sm font-extrabold text-gray-900 mb-2">Preview</p>
-                  <div className="rounded-xl border bg-gray-900 text-white p-3">
+                  <div className="rounded-lg border bg-gray-900 text-white p-3">
                     <div className="font-extrabold">{ann.title || 'Announcement title'}</div>
                     <div className="text-sm text-white/90 mt-1">{ann.message || 'Announcement message...'}</div>
                     {!!ann.link_url && <div className="text-xs text-white/80 mt-2 underline break-all">{ann.link_url}</div>}
@@ -1158,11 +1533,15 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </CollapsibleSection>
 
-          {/* Social Media */}
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Social Media Links</h2>
+          {/* ==================== SOCIAL MEDIA ==================== */}
+          <CollapsibleSection
+            title="Social Media Links"
+            icon={<Globe size={20} className="text-primary" />}
+            expanded={expandedSections.social}
+            onToggle={() => toggleSection('social')}
+          >
             <div className="grid gap-4">
               <Field
                 icon={<Facebook size={16} className="text-blue-600" />}
@@ -1200,36 +1579,34 @@ export default function SettingsPage() {
                 placeholder="https://yourwebsite.com"
               />
             </div>
-          </div>
+          </CollapsibleSection>
 
-          {/* Custom Links */}
-          <div>
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Custom Links</h2>
-                <p className="text-sm text-gray-600 mt-1">Add any external link with a logo (paste URL or upload).</p>
-              </div>
-            </div>
+          {/* ==================== CUSTOM LINKS ==================== */}
+          <CollapsibleSection
+            title="Custom Links"
+            icon={<LinkIcon size={20} className="text-primary" />}
+            expanded={expandedSections.custom}
+            onToggle={() => toggleSection('custom')}
+          >
+            <div className="space-y-4">
+              {/* Add New Link */}
+              <div className="bg-gradient-to-br from-orange-50 to-white p-4 rounded-lg border">
+                <p className="text-sm font-semibold text-gray-900 mb-3">Add New Custom Link</p>
+                <div className="grid md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Logo</label>
+                    <div className="flex items-center gap-2">
+                      <div className="w-12 h-12 rounded-lg border bg-white overflow-hidden flex items-center justify-center">
+                        {draft.logo_url ? (
+                          <Image src={draft.logo_url} alt="Logo" width={48} height={48} className="object-cover w-full h-full" />
+                        ) : (
+                          <LinkIcon className="text-gray-400" size={20} />
+                        )}
+                      </div>
 
-            {/* Add new */}
-            <div className="rounded-2xl border bg-gradient-to-br from-orange-50 to-white p-4">
-              <div className="grid md:grid-cols-3 gap-3">
-                <div className="md:col-span-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Logo</label>
-
-                  <div className="flex items-center gap-3">
-                    <div className="w-14 h-14 rounded-xl border bg-white overflow-hidden flex items-center justify-center">
-                      {draft.logo_url ? (
-                        <Image src={draft.logo_url} alt="Logo preview" width={56} height={56} className="object-cover w-full h-full" />
-                      ) : (
-                        <LinkIcon className="text-gray-400" />
-                      )}
-                    </div>
-
-                    <div className="flex-1 space-y-2">
-                      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold cursor-pointer">
-                        <Upload size={16} />
-                        {uploadingLogo ? 'Uploading…' : 'Upload'}
+                      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-900 text-white text-xs font-semibold cursor-pointer">
+                        <Upload size={14} />
+                        {uploadingLogo ? '...' : 'Upload'}
                         <input
                           type="file"
                           accept="image/*"
@@ -1238,25 +1615,22 @@ export default function SettingsPage() {
                           disabled={uploadingLogo}
                         />
                       </label>
-
-                      <input
-                        value={draft.logo_url}
-                        onChange={(e) => setDraft((p) => ({ ...p, logo_url: e.target.value }))}
-                        placeholder="Or paste logo URL"
-                        className="w-full px-3 py-2 border rounded-xl text-sm bg-white"
-                      />
                     </div>
+                    <input
+                      value={draft.logo_url}
+                      onChange={(e) => setDraft((p) => ({ ...p, logo_url: e.target.value }))}
+                      placeholder="Or paste URL"
+                      className="w-full mt-2 px-3 py-2 border rounded-lg text-xs"
+                    />
                   </div>
-                </div>
 
-                <div className="md:col-span-2 grid sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
                     <input
                       value={draft.title}
                       onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))}
                       placeholder="e.g. WhatsApp Support"
-                      className="w-full px-4 py-3 border rounded-xl"
+                      className="w-full px-4 py-3 border rounded-lg"
                     />
                   </div>
 
@@ -1265,176 +1639,185 @@ export default function SettingsPage() {
                     <input
                       value={draft.url}
                       onChange={(e) => setDraft((p) => ({ ...p, url: e.target.value }))}
-                      placeholder="e.g. https://wa.me/918278882799"
-                      className="w-full px-4 py-3 border rounded-xl"
+                      placeholder="https://..."
+                      className="w-full px-4 py-3 border rounded-lg"
                     />
                   </div>
+                </div>
 
-                  <div className="sm:col-span-2 flex items-center justify-between gap-3">
-                    <label className="flex items-center gap-2 text-sm text-gray-700">
-                      <input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft((p) => ({ ...p, enabled: e.target.checked }))} />
-                      Enabled
-                    </label>
+                <div className="flex items-center justify-between mt-3">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft((p) => ({ ...p, enabled: e.target.checked }))} className="w-4 h-4" />
+                    Enabled
+                  </label>
 
-                    <button
-                      type="button"
-                      onClick={addDraftLink}
-                      disabled={!canAddDraft}
-                      className="px-4 py-3 rounded-xl bg-primary text-white font-semibold inline-flex items-center gap-2 disabled:opacity-50"
-                    >
-                      <Plus size={18} />
-                      Add link
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={addDraftLink}
+                    disabled={!canAddDraft}
+                    className="px-4 py-2 rounded-lg bg-primary text-white font-semibold inline-flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Plus size={18} />
+                    Add Link
+                  </button>
                 </div>
               </div>
-            </div>
 
-            {/* Existing links */}
-            <div className="mt-4 space-y-3">
-              {settings.custom_links.length === 0 ? (
-                <div className="text-sm text-gray-600 bg-gray-50 border rounded-2xl p-4">No custom links yet.</div>
-              ) : (
-                settings.custom_links.map((l, idx) => (
-                  <div
-                    key={l.id}
-                    className={`border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between ${l.enabled ? 'bg-white' : 'bg-gray-50'}`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-12 h-12 rounded-xl border bg-white overflow-hidden flex items-center justify-center shrink-0">
-                        {l.logo_url ? (
-                          <Image src={l.logo_url} alt={l.title} width={48} height={48} className="object-cover w-full h-full" />
-                        ) : (
-                          <Globe className="text-gray-400" />
-                        )}
+              {/* Existing Links */}
+              <div className="space-y-2">
+                {settings.custom_links.length === 0 ? (
+                  <div className="text-sm text-gray-600 bg-gray-50 border rounded-lg p-4">No custom links yet.</div>
+                ) : (
+                  settings.custom_links.map((l, idx) => (
+                    <div
+                      key={l.id}
+                      className={`border rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between ${l.enabled ? 'bg-white' : 'bg-gray-50'}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-lg border bg-white overflow-hidden flex items-center justify-center shrink-0">
+                          {l.logo_url ? (
+                            <Image src={l.logo_url} alt={l.title} width={40} height={40} className="object-cover w-full h-full" />
+                          ) : (
+                            <Globe className="text-gray-400" size={20} />
+                          )}
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="font-bold text-gray-900 truncate text-sm">{l.title || 'Untitled'}</div>
+                          <a
+                            href={l.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-primary font-semibold hover:underline truncate block"
+                          >
+                            {l.url}
+                          </a>
+                          {!l.enabled ? <div className="text-xs text-gray-500">Hidden</div> : null}
+                        </div>
                       </div>
 
-                      <div className="min-w-0">
-                        <div className="font-bold text-gray-900 truncate">{l.title || 'Untitled'}</div>
-                        <a
-                          href={l.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-sm text-primary font-semibold hover:underline truncate block max-w-[520px]"
+                      <div className="flex flex-wrap gap-1.5 sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => toggleCustomLink(l.id)}
+                          className="px-2 py-1 rounded-lg border bg-white text-xs font-semibold inline-flex items-center gap-1"
                         >
-                          {l.url}
-                        </a>
-                        {!l.enabled ? <div className="text-xs text-gray-500 mt-1">Hidden</div> : null}
+                          {l.enabled ? <Eye size={14} /> : <EyeOff size={14} />}
+                          {l.enabled ? 'On' : 'Off'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => moveCustomLink(l.id, 'up')}
+                          disabled={idx === 0}
+                          className="px-2 py-1 rounded-lg border bg-white text-xs font-semibold disabled:opacity-50"
+                        >
+                          <ArrowUp size={14} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => moveCustomLink(l.id, 'down')}
+                          disabled={idx === settings.custom_links.length - 1}
+                          className="px-2 py-1 rounded-lg border bg-white text-xs font-semibold disabled:opacity-50"
+                        >
+                          <ArrowDown size={14} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => removeCustomLink(l.id)}
+                          className="px-2 py-1 rounded-lg border bg-red-50 text-red-700 text-xs font-semibold"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex flex-wrap gap-2 sm:justify-end">
-                      <button
-                        type="button"
-                        onClick={() => toggleCustomLink(l.id)}
-                        className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold inline-flex items-center gap-2"
-                        title={l.enabled ? 'Disable' : 'Enable'}
-                      >
-                        {l.enabled ? <Eye size={16} /> : <EyeOff size={16} />}
-                        {l.enabled ? 'Enabled' : 'Disabled'}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => moveCustomLink(l.id, 'up')}
-                        disabled={idx === 0}
-                        className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50"
-                      >
-                        <ArrowUp size={16} />
-                        Up
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => moveCustomLink(l.id, 'down')}
-                        disabled={idx === settings.custom_links.length - 1}
-                        className="px-3 py-2 rounded-xl border bg-white text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50"
-                      >
-                        <ArrowDown size={16} />
-                        Down
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => removeCustomLink(l.id)}
-                        className="px-3 py-2 rounded-xl border bg-red-50 text-red-700 text-sm font-semibold inline-flex items-center gap-2"
-                      >
-                        <Trash2 size={16} />
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
             </div>
-          </div>
+          </CollapsibleSection>
 
-          {/* Performance */}
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Performance</h2>
-            <div className="rounded-2xl border bg-white p-4">
+          {/* ==================== PERFORMANCE ==================== */}
+          <CollapsibleSection
+            title="Performance Settings"
+            icon={<Settings2 size={20} className="text-primary" />}
+            expanded={expandedSections.performance}
+            onToggle={() => toggleSection('performance')}
+          >
+            <div className="bg-white p-4 rounded-lg border">
               <label className="flex items-center gap-2 text-sm text-gray-800 font-semibold">
                 <input
                   type="checkbox"
                   checked={Boolean(settings.show_menu_images ?? true)}
                   onChange={(e) => setSettings((p) => ({ ...p, show_menu_images: e.target.checked }))}
+                  className="w-4 h-4"
                 />
                 Show menu item images in customer app
               </label>
-              <p className="text-[11px] text-gray-600 mt-1">
-                If disabled, images can still be uploaded (image_url is stored) but the UI won’t render them—this saves Cloudinary bandwidth.
+              <p className="text-xs text-gray-600 mt-2">
+                If disabled, images won&apos;t render in customer app (saves bandwidth). Images are still stored.
               </p>
             </div>
-          </div>
+          </CollapsibleSection>
+        </div>
 
-          {/* Order Settings */}
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Order Settings</h2>
+        {/* Save Button (Bottom) */}
+        <div className="mt-6">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full bg-primary text-white px-6 py-4 rounded-xl hover:bg-orange-600 font-semibold flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg"
+          >
+            <Save size={20} />
+            {saving ? 'Saving...' : 'Save All Settings'}
+          </button>
+        </div>
 
-            <div className="grid md:grid-cols-3 gap-4">
-              <NumberField
-                label="Min Order Amount (₹)"
-                value={settings.min_order_amount}
-                onChange={(n) => setSettings({ ...settings, min_order_amount: Math.max(0, n) })}
-                min={0}
-              />
-              <NumberField
-                label="Tax Percentage (%)"
-                value={settings.tax_percentage}
-                onChange={(n) => setSettings({ ...settings, tax_percentage: Math.max(0, n) })}
-                min={0}
-                max={100}
-              />
-              <div className="rounded-xl border bg-gray-50 p-4">
-                <p className="text-xs text-gray-600 font-semibold">Note</p>
-                <p className="text-sm text-gray-800 mt-1">
-                  Delivery fee amount here is the default/fallback. When enabled, your cart/checkout will compute distance by road first and then apply fee rules.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Save */}
-          <div className="pt-6 border-t">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full bg-primary text-white px-6 py-4 rounded-xl hover:bg-orange-600 font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              <Save size={20} />
-              {saving ? 'Saving...' : 'Save Settings'}
-            </button>
-          </div>
-
-          <div className="text-xs text-gray-500">
-            <p className="flex items-center gap-2">
-              <Truck className="w-4 h-4" />
-              Current: delivery is {settings.delivery_fee_enabled ? 'enabled' : 'disabled'}, today({todayKey}) is {todayRule.enabled ? `₹${todayRule.fee}` : 'disabled'}.
-            </p>
-          </div>
+        {/* Footer Info */}
+        <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg border">
+          <p className="flex items-center gap-2">
+            <Truck className="w-4 h-4" />
+            Delivery: {settings.delivery_fee_enabled ? 'Enabled' : 'Disabled'} • Today ({todayKey}): {todayRule.enabled ? `₹${todayRule.fee}` : 'Disabled'} • Base Area: {settings.base_delivery_radius_km}km • Per KM Beyond: ₹{settings.per_km_fee_beyond_base}
+          </p>
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+// ==================== HELPER COMPONENTS ====================
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function CollapsibleSection({
+  title,
+  icon,
+  expanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  icon: ReactNode;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-xl shadow-md border overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full px-4 py-4 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          {icon}
+          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+        </div>
+        {expanded ? <ChevronUp size={20} className="text-gray-600" /> : <ChevronDown size={20} className="text-gray-600" />}
+      </button>
+
+      {expanded && <div className="px-4 py-4 border-t">{children}</div>}
+    </div>
   );
 }
 
@@ -1462,35 +1845,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary"
-      />
-    </div>
-  );
-}
-
-function NumberField({
-  label,
-  value,
-  onChange,
-  min,
-  max,
-}: {
-  label: string;
-  value: number;
-  onChange: (n: number) => void;
-  min?: number;
-  max?: number;
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-      <input
-        type="number"
-        value={Number.isFinite(value) ? value : 0}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary"
-        min={min}
-        max={max}
+        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary"
       />
     </div>
   );

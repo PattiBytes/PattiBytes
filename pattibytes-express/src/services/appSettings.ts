@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// appSettings.service.ts
+// services/appSettings.ts
 import { supabase } from '@/lib/supabase';
 
 export type AppSettingsRow = {
@@ -16,6 +16,9 @@ export type AppSettingsRow = {
   website_url: string | null;
 
   delivery_fee: number | string | null;
+  base_delivery_radius_km: number | string | null;
+  per_km_fee_beyond_base: number | string | null;
+  
   min_order_amount: number | string | null;
   tax_percentage: number | string | null;
 
@@ -26,7 +29,7 @@ export type AppSettingsRow = {
   show_menu_images: boolean | string | null;
 
   delivery_fee_enabled: boolean | string | null;
-  delivery_fee_schedule: unknown | null; // keep json/jsonb flexible
+  delivery_fee_schedule: unknown | null;
   delivery_fee_show_to_customer: boolean | string | null;
 
   created_at: string | null;
@@ -77,6 +80,8 @@ export async function getAppConfigRow(): Promise<AppSettingsRow | null> {
         'youtube_url',
         'website_url',
         'delivery_fee',
+        'base_delivery_radius_km',       // ✅ Added
+        'per_km_fee_beyond_base',        // ✅ Added
         'min_order_amount',
         'tax_percentage',
         'custom_links',
@@ -129,11 +134,15 @@ export type DeliveryPolicy = {
   enabled: boolean;
   showToCustomer: boolean;
 
-  // Your rule (fixed):
-  baseKm: number;              // 3
-  baseFee: number;             // from settings
-  perKm: number;               // 15
-  rounding: 'ceil' | 'exact';  // 'ceil' (first km after 3km starts charging)
+  // ✅ New: Base delivery area configuration
+  baseRadiusKm: number;        // From base_delivery_radius_km
+  perKmFeeAfterBase: number;   // From per_km_fee_beyond_base
+
+  // Your existing rule (fixed):
+  baseKm: number;              // 3 (for compatibility)
+  baseFee: number;             // from delivery_fee or schedule
+  perKm: number;               // 15 (for compatibility)
+  rounding: 'ceil' | 'exact';  // 'ceil'
 
   schedule: any;
 };
@@ -146,7 +155,11 @@ export async function getDeliveryPolicyNow(): Promise<DeliveryPolicy> {
 
   const schedule = asJson<any>(row?.delivery_fee_schedule, null);
 
-  // Fixed rule defaults
+  // ✅ Get new delivery area settings
+  const baseRadiusKm = asNumber(row?.base_delivery_radius_km, 5);
+  const perKmFeeAfterBase = asNumber(row?.per_km_fee_beyond_base, 10);
+
+  // Fixed rule defaults (for backward compatibility)
   const baseKm = 3;
   const perKm = 15;
   const rounding: 'ceil' | 'exact' = 'ceil';
@@ -157,7 +170,17 @@ export async function getDeliveryPolicyNow(): Promise<DeliveryPolicy> {
       ? asNumber((schedule as any)?.ui?.base_fee, asNumber(row?.delivery_fee, 0))
       : asNumber(row?.delivery_fee, 0);
 
-  return { enabled, showToCustomer, baseKm, baseFee, perKm, rounding, schedule };
+  return {
+    enabled,
+    showToCustomer,
+    baseRadiusKm,           // ✅ Added
+    perKmFeeAfterBase,      // ✅ Added
+    baseKm,
+    baseFee,
+    perKm,
+    rounding,
+    schedule,
+  };
 }
 
 export const appSettingsService = {

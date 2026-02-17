@@ -4,14 +4,39 @@ import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Menu, X, User, ShoppingBag, LayoutDashboard, Package, MapPin, Users, Shield } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 export default function Header() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [appLogo, setAppLogo] = useState<string>('/icon-192.png');
+  const [appName, setAppName] = useState<string>('PattiBytes Express');
+
+  // Fetch app logo and name from settings
+  useEffect(() => {
+    const fetchAppSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('app_name, app_logo_url')
+          .limit(1)
+          .single();
+
+        if (!error && data) {
+          if (data.app_logo_url) setAppLogo(data.app_logo_url);
+          if (data.app_name) setAppName(data.app_name);
+        }
+      } catch (err) {
+        console.error('Failed to fetch app settings:', err);
+      }
+    };
+
+    fetchAppSettings();
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -109,26 +134,32 @@ export default function Header() {
     <header className="bg-white shadow-sm sticky top-0 z-50">
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 hover-scale">
-            <div className="relative w-10 h-10">
-              <Image
-                src="/icon-192.png"
-                alt="PattiBytes Express"
-                fill
-                sizes="40px"
-                className="object-contain"
-                priority
-              />
+          {/* Logo - Circular with Ring */}
+          <Link href="/" className="flex items-center gap-3 group">
+            <div className="relative w-10 h-10 sm:w-12 sm:h-12 shrink-0">
+              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 blur-md opacity-0 group-hover:opacity-75 transition-opacity duration-300" />
+              <div className="relative w-full h-full rounded-full ring-2 ring-orange-200 group-hover:ring-orange-400 transition-all duration-300 overflow-hidden bg-white shadow-md">
+                <Image
+                  src={appLogo}
+                  alt={appName}
+                  fill
+                  sizes="48px"
+                  className="object-cover p-1 transform group-hover:scale-110 transition-transform duration-300"
+                  priority
+                  onError={() => setAppLogo('/icon-192.png')}
+                />
+              </div>
             </div>
             <div className="hidden sm:block">
-              <div className="font-bold text-xl text-gray-900">PattiBytes Express</div>
+              <div className="font-bold text-lg sm:text-xl text-gray-900 group-hover:text-primary transition-colors">
+                {appName}
+              </div>
               <div className="text-xs text-primary font-semibold">ਪੱਟੀ ਦੀ ਲੋੜ, ਹਾਢੇ ਕੋਲ ਤੋੜ</div>
             </div>
           </Link>
 
           {/* Desktop Menu */}
-          <div className="hidden md:flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-4 lg:gap-6">
             {user ? (
               <>
                 {roleLinks.map((link) => (
@@ -142,9 +173,9 @@ export default function Header() {
                   </Link>
                 ))}
                 
-                {/* Profile Image/Logo */}
+                {/* Profile Image/Logo - Circular */}
                 {profileImage && (
-                  <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-primary">
+                  <div className="relative w-9 h-9 lg:w-10 lg:h-10 rounded-full overflow-hidden border-2 border-primary hover:border-orange-600 transition-all shadow-md hover:shadow-lg">
                     <Image
                       src={profileImage}
                       alt={user.full_name || 'Profile'}
@@ -157,7 +188,7 @@ export default function Header() {
                 
                 {/* Role Badge */}
                 {(user.role === 'superadmin' || user.role === 'admin') && (
-                  <div className="flex items-center gap-1 bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-xs font-semibold">
+                  <div className="flex items-center gap-1 bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-xs font-semibold shadow-sm">
                     <Shield size={14} />
                     {user.role === 'superadmin' ? 'SuperAdmin' : 'Admin'}
                   </div>
@@ -165,7 +196,7 @@ export default function Header() {
                 
                 <button
                   onClick={handleLogout}
-                  className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 font-medium transition-colors"
+                  className="bg-red-600 text-white px-4 lg:px-6 py-2 rounded-lg hover:bg-red-700 font-medium transition-all shadow-sm hover:shadow-md"
                 >
                   Logout
                 </button>
@@ -180,7 +211,7 @@ export default function Header() {
                 </Link>
                 <Link
                   href="/auth/signup"
-                  className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600 font-medium transition-colors"
+                  className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600 font-medium transition-all shadow-sm hover:shadow-md"
                 >
                   Sign Up
                 </Link>
@@ -191,7 +222,7 @@ export default function Header() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="md:hidden p-2 rounded-lg hover:bg-gray-100 text-gray-900"
+            className="md:hidden p-2 rounded-lg hover:bg-gray-100 text-gray-900 transition-colors"
           >
             {menuOpen ? (
               <X size={24} className="text-gray-900" />
@@ -207,10 +238,10 @@ export default function Header() {
             <div className="flex flex-col gap-4">
               {user ? (
                 <>
-                  {/* Profile Image in Mobile */}
+                  {/* Profile Image in Mobile - Circular */}
                   {profileImage && (
                     <div className="flex items-center gap-3 px-4 py-2">
-                      <div className="relative w-12 h-12 rounded-full overflow-hidden border-2 border-primary">
+                      <div className="relative w-12 h-12 rounded-full overflow-hidden border-2 border-primary shadow-md">
                         <Image
                           src={profileImage}
                           alt={user.full_name || 'Profile'}
@@ -221,7 +252,12 @@ export default function Header() {
                       </div>
                       <div>
                         <p className="font-semibold text-gray-900">{user.full_name}</p>
-                        <p className="text-sm text-gray-600 capitalize">{user.role}</p>
+                        <p className="text-sm text-gray-600 capitalize flex items-center gap-1">
+                          {(user.role === 'superadmin' || user.role === 'admin') && (
+                            <Shield size={12} className="text-purple-600" />
+                          )}
+                          {user.role}
+                        </p>
                       </div>
                     </div>
                   )}
@@ -230,7 +266,7 @@ export default function Header() {
                     <Link
                       key={link.href}
                       href={link.href}
-                      className="text-gray-700 hover:text-primary font-medium transition-colors px-4 py-2 flex items-center gap-2"
+                      className="text-gray-700 hover:text-primary font-medium transition-colors px-4 py-2 flex items-center gap-2 hover:bg-gray-50 rounded-lg mx-2"
                       onClick={() => setMenuOpen(false)}
                     >
                       {link.icon}
@@ -243,7 +279,7 @@ export default function Header() {
                       handleLogout();
                       setMenuOpen(false);
                     }}
-                    className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 font-medium transition-colors mx-4"
+                    className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 font-medium transition-colors mx-4 shadow-sm"
                   >
                     Logout
                   </button>
@@ -252,14 +288,14 @@ export default function Header() {
                 <>
                   <Link
                     href="/auth/login"
-                    className="text-gray-700 hover:text-primary font-medium transition-colors px-4 py-2"
+                    className="text-gray-700 hover:text-primary font-medium transition-colors px-4 py-2 hover:bg-gray-50 rounded-lg mx-2"
                     onClick={() => setMenuOpen(false)}
                   >
                     Sign In
                   </Link>
                   <Link
                     href="/auth/signup"
-                    className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600 font-medium transition-colors mx-4 text-center"
+                    className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600 font-medium transition-colors mx-4 text-center shadow-sm"
                     onClick={() => setMenuOpen(false)}
                   >
                     Sign Up
