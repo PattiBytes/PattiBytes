@@ -213,7 +213,7 @@ export function calculateDeliveryFeeByDistance(
 
   const baseKm = opts.baseKm ?? 3;
   const baseFee = opts.baseFee ?? 50;
-  const perKm = opts.perKmBeyondBase ?? 15;
+  const perKm = opts.perKmBeyondBase ?? 10;
 
   // NEW: choose how to charge once outside baseKm
   const beyondMode = opts.beyondMode ?? 'from_0km'; // <- set default to your NEW rule
