@@ -1331,7 +1331,7 @@ export default function AdminOrderDetailPage() {
           </div>
 
           <div className="lg:col-span-1 space-y-5">
-            <div className="bg-white rounded-2xl shadow p-4 sm:p-6 lg:sticky lg:top-6">
+            <div className="bg-white rounded-2xl shadow p-4 sm:p-6 lg:top-6">
               <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
                 <DollarSign className="text-primary" size={18} />
                 Order Summary
