@@ -56,6 +56,7 @@ import SearchBox from '@/components/customer-dashboard/SearchBox';
 import StatsCards from '@/components/customer-dashboard/StatsCards';
 import CuisineFilters from '@/components/customer-dashboard/CuisineFilters';
 import RestaurantGrid from '@/components/customer-dashboard/RestaurantGrid';
+import CustomOrderSection from '@/components/customer-dashboard/CustomOrderSection';
 
 import type { AddressPick } from '@/components/AddressAutocomplete';
 
@@ -249,7 +250,7 @@ export default function CustomerDashboardPage() {
   const [location, setLocation] = useState<Location | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
 
-  const [searchRadiusKm, setSearchRadiusKm] = useState<number>(25);
+  const [searchRadiusKm, setSearchRadiusKm] = useState<number>(9999);
 
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -728,7 +729,7 @@ export default function CustomerDashboardPage() {
   useEffect(() => {
     if (!location) return;
 
-    const key = `merchants:${location.lat.toFixed(3)}:${location.lon.toFixed(3)}:${searchRadiusKm}`;
+    const key = `merchants:${location.lat.toFixed(3)}:${location.lon.toFixed(3)}:all`;  // Changed key                //}:${searchRadiusKm}`;
 
     try {
       const cached = sessionStorage.getItem(key);
@@ -785,9 +786,7 @@ export default function CustomerDashboardPage() {
             const dist = lat && lon ? haversineKm(location.lat, location.lon, lat, lon) : Number.POSITIVE_INFINITY;
             return { ...m, distance_km: dist };
           })
-          .filter((m) => Number.isFinite(m.distance_km) && m.distance_km <= searchRadiusKm)
-          .sort((a, b) => Number(a.distance_km || 0) - Number(b.distance_km || 0));
-
+        
         setRestaurants(withDistance as any);
 
         try {
@@ -802,7 +801,7 @@ export default function CustomerDashboardPage() {
     };
 
     load();
-  }, [location?.lat, location?.lon, searchRadiusKm]);
+  }, [location?.lat, location?.lon]);
 
   // Filter restaurants
   useEffect(() => {

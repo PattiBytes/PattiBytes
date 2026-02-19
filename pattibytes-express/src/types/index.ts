@@ -1,4 +1,5 @@
 export interface User {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   user_metadata: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   avatar_url: any;
