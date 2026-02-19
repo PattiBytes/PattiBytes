@@ -723,6 +723,19 @@ const loadRecentOrders = async () => {
         </div>
       </button>
 
+       <button
+        onClick={() => router.push('/admin/custom-products')}
+        className="w-full bg-gray-50 hover:bg-gray-100 rounded-xl p-3 text-left border"
+      >
+        <div className="flex items-center gap-2">
+          <Users className="text-primary" size={18} />
+          <span className="font-semibold text-gray-900">Manage Custom Products</span>
+        </div>
+        <div className="mt-1 text-xs text-gray-600 flex items-center gap-2">
+         Manage custom products <Eye size={14} />
+        </div>
+      </button>
+
       <button
         onClick={() => router.push('/admin/analytics')}
         className="w-full bg-gray-50 hover:bg-gray-100 rounded-xl p-3 text-left border"

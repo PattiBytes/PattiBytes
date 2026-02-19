@@ -1231,6 +1231,8 @@ export default function CustomerDashboardPage() {
             onDetect={getCurrentLocation}
           />
 
+
+
           {/* Banner announcement */}
           {bannerVisible &&
             isAnnouncementActive(announcement) &&
@@ -1392,7 +1394,8 @@ export default function CustomerDashboardPage() {
               </div>
             )}
           </div>
-
+{/* Custom Order Section */}
+<CustomOrderSection />
           <SearchBox
             query={searchQuery}
             setQuery={setSearchQueryDebounced}
