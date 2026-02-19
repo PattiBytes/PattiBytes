@@ -203,24 +203,26 @@ export async function getRoadDistanceKmViaApi(
 
 
 
+// ✅ IMPROVED: Clear base fee + per km structure
 export function calculateDeliveryFeeByDistance(
   distanceKm: number,
-  opts: DeliveryFeeCalcOptions = {}
+  opts?: DeliveryFeeCalcOptions
 ): DeliveryFeeQuote {
-  const enabled = opts.enabled ?? true;
-  if (!enabled) return { distanceKm: 0, fee: 0, breakdown: 'Delivery fee disabled' };
+  const enabled = opts?.enabled ?? true;
+  if (!enabled) {
+    return { distanceKm: 0, fee: 0, breakdown: 'Delivery fee disabled' };
+  }
 
-  const d = Math.max(0, Number(distanceKm) || 0);
+  const d = Math.max(0, Number(distanceKm || 0));
+  const baseKm = opts?.baseKm ?? 3; // Free delivery up to 3km
+  const baseFee = opts?.baseFee ?? 50; // ₹50 base fee
+  const perKm = opts?.perKmBeyondBase ?? 15; // ₹15 per km after base
 
-  const baseKm = opts.baseKm ?? 3;
-  const baseFee = opts.baseFee ?? 50;
-  const perKm = opts.perKmBeyondBase ?? 10;
+  const rounding = opts?.rounding ?? 'ceil';
 
-  // NEW: choose how to charge once outside baseKm
-  const beyondMode = opts.beyondMode ?? 'from_0km'; // <- set default to your NEW rule
-  const rounding = opts.rounding ?? 'ceil';
-
+  // ✅ NEW LOGIC: Base fee + charges after base distance
   if (d <= baseKm) {
+    // Within base radius - only charge base fee
     return {
       distanceKm: round2(d),
       fee: round2(baseFee),
@@ -228,27 +230,19 @@ export function calculateDeliveryFeeByDistance(
     };
   }
 
-  // NEW RULE: once > baseKm, ignore baseFee and charge from 0km
-  if (beyondMode === 'from_0km') {
-    const fee = d * perKm;
-    return {
-      distanceKm: round2(d),
-      fee: round2(fee),
-      breakdown: `${round2(d)}km × ₹${perKm} = ₹${round2(fee)}`,
-    };
-  }
-
-  // OLD RULE (keep available if needed): baseFee + extraKm*perKm
-  const extra = Math.max(0, d - baseKm);
-  const billableExtra = rounding === 'ceil' ? Math.ceil(extra) : extra;
-  const fee = baseFee + billableExtra * perKm;
+  // ✅ Beyond base radius: base fee + per km charges
+  const extraKm = d - baseKm;
+  const billableExtra = rounding === 'ceil' ? Math.ceil(extraKm) : extraKm;
+  const extraCharge = billableExtra * perKm;
+  const totalFee = baseFee + extraCharge;
 
   return {
     distanceKm: round2(d),
-    fee: round2(fee),
-    breakdown: `₹${round2(baseFee)} + ${billableExtra}km × ₹${perKm} = ₹${round2(fee)}`,
+    fee: round2(totalFee),
+    breakdown: `₹${round2(baseFee)} (base) + ${round2(billableExtra)}km × ₹${perKm} = ₹${round2(totalFee)}`,
   };
 }
+
 
 
 class LocationService {
