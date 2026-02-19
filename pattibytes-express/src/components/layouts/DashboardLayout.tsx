@@ -201,6 +201,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: 'Search', href: '/customer/search', icon: Search },
         { name: 'Cart', href: '/customer/cart', icon: ShoppingBag },
         { name: 'Orders', href: '/customer/orders', icon: Receipt },
+         
         { name: 'Notifications', href: '/customer/notifications', icon: Bell },
         { name: 'Profile', href: '/customer/profile', icon: User },
       ];
@@ -236,6 +237,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: 'Drivers', href: '/admin/drivers', icon: Truck },
         { name: 'Approvals', href: '/admin/access-requests', icon: Bell, badge: approvalsCount },
         { name: 'Promo Codes', href: '/admin/promo-codes', icon: Tag },
+         { name: 'custom-products', href: '/admin/custom-products', icon: Tag },
         { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
         { name: 'Settings', href: '/admin/settings', icon: Settings },
         customerDashboardItem,
@@ -255,6 +257,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: 'Promo Codes', href: '/admin/promo-codes', icon: Tag },
         { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
         { name: 'Admins', href: '/admin/admins', icon: Users },
+           { name: 'custom-products', href: '/admin/custom-products', icon: Tag },
         { name: 'Settings', href: '/admin/settings', icon: Settings },
         customerDashboardItem,
       ];

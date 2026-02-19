@@ -1,265 +1,329 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-toastify';
-import { ArrowLeft, Send, Loader2, CheckCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  ShoppingCart,
+  Loader2,
+  Plus,
+  Package,
+  MessageSquare,
+  Send,
+} from 'lucide-react';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
-function CustomOrderForm() {
+type CustomProduct = {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  unit: string;
+  imageurl?: string | null;
+  description?: string | null;
+  isactive: boolean;
+};
+
+function CustomOrderContent() {
   const router = useRouter();
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const category = searchParams.get('category') || 'custom';
 
-  const [formData, setFormData] = useState({
-    category,
-    name: '',
-    phone: '',
-    email: '',
-    orderDetails: '',
-    budget: '',
-    deliveryDate: '',
-    deliveryTime: '',
-    address: '',
-  });
-
+  const [products, setProducts] = useState<CustomProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [orderDescription, setOrderDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
 
   useEffect(() => {
-    if (user) {
-      setFormData((prev) => ({
-        ...prev,
-        name: (user as any).full_name || '',
-        email: user.email || '',
-        phone: (user as any).phone || '',
-      }));
+    loadProducts();
+    loadCartCount();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category]);
+
+  const loadProducts = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('customproducts')
+        .select('*')
+        .eq('category', category)
+        .eq('isactive', true)
+        .order('name');
+
+      if (error) throw error;
+      setProducts((data || []) as CustomProduct[]);
+    } catch (e: any) {
+      console.error('Load products error:', e);
+      toast.error(e?.message || 'Failed to load products');
+    } finally {
+      setLoading(false);
     }
-  }, [user]);
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const loadCartCount = async () => {
+    try {
+      const cartId = localStorage.getItem('cartId');
+      if (!cartId) {
+        setCartCount(0);
+        return;
+      }
 
-    if (!formData.orderDetails.trim()) {
-      toast.error('Please describe your order');
+      const { data, error } = await supabase
+        .from('cartitems')
+        .select('quantity')
+        .eq('cartid', cartId);
+
+      if (error) throw error;
+      const total = (data || []).reduce((sum, item: any) => sum + (item.quantity || 0), 0);
+      setCartCount(total);
+    } catch (e) {
+      console.error('Load cart count error:', e);
+    }
+  };
+
+  const addToCart = async (product: CustomProduct) => {
+    try {
+      let cartId = localStorage.getItem('cartId');
+
+      // Create cart if doesn't exist
+      if (!cartId) {
+        const { data: newCart, error } = await supabase
+          .from('carts')
+          .insert({
+            customerid: user?.id || null,
+            merchantid: null,
+            createdat: new Date().toISOString(),
+          })
+          .select('id')
+          .single();
+
+        if (error) throw error;
+        cartId = newCart.id;
+        localStorage.setItem('cartId', cartId);
+      }
+
+      // Check if item exists
+      const { data: existing } = await supabase
+        .from('cartitems')
+        .select('*')
+        .eq('cartid', cartId)
+        .eq('productid', product.id)
+        .maybeSingle();
+
+      if (existing) {
+        // Update quantity
+        await supabase
+          .from('cartitems')
+          .update({ quantity: existing.quantity + 1 })
+          .eq('id', existing.id);
+      } else {
+        // Insert new item
+        await supabase.from('cartitems').insert({
+          cartid: cartId,
+          productid: product.id,
+          productname: product.name,
+          productprice: product.price,
+          quantity: 1,
+          category: product.category,
+          imageurl: product.imageurl,
+        });
+      }
+
+      toast.success(`${product.name} added to cart`);
+      loadCartCount();
+    } catch (e: any) {
+      console.error('Add to cart error:', e);
+      toast.error(e?.message || 'Failed to add to cart');
+    }
+  };
+
+  const submitCustomRequest = async () => {
+    if (!orderDescription.trim()) {
+      toast.error('Please describe what you need');
       return;
     }
 
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('customorders').insert({
+      const { error } = await supabase.from('customorderrequests').insert({
         customerid: user?.id || null,
-        category: formData.category,
-        customername: formData.name,
-        customerphone: formData.phone,
-        customeremail: formData.email,
-        orderdetails: formData.orderDetails,
-        budget: formData.budget || null,
-        deliverydate: formData.deliveryDate || null,
-        deliverytime: formData.deliveryTime || null,
-        deliveryaddress: formData.address || null,
+        category,
+        description: orderDescription,
         status: 'pending',
         createdat: new Date().toISOString(),
       });
 
       if (error) throw error;
 
-      setSubmitted(true);
-      toast.success('Custom order submitted! We\'ll contact you soon.');
+      toast.success("Custom order request submitted! We'll contact you soon.");
+      setOrderDescription('');
 
       setTimeout(() => {
         router.push('/customer-dashboard');
-      }, 3000);
+      }, 1500);
     } catch (e: any) {
       console.error('Submit error:', e);
-      toast.error(e?.message || 'Failed to submit order');
+      toast.error(e?.message || 'Failed to submit request');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (submitted) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl border-2 border-green-200 p-8 max-w-md w-full text-center animate-in zoom-in duration-500">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <CheckCircle className="w-10 h-10 text-white" />
-          </div>
-          <h2 className="text-2xl font-black text-gray-900 mb-2">Order Submitted!</h2>
-          <p className="text-gray-600 mb-4">
-            We&apos;ve received your custom order request. Our team will contact you within 24 hours.
-          </p>
-          <button
-            onClick={() => router.push('/customer-dashboard')}
-            className="w-full bg-gradient-to-r from-primary to-pink-600 text-white py-3 rounded-xl font-bold hover:shadow-xl transition-all"
-          >
-            Back to Home
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const goToCart = () => {
+    router.push('/customer/cart');
+  };
+
+  const getCategoryTitle = () => {
+    const titles: Record<string, string> = {
+      custom: 'Custom Orders',
+      dairy: 'Dairy Products',
+      grocery: 'Grocery Items',
+      medicines: 'Medicines',
+    };
+    return titles[category] || 'Products';
+  };
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-pink-50 pb-8">
-        <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="min-h-screen bg-gray-50 pb-24">
+        <div className="max-w-6xl mx-auto px-4 py-6">
           {/* Header */}
-          <div className="flex items-center gap-4 mb-6">
+          <div className="flex items-center justify-between gap-4 mb-6">
             <button
               onClick={() => router.back()}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
-            <div>
-              <h1 className="text-2xl font-black text-gray-900">Custom Order</h1>
-              <p className="text-sm text-gray-600">Tell us what you need</p>
-            </div>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl border-2 border-gray-200 p-6 space-y-6">
-            {/* Category */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Order Type</label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
-              >
-                <option value="birthday">Birthday Special</option>
-                <option value="bulk">Bulk Order</option>
-                <option value="custom">Custom Menu</option>
-                <option value="corporate">Corporate Catering</option>
-                <option value="wedding">Wedding/Event</option>
-              </select>
-            </div>
-
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Your Name *</label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                placeholder="John Doe"
-              />
-            </div>
-
-            {/* Phone */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Phone Number *</label>
-              <input
-                type="tel"
-                required
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                placeholder="+91 9876543210"
-              />
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Email</label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                placeholder="john@example.com"
-              />
-            </div>
-
-            {/* Order Details */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Order Details *</label>
-              <textarea
-                required
-                value={formData.orderDetails}
-                onChange={(e) => setFormData({ ...formData, orderDetails: e.target.value })}
-                rows={5}
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
-                placeholder="Describe what you want... (e.g., 2kg chocolate cake with custom design, serves 20 people)"
-              />
-            </div>
-
-            {/* Budget */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Budget (₹)</label>
-              <input
-                type="text"
-                value={formData.budget}
-                onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                placeholder="e.g., 5000"
-              />
-            </div>
-
-            {/* Delivery Date & Time */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Delivery Date</label>
-                <input
-                  type="date"
-                  value={formData.deliveryDate}
-                  onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Delivery Time</label>
-                <input
-                  type="time"
-                  value={formData.deliveryTime}
-                  onChange={(e) => setFormData({ ...formData, deliveryTime: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Address */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Delivery Address</label>
-              <textarea
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
-                placeholder="Full delivery address with pincode"
-              />
-            </div>
-
-            {/* Submit Button */}
+            <h1 className="text-2xl font-black text-gray-900 flex-1">{getCategoryTitle()}</h1>
             <button
-              type="submit"
-              disabled={submitting}
-              className="w-full bg-gradient-to-r from-primary to-pink-600 text-white py-4 rounded-xl font-black text-lg hover:shadow-2xl transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              onClick={goToCart}
+              className="p-3 bg-primary text-white rounded-xl hover:shadow-lg transition-all relative"
             >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                <>
-                  <Send className="w-5 h-5" />
-                  Submit Order Request
-                </>
+              <ShoppingCart className="w-6 h-6" />
+              {cartCount > 0 && (
+                <span className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                  {cartCount}
+                </span>
               )}
             </button>
+          </div>
 
-            <p className="text-xs text-gray-500 text-center">
-              Our team will review your request and contact you within 24 hours with a quote and confirmation.
+          {/* Products Section */}
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : products.length > 0 ? (
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-6">
+              <h2 className="text-lg font-black text-gray-900 mb-4 flex items-center gap-2">
+                <Package className="w-5 h-5 text-primary" />
+                Available Products
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {products.map((product) => (
+                  <div
+                    key={product.id}
+                    className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all group"
+                  >
+                    {product.imageurl ? (
+                      <img
+                        src={product.imageurl}
+                        alt={product.name}
+                        className="w-full h-32 object-cover group-hover:scale-110 transition-transform"
+                      />
+                    ) : (
+                      <div className="w-full h-32 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                        <Package className="w-10 h-10 text-gray-400" />
+                      </div>
+                    )}
+                    <div className="p-3">
+                      <h3 className="font-bold text-sm text-gray-900 mb-1 line-clamp-2">
+                        {product.name}
+                      </h3>
+                      {product.description && (
+                        <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                          {product.description}
+                        </p>
+                      )}
+                      <p className="text-sm font-bold text-primary mb-3">
+                        ₹{product.price.toFixed(2)}/{product.unit}
+                      </p>
+                      <button
+                        onClick={() => addToCart(product)}
+                        className="w-full bg-primary text-white py-2 rounded-lg text-sm font-bold hover:shadow-md transition-all flex items-center justify-center gap-1"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add to Cart
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={goToCart}
+                className="w-full mt-6 bg-gradient-to-r from-primary to-pink-600 text-white py-4 rounded-xl font-black text-lg hover:shadow-2xl transition-all hover:scale-105 flex items-center justify-center gap-2"
+              >
+                <ShoppingCart className="w-5 h-5" />
+                View Cart & Checkout ({cartCount} items)
+              </button>
+            </div>
+          ) : null}
+
+          {/* Custom Request Section */}
+          <div className="bg-white rounded-2xl shadow-lg border-2 border-primary/20 p-6">
+            <h2 className="text-lg font-black text-gray-900 mb-2 flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-primary" />
+              Can&apos;t Find What You Need?
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Describe your custom order requirements and we&apos;ll get back to you with a quote.
             </p>
-          </form>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  What do you need? *
+                </label>
+                <textarea
+                  value={orderDescription}
+                  onChange={(e) => setOrderDescription(e.target.value)}
+                  rows={5}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
+                  placeholder={`Example for ${category}:\n- Fresh milk 5 litres daily delivery\n- Organic vegetables basket\n- Custom birthday cake 2kg chocolate\n- Prescription medicines with photo upload`}
+                />
+              </div>
+
+              <button
+                onClick={submitCustomRequest}
+                disabled={submitting || !orderDescription.trim()}
+                className="w-full bg-gradient-to-r from-primary to-pink-600 text-white py-4 rounded-xl font-black text-lg hover:shadow-2xl transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-5 h-5" />
+                    Submit Custom Request
+                  </>
+                )}
+              </button>
+
+              <p className="text-xs text-gray-500 text-center">
+                💡 Our team will review and contact you within 24 hours
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </DashboardLayout>
@@ -268,8 +332,14 @@ function CustomOrderForm() {
 
 export default function CustomOrderPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
-      <CustomOrderForm />
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      }
+    >
+      <CustomOrderContent />
     </Suspense>
   );
 }
