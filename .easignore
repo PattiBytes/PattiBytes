@@ -1,0 +1,49 @@
+# ── Block entire monorepo by default ──────────────
+**
+
+# ── Re-include ONLY the Expo app ──────────────────
+!app/
+!app/pattibytes/
+!app/pattibytes/**
+
+# ── Exclude heavy folders inside Expo app ─────────
+app/pattibytes/node_modules/
+app/pattibytes/.expo/
+app/pattibytes/android/
+app/pattibytes/ios/
+app/pattibytes/.kotlin/
+app/pattibytes/dist/
+app/pattibytes/web-build/
+app/pattibytes/inspect-output/
+app/pattibytes/coverage/
+app/pattibytes/__tests__/
+app/pattibytes/__mocks__/
+app/pattibytes/docs/
+app/pattibytes/scripts/
+app/pattibytes/app-example/
+
+# ── Logs ──────────────────────────────────────────
+app/pattibytes/**/*.log
+app/pattibytes/npm-debug.*
+app/pattibytes/yarn-debug.*
+app/pattibytes/yarn-error.*
+
+# ── OS junk ───────────────────────────────────────
+app/pattibytes/**/.DS_Store
+app/pattibytes/**/*.pem
+
+# ── TypeScript build artifacts ────────────────────
+app/pattibytes/**/*.tsbuildinfo
+app/pattibytes/**/expo-env.d.ts
+
+# ── Local env (use EAS Environment Variables) ─────
+app/pattibytes/.env
+app/pattibytes/.env.*
+app/pattibytes/.env*.local
+
+# ── Native certs ──────────────────────────────────
+app/pattibytes/**/*.jks
+app/pattibytes/**/*.p8
+app/pattibytes/**/*.p12
+app/pattibytes/**/*.key
+app/pattibytes/**/*.mobileprovision
