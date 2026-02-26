@@ -10,27 +10,21 @@
       "android": {
         "buildType": "apk"
       },
-      "env": {
-        "EAS_PROJECT_ROOT": "app/pattibytes"
-      }
+      "prebuildCommand": "cd app/pattibytes && npx expo prebuild"
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       },
-      "env": {
-        "EAS_PROJECT_ROOT": "app/pattibytes"
-      }
+      "prebuildCommand": "cd app/pattibytes && npx expo prebuild"
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
       },
-      "env": {
-        "EAS_PROJECT_ROOT": "app/pattibytes"
-      }
+      "prebuildCommand": "cd app/pattibytes && npx expo prebuild"
     }
   },
   "submit": {
