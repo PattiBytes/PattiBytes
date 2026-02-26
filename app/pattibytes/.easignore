@@ -1,13 +1,20 @@
-# ── Dependencies ──────────────────────────────────
+node_modules
 node_modules/
+/node_modules
+/node_modules/
 
-# ── Expo ──────────────────────────────────────────
+inspect-output
+inspect-output/
+
+.expo
 .expo/
+dist
 dist/
+web-build
 web-build/
 expo-env.d.ts
 
-# ── Native ────────────────────────────────────────
+.kotlin
 .kotlin/
 *.orig.*
 *.jks
@@ -15,34 +22,38 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+ios
 /ios
+android
 /android
 
-# ── Metro ─────────────────────────────────────────
 .metro-health-check*
 
-# ── Debug logs ────────────────────────────────────
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# ── macOS ─────────────────────────────────────────
 .DS_Store
 *.pem
 
-# ── Local env files ───────────────────────────────
+.env
+.env.local
 .env*.local
+.env.development
+.env.production
 
-# ── TypeScript ────────────────────────────────────
 *.tsbuildinfo
 
-# ── Git ───────────────────────────────────────────
 .git
+.git/
 .github
+.github/
 
-# ── Misc ──────────────────────────────────────────
 app-example
 coverage
 __tests__
+__mocks__
 docs
 README.md
+scripts
+*.log
