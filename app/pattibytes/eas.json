@@ -9,18 +9,27 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EAS_PROJECT_ROOT": "app/pattibytes"
       }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EAS_PROJECT_ROOT": "app/pattibytes"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EAS_PROJECT_ROOT": "app/pattibytes"
       }
     }
   },
