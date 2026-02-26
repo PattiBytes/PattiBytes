@@ -1,57 +1,55 @@
 {
   "expo": {
     "name": "Pattibytes Express",
-    "slug": "pattibytes-express",
+    "slug": "pattibytes",
+    "scheme": "pattibytesexpress",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "pattibytesexpress",
     "icon": "./assets/images/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#FF6B35"
     },
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.thrillyverse.pattibytesexpress"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.pattibytes.express",
+      "infoPlist": {
+        "UIBackgroundModes": ["location", "fetch", "remote-notification"]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#FF6B35"
       },
-      "package": "com.thrillyverse.pattibytesexpress",
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
-      ]
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.VIBRATE"
+      ],
+      "package": "com.pattibytes.express"
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "bundler": "metro",
+      "output": "static"
     },
     "plugins": [
       "expo-router",
-      "expo-notifications",
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "Allow Pattibytes to use your location."
-        }
-      ],
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Allow Pattibytes to access your photos.",
-          "cameraPermission": "Allow Pattibytes to use your camera."
-        }
-      ]
+      ["expo-notifications", { "color": "#FF6B35" }],
+      ["expo-location", {
+        "locationAlwaysAndWhenInUsePermission": "Pattibytes needs your location for delivery tracking.",
+        "isIosBackgroundLocationEnabled": true
+      }]
     ],
     "experiments": {
       "typedRoutes": false
+    },
+    "extra": {
+      "eas": { "projectId": "YOUR_EAS_PROJECT_ID" }
     }
   }
 }

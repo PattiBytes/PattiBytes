@@ -1394,7 +1394,7 @@ export default function CustomerDashboardPage() {
               </div>
             )}
           </div>
-{/* Custom Order Section */}
+{/*======== Custom Order Section =======
 <CustomOrderSection />
           <SearchBox
             query={searchQuery}
@@ -1405,9 +1405,9 @@ export default function CustomerDashboardPage() {
           />
 
           {/* Filters */}
-          <CuisineFilters selected={selectedFilter} onSelect={setSelectedFilter} />
+     <CuisineFilters selected={selectedFilter} onSelect={setSelectedFilter} />  
 
-         
+       
 
           {/* Restaurants */}
           <div className="bg-white rounded-3xl shadow-xl border-2 border-gray-200 p-4 sm:p-5">
