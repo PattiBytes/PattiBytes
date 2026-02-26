@@ -1,59 +1,70 @@
+# Ignore everything in the repo root above us
+../../_includes
+../../_layouts
+../../_news
+../../_notifications
+../../_places
+../../.github
+../../admin
+../../app-next
+../../assests
+../../assets
+../../functions
+../../icons
+../../news
+../../pattibytes-express
+../../places
+../../privacy-policy
+../../shop
+../../_config.yml
+
+# Own node_modules
 node_modules
 node_modules/
-/node_modules
 /node_modules/
 
-inspect-output
-inspect-output/
-
+# Expo artifacts
 .expo
 .expo/
-dist
 dist/
-web-build
 web-build/
 expo-env.d.ts
 
-.kotlin
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-ios
+# Native (built remotely)
 /ios
-android
 /android
+.kotlin/
 
-.metro-health-check*
-
+# Logs
+*.log
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
+# OS
 .DS_Store
 *.pem
 
+# Local env
 .env
 .env.local
 .env*.local
 .env.development
 .env.production
 
+# TypeScript
 *.tsbuildinfo
 
+# Git
 .git
-.git/
 .github
-.github/
 
-app-example
+# Misc
+inspect-output
 coverage
 __tests__
 __mocks__
 docs
 README.md
 scripts
-*.log
+app-example
