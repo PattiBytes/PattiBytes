@@ -137,8 +137,11 @@ export default function RestaurantPage() {
   const sectionOffsets = useRef<Record<string, number>>({})
 
   // ── Load all data ───────────────────────────────────────────────────────────
-  const loadAll = useCallback(async () => {
-    if (!id) return
+ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const loadAll = useCallback(async () => {
+  // 🛡️ Don't query if id is missing or not a valid UUID (e.g. "store" route param)
+  if (!id || !UUID_REGEX.test(id as string)) return
     try {
       const now = new Date().toISOString()
 
@@ -238,21 +241,23 @@ export default function RestaurantPage() {
     } finally {
       setLoading(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   useEffect(() => { loadAll() }, [loadAll])
 
   // Check favourite
-  useEffect(() => {
-    if (!user || !id) return
+ useEffect(() => {
+  if (!user || !id || !UUID_REGEX.test(id as string)) return
     supabase.from('favorites').select('id')
       .eq('user_id', user.id).eq('merchant_id', id).maybeSingle()
       .then(({ data }) => setIsFav(!!data))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, id])
 
   // ✅ Check if user has a delivered order from this merchant (for review)
   useEffect(() => {
-    if (!user || !id) return
+  if (!user || !id || !UUID_REGEX.test(id as string)) return
     ;(async () => {
       const { data: orders } = await supabase.from('orders')
         .select('id')
@@ -274,6 +279,7 @@ export default function RestaurantPage() {
         setAlreadyReviewed(!!existing)
       }
     })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, id])
 
   const toggleFav = async () => {

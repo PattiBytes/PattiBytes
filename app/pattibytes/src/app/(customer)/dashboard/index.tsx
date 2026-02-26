@@ -88,26 +88,29 @@ function isAnnouncementActive(a: any) {
 // ─── ShopByCategory ───────────────────────────────────────────────────────────
 function ShopByCategory({ onNav }: { onNav: (p: string) => void }) {
   const CATS = [
-    { id: 'food',      label: 'Food',      emoji: '🍔', bg: '#FFF3EE', text: COLORS.primary },
-    { id: 'dairy',     label: 'Dairy',     emoji: '🥛', bg: '#DBEAFE', text: '#1D4ED8' },
-    { id: 'grocery',   label: 'Grocery',   emoji: '🛒', bg: '#D1FAE5', text: '#065F46' },
-    { id: 'medicines', label: 'Medicine',  emoji: '💊', bg: '#FEE2E2', text: '#991B1B' },
-    { id: 'custom',    label: 'Custom',    emoji: '✨', bg: '#F5F3FF', text: '#5B21B6' },
+    { id: 'food',      label: 'Food',      emoji: '🍱', bg: '#FFF3EE', text: COLORS.primary,  route: '/(customer)/shop?cat=food'      },
+    { id: 'dairy',     label: 'Dairy',     emoji: '🥛', bg: '#DBEAFE', text: '#1D4ED8',       route: '/(customer)/shop?cat=dairy'     },
+    { id: 'grocery',   label: 'Grocery',   emoji: '🛒', bg: '#D1FAE5', text: '#065F46',       route: '/(customer)/shop?cat=grocery'   },
+    { id: 'medicines', label: 'Medicine',  emoji: '💊', bg: '#FEE2E2', text: '#991B1B',       route: '/(customer)/shop?cat=medicines' },
+    { id: 'bakery',    label: 'Bakery',    emoji: '🎂', bg: '#FCE7F3', text: '#9D174D',       route: '/(customer)/shop?cat=bakery'    },
+    { id: 'custom',    label: 'Custom',    emoji: '📝', bg: '#F5F3FF', text: '#5B21B6',       route: '/(customer)/custom-order'       },
   ]
   return (
     <View style={{ marginBottom: 8 }}>
       <View style={[S.sectionHeader, { paddingHorizontal: 16, marginBottom: 10 }]}>
-        <Text style={S.secTitle}>🛍️ Categories</Text>
-        <TouchableOpacity onPress={() => onNav('/(customer)/custom-order')}>
-          <Text style={S.seeAll}>See All →</Text>
+        <Text style={S.secTitle}>Categories</Text>
+        {/* "See All" → shop with no cat filter */}
+        <TouchableOpacity onPress={() => onNav('/(customer)/shop')}>
+          <Text style={S.seeAll}>See All</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
         {CATS.map(c => (
-          <TouchableOpacity key={c.id}
+          <TouchableOpacity
+            key={c.id}
             style={{ backgroundColor: c.bg, borderRadius: 16, padding: 14, alignItems: 'center', minWidth: 70 }}
-            onPress={() => onNav(`/(customer)/custom-order?cat=${c.id}`)}>
+            onPress={() => onNav(c.route)}   // ✅ each category routes correctly
+          >
             <Text style={{ fontSize: 26, marginBottom: 5 }}>{c.emoji}</Text>
             <Text style={{ fontSize: 11, fontWeight: '800', color: c.text, textAlign: 'center' }}>{c.label}</Text>
           </TouchableOpacity>

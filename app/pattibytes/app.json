@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Pattibytes Express",
-    "slug": "pattibytes",
+    "slug": "pbexpress",
     "scheme": "pattibytesexpress",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -17,7 +17,11 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.pattibytes.express",
       "infoPlist": {
-        "UIBackgroundModes": ["location", "fetch", "remote-notification"]
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -39,17 +43,32 @@
     },
     "plugins": [
       "expo-router",
-      ["expo-notifications", { "color": "#FF6B35" }],
-      ["expo-location", {
-        "locationAlwaysAndWhenInUsePermission": "Pattibytes needs your location for delivery tracking.",
-        "isIosBackgroundLocationEnabled": true
-      }]
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FF6B35",
+          "sounds": [],
+          "androidMode": "default"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Pattibytes needs your location for delivery tracking.",
+          "isIosBackgroundLocationEnabled": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false
     },
     "extra": {
-      "eas": { "projectId": "YOUR_EAS_PROJECT_ID" }
-    }
+      "eas": {
+        "projectId": "6267f6ac-c78a-4b5c-80bc-9502040fbf9c"
+      },
+      "router": {}
+    },
+    "owner": "pattibytes"
   }
 }

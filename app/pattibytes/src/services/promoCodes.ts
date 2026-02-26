@@ -11,7 +11,7 @@ export type PromoCode = {
   max_discount_amount: number | null
   scope: 'global' | 'merchant'
   merchant_id: string | null
-  deal_type: string | null   // 'cart_discount' | 'bxgy'
+  deal_type: string | null
   deal_json: any
   valid_from: string | null
   valid_until: string | null
@@ -23,9 +23,17 @@ export type PromoCode = {
   max_uses_per_user: number | null
 }
 
+// 🛡️ UUID guard — prevents "invalid input syntax for type uuid" errors
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export const promoCodeService = {
 
   async getActivePromos(merchantId?: string): Promise<PromoCode[]> {
+    // 🛡️ Skip entirely if merchantId is not a real UUID (e.g. "store", undefined route param)
+    if (merchantId !== undefined && !UUID_REGEX.test(merchantId)) {
+      return []
+    }
+
     const now = new Date().toISOString()
 
     let q = supabase
@@ -62,6 +70,10 @@ export const promoCodeService = {
     userId: string,
     opts?: { merchantId?: string }
   ): Promise<{ valid: boolean; discount: number; message: string; promoCode?: PromoCode }> {
+    // 🛡️ Guard merchantId before any query
+    if (opts?.merchantId && !UUID_REGEX.test(opts.merchantId)) {
+      return { valid: false, discount: 0, message: 'Invalid merchant' }
+    }
 
     const { data: promo, error } = await supabase
       .from('promo_codes')
@@ -146,7 +158,6 @@ export const promoCodeService = {
     userId: string,
     discount: number
   ): Promise<void> {
-    // Insert usage record
     await supabase.from('promo_usage').insert({
       promo_code_id: promoCodeId,
       order_id:      orderId,
@@ -154,15 +165,19 @@ export const promoCodeService = {
       discount:      discount,
       used_at:       new Date().toISOString(),
     })
-    // Increment used_count
-    await supabase.rpc('increment_promo_used_count', { promo_id: promoCodeId })
-      .then(({ error }) => {
-        if (error) {
-          // Fallback manual increment if RPC doesn't exist
-          supabase.from('promo_codes')
-            .update({ used_count: (usedCount: number) => usedCount + 1 })
-            .eq('id', promoCodeId)
-        }
-      })
+    // Increment used_count — with manual fallback
+    const { error } = await supabase.rpc('increment_promo_used_count', { promo_id: promoCodeId })
+    if (error) {
+      // Fallback: fetch current count then increment
+      const { data: current } = await supabase
+        .from('promo_codes')
+        .select('used_count')
+        .eq('id', promoCodeId)
+        .maybeSingle()
+      await supabase
+        .from('promo_codes')
+        .update({ used_count: (current?.used_count ?? 0) + 1 })
+        .eq('id', promoCodeId)
+    }
   },
 }

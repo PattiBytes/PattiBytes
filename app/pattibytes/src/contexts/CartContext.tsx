@@ -7,6 +7,8 @@ export type CartItem = {
   is_veg?: boolean | null; category?: string | null; merchant_id?: string
 }
 export type Cart = {
+  merchantid: string;
+  merchantname: any;
   merchant_id: string; merchant_name: string
   items: CartItem[]; subtotal: number
 }

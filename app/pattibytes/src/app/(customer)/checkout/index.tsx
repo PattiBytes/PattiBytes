@@ -13,7 +13,7 @@ import { useCart } from '../../../contexts/CartContext'
 import { COLORS } from '../../../lib/constants'
 import {
   getSavedAddresses, type SavedAddress,
-  getRoadDistanceKm,
+  getRoadDistanceKm, getDeliveryFeeFromHub, PATTI_HUB,
 } from '../../../services/location'
 import { promoCodeService, type PromoCode } from '../../../services/promoCodes'
 
@@ -46,15 +46,19 @@ type BxGyGift = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatAddr(a: SavedAddress): string {
-  const parts: string[] = [a.address]
-  if (a.apartment_floor) parts.push(`Flat/Floor: ${a.apartment_floor}`)
-  if (a.landmark) parts.push(`Landmark: ${a.landmark}`)
-  if (a.city) parts.push(a.city + (a.state ? `, ${a.state}` : ''))
-  if (a.postal_code) parts.push(a.postal_code)
-  return parts.filter(Boolean).join('\n')
+  return [
+    a.address,
+    a.apartment_floor ? `Flat/Floor: ${a.apartment_floor}` : '',
+    a.landmark        ? `Near: ${a.landmark}` : '',
+    [a.city, a.state].filter(Boolean).join(', '),
+    a.postal_code ?? '',
+  ].filter(Boolean).join('\n')
 }
 
-function calcFee(distKm: number, settings: AppSettings): { fee: number; breakdown: string } {
+function calcFee(
+  distKm: number,
+  settings: AppSettings,
+): { fee: number; breakdown: string } {
   const BASE_KM  = settings.base_delivery_radius_km ?? 3
   const BASE_FEE = 35
   const PER_KM   = settings.per_km_fee_beyond_base ?? 15
@@ -68,10 +72,10 @@ function calcFee(distKm: number, settings: AppSettings): { fee: number; breakdow
   }
 }
 
-// ─── BillRow ──────────────────────────────────────────────────────────────────
-function BillRow({
-  label, value, green, sub,
-}: { label: string; value: string; green?: boolean; sub?: string }) {
+// ─── Sub-components ───────────────────────────────────────────────────────────
+function BillRow({ label, value, green, sub }: {
+  label: string; value: string; green?: boolean; sub?: string
+}) {
   return (
     <View style={{ marginBottom: 8 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -85,10 +89,7 @@ function BillRow({
   )
 }
 
-// ─── PayMethodCard ────────────────────────────────────────────────────────────
-function PayMethodCard({
-  selected, emoji, label, sub, onPress, disabled,
-}: {
+function PayMethodCard({ selected, emoji, label, sub, onPress, disabled }: {
   selected: boolean; emoji: string; label: string
   sub?: string; onPress: () => void; disabled?: boolean
 }) {
@@ -97,6 +98,7 @@ function PayMethodCard({
       style={[S.payCard, selected && S.payCardActive, disabled && { opacity: 0.4 }]}
       onPress={onPress}
       disabled={disabled}
+      activeOpacity={0.8}
     >
       <Text style={{ fontSize: 24, marginRight: 12 }}>{emoji}</Text>
       <View style={{ flex: 1 }}>
@@ -115,11 +117,15 @@ export default function CheckoutPage() {
   const { user }        = useAuth()
   const router          = useRouter()
   const { cart, clearCart } = useCart()
+
   const params = useLocalSearchParams<{
     delivery_fee: string; delivery_distance: string; tax: string
     promo_code: string; promo_discount: string; final_total: string
     address_id: string; bxgy_gifts: string
   }>()
+
+  // ✅ Is this a custom/store order?
+  const isStoreOrder = cart?.merchant_id === 'store'
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [addresses,      setAddresses]      = useState<SavedAddress[]>([])
@@ -141,19 +147,21 @@ export default function CheckoutPage() {
     params.bxgy_gifts ? JSON.parse(params.bxgy_gifts) : []
   )
 
-  const [notes,        setNotes]       = useState('')
-  const [specialInst,  setSpecialInst] = useState('')
-  const [payMethod,    setPayMethod]   = useState<'cod' | 'online'>('cod')
+  const [notes,       setNotes]      = useState('')
+  const [specialInst, setSpecialInst]= useState('')
+  const [payMethod,   setPayMethod]  = useState<'cod' | 'online'>('cod')
 
+  // ✅ Live location — mandatory, auto-detected on mount
   const [liveLocation, setLiveLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locLoading,   setLocLoading]   = useState(false)
+  const [locRequired,  setLocRequired]  = useState(false) // shows warning if user skipped
 
-  const [appSettings,  setAppSettings]  = useState<AppSettings | null>(null)
-  const [merchantGeo,  setMerchantGeo]  = useState<MerchantGeo | null>(null)
-  const [gstEnabled,   setGstEnabled]   = useState(false)
-  const [gstPct,       setGstPct]       = useState(0)
-  const [placing,      setPlacing]      = useState(false)
-  const [loading,      setLoading]      = useState(true)
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null)
+  const [merchantGeo, setMerchantGeo] = useState<MerchantGeo | null>(null)
+  const [gstEnabled,  setGstEnabled]  = useState(false)
+  const [gstPct,      setGstPct]      = useState(0)
+  const [placing,     setPlacing]     = useState(false)
+  const [loading,     setLoading]     = useState(true)
 
   const watchRef   = useRef<Location.LocationSubscription | null>(null)
   const orderIdRef = useRef<string | null>(null)
@@ -169,35 +177,45 @@ export default function CheckoutPage() {
   }, [cart?.items])
 
   // ── Load ───────────────────────────────────────────────────────────────────
-  const loadCheckout = useCallback(async () => {
-    if (!user || !cart?.merchant_id) return
-    setLoading(true)
-    try {
-      const [{ data: appRow }, addrList, { data: merch }, promos] = await Promise.all([
-        supabase.from('app_settings')
-          .select('delivery_fee_enabled,base_delivery_radius_km,per_km_fee_beyond_base,hub_latitude,hub_longitude')
-          .limit(1).maybeSingle(),
-        getSavedAddresses(user.id),
-        supabase.from('merchants')
-          .select('latitude,longitude,gst_enabled,gst_percentage,phone')
-          .eq('id', cart.merchant_id).maybeSingle(),
-        promoCodeService.getActivePromos(cart.merchant_id),
-      ])
+const loadCheckout = useCallback(async () => {
+  if (!user) return
+  setLoading(true)
+  try {
+    // ✅ Await each query separately — fixes PostgrestBuilder vs Promise<any> TS error
+    const { data: appRow } = await supabase
+      .from('app_settings')
+      .select('delivery_fee_enabled,base_delivery_radius_km,per_km_fee_beyond_base,hub_latitude,hub_longitude')
+      .limit(1)
+      .maybeSingle()
 
-      const settings = (appRow ?? {
-        delivery_fee_enabled: true,
-        base_delivery_radius_km: 3,
-        per_km_fee_beyond_base: 15,
-      }) as AppSettings
-      setAppSettings(settings)
-      setShowDeliveryFee(settings.delivery_fee_enabled !== false)
+    const addrList = await getSavedAddresses(user.id)
 
-      setAddresses(addrList ?? [])
-      const addrId = params.address_id
-      const found  = addrId
-        ? addrList?.find(a => a.id === addrId)
-        : addrList?.find(a => a.is_default) ?? addrList?.[0]
-      setSelectedAddr(found ?? null)
+    const settings = (appRow ?? {
+      delivery_fee_enabled: true,
+      base_delivery_radius_km: 3,
+      per_km_fee_beyond_base: 15,
+      hub_latitude: null,
+      hub_longitude: null,
+    }) as AppSettings
+
+    setAppSettings(settings)
+    setShowDeliveryFee(settings.delivery_fee_enabled !== false)
+    setAddresses(addrList)
+
+    // ✅ Auto-select address passed from cart page, fallback to default/first
+    const addrId = params.address_id
+    const found  = addrId
+      ? addrList.find(a => a.id === addrId)
+      : addrList.find(a => a.is_default) ?? addrList[0]
+    setSelectedAddr(found ?? null)
+
+    // ✅ Only load merchant geo for real restaurant orders
+    if (!isStoreOrder && cart?.merchant_id) {
+      const { data: merch } = await supabase
+        .from('merchants')
+        .select('latitude,longitude,gst_enabled,gst_percentage,phone')
+        .eq('id', cart.merchant_id)
+        .maybeSingle()
 
       if (merch) {
         setMerchantGeo(merch as MerchantGeo)
@@ -205,52 +223,83 @@ export default function CheckoutPage() {
         setGstPct(Number(merch.gst_percentage ?? 0))
       }
 
+      const promos = await promoCodeService.getActivePromos(cart.merchant_id)
       setAvailablePromos(promos ?? [])
 
       // Re-validate promo passed from cart
-      if (params.promo_code && user) {
+      if (params.promo_code) {
         const res = await promoCodeService.validatePromoCode(
-          params.promo_code, subtotal, user.id, { merchantId: cart.merchant_id }
+          params.promo_code,
+          subtotal,
+          user.id,
+          { merchantId: cart.merchant_id }
         )
         if (res.valid && res.promoCode) {
           setAppliedPromo(res.promoCode)
-          setPromoDiscount(Number(params.promo_discount ?? res.discount))
+          setPromoDiscount(Number(params.promo_discount ?? res.discount ?? 0))
           if (res.promoCode.deal_type === 'bxgy' && params.bxgy_gifts) {
             setBxgyGifts(JSON.parse(params.bxgy_gifts))
           }
         }
       }
-    } catch (e: any) {
-      console.warn('checkout load', e.message)
-    } finally {
-      setLoading(false)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, cart?.merchant_id, params.address_id, params.promo_code])
+  } catch (e: any) {
+    console.warn('checkout load', e.message)
+  } finally {
+    setLoading(false)
+  }
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [user, cart?.merchant_id, params.address_id, params.promo_code, isStoreOrder])
+
 
   useEffect(() => { loadCheckout() }, [loadCheckout])
 
-  // ── Recompute delivery fee when address changes ────────────────────────────
+  // ── Auto-detect live location on mount (mandatory) ────────────────────────
   useEffect(() => {
-    if (!selectedAddr || !merchantGeo || !appSettings) return
-    if (!merchantGeo.latitude || !merchantGeo.longitude) return
-    if (!selectedAddr.latitude || !selectedAddr.longitude) return
+    detectLocation()
+   
+  }, [])
+
+  // ── Recalculate delivery fee when address changes ─────────────────────────
+  useEffect(() => {
+    if (!selectedAddr?.latitude || !selectedAddr?.longitude || !appSettings) return
     ;(async () => {
       try {
-        const dist = await getRoadDistanceKm(
-          merchantGeo.latitude!, merchantGeo.longitude!,
-          selectedAddr.latitude!, selectedAddr.longitude!
-        )
-        setDeliveryKm(dist)
-        const { fee, breakdown } = calcFee(dist, appSettings)
+        let distKm: number
+        let breakdown: string
+        let fee: number
+
+        if (isStoreOrder) {
+          // ✅ Custom/store orders: always calculate from Patti hub
+          const result = await getDeliveryFeeFromHub(
+            selectedAddr.latitude!, selectedAddr.longitude!, appSettings
+          )
+          distKm    = result.distKm
+          fee       = result.fee
+          breakdown = result.breakdown
+        } else if (merchantGeo?.latitude && merchantGeo?.longitude) {
+          // Regular restaurant order: merchant → customer
+          distKm = await getRoadDistanceKm(
+            merchantGeo.latitude!, merchantGeo.longitude!,
+            selectedAddr.latitude!, selectedAddr.longitude!
+          )
+          const result = calcFee(distKm, appSettings)
+          fee       = result.fee
+          breakdown = result.breakdown
+        } else {
+          return
+        }
+
+        setDeliveryKm(distKm)
         setDeliveryFee(showDeliveryFee ? fee : 0)
         setDeliveryBreakdown(breakdown)
       } catch {
-        const { fee, breakdown } = calcFee(0, appSettings)
-        setDeliveryFee(fee); setDeliveryBreakdown(breakdown)
+        const result = calcFee(0, appSettings)
+        setDeliveryFee(result.fee)
+        setDeliveryBreakdown(result.breakdown)
       }
     })()
-  }, [selectedAddr, merchantGeo, appSettings, showDeliveryFee])
+  }, [selectedAddr, merchantGeo, appSettings, showDeliveryFee, isStoreOrder])
 
   // ── Totals ─────────────────────────────────────────────────────────────────
   const taxAmount = useMemo(() => {
@@ -272,6 +321,12 @@ export default function CheckoutPage() {
     return Math.round((itemSavings + promoDiscount) * 100) / 100
   }, [cart?.items, promoDiscount])
 
+  const itemDiscountTotal = useMemo(() => (cart?.items ?? []).reduce((s, i) => {
+    const d = (i.discount_percentage ?? 0) > 0
+      ? i.price * (i.discount_percentage! / 100) * i.quantity : 0
+    return s + d
+  }, 0), [cart?.items])
+
   // ── Promo helpers ──────────────────────────────────────────────────────────
   const applyPromoObj = (promo: PromoCode) => {
     if (promo.deal_type === 'bxgy') {
@@ -280,14 +335,10 @@ export default function CheckoutPage() {
       setPromoDiscount(Math.round(freeVal * 100) / 100)
       return
     }
-    let disc = 0
-    if (promo.discount_type === 'percentage') {
-      disc = subtotal * (promo.discount_value / 100)
-      if ((promo.max_discount_amount ?? 0) > 0)
-        disc = Math.min(disc, promo.max_discount_amount!)
-    } else {
-      disc = promo.discount_value
-    }
+    let disc = promo.discount_type === 'percentage'
+      ? subtotal * (promo.discount_value / 100)
+      : promo.discount_value
+    if ((promo.max_discount_amount ?? 0) > 0) disc = Math.min(disc, promo.max_discount_amount!)
     setAppliedPromo(promo)
     setPromoDiscount(Math.round(disc * 100) / 100)
     setBxgyGifts([])
@@ -310,17 +361,23 @@ export default function CheckoutPage() {
     }
   }
 
-  // ── Live location ──────────────────────────────────────────────────────────
+  // ── Live location (mandatory) ──────────────────────────────────────────────
   const detectLocation = async () => {
     setLocLoading(true)
     try {
       const { status } = await Location.requestForegroundPermissionsAsync()
       if (status !== 'granted') {
-        Alert.alert('Permission denied', 'Location permission required.')
+        Alert.alert(
+          'Location Required',
+          'Live location is required so our driver can find you. Please allow location access.',
+          [{ text: 'OK' }]
+        )
+        setLocRequired(true)
         return
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
       setLiveLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+      setLocRequired(false)
     } catch (e: any) {
       Alert.alert('Location Error', e.message)
     } finally {
@@ -328,11 +385,12 @@ export default function CheckoutPage() {
     }
   }
 
+  // ✅ Continuous location watch — starts after order is placed
   const startWatch = useCallback(async () => {
     if (watchRef.current || !orderIdRef.current) return
     watchRef.current = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.Balanced, timeInterval: 8000, distanceInterval: 20 },
-      async (pos) => {
+      async pos => {
         const { latitude: lat, longitude: lng } = pos.coords
         setLiveLocation({ lat, lng })
         if (orderIdRef.current) {
@@ -349,7 +407,18 @@ export default function CheckoutPage() {
   // ── Place Order ────────────────────────────────────────────────────────────
   const handlePlaceOrder = async () => {
     if (!user || !cart?.items?.length || !selectedAddr) {
-      Alert.alert('Incomplete', 'Please add a delivery address.')
+      Alert.alert('Incomplete', 'Please select a delivery address.')
+      return
+    }
+    if (!liveLocation) {
+      Alert.alert(
+        'Location Required',
+        'Live location is mandatory to track your delivery. Please allow location access.',
+        [
+          { text: 'Allow Now', onPress: detectLocation },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      )
       return
     }
     if (payMethod === 'online') {
@@ -359,12 +428,13 @@ export default function CheckoutPage() {
 
     setPlacing(true)
     try {
+      // ── Order number ──────────────────────────────────────────────────────
       const { count } = await supabase.from('orders')
         .select('*', { count: 'exact', head: true })
       const orderNum = (count ?? 0) + 1
-      const eta = new Date(Date.now() + 40 * 60 * 1000)
+      const eta = new Date(Date.now() + 45 * 60 * 1000).toISOString()
 
-      // ── Build base items ──────────────────────────────────────────────────
+      // ── Build items list ──────────────────────────────────────────────────
       const orderItems = cart.items.map(i => ({
         id:                  i.id,
         menu_item_id:        i.id,
@@ -378,19 +448,17 @@ export default function CheckoutPage() {
         merchant_id:         cart.merchant_id,
         is_free:             false,
         free_qty:            0,
+        // ✅ custom product flag
+        is_custom_product:   isStoreOrder,
       }))
 
-      // ── Inject BxGy free items properly ──────────────────────────────────
-      // Rules:
-      //   - If item already in cart: add a separate "FREE" line-item at ₹0
-      //   - If item not in cart: push new line-item with price ₹0
+      // ── Inject BxGy free items ────────────────────────────────────────────
       for (const gift of bxgyGifts) {
-        // Always add as a separate FREE line so merchant sees it clearly
         orderItems.push({
           id:                  `${gift.menuItemId}_free`,
           menu_item_id:        gift.menuItemId,
           name:                `${gift.name} 🎁 FREE`,
-          price:               0,           // ← ₹0 so total reduces correctly
+          price:               0,
           quantity:            gift.qty,
           discount_percentage: 100,
           image_url:           null,
@@ -399,40 +467,91 @@ export default function CheckoutPage() {
           merchant_id:         cart.merchant_id,
           is_free:             true,
           free_qty:            gift.qty,
+          is_custom_product:   false,
         })
       }
 
-      const { data: order, error } = await supabase.from('orders').insert({
+      // ── Build order payload ───────────────────────────────────────────────
+      const orderPayload: Record<string, any> = {
         customer_id:             user.id,
-        merchant_id:             cart.merchant_id,
+        merchant_id:             isStoreOrder ? null : cart.merchant_id,
         order_number:            orderNum,
+        order_type:              isStoreOrder ? 'store' : 'restaurant', // ✅ new column
         status:                  'pending',
-        subtotal:                subtotal,
+        subtotal,
         delivery_fee:            showDeliveryFee ? deliveryFee : 0,
         tax:                     taxAmount,
         discount:                promoDiscount,
         total_amount:            finalTotal,
         payment_method:          payMethod,
         payment_status:          'pending',
+        // Address
         delivery_address:        formatAddr(selectedAddr),
-        delivery_latitude:       selectedAddr.latitude ?? null,
+        delivery_address_label:  selectedAddr.label,              // ✅ Home/Work/Other
+        delivery_address_id:     selectedAddr.id,                 // ✅ FK to saved_addresses
+        delivery_latitude:       selectedAddr.latitude  ?? null,
         delivery_longitude:      selectedAddr.longitude ?? null,
         delivery_distance_km:    deliveryKm > 0 ? parseFloat(deliveryKm.toFixed(2)) : null,
+        // Recipient
         customer_phone:          selectedAddr.recipient_phone ?? null,
+        recipient_name:          selectedAddr.recipient_name  ?? null,  // ✅ new column
+        // Notes
         special_instructions:    specialInst.trim() || null,
         customer_notes:          notes.trim() || null,
+        delivery_instructions:   selectedAddr.delivery_instructions ?? null,  // ✅ from address
+        // Promo
         promo_code:              appliedPromo?.code ?? null,
-        customer_location:       liveLocation
-          ? { ...liveLocation, updated_at: new Date().toISOString() } : null,
+        promo_id:                appliedPromo?.id   ?? null,       // ✅ new FK
+        // Live location (mandatory)
+        customer_location: {
+          lat:        liveLocation.lat,
+          lng:        liveLocation.lng,
+          updated_at: new Date().toISOString(),
+        },
+        // Items
         items:                   orderItems,
-        preparation_time:        30,
-        estimated_delivery_time: eta.toISOString(),
+        // Timing
+        preparation_time:        isStoreOrder ? 15 : 30,
+        estimated_delivery_time: eta,
         created_at:              new Date().toISOString(),
-      }).select().single()
+        // Hub origin (for store orders)
+        hub_origin: isStoreOrder
+          ? { lat: PATTI_HUB.lat, lng: PATTI_HUB.lng, label: 'Patti, Punjab 143416' }
+          : null,
+      }
+
+      const { data: order, error } = await supabase
+        .from('orders')
+        .insert(orderPayload)
+        .select()
+        .single()
 
       if (error) throw error
 
-      // ── Record promo usage ─────────────────────────────────────────────
+      // ── For store/custom-product orders: also insert into custom_product_orders ──
+      if (isStoreOrder && order) {
+        await supabase.from('custom_product_orders').insert({
+          order_id:            order.id,
+          customer_id:         user.id,
+          items:               orderItems,
+          total_amount:        finalTotal,
+          delivery_fee:        showDeliveryFee ? deliveryFee : 0,
+          delivery_distance_km: deliveryKm > 0 ? parseFloat(deliveryKm.toFixed(2)) : null,
+          hub_lat:             PATTI_HUB.lat,
+          hub_lng:             PATTI_HUB.lng,
+          delivery_address:    formatAddr(selectedAddr),
+          delivery_latitude:   selectedAddr.latitude  ?? null,
+          delivery_longitude:  selectedAddr.longitude ?? null,
+          customer_location:   orderPayload.customer_location,
+          status:              'pending',
+          payment_method:      payMethod,
+          special_instructions: specialInst.trim() || null,
+          customer_notes:       notes.trim() || null,
+          created_at:           new Date().toISOString(),
+        })
+      }
+
+      // ── Record promo usage ────────────────────────────────────────────────
       if (appliedPromo && order) {
         await supabase.from('promo_usage').insert({
           promo_code_id: appliedPromo.id,
@@ -441,14 +560,13 @@ export default function CheckoutPage() {
           discount:      promoDiscount,
           used_at:       new Date().toISOString(),
         })
-        // Increment used_count
         await supabase.from('promo_codes')
           .update({ used_count: (appliedPromo.used_count ?? 0) + 1 })
           .eq('id', appliedPromo.id)
       }
 
       orderIdRef.current = order.id
-      startWatch()
+      startWatch()   // ✅ Start continuous location tracking after order placed
       clearCart()
       router.replace(`/(customer)/orders/${order.id}` as any)
 
@@ -470,37 +588,69 @@ export default function CheckoutPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
-      <Stack.Screen options={{ title: 'Checkout' }} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen options={{
+        title: isStoreOrder ? 'Checkout — Store Order' : 'Checkout',
+        headerStyle: { backgroundColor: COLORS.primary },
+        headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '800' },
+      }} />
 
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
 
-          {/* ── Step 1: Delivery Address ────────────────────────────── */}
+          {/* ── Store order banner ────────────────────────────────────── */}
+          {isStoreOrder && (
+            <View style={S.storeBanner}>
+              <Text style={{ fontSize: 22, marginRight: 10 }}>🛍️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '800', color: '#5B21B6', fontSize: 14 }}>PBExpress Store Order</Text>
+                <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                  Items dispatched from Patti, Punjab 143416
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* ── Step 1: Delivery Address ──────────────────────────────── */}
           <View style={S.section}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Text style={S.secTitle}>📍 Delivery Address</Text>
-              <TouchableOpacity onPress={() => setShowAddrModal(true)}>
+              <TouchableOpacity
+                onPress={() => addresses.length > 0
+                  ? setShowAddrModal(true)
+                  : router.push('/(customer)/addresses' as any)
+                }
+                style={S.changeBtnSmall}
+              >
                 <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 13 }}>
-                  {addresses.length === 0 ? 'Add' : 'Change'}
+                  {addresses.length === 0 ? '+ Add' : '⇄ Change'}
                 </Text>
               </TouchableOpacity>
             </View>
 
             {selectedAddr ? (
               <View>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-                  <View style={S.addrIcon}>
-                    <Text style={{ fontSize: 18 }}>
+                {/* ✅ Pre-filled address card */}
+                <View style={S.addrCard}>
+                  <View style={S.addrIconBox}>
+                    <Text style={{ fontSize: 20 }}>
                       {selectedAddr.label === 'Home' ? '🏠'
                         : selectedAddr.label === 'Work' ? '🏢' : '📍'}
                     </Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: '800', color: COLORS.text, fontSize: 15 }}>
-                      {selectedAddr.label}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontWeight: '800', color: COLORS.text, fontSize: 15 }}>
+                        {selectedAddr.label}
+                      </Text>
+                      {selectedAddr.is_default && (
+                        <View style={S.defaultTag}>
+                          <Text style={{ color: COLORS.primary, fontSize: 9, fontWeight: '800' }}>DEFAULT</Text>
+                        </View>
+                      )}
+                    </View>
                     {!!selectedAddr.recipient_name && (
-                      <Text style={{ fontSize: 12, color: '#6B7280' }}>
+                      <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
                         {selectedAddr.recipient_name}
                         {selectedAddr.recipient_phone ? ` · ${selectedAddr.recipient_phone}` : ''}
                       </Text>
@@ -511,23 +661,64 @@ export default function CheckoutPage() {
                     {!!selectedAddr.delivery_instructions && (
                       <View style={S.instrBox}>
                         <Text style={{ fontSize: 12, color: '#92400E' }}>
-                          {`📋 ${selectedAddr.delivery_instructions}`}
+                          📋 {selectedAddr.delivery_instructions}
                         </Text>
                       </View>
                     )}
                   </View>
                 </View>
+
+                {/* Delivery distance/fee info */}
                 {showDeliveryFee && !!deliveryBreakdown && (
-                  <View style={{ backgroundColor: '#F0F9FF', borderRadius: 8, padding: 10, marginTop: 10 }}>
-                    <Text style={{ fontSize: 12, color: '#0369A1', fontWeight: '600' }}>
-                      {`🚚 Delivery: ${deliveryBreakdown}`}
+                  <View style={S.feeInfoBox}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 12, color: '#0369A1', fontWeight: '700' }}>
+                        🚚 Delivery Fee
+                      </Text>
+                      <Text style={{ fontSize: 14, color: '#0369A1', fontWeight: '900' }}>
+                        ₹{deliveryFee}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 3 }}>
+                      {deliveryBreakdown}
                     </Text>
                     {deliveryKm > 0 && (
                       <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
-                        {`Distance: ${deliveryKm.toFixed(1)} km`}
+                        Distance: {deliveryKm.toFixed(1)} km
+                        {isStoreOrder ? ' from Patti hub' : ' from restaurant'}
                       </Text>
                     )}
                   </View>
+                )}
+
+                {/* Quick address chips */}
+                {addresses.length > 1 && (
+                  <ScrollView
+                    horizontal showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8, marginTop: 12 }}
+                  >
+                    {addresses.map(a => (
+                      <TouchableOpacity
+                        key={a.id}
+                        style={[S.addrChip, selectedAddr.id === a.id && S.addrChipActive]}
+                        onPress={() => setSelectedAddr(a)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{
+                          fontSize: 12, fontWeight: '700',
+                          color: selectedAddr.id === a.id ? '#fff' : COLORS.text,
+                        }}>
+                          {a.label === 'Home' ? '🏠 ' : a.label === 'Work' ? '🏢 ' : '📍 '}{a.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity
+                      style={[S.addrChip, { borderStyle: 'dashed', borderColor: COLORS.primary }]}
+                      onPress={() => router.push('/(customer)/addresses' as any)}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.primary }}>＋ Add</Text>
+                    </TouchableOpacity>
+                  </ScrollView>
                 )}
               </View>
             ) : (
@@ -536,76 +727,127 @@ export default function CheckoutPage() {
                 onPress={() => router.push('/(customer)/addresses' as any)}
               >
                 <Text style={{ fontSize: 24 }}>📍</Text>
-                <Text style={{ fontWeight: '700', color: COLORS.primary, marginLeft: 12 }}>
-                  Add a delivery address
-                </Text>
+                <View style={{ marginLeft: 12 }}>
+                  <Text style={{ fontWeight: '700', color: COLORS.primary, fontSize: 14 }}>
+                    Add a delivery address
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>Required to place order</Text>
+                </View>
               </TouchableOpacity>
             )}
           </View>
 
-          {/* ── Step 2: Live Location ───────────────────────────────── */}
+          {/* ── Step 2: Live Location (MANDATORY) ────────────────────── */}
           <View style={S.section}>
-            <Text style={S.secTitle}>📡 Live Location (optional)</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={[S.secTitle, { flex: 1, marginBottom: 0 }]}>📡 Live Location</Text>
+              <View style={{
+                backgroundColor: '#FEF3C7', borderRadius: 6,
+                paddingHorizontal: 8, paddingVertical: 3,
+              }}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: '#92400E' }}>REQUIRED</Text>
+              </View>
+            </View>
             <Text style={{ fontSize: 12, color: '#6B7280', marginBottom: 12 }}>
-              Share your real-time location so the driver finds you easily.
+              Your live location is mandatory so our driver can find you easily.
             </Text>
+
             <TouchableOpacity
-              style={[S.locBtn, !!liveLocation && { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
+              style={[S.locBtn, !!liveLocation && S.locBtnActive]}
               onPress={detectLocation}
               disabled={locLoading}
+              activeOpacity={0.8}
             >
               {locLoading
                 ? <ActivityIndicator color={COLORS.primary} size="small" />
-                : <Text style={{ fontSize: 18 }}>{liveLocation ? '✅' : '📍'}</Text>
+                : <Text style={{ fontSize: 20 }}>{liveLocation ? '✅' : '📍'}</Text>
               }
-              <Text style={{
-                marginLeft: 10, fontWeight: '700',
-                color: liveLocation ? '#065F46' : COLORS.primary, fontSize: 14,
-              }}>
-                {liveLocation
-                  ? `Location shared (${liveLocation.lat.toFixed(4)}, ${liveLocation.lng.toFixed(4)})`
-                  : 'Share my location'
-                }
-              </Text>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={{
+                  fontWeight: '700',
+                  color: liveLocation ? '#065F46' : COLORS.primary,
+                  fontSize: 14,
+                }}>
+                  {locLoading
+                    ? 'Detecting…'
+                    : liveLocation
+                      ? 'Location shared ✓'
+                      : 'Share my current location'
+                  }
+                </Text>
+                {liveLocation && (
+                  <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
+                    {liveLocation.lat.toFixed(5)}, {liveLocation.lng.toFixed(5)}
+                  </Text>
+                )}
+              </View>
+              {liveLocation && (
+                <TouchableOpacity onPress={detectLocation} style={{ padding: 4 }}>
+                  <Text style={{ fontSize: 11, color: COLORS.primary, fontWeight: '700' }}>Refresh</Text>
+                </TouchableOpacity>
+              )}
             </TouchableOpacity>
+
+            {locRequired && !liveLocation && (
+              <View style={S.locWarning}>
+                <Text style={{ fontSize: 12, color: '#991B1B', fontWeight: '600' }}>
+                  ⚠️ Location is required to place the order. Tap above to allow.
+                </Text>
+              </View>
+            )}
           </View>
 
-          {/* ── Step 3: Order Items ─────────────────────────────────── */}
+          {/* ── Step 3: Order Items ───────────────────────────────────── */}
           <View style={S.section}>
             <Text style={S.secTitle}>
-              {`🧾 Order Items (${cart.items.length})`}
+              🧾 Order Items ({cart.items.length})
+              {isStoreOrder ? ' — Store Products' : ''}
             </Text>
 
-            {/* Regular items */}
+            {/* Restaurant info if not store */}
+            {!isStoreOrder && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, backgroundColor: '#F9FAFB', borderRadius: 10, padding: 10 }}>
+                <Text style={{ fontSize: 16 }}>🏪</Text>
+                <Text style={{ fontWeight: '700', color: COLORS.text, fontSize: 13 }}>
+                  {cart.merchant_name}
+                </Text>
+              </View>
+            )}
+
+            {/* Items list */}
             {cart.items.map((item, idx) => {
               const hasDisc  = (item.discount_percentage ?? 0) > 0
               const effPrice = hasDisc
                 ? item.price * (1 - item.discount_percentage! / 100)
                 : item.price
               return (
-                <View key={item.id ?? idx}
-                  style={S.orderItemRow}>
+                <View key={item.id ?? idx} style={S.orderItemRow}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
                     <Text style={{ fontWeight: '700', color: COLORS.text, fontSize: 13 }}>
                       {item.name}
                     </Text>
+                    {!!item.category && (
+                      <Text style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>
+                        {item.category}
+                      </Text>
+                    )}
                     {hasDisc && (
                       <Text style={{ fontSize: 11, color: '#9CA3AF' }}>
-                        {`₹${item.price} → ₹${effPrice.toFixed(0)} (${item.discount_percentage}% off)`}
+                        ₹{item.price} → ₹{effPrice.toFixed(0)} ({item.discount_percentage}% off)
                       </Text>
                     )}
                   </View>
                   <Text style={{ color: '#6B7280', marginHorizontal: 8, fontSize: 13 }}>
-                    {`×${item.quantity}`}
+                    ×{item.quantity}
                   </Text>
                   <Text style={{ fontWeight: '700', color: COLORS.text, fontSize: 13 }}>
-                    {`₹${(effPrice * item.quantity).toFixed(0)}`}
+                    ₹{(effPrice * item.quantity).toFixed(0)}
                   </Text>
                 </View>
               )
             })}
 
-            {/* ✅ BxGy FREE items — shown clearly with ₹0 and green FREE badge */}
+            {/* BxGy free items */}
             {bxgyGifts.length > 0 && (
               <View style={S.freeItemsBox}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
@@ -624,131 +866,123 @@ export default function CheckoutPage() {
                 {bxgyGifts.map((g, i) => (
                   <View key={i} style={S.freeItemRow}>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontWeight: '700', color: '#047857', fontSize: 13 }}>
-                        {g.name}
-                      </Text>
+                      <Text style={{ fontWeight: '700', color: '#047857', fontSize: 13 }}>{g.name}</Text>
                       <Text style={{ fontSize: 11, color: '#6B7280' }}>
-                        {`Original price: ₹${g.price.toFixed(0)}`}
+                        Original: ₹{g.price.toFixed(0)}
                       </Text>
                     </View>
-                    <Text style={{ color: '#6B7280', marginHorizontal: 8 }}>
-                      {`×${g.qty}`}
-                    </Text>
+                    <Text style={{ color: '#6B7280', marginHorizontal: 8 }}>×{g.qty}</Text>
                     <View style={S.freeBadge}>
                       <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>FREE</Text>
                     </View>
                   </View>
                 ))}
                 <View style={{ borderTopWidth: 1, borderTopColor: '#A7F3D0', marginTop: 8, paddingTop: 8, flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ color: '#065F46', fontWeight: '700', fontSize: 13 }}>
-                    Free items value
-                  </Text>
+                  <Text style={{ color: '#065F46', fontWeight: '700', fontSize: 13 }}>Free items value</Text>
                   <Text style={{ color: '#065F46', fontWeight: '800', fontSize: 13 }}>
-                    {`-₹${bxgyGifts.reduce((s, g) => s + g.price * g.qty, 0).toFixed(0)}`}
+                    −₹{bxgyGifts.reduce((s, g) => s + g.price * g.qty, 0).toFixed(0)}
                   </Text>
                 </View>
               </View>
             )}
           </View>
 
-          {/* ── Step 4: Promo Code ──────────────────────────────────── */}
-          <View style={S.section}>
-            <Text style={S.secTitle}>🏷️ Promo Code</Text>
+          {/* ── Step 4: Promo Code (only for restaurant orders) ───────── */}
+          {!isStoreOrder && (
+            <View style={S.section}>
+              <Text style={S.secTitle}>🏷️ Promo Code</Text>
 
-            {!appliedPromo ? (
-              <>
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                  <TextInput
-                    style={[S.input, { flex: 1 }]}
-                    placeholder="Enter promo code"
-                    value={promoInput}
-                    onChangeText={t => setPromoInput(t.toUpperCase())}
-                    placeholderTextColor="#9CA3AF"
-                    autoCapitalize="characters"
-                  />
-                  <TouchableOpacity
-                    style={[S.applyBtn, (!promoInput.trim() || applyingPromo) && { opacity: 0.5 }]}
-                    onPress={handleApplyPromo}
-                    disabled={!promoInput.trim() || applyingPromo}
-                  >
-                    {applyingPromo
-                      ? <ActivityIndicator color="#fff" size="small" />
-                      : <Text style={{ color: '#fff', fontWeight: '700' }}>Apply</Text>
-                    }
+              {!appliedPromo ? (
+                <>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                    <TextInput
+                      style={[S.input, { flex: 1 }]}
+                      placeholder="Enter promo code"
+                      value={promoInput}
+                      onChangeText={t => setPromoInput(t.toUpperCase())}
+                      placeholderTextColor="#9CA3AF"
+                      autoCapitalize="characters"
+                    />
+                    <TouchableOpacity
+                      style={[S.applyBtn, (!promoInput.trim() || applyingPromo) && { opacity: 0.45 }]}
+                      onPress={handleApplyPromo}
+                      disabled={!promoInput.trim() || applyingPromo}
+                    >
+                      {applyingPromo
+                        ? <ActivityIndicator color="#fff" size="small" />
+                        : <Text style={{ color: '#fff', fontWeight: '700' }}>Apply</Text>
+                      }
+                    </TouchableOpacity>
+                  </View>
+
+                  {availablePromos.length > 0 && (
+                    <>
+                      <TouchableOpacity onPress={() => setShowPromoList(v => !v)}>
+                        <Text style={{ color: COLORS.primary, fontWeight: '600', fontSize: 13 }}>
+                          {showPromoList
+                            ? 'Hide offers'
+                            : `${availablePromos.length} offer${availablePromos.length !== 1 ? 's' : ''} available`
+                          }
+                        </Text>
+                      </TouchableOpacity>
+                      {showPromoList && availablePromos.map(p => {
+                        const label = p.deal_type === 'bxgy'
+                          ? `Buy ${(p.deal_json as any)?.buy?.qty ?? 1} Get ${(p.deal_json as any)?.get?.qty ?? 1} FREE`
+                          : p.discount_type === 'percentage'
+                            ? `${p.discount_value}% OFF`
+                            : `₹${p.discount_value} OFF`
+                        return (
+                          <TouchableOpacity key={p.id} style={S.promoItem} onPress={() => applyPromoObj(p)}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontWeight: '800', color: COLORS.primary }}>{p.code}</Text>
+                              {!!p.description && (
+                                <Text style={{ fontSize: 12, color: '#4B5563' }}>{p.description}</Text>
+                              )}
+                              {(p.min_order_amount ?? 0) > 0 && (
+                                <Text style={{ fontSize: 11, color: '#9CA3AF' }}>
+                                  Min order ₹{p.min_order_amount}
+                                </Text>
+                              )}
+                            </View>
+                            <View style={S.promoBadge}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#065F46' }}>{label}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        )
+                      })}
+                    </>
+                  )}
+                </>
+              ) : (
+                <View style={S.appliedPromo}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: '800', color: '#065F46' }}>
+                      {appliedPromo.deal_type === 'bxgy'
+                        ? `🎁 ${appliedPromo.code} — Buy ${(appliedPromo.deal_json as any)?.buy?.qty ?? 1} Get ${(appliedPromo.deal_json as any)?.get?.qty ?? 1} FREE`
+                        : `🏷️ ${appliedPromo.code}`}
+                    </Text>
+                    {promoDiscount > 0 && (
+                      <Text style={{ fontSize: 12, color: '#047857' }}>
+                        Saving ₹{promoDiscount.toFixed(2)}
+                      </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity onPress={() => { setAppliedPromo(null); setPromoDiscount(0); setBxgyGifts([]) }}>
+                    <Text style={{ color: '#EF4444', fontWeight: '700' }}>Remove</Text>
                   </TouchableOpacity>
                 </View>
+              )}
+            </View>
+          )}
 
-                {availablePromos.length > 0 && (
-                  <>
-                    <TouchableOpacity onPress={() => setShowPromoList(v => !v)}>
-                      <Text style={{ color: COLORS.primary, fontWeight: '600', fontSize: 13 }}>
-                        {showPromoList
-                          ? 'Hide offers'
-                          : `${availablePromos.length} offer${availablePromos.length !== 1 ? 's' : ''} available`
-                        }
-                      </Text>
-                    </TouchableOpacity>
-                    {showPromoList && availablePromos.map(p => {
-                      const label = p.deal_type === 'bxgy'
-                        ? `Buy ${(p.deal_json as any)?.buy?.qty ?? 1} Get ${(p.deal_json as any)?.get?.qty ?? 1} FREE`
-                        : p.discount_type === 'percentage'
-                          ? `${p.discount_value}% OFF`
-                          : `₹${p.discount_value} OFF`
-                      return (
-                        <TouchableOpacity
-                          key={p.id} style={S.promoItem}
-                          onPress={() => applyPromoObj(p)}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontWeight: '800', color: COLORS.primary }}>{p.code}</Text>
-                            {!!p.description && (
-                              <Text style={{ fontSize: 12, color: '#4B5563' }}>{p.description}</Text>
-                            )}
-                            {(p.min_order_amount ?? 0) > 0 && (
-                              <Text style={{ fontSize: 11, color: '#9CA3AF' }}>
-                                {`Min order ₹${p.min_order_amount}`}
-                              </Text>
-                            )}
-                          </View>
-                          <View style={S.promoBadge}>
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#065F46' }}>{label}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      )
-                    })}
-                  </>
-                )}
-              </>
-            ) : (
-              <View style={S.appliedPromo}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '800', color: '#065F46' }}>
-                    {appliedPromo.deal_type === 'bxgy'
-                      ? `🎁 ${appliedPromo.code} — Buy ${(appliedPromo.deal_json as any)?.buy?.qty ?? 1} Get ${(appliedPromo.deal_json as any)?.get?.qty ?? 1} FREE`
-                      : `🏷️ ${appliedPromo.code}`
-                    }
-                  </Text>
-                  {promoDiscount > 0 && (
-                    <Text style={{ fontSize: 12, color: '#047857' }}>
-                      {`Saving ₹${promoDiscount.toFixed(2)}`}
-                    </Text>
-                  )}
-                </View>
-                <TouchableOpacity onPress={() => {
-                  setAppliedPromo(null); setPromoDiscount(0); setBxgyGifts([])
-                }}>
-                  <Text style={{ color: '#EF4444', fontWeight: '700' }}>Remove</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-
-          {/* ── Step 5: Notes ──────────────────────────────────────── */}
+          {/* ── Step 5: Notes ────────────────────────────────────────── */}
           <View style={S.section}>
             <Text style={S.secTitle}>📝 Notes</Text>
             <TextInput
               style={S.input}
-              placeholder="Special instructions for the restaurant?"
+              placeholder={isStoreOrder
+                ? 'Special packing instructions or requests…'
+                : 'Special instructions for the restaurant?'}
               value={specialInst}
               onChangeText={setSpecialInst}
               multiline numberOfLines={2}
@@ -766,7 +1000,7 @@ export default function CheckoutPage() {
             />
           </View>
 
-          {/* ── Step 6: Payment Method ─────────────────────────────── */}
+          {/* ── Step 6: Payment Method ────────────────────────────────── */}
           <View style={S.section}>
             <Text style={S.secTitle}>💳 Payment Method</Text>
             <PayMethodCard
@@ -784,25 +1018,15 @@ export default function CheckoutPage() {
             />
           </View>
 
-          {/* ── Step 7: Bill Summary ───────────────────────────────── */}
+          {/* ── Step 7: Bill Summary ──────────────────────────────────── */}
           <View style={S.section}>
             <Text style={S.secTitle}>🧾 Bill Summary</Text>
 
             <BillRow label="Item Total" value={`₹${subtotal.toFixed(2)}`} />
 
-            {/* Item-level discounts */}
-            {(() => {
-              const saved = (cart.items ?? []).reduce((s, i) => {
-                const d = (i.discount_percentage ?? 0) > 0
-                  ? i.price * (i.discount_percentage! / 100) * i.quantity : 0
-                return s + d
-              }, 0)
-              return saved > 0
-                ? <BillRow label="Item Discounts" value={`-₹${saved.toFixed(2)}`} green />
-                : null
-            })()}
-
-            {/* Promo discount */}
+            {itemDiscountTotal > 0 && (
+              <BillRow label="Item Discounts" value={`-₹${itemDiscountTotal.toFixed(2)}`} green />
+            )}
             {promoDiscount > 0 && (
               <BillRow
                 label={`Promo (${appliedPromo?.code ?? ''})`}
@@ -810,11 +1034,9 @@ export default function CheckoutPage() {
                 green
                 sub={appliedPromo?.deal_type === 'bxgy'
                   ? `🎁 ${bxgyGifts.length} free item${bxgyGifts.length !== 1 ? 's' : ''} deducted`
-                  : undefined
-                }
+                  : undefined}
               />
             )}
-
             {showDeliveryFee && (
               <BillRow
                 label="Delivery Fee"
@@ -822,7 +1044,6 @@ export default function CheckoutPage() {
                 sub={deliveryBreakdown || undefined}
               />
             )}
-
             {gstEnabled && gstPct > 0 && (
               <BillRow label={`GST (${gstPct}%)`} value={`₹${taxAmount.toFixed(2)}`} />
             )}
@@ -830,72 +1051,102 @@ export default function CheckoutPage() {
             <View style={S.totalRow}>
               <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>Total</Text>
               <Text style={{ fontSize: 22, fontWeight: '900', color: COLORS.primary }}>
-                {`₹${finalTotal.toFixed(2)}`}
+                ₹{finalTotal.toFixed(2)}
               </Text>
             </View>
 
             {totalSavings > 0 && (
               <View style={{ backgroundColor: '#F0FDF4', borderRadius: 10, padding: 10, marginTop: 12 }}>
                 <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 13, textAlign: 'center' }}>
-                  {`🎉 You saved ₹${totalSavings.toFixed(2)} on this order!`}
+                  🎉 You saved ₹{totalSavings.toFixed(2)} on this order!
                 </Text>
               </View>
             )}
           </View>
 
-          <View style={{ height: 10 }} />
+          {/* Cancellation note */}
+          <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+            <Text style={{ fontSize: 11, color: '#9CA3AF', textAlign: 'center', lineHeight: 16 }}>
+              By placing this order you agree to our terms.{'\n'}
+              Cancellation charges may apply once order is confirmed.
+            </Text>
+          </View>
+
         </ScrollView>
 
         {/* ── Place Order Bar ───────────────────────────────────────── */}
         <View style={S.placeBar}>
           <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={{ color: '#6B7280', fontSize: 12 }}>
-              {payMethod === 'cod' ? 'Cash on Delivery' : 'Online Payment'}
+            <Text style={{ color: '#6B7280', fontSize: 11 }}>
+              {payMethod === 'cod' ? '💵 Cash on Delivery' : '📱 Online'}
+              {liveLocation ? '  ·  📡 Live' : ''}
             </Text>
             <Text style={{ fontWeight: '900', color: COLORS.text, fontSize: 18 }}>
-              {`₹${finalTotal.toFixed(2)}`}
+              ₹{finalTotal.toFixed(2)}
             </Text>
             {totalSavings > 0 && (
               <Text style={{ fontSize: 11, color: '#15803D' }}>
-                {`Saved ₹${totalSavings.toFixed(0)}`}
+                Saved ₹{totalSavings.toFixed(0)}
               </Text>
             )}
           </View>
           <TouchableOpacity
-            style={[S.placeBtn, (placing || !selectedAddr) && { opacity: 0.6 }]}
+            style={[
+              S.placeBtn,
+              (placing || !selectedAddr || !liveLocation) && { opacity: 0.55 },
+            ]}
             onPress={handlePlaceOrder}
-            disabled={placing || !selectedAddr}
+            disabled={placing || !selectedAddr || !liveLocation}
+            activeOpacity={0.85}
           >
             {placing
               ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
-                  {`Place Order ₹${finalTotal.toFixed(0)}`}
+              : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
+                  {!liveLocation
+                    ? '📍 Location Required'
+                    : `Place Order  ₹${finalTotal.toFixed(0)}`
+                  }
                 </Text>
             }
           </TouchableOpacity>
         </View>
-
       </KeyboardAvoidingView>
 
-      {/* ── Address Select Modal ──────────────────────────────────── */}
-      <Modal visible={showAddrModal} transparent animationType="slide">
+      {/* ── Address Select Modal ──────────────────────────────────────── */}
+      <Modal visible={showAddrModal} transparent animationType="slide" onRequestClose={() => setShowAddrModal(false)}>
         <View style={S.modalOverlay}>
           <View style={S.addrModal}>
-            <Text style={{ fontSize: 17, fontWeight: '900', color: COLORS.text, marginBottom: 16 }}>
-              Select Address
-            </Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={S.sheetHandle} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 17, fontWeight: '900', color: COLORS.text }}>
+                Select Address
+              </Text>
+              <TouchableOpacity onPress={() => setShowAddrModal(false)}>
+                <Text style={{ fontSize: 22, color: '#9CA3AF' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 360 }}>
               {addresses.map(a => (
                 <TouchableOpacity
                   key={a.id}
                   style={[S.addrRow, selectedAddr?.id === a.id && S.addrRowActive]}
                   onPress={() => { setSelectedAddr(a); setShowAddrModal(false) }}
+                  activeOpacity={0.8}
                 >
-                  <Text style={{ fontSize: 20, marginRight: 10 }}>
-                    {a.label === 'Home' ? '🏠' : a.label === 'Work' ? '🏢' : '📍'}
-                  </Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: '800', color: COLORS.text }}>{a.label}</Text>
+                  <View style={[S.addrIconBox, { width: 38, height: 38 }]}>
+                    <Text style={{ fontSize: 18 }}>
+                      {a.label === 'Home' ? '🏠' : a.label === 'Work' ? '🏢' : '📍'}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontWeight: '800', color: COLORS.text }}>{a.label}</Text>
+                      {a.is_default && (
+                        <View style={{ backgroundColor: '#FFF3EE', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1, borderWidth: 1, borderColor: COLORS.primary }}>
+                          <Text style={{ fontSize: 8, fontWeight: '800', color: COLORS.primary }}>DEFAULT</Text>
+                        </View>
+                      )}
+                    </View>
                     {!!a.recipient_name && (
                       <Text style={{ fontSize: 12, color: '#6B7280' }}>{a.recipient_name}</Text>
                     )}
@@ -904,20 +1155,20 @@ export default function CheckoutPage() {
                     </Text>
                   </View>
                   {selectedAddr?.id === a.id && (
-                    <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' }}>
+                    <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <Text style={{ color: '#fff', fontSize: 12 }}>✓</Text>
                     </View>
                   )}
                 </TouchableOpacity>
               ))}
               <TouchableOpacity
-                style={{ backgroundColor: '#F3F4F6', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 8 }}
+                style={{ backgroundColor: '#FFF3EE', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 8, borderWidth: 1.5, borderColor: COLORS.primary }}
                 onPress={() => { setShowAddrModal(false); router.push('/(customer)/addresses' as any) }}
               >
                 <Text style={{ color: COLORS.primary, fontWeight: '700' }}>+ Add New Address</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={{ alignItems: 'center', paddingVertical: 12, marginTop: 4 }}
+                style={{ alignItems: 'center', paddingVertical: 14, marginTop: 4 }}
                 onPress={() => setShowAddrModal(false)}
               >
                 <Text style={{ color: '#6B7280', fontWeight: '600' }}>Cancel</Text>
@@ -932,32 +1183,49 @@ export default function CheckoutPage() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
+  storeBanner:   { margin: 16, marginBottom: 0, backgroundColor: '#F5F3FF', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#DDD6FE' },
   section:       { backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 10, borderRadius: 16, padding: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
   secTitle:      { fontSize: 15, fontWeight: '800', color: COLORS.text, marginBottom: 12 },
-  addrIcon:      { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FFF3EE', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  changeBtnSmall:{ backgroundColor: '#FFF3EE', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: COLORS.primary + '60' },
+  // Address card
+  addrCard:      { flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#F9FAFB', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: COLORS.primary + '30' },
+  addrIconBox:   { width: 40, height: 40, borderRadius: 10, backgroundColor: '#FFF3EE', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  defaultTag:    { backgroundColor: '#FFF3EE', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: COLORS.primary },
   instrBox:      { backgroundColor: '#FFFBEB', borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: '#FDE68A' },
+  feeInfoBox:    { backgroundColor: '#EFF6FF', borderRadius: 10, padding: 10, marginTop: 10, borderWidth: 1, borderColor: '#BFDBFE' },
+  addrChip:      { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#F3F4F6', borderWidth: 1.5, borderColor: 'transparent' },
+  addrChipActive:{ backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   addAddrBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF3EE', borderRadius: 12, padding: 16, borderWidth: 1.5, borderColor: '#FED7AA' },
+  // Location
   locBtn:        { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF3EE', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#FED7AA' },
+  locBtnActive:  { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+  locWarning:    { backgroundColor: '#FEF2F2', borderRadius: 8, padding: 10, marginTop: 10, borderWidth: 1, borderColor: '#FECACA' },
+  // Items
   orderItemRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  // ✅ Free items box
   freeItemsBox:  { backgroundColor: '#ECFDF5', borderRadius: 12, padding: 12, marginTop: 10, borderWidth: 1.5, borderColor: '#A7F3D0' },
   freeItemRow:   { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#D1FAE5' },
   freeBadge:     { backgroundColor: '#16A34A', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  // Promo
   input:         { borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: COLORS.text },
   applyBtn:      { backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   promoItem:     { flexDirection: 'row', alignItems: 'center', padding: 12, borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, marginTop: 8 },
   promoBadge:    { backgroundColor: '#ECFDF5', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   appliedPromo:  { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: 12, padding: 12, borderWidth: 1.5, borderColor: '#BBF7D0' },
+  // Payment
   payCard:       { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 2, borderColor: 'transparent' },
   payCardActive: { borderColor: COLORS.primary, backgroundColor: '#FFF3EE' },
   radio:         { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#D1D5DB', alignItems: 'center', justifyContent: 'center' },
   radioActive:   { borderColor: COLORS.primary },
   radioDot:      { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primary },
+  // Bill
   totalRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, borderTopWidth: 2, borderTopColor: '#F3F4F6', marginTop: 6 },
+  // Place bar
   placeBar:      { backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, paddingBottom: Platform.OS === 'ios' ? 34 : 14, borderTopWidth: 1, borderTopColor: '#F3F4F6', elevation: 10 },
   placeBtn:      { backgroundColor: COLORS.primary, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 14, alignItems: 'center' },
+  // Modal
   modalOverlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  addrModal:     { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36, maxHeight: '80%' },
+  addrModal:     { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 24 },
+  sheetHandle:   { width: 40, height: 4, backgroundColor: '#E5E7EB', borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   addrRow:       { flexDirection: 'row', alignItems: 'flex-start', padding: 14, borderRadius: 14, borderWidth: 2, borderColor: 'transparent', marginBottom: 8, backgroundColor: '#F9FAFB' },
   addrRowActive: { borderColor: COLORS.primary, backgroundColor: '#FFF3EE' },
 })

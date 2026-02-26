@@ -3,6 +3,9 @@ import { supabase } from '../lib/supabase'
 
 const LOCATIONIQ_KEY = process.env.EXPO_PUBLIC_LOCATIONIQ_KEY!
 
+// ✅ Fixed hub — Patti, Punjab 143416
+export const PATTI_HUB = { lat: 31.2837165, lng: 74.8471140 }
+
 export type SavedAddress = {
   id: string
   label: string
@@ -26,7 +29,6 @@ export type SavedAddress = {
 export async function getCurrentCoords(): Promise<{ lat: number; lng: number }> {
   const { status } = await Location.requestForegroundPermissionsAsync()
   if (status !== 'granted') throw new Error('Location permission denied')
-
   const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
   return { lat: pos.coords.latitude, lng: pos.coords.longitude }
 }
@@ -40,9 +42,9 @@ export async function reverseGeocode(lat: number, lng: number): Promise<{
     )
     const data = await res.json()
     return {
-      address: data.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-      city: data.address?.city || data.address?.town || data.address?.village || '',
-      state: data.address?.state || '',
+      address:     data.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+      city:        data.address?.city || data.address?.town || data.address?.village || '',
+      state:       data.address?.state || '',
       postal_code: data.address?.postcode || '',
     }
   } catch {
@@ -57,7 +59,7 @@ export async function getRoadDistanceKm(
     const url =
       `https://us1.locationiq.com/v1/directions/driving/${lon1},${lat1};${lon2},${lat2}` +
       `?key=${LOCATIONIQ_KEY}&overview=false`
-    const res = await fetch(url)
+    const res  = await fetch(url)
     const data = await res.json()
     const meters = data?.routes?.[0]?.distance
     if (meters && Number.isFinite(Number(meters))) return Number(meters) / 1000
@@ -68,7 +70,7 @@ export async function getRoadDistanceKm(
 }
 
 export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371
+  const R    = 6371
   const toRad = (d: number) => (d * Math.PI) / 180
   const dLat = toRad(lat2 - lat1)
   const dLon = toRad(lon2 - lon1)
@@ -86,28 +88,61 @@ export function calculateDeliveryFee(
   return Math.ceil(opts.baseFee + (distKm - opts.baseKm) * opts.perKmBeyond)
 }
 
+/**
+ * ✅ Calculate delivery fee from Patti hub to a customer address.
+ * Used for both regular orders (when hub coords not in app_settings)
+ * and CUSTOM ORDERS (always uses Patti hub as origin).
+ */
+export async function getDeliveryFeeFromHub(
+  customerLat: number,
+  customerLng: number,
+  settings: { base_delivery_radius_km: number; per_km_fee_beyond_base: number } | null,
+  hubOverride?: { lat: number; lng: number },
+): Promise<{ fee: number; distKm: number; breakdown: string }> {
+  const hub     = hubOverride ?? PATTI_HUB
+  const BASE_KM = settings?.base_delivery_radius_km ?? 3
+  const BASE_FEE = 35
+  const PER_KM  = settings?.per_km_fee_beyond_base ?? 15
+
+  const distKm = await getRoadDistanceKm(hub.lat, hub.lng, customerLat, customerLng)
+
+  if (distKm <= BASE_KM) {
+    return { fee: BASE_FEE, distKm, breakdown: `Base ₹${BASE_FEE} (within ${BASE_KM} km of Patti)` }
+  }
+  const extra = Math.ceil((distKm - BASE_KM) * PER_KM)
+  return {
+    fee:       BASE_FEE + extra,
+    distKm,
+    breakdown: `₹${BASE_FEE} + ₹${extra} (${(distKm - BASE_KM).toFixed(1)} km × ₹${PER_KM}/km from Patti)`,
+  }
+}
+
 export async function getSavedAddresses(userId: string): Promise<SavedAddress[]> {
   const { data, error } = await supabase
     .from('saved_addresses')
     .select('*')
     .eq('customer_id', userId)
     .order('is_default', { ascending: false })
-    .order('created_at', { ascending: false })
-
+    .order('created_at',  { ascending: false })
   if (error) return []
   return (data || []) as SavedAddress[]
 }
 
 export async function getDefaultAddress(userId: string): Promise<SavedAddress | null> {
   const addrs = await getSavedAddresses(userId)
-  return addrs.find((a) => a.is_default || a.isdefault) || addrs[0] || null
+  return addrs.find(a => a.is_default || a.isdefault) || addrs[0] || null
 }
 
-export async function saveAddress(payload: Partial<SavedAddress> & { customer_id: string }): Promise<SavedAddress | null> {
+export async function saveAddress(
+  payload: Partial<SavedAddress> & { customer_id: string }
+): Promise<SavedAddress | null> {
   if (payload.is_default) {
-    await supabase.from('saved_addresses').update({ is_default: false }).eq('customer_id', payload.customer_id)
+    await supabase.from('saved_addresses')
+      .update({ is_default: false })
+      .eq('customer_id', payload.customer_id)
   }
-  const { data, error } = await supabase.from('saved_addresses').insert([payload]).select().single()
+  const { data, error } = await supabase
+    .from('saved_addresses').insert([payload]).select().single()
   if (error) throw error
   return data as SavedAddress
 }
