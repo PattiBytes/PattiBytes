@@ -1,4 +1,6 @@
 // app.config.js
+const IOS_URL_SCHEME = "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt";
+
 export default {
   expo: {
     name: "Pattibytes Express",
@@ -46,8 +48,6 @@ export default {
 
     plugins: [
       "expo-router",
-
-      // Expo Notifications config plugin
       [
         "expo-notifications",
         {
@@ -57,8 +57,6 @@ export default {
           androidMode: "default",
         },
       ],
-
-      // Location
       [
         "expo-location",
         {
@@ -67,8 +65,6 @@ export default {
           isIosBackgroundLocationEnabled: true,
         },
       ],
-
-      // Build props
       [
         "expo-build-properties",
         {
@@ -79,25 +75,17 @@ export default {
         },
       ],
 
-      // ✅ Native Google Sign-In (Expo without Firebase)
-      // You MUST set iosUrlScheme to the "Reversed client ID"
-      // format: com.googleusercontent.apps.xxxxxxxx [web:302]
-   [
-  "@react-native-google-signin/google-signin",
-  {
-    iosUrlScheme: process.env.EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME
-  }
-]
+      // Native Google Sign-In (Expo without Firebase): iosUrlScheme is required. [web:302]
+      [
+        "@react-native-google-signin/google-signin",
+        { iosUrlScheme: IOS_URL_SCHEME },
+      ],
     ],
 
-    experiments: {
-      typedRoutes: false,
-    },
+    experiments: { typedRoutes: false },
 
     extra: {
-      eas: {
-        projectId: "6267f6ac-c78a-4b5c-80bc-9502040fbf9c",
-      },
+      eas: { projectId: "6267f6ac-c78a-4b5c-80bc-9502040fbf9c" },
       router: {},
     },
 
