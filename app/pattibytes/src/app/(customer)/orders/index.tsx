@@ -72,7 +72,7 @@ type OrderRow = {
   delivery_distance_km: number | null
   merchant_name?: string
 }
-
+ 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(iso: string) {
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)

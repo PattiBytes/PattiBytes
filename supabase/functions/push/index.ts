@@ -1,16 +1,17 @@
+/// <reference types="jsr:@supabase/functions-js/edge-runtime.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-// eslint-disable-next-line
-import { createClient } from "@supabase/supabase-js";
 
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 type NotificationRecord = {
   id: string;
-  user_id: string;
-  title: string | null;
-  message: string | null;
-  body: string | null;
-  type: string | null; // "order" | "promo" | ...
-  data: any;           // jsonb can arrive as object or string
+  user_id?: string | null;   // support both
+  userid?: string | null;    // <-- your DB uses this in app code
+  title?: string | null;
+  message?: string | null;
+  body?: string | null;
+  type?: string | null;
+  data?: any;
 };
 
 type WebhookPayload = {
@@ -34,13 +35,10 @@ function safeJsonParse(v: any) {
 
 function buildPushData(record: NotificationRecord) {
   const data = safeJsonParse(record.data);
-
-  // ensure keys exist for routing
-  const orderId = data.orderId ?? data.order_id ?? null;
+  const orderId = data.orderId ?? data.orderid ?? data.order_id ?? null;
 
   return {
     ...data,
-    // force standard keys your app listens for
     type: data.type ?? (record.type === "order" ? "order_update" : record.type ?? "general"),
     orderId,
     order_id: orderId,
@@ -60,16 +58,22 @@ Deno.serve(async (req: Request) => {
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   const rec = payload.record;
+  const userId = rec.user_id ?? rec.userid ?? null;
 
-  // Fetch tokens for this user
+  if (!userId) {
+    return new Response(JSON.stringify({ ok: true, sent: 0, reason: "missing user id" }), {
+      headers: { "Content-Type": "application/json" },
+      status: 200,
+    });
+  }
+
   const { data: tokens, error } = await supabase
     .from("device_push_tokens")
     .select("expo_push_token")
-    .eq("user_id", rec.user_id);
+    .eq("user_id", userId);
 
   if (error) {
     console.error("[push] token query error:", error);

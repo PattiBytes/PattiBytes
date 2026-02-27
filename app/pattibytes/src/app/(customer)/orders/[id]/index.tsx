@@ -11,12 +11,18 @@ import { COLORS } from '../../../../lib/constants'
 import { MapView, Marker, Polyline } from '../../../../components/MapView'
 import Constants from 'expo-constants'
 import * as Device from 'expo-device'
+import type { Region } from 'react-native-maps'
 // ✅ REMOVED: import * as Notifications from 'expo-notifications'
 // ✅ REMOVED: import { navigateFromNotification, markNotificationRead } from '../../../../services/notifications'
 // Notifications are lazy-loaded below only on real device builds
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type OrderDetail = {
+  // camelCase coordinate fields used by the UI (nullable)
+  deliverylatitude?: number | null
+  deliverylongitude?: number | null
+  // hub origin in camelCase (nullable) — keep flexible to match returned payloads
+  huborigin?: { lat?: number | null; lng?: number | null; label?: string | null } | null
   id: string; order_number: number; status: string
   order_type: string | null
   subtotal: number; delivery_fee: number; tax: number; discount: number
@@ -45,6 +51,8 @@ type MerchantInfo = {
 }
 
 type DriverInfo = { full_name: string | null; phone: string | null }
+type LatLng = { latitude: number; longitude: number }
+
 
 // ─── Timeline ─────────────────────────────────────────────────────────────────
 const TIMELINE = [
@@ -52,7 +60,7 @@ const TIMELINE = [
   { key: 'confirmed',  label: 'Confirmed',        emoji: '✅' },
   { key: 'preparing',  label: 'Preparing',        emoji: '👨‍🍳' },
   { key: 'ready',      label: 'Ready for Pickup', emoji: '📦' },
-  { key: 'pickedup',   label: 'Picked Up',        emoji: '🛵' },
+  { key: 'picked_up',   label: 'Picked Up',        emoji: '🛵' },
   { key: 'on_the_way', label: 'On the Way',       emoji: '🚀' },
   { key: 'delivered',  label: 'Delivered',        emoji: '🎉' },
 ]
@@ -62,13 +70,13 @@ const STORE_TIMELINE = [
   { key: 'confirmed',  label: 'Order Confirmed', emoji: '✅' },
   { key: 'preparing',  label: 'Packing Items',   emoji: '📦' },
   { key: 'ready',      label: 'Ready to Ship',   emoji: '🚚' },
-  { key: 'pickedup',   label: 'Dispatched',      emoji: '🛵' },
+  { key: 'picked_up',   label: 'Dispatched',      emoji: '🛵' },
   { key: 'on_the_way', label: 'On the Way',      emoji: '🚀' },
   { key: 'delivered',  label: 'Delivered',       emoji: '🎉' },
 ]
 
-const STATUS_ORDER  = ['pending','confirmed','preparing','ready','pickedup','on_the_way','delivered']
-const ACTIVE        = ['pending','confirmed','preparing','ready','assigned','pickedup','on_the_way']
+const STATUS_ORDER  = ['pending','confirmed','preparing','ready','picked_up','on_the_way','delivered']
+const ACTIVE        = ['pending','confirmed','preparing','ready','assigned','picked_up','on_the_way','out_for_delivery', 'delivered']
 const CANCELLABLE   = ['pending','confirmed']
 
 const CANCEL_REASONS = [
@@ -294,17 +302,35 @@ export default function OrderDetailPage() {
   const currentStep = STATUS_ORDER.indexOf(order.status)
   const timeline    = isStore ? STORE_TIMELINE : TIMELINE
 
-  const deliveryCoords = order.delivery_latitude && order.delivery_longitude
-    ? { latitude: +order.delivery_latitude, longitude: +order.delivery_longitude } : null
-  const merchantCoords = merchant?.latitude && merchant?.longitude
-    ? { latitude: +merchant.latitude, longitude: +merchant.longitude } : null
-  const hubCoords = order.hub_origin
-    ? { latitude: order.hub_origin.lat, longitude: order.hub_origin.lng } : null
-  const mapCenter = driverCoords ?? merchantCoords ?? hubCoords ?? deliveryCoords
+ 
+
+const toLatLng = (lat?: number | null, lng?: number | null): LatLng | null =>
+  typeof lat === 'number' && typeof lng === 'number'
+    ? { latitude: lat, longitude: lng }
+    : null
+
+const deliveryCoords = toLatLng(order?.deliverylatitude, order?.deliverylongitude)
+const merchantCoords = toLatLng(merchant?.latitude, merchant?.longitude)
+const hubCoords = toLatLng(order?.huborigin?.lat, order?.huborigin?.lng)
+// driverCoords already looks like LatLng in your state; ensure it is exactly LatLng|null
+
+const mapCenter: LatLng | null =
+  driverCoords ?? merchantCoords ?? hubCoords ?? deliveryCoords
+
+const hasCenter = !!mapCenter
+
+const initialRegion: Region | undefined = mapCenter
+  ? { ...mapCenter, latitudeDelta: 0.02, longitudeDelta: 0.02 }
+  : undefined
+
+const liveRegion: Region | undefined = driverCoords
+  ? { ...driverCoords, latitudeDelta: 0.015, longitudeDelta: 0.015 }
+  : initialRegion
 
   const STAR_LABELS: Record<number, string> = {
     5: '🎉 Excellent!', 4: '😊 Good', 3: '😐 Okay', 2: '😕 Not great', 1: '😢 Poor',
   }
+  
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
@@ -357,17 +383,14 @@ export default function OrderDetailPage() {
         </View>
 
         {/* ── Live Map ──────────────────────────────────────────────────── */}
-        {isActive && mapCenter && (
-          <MapView
-            style={S.map}
-            provider="google"
-            initialRegion={{ ...mapCenter, latitudeDelta: 0.02, longitudeDelta: 0.02 }}
-            region={driverCoords
-              ? { ...driverCoords, latitudeDelta: 0.015, longitudeDelta: 0.015 }
-              : { ...mapCenter, latitudeDelta: 0.02, longitudeDelta: 0.02 }
-            }
-            showsUserLocation
-          >
+     {isActive && initialRegion ? (
+  <MapView
+    style={S.map}
+    provider="google"
+    initialRegion={initialRegion}
+    region={liveRegion}
+    showsUserLocation
+  >
             {merchantCoords && (
               <Marker coordinate={merchantCoords} title={merchant?.business_name ?? 'Restaurant'} pinColor="#FF6B35" />
             )}
@@ -386,8 +409,12 @@ export default function OrderDetailPage() {
                 strokeColor={COLORS.primary} strokeWidth={3} lineDashPattern={[6, 3]}
               />
             )}
-          </MapView>
-        )}
+  </MapView>
+) : isActive ? (
+  <View style={{ padding: 12 }}>
+    <Text style={{ color: COLORS.textMuted }}>Tracking will appear once location is available.</Text>
+  </View>
+) : null}
 
         {/* ── Status Timeline ───────────────────────────────────────────── */}
         {!isCancelled && (

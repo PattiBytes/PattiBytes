@@ -1,71 +1,64 @@
+// src/contexts/AuthContext.tsx
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { getMyProfile, type Profile } from '../lib/profile'
+import type { User } from '@supabase/supabase-js'
 
 type AuthCtx = {
-  user_metadata: any
-  email: any
-  id(arg0: string, id: any): unknown
-  user: any | null
+  user: User | null
   profile: Profile | null
   loading: boolean
   refreshProfile: () => Promise<void>
 }
 
-const AuthContext = createContext<AuthCtx>({
-  user: null,
-  profile: null,
-  loading: true,
-  refreshProfile: async () => {},
-})
+const AuthContext = createContext<AuthCtx | undefined>(undefined)
+
+export function useAuth() {
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
+  return ctx
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser]       = useState<any | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
-  const mountedRef             = useRef(true)
+
+  const mounted = useRef(true)
 
   const loadProfile = useCallback(async (uid: string) => {
     const p = await getMyProfile(uid)
-    if (mountedRef.current) setProfile(p)
+    if (mounted.current) setProfile(p)
     return p
   }, [])
 
   const refreshProfile = useCallback(async () => {
-    if (user?.id) await loadProfile(user.id)
+    if (!user?.id) return
+    await loadProfile(user.id)
   }, [user?.id, loadProfile])
 
   useEffect(() => {
-    mountedRef.current = true
+    mounted.current = true
 
-    // 1. Restore existing session on app open
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mountedRef.current) return
+    ;(async () => {
+      const { data } = await supabase.auth.getSession()
       const u = data.session?.user ?? null
+      if (!mounted.current) return
       setUser(u)
-      if (u) {
-        await loadProfile(u.id)
-      }
+      if (u) await loadProfile(u.id)
       setLoading(false)
-    })
+    })()
 
-    // 2. Listen for sign-in / sign-out / token refresh
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mountedRef.current) return
-
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const u = session?.user ?? null
+      if (!mounted.current) return
       setUser(u)
-
-      if (u) {
-        // Keep loading=false; profile update will trigger RootGuard re-run via state
-        await loadProfile(u.id)
-      } else {
-        setProfile(null)
-      }
+      if (u) await loadProfile(u.id)
+      else setProfile(null)
     })
 
     return () => {
-      mountedRef.current = false
+      mounted.current = false
       sub.subscription.unsubscribe()
     }
   }, [loadProfile])
@@ -76,5 +69,3 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   )
 }
-
-export const useAuth = () => useContext(AuthContext)

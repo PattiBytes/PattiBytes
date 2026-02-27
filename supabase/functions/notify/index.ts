@@ -16,7 +16,7 @@ function json(status: number, payload: unknown) {
     status,
     headers: { "Content-Type": "application/json" },
   });
-}
+} 
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json(405, { error: "Method not allowed" });
