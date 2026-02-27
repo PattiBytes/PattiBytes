@@ -1,22 +1,20 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 // src/lib/notificationHandler.ts
 import Constants from 'expo-constants'
 import * as Device from 'expo-device'
 import { Platform } from 'react-native'
 
-// ✅ Expo Go guard — single source of truth
 export const isExpoGo =
   Constants.appOwnership === 'expo' ||
   (Constants as any).executionEnvironment === 'storeClient'
 
 export const canUsePush =
   Device.isDevice &&
-  !(Platform.OS === 'android' && isExpoGo)
+  !isExpoGo
 
-// ✅ Safe lazy loader — never runs expo-notifications in Expo Go
 function getN(): any | null {
   if (isExpoGo) return null
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require('expo-notifications')
   } catch {
     return null
@@ -32,11 +30,11 @@ export function initNotificationHandler(): void {
   if (!N) return
   N.setNotificationHandler({
     handleNotification: async () => ({
-      shouldShowAlert:  true,
-      shouldPlaySound:  true,
-      shouldSetBadge:   true,
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
       shouldShowBanner: true,
-      shouldShowList:   true,
+      shouldShowList: true,
     }),
   })
   if (Platform.OS === 'android') {
@@ -52,13 +50,15 @@ export function initNotificationHandler(): void {
       importance: N.AndroidImportance.DEFAULT,
       sound: 'default',
     }).catch(() => {})
+    N.setNotificationChannelAsync('default', {
+      name: 'General',
+      importance: N.AndroidImportance.DEFAULT,
+      sound: 'default',
+    }).catch(() => {})
   }
 }
 
-// ✅ These are the stubs _layout.tsx needs — safe no-ops in Expo Go
-export function addReceivedListener(
-  cb: (n: any) => void
-): { remove: () => void } {
+export function addReceivedListener(cb: (n: any) => void): { remove: () => void } {
   const N = getN()
   if (!N) return { remove: () => {} }
   try {
@@ -69,9 +69,7 @@ export function addReceivedListener(
   }
 }
 
-export function addResponseListener(
-  cb: (r: any) => void
-): { remove: () => void } {
+export function addResponseListener(cb: (r: any) => void): { remove: () => void } {
   const N = getN()
   if (!N) return { remove: () => {} }
   try {
@@ -90,6 +88,12 @@ export async function registerForPushNotifications(
   if (!N) return null
   initNotificationHandler()
   try {
+    if (Platform.OS === 'android') {
+      await N.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: N.AndroidImportance.MAX,
+      })
+    }
     const { status: existing } = await N.getPermissionsAsync()
     let finalStatus = existing
     if (existing !== 'granted') {
@@ -97,20 +101,39 @@ export async function registerForPushNotifications(
       finalStatus = status
     }
     if (finalStatus !== 'granted') return null
+
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
-      (Constants as any).easConfig?.projectId ??
-      ''
+      (Constants as any).easConfig?.projectId ?? ''
     if (!projectId) {
       console.warn('[push] No EAS projectId in Constants')
       return null
     }
+
     const token = (await N.getExpoPushTokenAsync({ projectId })).data
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+
     const { supabase } = require('../lib/supabase')
-    await supabase.from('profiles')
-      .update({ push_token: token, push_token_updated_at: new Date().toISOString() })
+
+    // Save to device_push_tokens table
+    await supabase.from('device_push_tokens').upsert(
+      {
+        user_id: userId,
+        expo_push_token: token,
+        platform: Platform.OS,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'expo_push_token' }
+    )
+
+    // Also keep push_token on profiles for quick lookups
+    await supabase
+      .from('profiles')
+      .update({
+        push_token: token,
+        push_token_updated_at: new Date().toISOString(),
+      })
       .eq('id', userId)
+
     return token
   } catch (e) {
     console.warn('[push] registerForPushNotifications failed:', e)

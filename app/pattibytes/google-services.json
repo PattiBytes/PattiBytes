@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:63217087314:android:b2af6ce0dfdd47c073408b",
+        "android_client_info": {
+          "package_name": "com.pattibytes.express"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2c-hG9sfHoa3p8dL0NueJd6G0WdzZx8E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:63217087314:android:1da09dc6dc2216ed73408b",
         "android_client_info": {
           "package_name": "com.thrillyverse.pattibytesexpress"

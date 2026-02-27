@@ -5,24 +5,20 @@
     "requireCommit": false
   },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "APP_VARIANT": "development" }
+    },
     "preview": {
       "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      },
-      "env": {
-        "EAS_PROJECT_ROOT": "app/pattibytes",
-        "APP_VARIANT": "preview"
-      }
+      "android": { "buildType": "apk" },
+      "env": { "APP_VARIANT": "preview" }
     },
     "production": {
       "autoIncrement": true,
-      "android": {
-        "buildType": "app-bundle"
-      },
-      "env": {
-        "EAS_PROJECT_ROOT": "app/pattibytes"
-      }
+      "android": { "buildType": "app-bundle" }
     }
   },
   "submit": {

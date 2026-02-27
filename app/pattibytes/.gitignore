@@ -41,3 +41,15 @@ app-example
 # generated native folders
 /ios
 /android
+
+
+# Firebase service account private key
+app/pattibytes/pattibytes-express-firebase-adminsdk-fbsvc-e269dfc8f0.json
+
+# google-services (managed via EAS secret)
+app/pattibytes/google-services.json
+
+# Local env
+app/pattibytes/.env
+app/pattibytes/.env.*
+app/pattibytes/.env*.local
