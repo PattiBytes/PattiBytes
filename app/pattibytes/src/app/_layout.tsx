@@ -3,27 +3,18 @@ import React, { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, View } from 'react-native'
 import { Slot, useRouter, useSegments } from 'expo-router'
 import NetInfo from '@react-native-community/netinfo'
+import Constants from 'expo-constants'
+
 import { AuthProvider, useAuth } from '../contexts/AuthContext'
 import { CartProvider } from '../contexts/CartContext'
 import { supabase } from '../lib/supabase'
-import {
-  initNotificationHandler,
-  addReceivedListener,
-  addResponseListener,
-  registerForPushNotifications,
-} from '../lib/notificationHandler'
-import * as Notifications from 'expo-notifications'
-
-initNotificationHandler()
 
 function extractOrderId(data: any): string | null {
   return data?.orderId ?? data?.order_id ?? null
 }
 
 function isOrderUpdate(data: any): boolean {
-  // Primary: data.type (recommended)
   if (data?.type === 'order_update') return true
-  // Fallback: if your server sends { type: "order" } in data
   if (data?.type === 'order') return true
   return false
 }
@@ -43,7 +34,10 @@ function RootGuard() {
   const inAuthGroup = segments[0] === '(auth)'
   const isOfflinePage = (segments as string[]).includes('offline')
 
-  // Network monitoring (same as yours)
+  // Expo Go check: in SDK 53+, remote push via expo-notifications is not supported in Expo Go. [web:59]
+  const isExpoGo = Constants.appOwnership === 'expo'
+
+  // ── Network monitoring ────────────────────────────────────────────────
   useEffect(() => {
     const unsub = NetInfo.addEventListener(state => {
       const offline = state.isConnected === false
@@ -66,46 +60,78 @@ function RootGuard() {
     return () => unsub()
   }, [router, user, profile, isOfflinePage])
 
-  // Notification handling (foreground/background/killed)
+  // ── Notification handling (safe for Expo Go) ──────────────────────────
   useEffect(() => {
+    if (isExpoGo) {
+      // Avoid importing expo-notifications / registering remote push in Expo Go SDK 53+. [web:59]
+      return
+    }
+
+    let removeTapListener: (() => void) | null = null
+    let mounted = true
+
     const goToOrder = (orderId: string) => {
       router.push({ pathname: '/(customer)/orders/[id]', params: { id: orderId } } as any)
     }
 
-    // 1) Cold start: user tapped notification and app opened from closed state [web:45]
     ;(async () => {
+      // Lazy imports so Expo Go doesn’t crash at module import time. [web:59]
+      const Notifications = await import('expo-notifications')
+      const notif = await import('../lib/notificationHandler')
+
+      // Run once (init sets handler + channels, etc.)
+      notif.initNotificationHandler()
+
+      // Cold start: opened from killed state [web:45]
       const last = await Notifications.getLastNotificationResponseAsync()
-      if (!last) return
-      const data = last.notification.request.content.data as any
-      const orderId = extractOrderId(data)
-      if (orderId && isOrderUpdate(data)) goToOrder(orderId)
+      if (last && mounted) {
+        const data = last.notification.request.content.data as any
+        const orderId = extractOrderId(data)
+        if (orderId && isOrderUpdate(data)) goToOrder(orderId)
+      }
+
+      // Listener via your wrapper (kept for compatibility with your existing code)
+      receivedRef.current = notif.addReceivedListener(() => {})
+
+      responseRef.current = notif.addResponseListener((res: any) => {
+        const data = res?.notification?.request?.content?.data ?? {}
+        const orderId = extractOrderId(data)
+
+        if (orderId && isOrderUpdate(data)) goToOrder(orderId)
+        if (data?.type === 'new_order') router.push('/(driver)/dashboard' as any)
+      })
+
+      // Also add direct tap listener (extra safety)
+      const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response?.notification?.request?.content?.data ?? {}
+        const orderId = extractOrderId(data)
+        if (orderId && isOrderUpdate(data)) goToOrder(orderId)
+      })
+      removeTapListener = () => sub.remove()
     })()
 
-    // 2) Runtime listeners [web:164]
-    receivedRef.current = addReceivedListener(() => {})
-    responseRef.current = addResponseListener((res: any) => {
-      const data = res?.notification?.request?.content?.data ?? {}
-      const orderId = extractOrderId(data)
-
-      if (orderId && isOrderUpdate(data)) goToOrder(orderId)
-      if (data?.type === 'new_order') router.push('/(driver)/dashboard' as any)
-    })
-
     return () => {
+      mounted = false
       receivedRef.current?.remove()
       responseRef.current?.remove()
+      removeTapListener?.()
     }
-  }, [router])
+  }, [router, isExpoGo])
 
-  // Register push once per user
+  // ── Register push once per user (only in dev/prod build) ──────────────
   useEffect(() => {
+    if (isExpoGo) return // Expo Go SDK 53+ can’t do remote push token. [web:59]
     if (!user?.id) return
     if (lastPushUid.current === user.id) return
     lastPushUid.current = user.id
-    registerForPushNotifications(user.id)
-  }, [user?.id])
 
-  // Role routing guard (same as yours)
+    ;(async () => {
+      const notif = await import('../lib/notificationHandler')
+      await notif.registerForPushNotifications(user.id)
+    })()
+  }, [user?.id, isExpoGo])
+
+  // ── Role-based routing guard ──────────────────────────────────────────
   useEffect(() => {
     if (loading || isOffline) return
 
@@ -113,6 +139,7 @@ function RootGuard() {
       if (!inAuthGroup) router.replace('/(auth)/login' as any)
       return
     }
+
     if (!profile) return
 
     if (!profile.is_active || profile.account_status === 'banned') {
@@ -125,8 +152,7 @@ function RootGuard() {
     const approval = profile.approval_status ?? 'approved'
 
     if (['driver', 'merchant', 'admin', 'superadmin'].includes(role) && approval === 'pending') {
-      if (segments[1] !== 'pending-approval')
-        router.replace('/(auth)/pending-approval' as any)
+      if (segments[1] !== 'pending-approval') router.replace('/(auth)/pending-approval' as any)
       return
     }
 
