@@ -1,17 +1,14 @@
-/// <reference types="jsr:@supabase/functions-js/edge-runtime.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 type NotificationRecord = {
   id: string;
-  user_id?: string | null;   // support both
-  userid?: string | null;    // <-- your DB uses this in app code
-  title?: string | null;
-  message?: string | null;
-  body?: string | null;
-  type?: string | null;
-  data?: any;
+  user_id: string;            // ✅ matches your notifications table
+  title: string | null;
+  message: string | null;
+  body: string | null;
+  type: string | null;
+  data: any;                  // jsonb or stringified json
 };
 
 type WebhookPayload = {
@@ -34,12 +31,14 @@ function safeJsonParse(v: any) {
 }
 
 function buildPushData(record: NotificationRecord) {
-  const data = safeJsonParse(record.data);
-  const orderId = data.orderId ?? data.orderid ?? data.order_id ?? null;
+  const d = safeJsonParse(record.data);
+
+  // ✅ Your current DB payload uses order_id
+  const orderId = d.orderId ?? d.order_id ?? d.orderid ?? null;
 
   return {
-    ...data,
-    type: data.type ?? (record.type === "order" ? "order_update" : record.type ?? "general"),
+    ...d,
+    type: d.type ?? (record.type === "order" ? "order_update" : record.type ?? "general"),
     orderId,
     order_id: orderId,
     notificationId: record.id,
@@ -61,14 +60,7 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   const rec = payload.record;
-  const userId = rec.user_id ?? rec.userid ?? null;
-
-  if (!userId) {
-    return new Response(JSON.stringify({ ok: true, sent: 0, reason: "missing user id" }), {
-      headers: { "Content-Type": "application/json" },
-      status: 200,
-    });
-  }
+  const userId = rec.user_id;
 
   const { data: tokens, error } = await supabase
     .from("device_push_tokens")
@@ -84,7 +76,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (!tokens?.length) {
-    return new Response(JSON.stringify({ ok: true, sent: 0, reason: "no tokens" }), {
+    return new Response(JSON.stringify({ ok: true, sent: 0, reason: "no tokens for user" }), {
       headers: { "Content-Type": "application/json" },
       status: 200,
     });
