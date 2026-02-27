@@ -1,38 +1,49 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+// src/app/_layout.tsx
+import React, { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, View } from 'react-native'
 import { Slot, useRouter, useSegments } from 'expo-router'
 import NetInfo from '@react-native-community/netinfo'
 import { AuthProvider, useAuth } from '../contexts/AuthContext'
 import { CartProvider } from '../contexts/CartContext'
 import { supabase } from '../lib/supabase'
-// src/app/_layout.tsx — change this import:
 import {
   initNotificationHandler,
   addReceivedListener,
   addResponseListener,
   registerForPushNotifications,
 } from '../lib/notificationHandler'
+import * as Notifications from 'expo-notifications'
 
-
-// Run once at module level — safe (exits early in Expo Go)
 initNotificationHandler()
+
+function extractOrderId(data: any): string | null {
+  return data?.orderId ?? data?.order_id ?? null
+}
+
+function isOrderUpdate(data: any): boolean {
+  // Primary: data.type (recommended)
+  if (data?.type === 'order_update') return true
+  // Fallback: if your server sends { type: "order" } in data
+  if (data?.type === 'order') return true
+  return false
+}
 
 function RootGuard() {
   const { user, profile, loading } = useAuth()
-  const router   = useRouter()
+  const router = useRouter()
   const segments = useSegments()
 
-  const receivedRef     = useRef<{ remove: () => void } | null>(null)
-  const responseRef     = useRef<{ remove: () => void } | null>(null)
-  const lastPushUid     = useRef<string | null>(null)
+  const receivedRef = useRef<{ remove: () => void } | null>(null)
+  const responseRef = useRef<{ remove: () => void } | null>(null)
+  const lastPushUid = useRef<string | null>(null)
+
   const [isOffline, setIsOffline] = useState(false)
-  const wasOffline      = useRef(false)
+  const wasOffline = useRef(false)
 
   const inAuthGroup = segments[0] === '(auth)'
   const isOfflinePage = (segments as string[]).includes('offline')
 
-  // ── Network monitoring ────────────────────────────────────────────────
+  // Network monitoring (same as yours)
   useEffect(() => {
     const unsub = NetInfo.addEventListener(state => {
       const offline = state.isConnected === false
@@ -43,17 +54,11 @@ function RootGuard() {
         router.replace('/offline' as any)
       } else if (!offline && wasOffline.current) {
         wasOffline.current = false
-        // Navigate back to appropriate screen after reconnection
         if (isOfflinePage) {
-          if (!user) {
-            router.replace('/(auth)/login' as any)
-          } else {
+          if (!user) router.replace('/(auth)/login' as any)
+          else {
             const role = profile?.role ?? 'customer'
-            router.replace(
-              role === 'driver'
-                ? '/(driver)/dashboard'
-                : '/(customer)/dashboard' as any
-            )
+            router.replace(role === 'driver' ? '/(driver)/dashboard' : '/(customer)/dashboard' as any)
           }
         }
       }
@@ -61,23 +66,38 @@ function RootGuard() {
     return () => unsub()
   }, [router, user, profile, isOfflinePage])
 
-  // ── Notification listeners ────────────────────────────────────────────
+  // Notification handling (foreground/background/killed)
   useEffect(() => {
+    const goToOrder = (orderId: string) => {
+      router.push({ pathname: '/(customer)/orders/[id]', params: { id: orderId } } as any)
+    }
+
+    // 1) Cold start: user tapped notification and app opened from closed state [web:45]
+    ;(async () => {
+      const last = await Notifications.getLastNotificationResponseAsync()
+      if (!last) return
+      const data = last.notification.request.content.data as any
+      const orderId = extractOrderId(data)
+      if (orderId && isOrderUpdate(data)) goToOrder(orderId)
+    })()
+
+    // 2) Runtime listeners [web:164]
     receivedRef.current = addReceivedListener(() => {})
     responseRef.current = addResponseListener((res: any) => {
       const data = res?.notification?.request?.content?.data ?? {}
-      if (data.type === 'order_update' && data.orderId)
-        router.push(`/(customer)/orders/${data.orderId}` as any)
-      if (data.type === 'new_order')
-        router.push('/(driver)/dashboard' as any)
+      const orderId = extractOrderId(data)
+
+      if (orderId && isOrderUpdate(data)) goToOrder(orderId)
+      if (data?.type === 'new_order') router.push('/(driver)/dashboard' as any)
     })
+
     return () => {
       receivedRef.current?.remove()
       responseRef.current?.remove()
     }
   }, [router])
 
-  // ── Register push once per user ───────────────────────────────────────
+  // Register push once per user
   useEffect(() => {
     if (!user?.id) return
     if (lastPushUid.current === user.id) return
@@ -85,7 +105,7 @@ function RootGuard() {
     registerForPushNotifications(user.id)
   }, [user?.id])
 
-  // ── Role-based routing guard ──────────────────────────────────────────
+  // Role routing guard (same as yours)
   useEffect(() => {
     if (loading || isOffline) return
 
@@ -93,7 +113,6 @@ function RootGuard() {
       if (!inAuthGroup) router.replace('/(auth)/login' as any)
       return
     }
-
     if (!profile) return
 
     if (!profile.is_active || profile.account_status === 'banned') {
@@ -102,13 +121,10 @@ function RootGuard() {
       return
     }
 
-    const role     = profile.role            ?? 'customer'
+    const role = profile.role ?? 'customer'
     const approval = profile.approval_status ?? 'approved'
 
-    if (
-      ['driver', 'merchant', 'admin', 'superadmin'].includes(role) &&
-      approval === 'pending'
-    ) {
+    if (['driver', 'merchant', 'admin', 'superadmin'].includes(role) && approval === 'pending') {
       if (segments[1] !== 'pending-approval')
         router.replace('/(auth)/pending-approval' as any)
       return
@@ -120,20 +136,13 @@ function RootGuard() {
     }
 
     if (inAuthGroup) {
-      router.replace(
-        role === 'driver'
-          ? '/(driver)/dashboard'
-          : '/(customer)/dashboard' as any
-      )
+      router.replace(role === 'driver' ? '/(driver)/dashboard' : '/(customer)/dashboard' as any)
     }
   }, [loading, user, profile, inAuthGroup, segments, router, isOffline])
 
   if (loading) {
     return (
-      <View style={{
-        flex: 1, alignItems: 'center',
-        justifyContent: 'center', backgroundColor: '#fff',
-      }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#FF6B35" />
       </View>
     )
