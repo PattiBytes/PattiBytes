@@ -29,23 +29,14 @@ function getNotif() {
  * - Sets Android channels (orders, promotions, default)
  * - Upserts token into `push_tokens` table  ← FIXED (was device_push_tokens)
  */
-export async function registerForPushNotifications(
-  userId: string
-): Promise<string | null> {
+export async function registerForPushNotifications(userId: string): Promise<string | null> {
   const N = getNotif();
   if (!N) return null;
 
   try {
     // Foreground notification behaviour
-    N.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
+    
+   
 
     // Permission
     const { status: existing } = await N.getPermissionsAsync();
@@ -165,5 +156,16 @@ export function setupForegroundReregistration(userId: string): () => void {
 }
 
 export function initNotificationHandler() {
-  throw new Error('Function not implemented.');
+  const N = getNotif();
+  if (!N) return; // safe in Expo Go
+
+  N.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
 }

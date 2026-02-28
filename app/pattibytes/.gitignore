@@ -55,3 +55,5 @@ app/pattibytes/.env.*
 app/pattibytes/.env*.local
 
 .env.local
+
+.env.local
