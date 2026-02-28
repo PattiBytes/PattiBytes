@@ -53,3 +53,5 @@ app/pattibytes/google-services.json
 app/pattibytes/.env
 app/pattibytes/.env.*
 app/pattibytes/.env*.local
+
+.env.local
