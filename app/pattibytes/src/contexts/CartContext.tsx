@@ -21,6 +21,7 @@ type Action =
   | { type: 'HYDRATE';  cart: Cart | null }
 
 export type CartCtx = {
+  items: any;
   cart: Cart | null
   addToCart: (item: AddPayload, merchantId: string, merchantName: string) => void
   updateQuantity: (itemId: string, qty: number) => void

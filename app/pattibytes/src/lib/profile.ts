@@ -26,7 +26,7 @@ const PROFILE_SELECT = [
   'id', 'email', 'full_name', 'phone', 'role',
   'avatar_url', 'approval_status', 'profile_completed',
   'is_active', 'is_approved', 'is_trusted', 'trust_score',
-  'account_status', 'cancelled_orders_count',
+  'account_status','username', 'cancelled_orders_count',
   'total_orders', 'completed_orders', 'cancelled_orders',
 ].join(',')
 
