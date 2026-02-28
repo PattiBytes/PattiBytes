@@ -11,6 +11,7 @@
       "android": {
         "buildType": "apk"
       },
+      "channel": "development",
       "env": {
         "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt"
       }
@@ -20,6 +21,7 @@
       "android": {
         "buildType": "apk"
       },
+      "channel": "preview",
       "env": {
         "APP_VARIANT": "preview",
         "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt"
@@ -27,6 +29,7 @@
     },
     "preview-simulator": {
       "extends": "preview",
+      "channel": "preview",
       "ios": {
         "simulator": true
       }
@@ -36,6 +39,7 @@
       "android": {
         "buildType": "app-bundle"
       },
+      "channel": "production",
       "env": {
         "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt"
       }
