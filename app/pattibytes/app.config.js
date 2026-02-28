@@ -56,7 +56,14 @@ export default {
 
     plugins: [
       "expo-router",
-       "@sentry/react-native", 
+      [
+  "@sentry/react-native/expo",
+  {
+    "url": "https://sentry.io/",
+    "project": "pattibytes",       // ← your project slug from sentry.io
+    "organization": "pattibytes"   // ← your org slug from sentry.io
+  }
+],
       [
         "expo-notifications",
         {
