@@ -163,3 +163,7 @@ export function setupForegroundReregistration(userId: string): () => void {
   });
   return () => sub.remove();
 }
+
+export function initNotificationHandler() {
+  throw new Error('Function not implemented.');
+}

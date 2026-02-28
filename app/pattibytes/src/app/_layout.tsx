@@ -4,10 +4,20 @@ import { ActivityIndicator, View } from 'react-native'
 import { Slot, useRouter, useSegments } from 'expo-router'
 import NetInfo from '@react-native-community/netinfo'
 import Constants from 'expo-constants'
+import * as Sentry from '@sentry/react-native'   
 
 import { AuthProvider, useAuth } from '../contexts/AuthContext'
 import { CartProvider } from '../contexts/CartContext'
 import { supabase } from '../lib/supabase'
+
+
+Sentry.init({
+  dsn: 'https://4ef63860fdb9b613ac4e538d599ee598@o4510964276723712.ingest.de.sentry.io/4510964283605072',
+  debug: false,                        // set true temporarily to verify it works
+  environment: process.env.APP_VARIANT ?? 'production',
+  enableNativeFramesTracking: true,    // tracks slow/frozen frames
+  tracesSampleRate: 0.2,              // 20% of sessions tracked (keeps free tier)
+})
 
 function extractOrderId(data: any): string | null {
   return data?.orderId ?? data?.order_id ?? null
@@ -131,6 +141,18 @@ function RootGuard() {
     })()
   }, [user?.id, isExpoGo])
 
+  useEffect(() => {
+  if (user?.id) {
+    Sentry.setUser({
+      id: user.id,
+      email: user.email ?? undefined,
+    })
+  } else {
+    Sentry.setUser(null)   // clear on logout
+  }
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [user?.id])
+
   // ── Role-based routing guard ──────────────────────────────────────────
   useEffect(() => {
     if (loading || isOffline) return
@@ -177,7 +199,7 @@ function RootGuard() {
   return <Slot />
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <AuthProvider>
       <CartProvider>
@@ -186,3 +208,4 @@ export default function RootLayout() {
     </AuthProvider>
   )
 }
+export default Sentry.wrap(RootLayout)

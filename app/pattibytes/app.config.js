@@ -56,6 +56,7 @@ export default {
 
     plugins: [
       "expo-router",
+       "@sentry/react-native", 
       [
         "expo-notifications",
         {
