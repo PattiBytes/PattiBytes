@@ -31,10 +31,11 @@ export type CartCtx = {
 
 const Ctx = createContext<CartCtx>({
   cart: null,
-  addToCart: () => {},
-  updateQuantity: () => {},
-  removeFromCart: () => {},
-  clearCart: () => {},
+  addToCart: () => { },
+  updateQuantity: () => { },
+  removeFromCart: () => { },
+  clearCart: () => { },
+  items: undefined
 })
 
 const KEY = 'pbexpress_cart_v2'
@@ -50,18 +51,30 @@ function reducer(state: Cart | null, action: Action): Cart | null {
   switch (action.type) {
     case 'HYDRATE': return action.cart
     case 'CLEAR':   return null
-    case 'ADD': {
-      const { item, merchantId, merchantName } = action
-      const qty = Math.max(1, item.quantity ?? 1)
-      const base: Cart = state?.merchant_id === merchantId
-        ? state
-        : { merchant_id: merchantId, merchant_name: merchantName, items: [], subtotal: 0 }
-      const existing = base.items.find(i => i.id === item.id)
-      const items = existing
-        ? base.items.map(i => i.id === item.id ? { ...i, quantity: Math.min(10, i.quantity + qty) } : i)
-        : [...base.items, { ...item, quantity: qty }]
-      return { ...base, items, subtotal: sub(items) }
-    }
+  case 'ADD': {
+  const { item, merchantId, merchantName } = action;
+  const qty = Math.max(1, item.quantity ?? 1);
+
+  const base: Cart =
+    state?.merchant_id === merchantId
+      ? state
+      : {
+          merchantid: merchantId,
+          merchantname: merchantName,
+          merchant_id: merchantId,
+          merchant_name: merchantName,
+          items: [],
+          subtotal: 0,
+        };
+
+  const existing = base.items.find(i => i.id === item.id);
+  const items = existing
+    ? base.items.map(i => (i.id === item.id ? { ...i, quantity: Math.min(10, i.quantity + qty) } : i))
+    : [...base.items, { ...item, quantity: qty }];
+
+  return { ...base, items, subtotal: sub(items) };
+}
+
     case 'UPDATEQTY': {
       if (!state) return null
       if (action.qty <= 0) {
@@ -98,10 +111,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const value: CartCtx = {
     cart,
-    addToCart:      (item, merchantId, merchantName) => dispatch({ type: 'ADD', item, merchantId, merchantName }),
-    updateQuantity: (itemId, qty)                    => dispatch({ type: 'UPDATEQTY', itemId, qty }),
-    removeFromCart: (itemId)                         => dispatch({ type: 'REMOVE', itemId }),
-    clearCart:      ()                               => dispatch({ type: 'CLEAR' }),
+    addToCart: (item, merchantId, merchantName) => dispatch({ type: 'ADD', item, merchantId, merchantName }),
+    updateQuantity: (itemId, qty) => dispatch({ type: 'UPDATEQTY', itemId, qty }),
+    removeFromCart: (itemId) => dispatch({ type: 'REMOVE', itemId }),
+    clearCart: () => dispatch({ type: 'CLEAR' }),
+    items: undefined
   }
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

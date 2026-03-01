@@ -11,6 +11,9 @@ import { AuthProvider, useAuth } from '../contexts/AuthContext'
 import { CartProvider } from '../contexts/CartContext'
 import { supabase } from '../lib/supabase'
 import { initNotificationHandler } from '../lib/notificationHandler'
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ScrollToTopProvider, BackToTopFab } from '../components/ui/ScrollToTop';
 
 Sentry.init({
   dsn: 'https://4ef63860fdb9b613ac4e538d599ee598@o4510964276723712.ingest.de.sentry.io/4510964283605072',
@@ -197,12 +200,18 @@ function RootGuard() {
 
 function RootLayout() {
   return (
-    <AuthProvider>
-      <CartProvider>
-        <RootGuard />
-      </CartProvider>
-    </AuthProvider>
-  )
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <CartProvider>
+            <ScrollToTopProvider>
+              <RootGuard />
+              <BackToTopFab />
+            </ScrollToTopProvider>
+          </CartProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
 }
-
-export default Sentry.wrap(RootLayout)
+export default Sentry.wrap(RootLayout);
