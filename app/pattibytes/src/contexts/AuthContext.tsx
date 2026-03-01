@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     inflight.current = null
     if (mounted.current) {
       setProfile(result)
-      lastUid.current = result?.id ?? null
+      // ✅ lastUid is already set in handleSignedIn — don't overwrite here
     }
     return result
   }, [])
@@ -63,13 +63,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     if (user?.id) await deregisterPushToken(user.id)
     await supabase.auth.signOut()
-    // SIGNED_OUT event clears state below
   }, [user?.id])
 
-  // ✅ Single source of truth for push registration
-  // Called only on actual sign-in, not on every auth event
   const handleSignedIn = useCallback(async (u: User) => {
     if (!mounted.current) return
+
+    // ✅ Set lastUid IMMEDIATELY (synchronously) before any await
+    // This is the fix — prevents onAuthStateChange SIGNED_IN from
+    // racing with getSession() and calling handleSignedIn twice
+    lastUid.current = u.id
+
     setUser(u)
     await loadProfile(u.id)
     const token = await registerForPushNotifications(u.id)
@@ -104,21 +107,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
 
-        // TOKEN_REFRESHED fires very frequently — only update user object
-        // ✅ Do NOT re-register push here — module guard handles rotation
+        // TOKEN_REFRESHED fires frequently — only update user object, skip everything else
         if (event === 'TOKEN_REFRESHED') {
           setUser(prev => (prev?.id === u?.id ? prev : u))
           return
         }
 
-        // SIGNED_IN, USER_UPDATED, etc.
         if (u) {
-          // ✅ Only call handleSignedIn for new users (different uid)
-          // For same user re-auth, just refresh token — push guard handles the rest
+          // ✅ lastUid.current is now set synchronously in handleSignedIn
+          // so this check correctly prevents the race condition
           if (lastUid.current !== u.id) {
-            resetPushRegistration() // new user — allow fresh registration
+            resetPushRegistration() // different user — allow fresh registration
             await handleSignedIn(u)
           } else {
+            // Same user already being handled — just update user object
             setUser(u)
           }
         } else {
@@ -135,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [handleSignedIn])
 
-  // 3. Re-register when app comes back to foreground (with 1hr cooldown in handler)
+  // 3. Re-register when app comes back to foreground (1hr cooldown in handler)
   useEffect(() => {
     if (!user?.id) return
     const cleanup = setupForegroundReregistration(user.id)
