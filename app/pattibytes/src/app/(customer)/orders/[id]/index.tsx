@@ -8,10 +8,11 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { supabase } from '../../../../lib/supabase'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { COLORS } from '../../../../lib/constants'
-import { MapView, Marker, Polyline, PROVIDER_GOOGLE } from "../../../../components/MapView";
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "../../../../components/MapView"
 import Constants from 'expo-constants'
 import * as Device from 'expo-device'
-import type { Region } from "../../../../components/MapView";
+import type { Region } from "../../../../components/MapView"
+
 // ✅ REMOVED: import * as Notifications from 'expo-notifications'
 // ✅ REMOVED: import { navigateFromNotification, markNotificationRead } from '../../../../services/notifications'
 // Notifications are lazy-loaded below only on real device builds

@@ -1,32 +1,40 @@
 // src/app/_layout.tsx
 import React, { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, View } from 'react-native'
+import { ActivityIndicator, View , LogBox } from 'react-native'
+
 import { Slot, useRouter, useSegments } from 'expo-router'
 import NetInfo from '@react-native-community/netinfo'
 import Constants from 'expo-constants'
-import * as Sentry from '@sentry/react-native'   
+import * as Sentry from '@sentry/react-native'
 
 import { AuthProvider, useAuth } from '../contexts/AuthContext'
 import { CartProvider } from '../contexts/CartContext'
 import { supabase } from '../lib/supabase'
-
+import { initNotificationHandler } from '../lib/notificationHandler'
 
 Sentry.init({
   dsn: 'https://4ef63860fdb9b613ac4e538d599ee598@o4510964276723712.ingest.de.sentry.io/4510964283605072',
-  debug: false,                        // set true temporarily to verify it works
+  debug: false,
   environment: process.env.APP_VARIANT ?? 'production',
-  enableNativeFramesTracking: true,    // tracks slow/frozen frames
-  tracesSampleRate: 0.2,              // 20% of sessions tracked (keeps free tier)
+  enableNativeFramesTracking: true,
+  tracesSampleRate: 0.2,
 })
+
+LogBox.ignoreLogs([
+  'MapLibre [info] Request failed due to a permanent error: Canceled',
+  'Mbgl-HttpRequest',
+])
+
+// ✅ Init notification handler ONCE at module level (not inside a component)
+// This is safe — getNotif() returns null in Expo Go
+initNotificationHandler()
 
 function extractOrderId(data: any): string | null {
   return data?.orderId ?? data?.order_id ?? null
 }
 
 function isOrderUpdate(data: any): boolean {
-  if (data?.type === 'order_update') return true
-  if (data?.type === 'order') return true
-  return false
+  return data?.type === 'order_update' || data?.type === 'order'
 }
 
 function RootGuard() {
@@ -36,18 +44,15 @@ function RootGuard() {
 
   const receivedRef = useRef<{ remove: () => void } | null>(null)
   const responseRef = useRef<{ remove: () => void } | null>(null)
-  const lastPushUid = useRef<string | null>(null)
 
   const [isOffline, setIsOffline] = useState(false)
   const wasOffline = useRef(false)
 
   const inAuthGroup = segments[0] === '(auth)'
   const isOfflinePage = (segments as string[]).includes('offline')
-
-  // Expo Go check: in SDK 53+, remote push via expo-notifications is not supported in Expo Go. [web:59]
   const isExpoGo = Constants.appOwnership === 'expo'
 
-  // ── Network monitoring ────────────────────────────────────────────────
+  // ── Network monitoring ──────────────────────────────────────────────────
   useEffect(() => {
     const unsub = NetInfo.addEventListener(state => {
       const offline = state.isConnected === false
@@ -62,7 +67,9 @@ function RootGuard() {
           if (!user) router.replace('/(auth)/login' as any)
           else {
             const role = profile?.role ?? 'customer'
-            router.replace(role === 'driver' ? '/(driver)/dashboard' : '/(customer)/dashboard' as any)
+            router.replace(
+              role === 'driver' ? '/(driver)/dashboard' : '/(customer)/dashboard' as any
+            )
           }
         }
       }
@@ -70,12 +77,11 @@ function RootGuard() {
     return () => unsub()
   }, [router, user, profile, isOfflinePage])
 
-  // ── Notification handling (safe for Expo Go) ──────────────────────────
+  // ── Notification tap/response listeners ONLY — NO registration here ─────
+  // ✅ Registration is handled entirely in AuthContext
+  // ✅ This effect only sets up navigation from notification taps
   useEffect(() => {
-    if (isExpoGo) {
-      // Avoid importing expo-notifications / registering remote push in Expo Go SDK 53+. [web:59]
-      return
-    }
+    if (isExpoGo) return
 
     let removeTapListener: (() => void) | null = null
     let mounted = true
@@ -85,14 +91,10 @@ function RootGuard() {
     }
 
     ;(async () => {
-      // Lazy imports so Expo Go doesn’t crash at module import time. [web:59]
       const Notifications = await import('expo-notifications')
       const notif = await import('../lib/notificationHandler')
 
-      // Run once (init sets handler + channels, etc.)
-      notif.initNotificationHandler()
-
-      // Cold start: opened from killed state [web:45]
+      // Cold start: app opened from killed state via notification tap
       const last = await Notifications.getLastNotificationResponseAsync()
       if (last && mounted) {
         const data = last.notification.request.content.data as any
@@ -100,18 +102,18 @@ function RootGuard() {
         if (orderId && isOrderUpdate(data)) goToOrder(orderId)
       }
 
-      // Listener via your wrapper (kept for compatibility with your existing code)
+      // Foreground received listener (just for side effects if needed)
       receivedRef.current = notif.addReceivedListener(() => {})
 
+      // Response listener (user tapped notification)
       responseRef.current = notif.addResponseListener((res: any) => {
         const data = res?.notification?.request?.content?.data ?? {}
         const orderId = extractOrderId(data)
-
         if (orderId && isOrderUpdate(data)) goToOrder(orderId)
         if (data?.type === 'new_order') router.push('/(driver)/dashboard' as any)
       })
 
-      // Also add direct tap listener (extra safety)
+      // Direct tap listener (extra safety for edge cases)
       const sub = Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response?.notification?.request?.content?.data ?? {}
         const orderId = extractOrderId(data)
@@ -128,32 +130,20 @@ function RootGuard() {
     }
   }, [router, isExpoGo])
 
-  // ── Register push once per user (only in dev/prod build) ──────────────
+  // ✅ REMOVED: push registration useEffect — AuthContext handles it
+  // This was causing double registration before
+
+  // ── Sentry user context ─────────────────────────────────────────────────
   useEffect(() => {
-    if (isExpoGo) return // Expo Go SDK 53+ can’t do remote push token. [web:59]
-    if (!user?.id) return
-    if (lastPushUid.current === user.id) return
-    lastPushUid.current = user.id
+    if (user?.id) {
+      Sentry.setUser({ id: user.id, email: user.email ?? undefined })
+    } else {
+      Sentry.setUser(null)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
 
-    ;(async () => {
-      const notif = await import('../lib/notificationHandler')
-      await notif.registerForPushNotifications(user.id)
-    })()
-  }, [user?.id, isExpoGo])
-
-  useEffect(() => {
-  if (user?.id) {
-    Sentry.setUser({
-      id: user.id,
-      email: user.email ?? undefined,
-    })
-  } else {
-    Sentry.setUser(null)   // clear on logout
-  }
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [user?.id])
-
-  // ── Role-based routing guard ──────────────────────────────────────────
+  // ── Role-based routing guard ────────────────────────────────────────────
   useEffect(() => {
     if (loading || isOffline) return
 
@@ -173,8 +163,12 @@ function RootGuard() {
     const role = profile.role ?? 'customer'
     const approval = profile.approval_status ?? 'approved'
 
-    if (['driver', 'merchant', 'admin', 'superadmin'].includes(role) && approval === 'pending') {
-      if (segments[1] !== 'pending-approval') router.replace('/(auth)/pending-approval' as any)
+    if (
+      ['driver', 'merchant', 'admin', 'superadmin'].includes(role) &&
+      approval === 'pending'
+    ) {
+      if (segments[1] !== 'pending-approval')
+        router.replace('/(auth)/pending-approval' as any)
       return
     }
 
@@ -184,7 +178,9 @@ function RootGuard() {
     }
 
     if (inAuthGroup) {
-      router.replace(role === 'driver' ? '/(driver)/dashboard' : '/(customer)/dashboard' as any)
+      router.replace(
+        role === 'driver' ? '/(driver)/dashboard' : '/(customer)/dashboard' as any
+      )
     }
   }, [loading, user, profile, inAuthGroup, segments, router, isOffline])
 
@@ -208,4 +204,5 @@ function RootLayout() {
     </AuthProvider>
   )
 }
+
 export default Sentry.wrap(RootLayout)

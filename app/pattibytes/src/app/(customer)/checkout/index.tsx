@@ -428,11 +428,7 @@ const loadCheckout = useCallback(async () => {
 
     setPlacing(true)
     try {
-      // ── Order number ──────────────────────────────────────────────────────
-      const { count } = await supabase.from('orders')
-        .select('*', { count: 'exact', head: true })
-      const orderNum = (count ?? 0) + 1
-      const eta = new Date(Date.now() + 45 * 60 * 1000).toISOString()
+    const eta = new Date(Date.now() + 45 * 60 * 1000).toISOString()
 
       // ── Build items list ──────────────────────────────────────────────────
       const orderItems = cart.items.map(i => ({
@@ -475,7 +471,6 @@ const loadCheckout = useCallback(async () => {
       const orderPayload: Record<string, any> = {
         customer_id:             user.id,
         merchant_id:             isStoreOrder ? null : cart.merchant_id,
-        order_number:            orderNum,
         order_type:              isStoreOrder ? 'store' : 'restaurant', // ✅ new column
         status:                  'pending',
         subtotal,

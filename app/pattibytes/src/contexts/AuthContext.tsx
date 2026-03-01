@@ -10,7 +10,8 @@ import {
   registerForPushNotifications,
   deregisterPushToken,
   setupForegroundReregistration,
-} from "../lib/notificationHandler";
+  resetPushRegistration,
+} from '../lib/notificationHandler'
 
 type AuthCtx = {
   [x: string]: any
@@ -36,8 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading]     = useState(true)
   const [pushToken, setPushToken] = useState<string | null>(null)
 
-  const mounted = useRef(true)
-  // Prevent concurrent profile fetches for same user
+  const mounted  = useRef(true)
   const inflight = useRef<Promise<Profile | null> | null>(null)
   const lastUid  = useRef<string | null>(null)
 
@@ -60,19 +60,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await loadProfile(user.id, true)
   }, [user?.id, loadProfile])
 
-  /** Full sign-out: removes push token then calls supabase */
   const signOut = useCallback(async () => {
     if (user?.id) await deregisterPushToken(user.id)
     await supabase.auth.signOut()
-    // onAuthStateChange SIGNED_OUT will clear state
+    // SIGNED_OUT event clears state below
   }, [user?.id])
 
-  /** Called whenever a real user signs in or session restores */
+  // ✅ Single source of truth for push registration
+  // Called only on actual sign-in, not on every auth event
   const handleSignedIn = useCallback(async (u: User) => {
     if (!mounted.current) return
     setUser(u)
     await loadProfile(u.id)
-    // Register push after profile is loaded
     const token = await registerForPushNotifications(u.id)
     if (mounted.current && token) setPushToken(token)
   }, [loadProfile])
@@ -80,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     mounted.current = true
 
-    // 1. Hydrate existing session
+    // 1. Hydrate existing session on app start
     ;(async () => {
       const { data } = await supabase.auth.getSession()
       const u = data.session?.user ?? null
@@ -90,32 +89,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false)
     })()
 
-    // 2. Listen to auth state changes
+    // 2. Auth state changes
     const { data: sub } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session) => {
         if (!mounted.current) return
         const u = session?.user ?? null
 
         if (event === 'SIGNED_OUT') {
-          setUser(null); setProfile(null); setPushToken(null)
-          inflight.current = null; lastUid.current = null
+          setUser(null)
+          setProfile(null)
+          setPushToken(null)
+          inflight.current = null
+          lastUid.current = null
           return
         }
-        // TOKEN_REFRESHED fires frequently — only update user obj, skip profile re-fetch
+
+        // TOKEN_REFRESHED fires very frequently — only update user object
+        // ✅ Do NOT re-register push here — module guard handles rotation
         if (event === 'TOKEN_REFRESHED') {
           setUser(prev => (prev?.id === u?.id ? prev : u))
           return
         }
+
+        // SIGNED_IN, USER_UPDATED, etc.
         if (u) {
-          const profileChanged = lastUid.current !== u.id
-          await handleSignedIn(u)
-          if (!profileChanged) {
-            // Still re-register push in case token rotated
-            const token = await registerForPushNotifications(u.id)
-            if (mounted.current && token) setPushToken(token)
+          // ✅ Only call handleSignedIn for new users (different uid)
+          // For same user re-auth, just refresh token — push guard handles the rest
+          if (lastUid.current !== u.id) {
+            resetPushRegistration() // new user — allow fresh registration
+            await handleSignedIn(u)
+          } else {
+            setUser(u)
           }
         } else {
-          setUser(null); setProfile(null); setPushToken(null)
+          setUser(null)
+          setProfile(null)
+          setPushToken(null)
         }
       }
     )
@@ -126,7 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [handleSignedIn])
 
-  // 3. Re-register push token when app comes back to foreground
+  // 3. Re-register when app comes back to foreground (with 1hr cooldown in handler)
   useEffect(() => {
     if (!user?.id) return
     const cleanup = setupForegroundReregistration(user.id)

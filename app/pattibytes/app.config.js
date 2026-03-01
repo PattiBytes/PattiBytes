@@ -50,51 +50,59 @@ export default {
       ],
       package: "com.pattibytes.express",
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
-    },
+  
+},
 
     web: { bundler: "metro", output: "static" },
 
     plugins: [
-      "expo-router",
-      [
-  "@sentry/react-native/expo",
-  {
-    "url": "https://sentry.io/",
-    "project": "pattibytes",       // ← your project slug from sentry.io
-    "organization": "pattibytes"   // ← your org slug from sentry.io
-  }
+  "expo-router",
+
+  // ✅ Sentry — standalone, with its own config object
+  [
+    "@sentry/react-native/expo",
+    {
+      url: "https://sentry.io/",
+      project: "pattibytes",
+      organization: "pattibytes",
+    },
+  ],
+
+  // ✅ MapLibre — its own entry, NOT inside Sentry's array
+  "@maplibre/maplibre-react-native",
+  "expo-dev-client",
+  [
+    "expo-notifications",
+    {
+      icon: "./assets/images/notification-icon.png",
+      color: "#FF6B35",
+      sounds: [],
+      androidMode: "default",
+    },
+  ],
+  [
+    "expo-location",
+    {
+      locationAlwaysAndWhenInUsePermission:
+        "Pattibytes needs your location for delivery tracking.",
+      isIosBackgroundLocationEnabled: true,
+    },
+  ],
+  [
+    "expo-build-properties",
+    {
+      android: {
+        enableProguardInReleaseBuilds: true,
+        enableShrinkResourcesInReleaseBuilds: true,
+      },
+    },
+  ],
+  [
+    "@react-native-google-signin/google-signin",
+    { iosUrlScheme: IOS_URL_SCHEME },
+  ],
 ],
-      [
-        "expo-notifications",
-        {
-          icon: "./assets/images/notification-icon.png",
-          color: "#FF6B35",
-          sounds: [],
-          androidMode: "default",
-        },
-      ],
-      [
-        "expo-location",
-        {
-          locationAlwaysAndWhenInUsePermission:
-            "Pattibytes needs your location for delivery tracking.",
-          isIosBackgroundLocationEnabled: true,
-        },
-      ],
-      [
-        "expo-build-properties",
-        {
-          android: {
-            enableProguardInReleaseBuilds: true,
-            enableShrinkResourcesInReleaseBuilds: true,
-          },
-        },
-      ],
-      [
-        "@react-native-google-signin/google-signin",
-        { iosUrlScheme: IOS_URL_SCHEME },
-      ],
-    ],
+
 
     experiments: { typedRoutes: false },
 

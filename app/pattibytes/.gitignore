@@ -44,7 +44,7 @@ app-example
 
 
 # Firebase service account private key
-app/pattibytes/pattibytes-express-firebase-adminsdk-fbsvc-e269dfc8f0.json
+app/pattibytes/pattibytes-express-firebase-adminsdk-fbsvc-01187f1f3e.json
 
 # google-services (managed via EAS secret)
 app/pattibytes/google-services.json
