@@ -1,18 +1,22 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* pattibytes-express service worker (safe caching) */
 
-const CACHE_NAME = 'pattibytes-express-v3'; // bump to force update
+const CACHE_NAME = 'pattibytes-express-v4'; // bump to force update
 const APP_SHELL_CACHE = CACHE_NAME;
 
-const APP_SHELL_URLS = [
-  '/',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/favicon.ico',
-];
+const APP_SHELL_URLS = ['/', '/icon-192.png', '/icon-512.png', '/favicon.ico'];
 
 // ---- helpers ----
 const isSameOrigin = (url) => url.origin === self.location.origin;
+
+const isSupabaseLike = (url) => {
+  const host = url.hostname;
+  return (
+    host.endsWith('.supabase.co') ||
+    host.endsWith('.workers.dev') ||
+    host === 'supabase-proxy.sbpbexpresspattibytescom.workers.dev'
+  );
+};
 
 const isApiRequest = (url) => isSameOrigin(url) && url.pathname.startsWith('/api/');
 
@@ -23,7 +27,8 @@ const isAuthPage = (url) =>
     url.pathname.startsWith('/auth/'));
 
 const isNextStaticAsset = (url) =>
-  isSameOrigin(url) && (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/assets/'));
+  isSameOrigin(url) &&
+  (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/assets/'));
 
 const isStaticPublicAsset = (url) =>
   isSameOrigin(url) &&
@@ -44,11 +49,12 @@ async function cacheFirst(request) {
   if (cached) return cached;
 
   const resp = await fetch(request);
+
   // Cache only ok GET responses
   if (request.method === 'GET' && resp && resp.ok) {
     const copy = resp.clone();
     const cache = await caches.open(APP_SHELL_CACHE);
-    cache.put(request, copy);
+    await cache.put(request, copy);
   }
   return resp;
 }
@@ -57,17 +63,23 @@ async function cacheFirst(request) {
 async function networkFirstNavigation(request) {
   try {
     const resp = await fetch(request);
-    // Optionally update cached "/" so offline fallback stays fresh
+
+    // Keep "/" fresh for offline fallback
     if (resp && resp.ok) {
       const cache = await caches.open(APP_SHELL_CACHE);
-      cache.put('/', resp.clone());
+      await cache.put('/', resp.clone());
     }
+
     return resp;
   } catch (e) {
-    // Offline fallback to cached app shell
     const cached = await caches.match('/');
     if (cached) return cached;
-    throw e;
+
+    // IMPORTANT: do not throw inside respondWith chain
+    return new Response('Offline', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain' },
+    });
   }
 }
 
@@ -76,7 +88,10 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(APP_SHELL_CACHE);
-      await cache.addAll(APP_SHELL_URLS);
+
+      // cache.addAll() fails if any single request fails; use settled adds instead. [web:401]
+      await Promise.allSettled(APP_SHELL_URLS.map((u) => cache.add(u)));
+
       await self.skipWaiting();
     })()
   );
@@ -100,6 +115,13 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
+
+  // ✅ NEVER intercept Supabase / proxy traffic (keep headers intact, avoid caching)
+  // This prevents SW from ever causing auth/data failures when proxy is flaky.
+  if (!isSameOrigin(url) && isSupabaseLike(url)) {
+    event.respondWith(fetch(req));
+    return;
+  }
 
   // Don’t cache audio
   if (isAudio(url)) {
@@ -131,7 +153,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Default: network-first-ish (try network, fallback cache)
+  // Default: network-first-ish (try network, fallback cache, else return Response)
   event.respondWith(
     (async () => {
       try {
@@ -139,7 +161,12 @@ self.addEventListener('fetch', (event) => {
       } catch (e) {
         const cached = await caches.match(req);
         if (cached) return cached;
-        throw e;
+
+        // IMPORTANT: do not throw -> return a valid Response instead. [web:394]
+        return new Response('Network error', {
+          status: 502,
+          headers: { 'Content-Type': 'text/plain' },
+        });
       }
     })()
   );
@@ -176,7 +203,6 @@ self.addEventListener('notificationclick', (event) => {
       const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
 
       for (const client of clientList) {
-        // If already open, focus and navigate
         if ('focus' in client) {
           try {
             await client.focus();
