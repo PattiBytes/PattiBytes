@@ -1,4 +1,3 @@
- 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
@@ -32,22 +31,21 @@ export interface Profile {
   created_at?: string | null;
   updated_at?: string | null;
 
-  // optional extras if you use them
   account_status?: string | null;
   is_approved?: boolean | null;
 }
 
 export interface AuthContextType {
-  user: Profile | null;
-  authUser: SupabaseUser | null;
-  loading: boolean; // booting only
+  user: Profile | null; // profile row (app user)
+  authUser: SupabaseUser | null; // supabase auth user
+  loading: boolean; // initial boot only
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
-function withTimeout<T>(p: Promise<T>, ms = 2500): Promise<T> {
+function withTimeout<T>(p: Promise<T>, ms = 8000): Promise<T> {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('Auth timeout')), ms);
     p.then((v) => {
@@ -64,7 +62,7 @@ function isPublicPath(p: string) {
   return p === '/' || p.startsWith('/login') || p.startsWith('/signup') || p.startsWith('/auth/');
 }
 
-// Don’t select '*' (faster + less re-render noise)
+// Keep this aligned with your table columns
 const PROFILE_SELECT =
   'id,email,full_name,phone,role,approval_status,avatar_url,profile_completed,is_active,created_at,updated_at,account_status,is_approved';
 
@@ -75,14 +73,18 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
   const [user, setUser] = useState<Profile | null>(null);
   const [authUser, setAuthUser] = useState<SupabaseUser | null>(null);
-
-  // Only for initial session hydration
   const [booting, setBooting] = useState(true);
+
+  // Keep freshest profile in a ref to avoid stale closures
+  const userRef = useRef<Profile | null>(null);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // request/race guards
   const reqIdRef = useRef(0);
   const lastProfileUserIdRef = useRef<string | null>(null);
-  const inflightRef = useRef<Promise<Profile | null> | null>(null);
+  const inflightProfileRef = useRef<Promise<Profile | null> | null>(null);
 
   useEffect(() => {
     pathnameRef.current = pathname || '/';
@@ -91,8 +93,10 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const loadUserProfile = useCallback(async (userId: string, opts?: { force?: boolean }) => {
     if (!userId) return null;
 
-    if (!opts?.force && lastProfileUserIdRef.current === userId) return user;
-    if (inflightRef.current) return inflightRef.current;
+    if (!opts?.force && lastProfileUserIdRef.current === userId) {
+      return userRef.current; // safe cached return
+    }
+    if (inflightProfileRef.current) return inflightProfileRef.current;
 
     const rid = ++reqIdRef.current;
 
@@ -118,28 +122,79 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         lastProfileUserIdRef.current = row?.id ?? null;
         return row;
       } finally {
-        inflightRef.current = null;
+        inflightProfileRef.current = null;
       }
     })();
 
-    inflightRef.current = promise;
+    inflightProfileRef.current = promise;
     return promise;
-  }, [user]);
+  }, []);
+
+  /**
+   * Ensures there is a `profiles` row for the given auth user.
+   * Needed for Google One Tap / signInWithIdToken (no /auth/callback step to create profile).
+   */
+  const ensureProfile = useCallback(async (u: SupabaseUser) => {
+    const { data: existing, error: e1 } = await supabase
+      .from('profiles')
+      .select(PROFILE_SELECT)
+      .eq('id', u.id)
+      .maybeSingle();
+
+    if (e1) throw e1;
+    if (existing) return existing as Profile;
+
+    const payload = {
+      id: u.id,
+      email: u.email,
+      full_name: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || 'User',
+      phone: u.phone || u.user_metadata?.phone || '',
+      role: 'customer',
+      approval_status: 'approved',
+      profile_completed: true,
+      is_active: true,
+      avatar_url: u.user_metadata?.avatar_url || u.user_metadata?.picture || '',
+    };
+
+    const { data: created, error: e2 } = await supabase
+      .from('profiles')
+      .insert([payload])
+      .select(PROFILE_SELECT)
+      .single();
+
+    if (e2) {
+      // If insert fails due to RLS, you must add an INSERT policy on profiles.
+      throw e2;
+    }
+    return created as Profile;
+  }, []);
+
+  const hydrateFromSession = useCallback(
+    async (sessionUser: SupabaseUser | null) => {
+      setAuthUser((prev) => (prev?.id === sessionUser?.id ? prev : sessionUser));
+
+      if (sessionUser?.id) {
+        try {
+          await ensureProfile(sessionUser);
+        } catch (e: any) {
+          // Don’t hard-crash; still allow app to run but user may appear “missing profile”.
+          console.error('ensureProfile failed:', e?.message || e);
+        }
+
+        await loadUserProfile(sessionUser.id, { force: true });
+      } else {
+        setUser(null);
+        lastProfileUserIdRef.current = null;
+      }
+    },
+    [ensureProfile, loadUserProfile]
+  );
 
   const initAuth = useCallback(async () => {
-    const res = await withTimeout(supabase.auth.getSession(), 2500);
+    const res = await withTimeout(supabase.auth.getSession(), 8000);
     const u = res.data.session?.user ?? null;
-
-    // Only set state if changed (reduces re-render churn)
-    setAuthUser((prev) => (prev?.id === u?.id ? prev : u));
-
-    if (u?.id) {
-      void loadUserProfile(u.id, { force: false });
-    } else {
-      setUser(null);
-      lastProfileUserIdRef.current = null;
-    }
-  }, [loadUserProfile]);
+    await hydrateFromSession(u);
+  }, [hydrateFromSession]);
 
   useEffect(() => {
     let alive = true;
@@ -158,12 +213,14 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       }
     })();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session) => {
       if (!alive) return;
+
+      const u = session?.user ?? null;
 
       if (event === 'SIGNED_OUT') {
         reqIdRef.current += 1;
-        inflightRef.current = null;
+        inflightProfileRef.current = null;
         lastProfileUserIdRef.current = null;
 
         setAuthUser(null);
@@ -176,33 +233,35 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // IMPORTANT:
-      // TOKEN_REFRESHED can fire repeatedly; don’t refetch profile each time. [web:12]
+      // INITIAL_SESSION / SIGNED_IN should hydrate profile. [web:280]
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        await hydrateFromSession(u);
+        return;
+      }
+
+      // TOKEN_REFRESHED can fire often; don’t refetch profile every time. [web:280]
       if (event === 'TOKEN_REFRESHED') {
-        const u = session?.user ?? null;
         setAuthUser((prev) => (prev?.id === u?.id ? prev : u));
         return;
       }
 
-      // For real state changes, update auth user and profile
-      const u = session?.user ?? null;
-      setAuthUser((prev) => (prev?.id === u?.id ? prev : u));
-
-      if (u?.id) {
-        const idChanged = lastProfileUserIdRef.current !== u.id;
-        // Refetch only when needed
-        void loadUserProfile(u.id, { force: event === 'USER_UPDATED' || idChanged });
-      } else {
-        setUser(null);
-        lastProfileUserIdRef.current = null;
+      if (event === 'USER_UPDATED') {
+        setAuthUser((prev) => (prev?.id === u?.id ? prev : u));
+        if (u?.id) {
+          await loadUserProfile(u.id, { force: true });
+        }
+        return;
       }
+
+      // Fallback: keep authUser in sync
+      setAuthUser((prev) => (prev?.id === u?.id ? prev : u));
     });
 
     return () => {
       alive = false;
       authListener.subscription.unsubscribe();
     };
-  }, [router, initAuth, loadUserProfile]);
+  }, [router, initAuth, hydrateFromSession, loadUserProfile]);
 
   const refreshUser = useCallback(async () => {
     const uid = authUser?.id;
@@ -215,7 +274,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     if (error) console.error('Logout error:', error.message);
 
     reqIdRef.current += 1;
-    inflightRef.current = null;
+    inflightProfileRef.current = null;
     lastProfileUserIdRef.current = null;
 
     setAuthUser(null);
