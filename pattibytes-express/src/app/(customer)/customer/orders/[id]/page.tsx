@@ -596,12 +596,25 @@ const downloadInvoice = async () => {
 
     setCancelling(true);
     try {
-      const { error: orderError } = await supabase
-        .from('orders')
-        .update({ status: 'cancelled', cancellation_reason: cancelReason, cancelled_by: 'customer' })
-        .eq('id', order.id);
+   const { data, error } = await supabase
+  .from("orders")
+  .update({
+    status: "cancelled",
+    cancellationreason: cancelReason,
+    cancelledby: "customer",
+  })
+  .eq("id", order.id)
+  .eq("customerid", user!.id)
+  .in("status", ["pending", "confirmed"])   // <-- this blocks preparing+
+  .select("id,status");                    // <-- so we can detect “0 rows updated”
 
-      if (orderError) throw orderError;
+if (error) throw error;
+
+if (!data || data.length === 0) {
+  toast.error("You can't cancel after the order starts preparing.");
+  return;
+}
+
 
       // Optional: record cancellations table (if you created it)
       try {
