@@ -1,185 +1,169 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, TextInput, Linking, RefreshControl, Platform,
+  View, Text, ScrollView, TouchableOpacity,
+  StyleSheet, ActivityIndicator, Alert, RefreshControl,
+  Platform, Linking,
 } from 'react-native'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
+import Constants from 'expo-constants'
+import * as Device from 'expo-device'
 import { supabase } from '../../../../lib/supabase'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { COLORS } from '../../../../lib/constants'
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "../../../../components/MapView"
-import Constants from 'expo-constants'
-import * as Device from 'expo-device'
-import type { Region } from "../../../../components/MapView"
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE, canUseMapLibre } from '../../../../components/MapView'
+import type { Region } from '../../../../components/MapView'
 
-// ✅ REMOVED: import * as Notifications from 'expo-notifications'
-// ✅ REMOVED: import { navigateFromNotification, markNotificationRead } from '../../../../services/notifications'
-// Notifications are lazy-loaded below only on real device builds
+// ── Order sub-components ──────────────────────────────────────────────────────
+import StatusHero      from '../../../../components/orders/StatusHero'
+import OrderTimeline   from '../../../../components/orders/OrderTimeline'
+import CustomOrderFlow from '../../../../components/orders/CustomOrderFlow'
+import OrderItems      from '../../../../components/orders/OrderItems'
+import BillSection     from '../../../../components/orders/BillSection'
+import DeliverySection from '../../../../components/orders/DeliverySection'
+import MerchantSection from '../../../../components/orders/MerchantSection'
+import ReviewSection   from '../../../../components/orders/ReviewSection'
+import CancelModal     from '../../../../components/orders/CancelModal'
+import {
+  ACTIVE_STATUSES, CANCELLABLE_STATUSES,
+  RESTAURANT_TIMELINE, STORE_TIMELINE, CUSTOM_TIMELINE,
+  STATUS_ORDER, TRACKABLE_STATUSES,
+} from '../../../../components/orders/constants'
+import type { OrderDetail, DriverInfo, LatLng } from '../../../../components/orders/types'
+import { useAppSettings , getSupportWhatsApp } from '../../../../hooks/useAppSettings'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type OrderDetail = {
-  // camelCase coordinate fields used by the UI (nullable)
-  deliverylatitude?: number | null
-  deliverylongitude?: number | null
-  // hub origin in camelCase (nullable) — keep flexible to match returned payloads
-  huborigin?: { lat?: number | null; lng?: number | null; label?: string | null } | null
-  id: string; order_number: number; status: string
-  order_type: string | null
-  subtotal: number; delivery_fee: number; tax: number; discount: number
-  total_amount: number; payment_method: string; payment_status: string
-  delivery_address: string; delivery_address_label: string | null
-  customer_notes: string | null; special_instructions: string | null
-  delivery_instructions: string | null
-  created_at: string; updated_at: string
-  estimated_delivery_time: string | null; actual_delivery_time: string | null
-  promo_code: string | null; promo_id: string | null
-  cancellation_reason: string | null; cancelled_by: string | null
-  rating: number | null; review: string | null
-  items: any[]
-  merchant_id: string | null; driver_id: string | null
-  customer_phone: string | null; recipient_name: string | null
-  delivery_latitude: number | null; delivery_longitude: number | null
-  delivery_distance_km: number | null
-  customer_location: any; driver_location: any
-  hub_origin: { lat: number; lng: number; label: string } | null
-}
 
+// ── MerchantInfo — defined at module level (not inside the component) ─────────
 type MerchantInfo = {
-  id: string; business_name: string; logo_url: string | null
-  phone: string | null; address: string | null
-  latitude: number | null; longitude: number | null
+  id:            string
+  business_name: string        // ✅ snake_case — matches Supabase column
+  logo_url:      string | null
+  phone:         string | null
+  address:       string | null
+  latitude:      number | null
+  longitude:     number | null
 }
 
-type DriverInfo = { full_name: string | null; phone: string | null }
- 
-type LatLng = { latitude: number; longitude: number }
-
-
-// ─── Timeline ─────────────────────────────────────────────────────────────────
-const TIMELINE = [
-  { key: 'pending',    label: 'Order Placed',    emoji: '🕐' },
-  { key: 'confirmed',  label: 'Confirmed',        emoji: '✅' },
-  { key: 'preparing',  label: 'Preparing',        emoji: '👨‍🍳' },
-  { key: 'ready',      label: 'Ready for Pickup', emoji: '📦' },
-  { key: 'picked_up',   label: 'Picked Up',        emoji: '🛵' },
-  { key: 'on_the_way', label: 'On the Way',       emoji: '🚀' },
-  { key: 'delivered',  label: 'Delivered',        emoji: '🎉' },
-]
-
-const STORE_TIMELINE = [
-  { key: 'pending',    label: 'Order Placed',    emoji: '🕐' },
-  { key: 'confirmed',  label: 'Order Confirmed', emoji: '✅' },
-  { key: 'preparing',  label: 'Packing Items',   emoji: '📦' },
-  { key: 'ready',      label: 'Ready to Ship',   emoji: '🚚' },
-  { key: 'picked_up',   label: 'Dispatched',      emoji: '🛵' },
-  { key: 'on_the_way', label: 'On the Way',      emoji: '🚀' },
-  { key: 'delivered',  label: 'Delivered',       emoji: '🎉' },
-]
-
-const STATUS_ORDER  = ['pending','confirmed','preparing','ready','picked_up','on_the_way','delivered']
-const ACTIVE        = ['pending','confirmed','preparing','ready','assigned','picked_up','on_the_way','out_for_delivery', 'delivered']
-const CANCELLABLE   = ['pending','confirmed']
-
-const CANCEL_REASONS = [
-  'Ordered by mistake', 'Delivery taking too long',
-  'Found a better option', 'Payment issue',
-  'Changed my mind', 'Restaurant not responding',
-]
-
-const STATUS_COLORS: Record<string, string> = {
-  pending:   '#F59E0B', confirmed: '#3B82F6', preparing: '#8B5CF6',
-  ready:     '#10B981', assigned:  '#06B6D4', pickedup:  '#F97316',
-  on_the_way:'#F97316', delivered: '#22C55E', cancelled: '#EF4444', rejected: '#EF4444',
-}
-
-// ─── Check if we can use push notifications ───────────────────────────────────
-// Expo Go on Android (SDK 53+) does NOT support push notifications
+// ── Push safety guard ─────────────────────────────────────────────────────────
 const canUsePush =
   Device.isDevice &&
   !(Platform.OS === 'android' && Constants.appOwnership === 'expo')
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-function BillRow({ label, value, green }: { label: string; value: string; green?: boolean }) {
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-      <Text style={{ color: '#6B7280', fontSize: 14 }}>{label}</Text>
-      <Text style={{ fontWeight: '700', color: green ? '#15803D' : COLORS.text, fontSize: 14 }}>
-        {value}
-      </Text>
-    </View>
-  )
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function parseLocation(v: unknown): { lat: number; lng: number } | null {
+  if (!v) return null
+  if (typeof v === 'object' && v !== null) {
+    const o = v as any
+    if (typeof o.lat === 'number' && typeof o.lng === 'number') return o
+  }
+  if (typeof v === 'string') {
+    try {
+      const o = JSON.parse(v)
+      if (typeof o.lat === 'number' && typeof o.lng === 'number') return o
+    } catch { /* ignore */ }
+  }
+  return null
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+function toLatLng(lat?: number | null, lng?: number | null): LatLng | null {
+  return typeof lat === 'number' && typeof lng === 'number'
+    ? { latitude: lat, longitude: lng }
+    : null
+}
+
+function fmtDateTime(iso?: string | null) {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    })
+  } catch { return iso }
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 export default function OrderDetailPage() {
   const { id }   = useLocalSearchParams<{ id: string }>()
   const router   = useRouter()
   const { user } = useAuth()
+  const { settings } = useAppSettings()
 
-  const [order,      setOrder]     = useState<OrderDetail | null>(null)
-  const [merchant,   setMerchant]  = useState<MerchantInfo | null>(null)
-  const [driver,     setDriver]    = useState<DriverInfo | null>(null)
-  const [loading,    setLoading]   = useState(true)
-  const [refreshing, setRefreshing]= useState(false)
-  const [driverCoords, setDriverCoords] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [order,         setOrder]         = useState<OrderDetail | null>(null)
+  const [merchant,      setMerchant]      = useState<MerchantInfo | null>(null)
+  const [driver,        setDriver]        = useState<DriverInfo | null>(null)
+  const [loading,       setLoading]       = useState(true)
+  const [refreshing,    setRefreshing]    = useState(false)
+  const [driverCoords,  setDriverCoords]  = useState<LatLng | null>(null)
+  const [showCancel,    setShowCancel]    = useState(false)
+  const [cancelling,    setCancelling]    = useState(false)
+  const [acceptingQuote,setAcceptingQuote]= useState(false)
 
-  // Review
-  const [showReviewForm,    setShowReviewForm]    = useState(false)
-  const [starRating,        setStarRating]        = useState(5)
-  const [reviewText,        setReviewText]        = useState('')
-  const [submittingReview,  setSubmittingReview]  = useState(false)
-  const [reviewDone,        setReviewDone]        = useState(false)
+  const orderIdRef = useRef<string | null>(null)
 
-  // Cancel
-  const [showCancelModal, setShowCancelModal] = useState(false)
-  const [cancelReason,    setCancelReason]    = useState('')
-  const [cancelling,      setCancelling]      = useState(false)
-
-  // ── Load ───────────────────────────────────────────────────────────────────
+  // ── Load order ────────────────────────────────────────────────────────────
   const loadOrder = useCallback(async () => {
     if (!id || !user) return
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('*')
+        .select(`
+          id, order_number, status, order_type, platform_handled,
+          subtotal, delivery_fee, tax, discount, total_amount,
+          payment_method, payment_status,
+          delivery_address, delivery_address_label,
+          customer_notes, special_instructions, delivery_instructions,
+          created_at, updated_at,
+          estimated_delivery_time, actual_delivery_time, preparation_time,
+          cancellation_reason, cancelled_by,
+          rating, review,
+          delivery_distance_km,
+          customer_phone, recipient_name,
+          delivery_latitude, delivery_longitude,
+          customer_location, driver_location,
+          promo_code, promo_id,
+          merchant_id, driver_id,
+          hub_origin, items,
+          custom_order_ref, custom_order_status,
+          quoted_amount, quote_message,
+          custom_category, custom_image_url
+        `)
         .eq('id', id)
         .eq('customer_id', user.id)
         .single()
-      if (error) throw error
 
-      setOrder(data as OrderDetail)
-      if (data.driver_location?.lat && data.driver_location?.lng)
-        setDriverCoords({ latitude: +data.driver_location.lat, longitude: +data.driver_location.lng })
+      if (error) throw error
+      const o = data as OrderDetail
+      setOrder(o)
+      orderIdRef.current = o.id
+
+      // Parse driver location
+      const dl = parseLocation(o.driver_location)
+      if (dl) setDriverCoords({ latitude: dl.lat, longitude: dl.lng })
+      else    setDriverCoords(null)
 
       // Load merchant (restaurant orders only)
-      if (data.merchant_id && data.order_type !== 'store') {
+      if (o.merchant_id && o.order_type === 'restaurant') {
         const { data: m } = await supabase
           .from('merchants')
-          .select('id,business_name,logo_url,phone,address,latitude,longitude')
-          .eq('id', data.merchant_id)
+          .select('id,business_name,logo_url,phone,address,latitude,longitude') // ✅ snake_case
+          .eq('id', o.merchant_id)
           .maybeSingle()
-        if (m) setMerchant(m as MerchantInfo)
+        setMerchant(m ? (m as MerchantInfo) : null)
+      } else {
+        setMerchant(null)
       }
 
       // Load driver
-      if (data.driver_id) {
+      if (o.driver_id) {
         const { data: d } = await supabase
           .from('profiles')
-          .select('full_name,phone')
-          .eq('id', data.driver_id)
+          .select('id,full_name,phone,avatar_url')
+          .eq('id', o.driver_id)
           .maybeSingle()
-        if (d) setDriver(d as DriverInfo)
+        setDriver(d ? (d as DriverInfo) : null)
+      } else {
+        setDriver(null)
       }
-
-      // Check review
-      const { data: rev } = await supabase
-        .from('reviews')
-        .select('id')
-        .eq('order_id', id)
-        .maybeSingle()
-      if (rev) setReviewDone(true)
-
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to load order', [
         { text: 'Back', onPress: () => router.back() },
@@ -191,103 +175,150 @@ export default function OrderDetailPage() {
 
   useEffect(() => { loadOrder() }, [loadOrder])
 
-  // ── Real-time updates ──────────────────────────────────────────────────────
+  // ── Real-time updates ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!id) return
-    const sub = supabase.channel(`order-detail-${id}`)
+    const sub = supabase
+      .channel(`order-detail-${id}`)
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${id}`,
       }, payload => {
-        const u = payload.new as any
-        setOrder(prev => prev ? { ...prev, ...u } : u)
-        if (u.driver_location?.lat && u.driver_location?.lng)
-          setDriverCoords({ latitude: +u.driver_location.lat, longitude: +u.driver_location.lng })
+        const u = payload.new as Partial<OrderDetail>
+        setOrder(prev => prev ? { ...prev, ...u } : null)
+        const dl = parseLocation(u.driver_location)
+        if (dl) setDriverCoords({ latitude: dl.lat, longitude: dl.lng })
       })
       .subscribe()
     return () => { sub.unsubscribe() }
   }, [id])
 
-  // ── Notification tap handler — SAFE: only runs on real device builds ────────
+  // ── Push notification tap ─────────────────────────────────────────────────
   useEffect(() => {
-    // 🛡️ Skip entirely in Expo Go (SDK 53 removed push from Expo Go)
     if (!canUsePush) return
-
     let sub: any = null
-    // Lazy import — module never loads in Expo Go
-    import('expo-notifications').then(Notifications => {
-      sub = Notifications.addNotificationResponseReceivedListener(response => {
+    import('expo-notifications').then(N => {
+      sub = N.addNotificationResponseReceivedListener(response => {
         const data = response.notification.request.content.data as any
-        if (data?.order_id === id) {
-          // Notification is for this order — just refresh
-          loadOrder()
-        } else {
-          // Different order — navigate there
-          if (data?.order_id) {
-            router.push(`/(customer)/orders/${data.order_id}` as any)
-          }
-        }
+        if (data?.order_id === id) loadOrder()
+        else if (data?.order_id) router.push(`/(customer)/orders/${data.order_id}` as any)
       })
     })
-
     return () => { sub?.remove?.() }
   }, [id, loadOrder, router])
 
   const onRefresh = async () => { setRefreshing(true); await loadOrder(); setRefreshing(false) }
 
-  // ── Review ─────────────────────────────────────────────────────────────────
-  const handleSubmitReview = async () => {
-    if (!order || !user || starRating < 1) return
-    setSubmittingReview(true)
-    try {
-      const { error } = await supabase.from('reviews').insert({
-        order_id:    order.id,
-        customer_id: user.id,
-        merchant_id: order.merchant_id ?? null,
-        driver_id:   order.driver_id ?? null,
-        rating:      starRating,
-        comment:     reviewText.trim() || null,
-        created_at:  new Date().toISOString(),
-      })
-      if (error) throw error
-      await supabase.from('orders').update({
-        rating: starRating, review: reviewText.trim() || null,
-      }).eq('id', order.id)
-      setReviewDone(true)
-      setShowReviewForm(false)
-      Alert.alert('🎉 Thank You!', 'Your review has been submitted!')
-    } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Failed to submit review')
-    } finally { setSubmittingReview(false) }
-  }
-  
-
-  // ── Cancel ─────────────────────────────────────────────────────────────────
-  const handleCancelOrder = async () => {
-    if (!cancelReason.trim()) { Alert.alert('Required', 'Please give a reason.'); return }
+  // ── Cancel order ──────────────────────────────────────────────────────────
+  const handleCancelOrder = async (reason: string) => {
     if (!order || !user) return
+
+    if (!CANCELLABLE_STATUSES.includes(order.status)) {
+      const phone = (settings?.support_phone ?? '+918400009045').replace(/\D/g, '')
+      Alert.alert(
+        'Cannot Cancel',
+        `Your order is already being ${order.status}. Please contact support.`,
+        [
+          {
+            text: '💬 Contact Support',
+            onPress: () => Linking.openURL(
+              `https://wa.me/${phone}?text=Hi! Help cancelling order %23${order.order_number}`
+            ),
+          },
+          { text: 'OK', style: 'cancel' },
+        ]
+      )
+      return
+    }
+
     setCancelling(true)
     try {
       await supabase.from('order_cancellations').insert({
-        order_id:     order.id,
-        customer_id:  user.id,
-        reason:       cancelReason.trim(),
-        cancelled_at: new Date().toISOString(),
+        order_id: order.id, customer_id: user.id,
+        reason, cancelled_at: new Date().toISOString(),
       })
-      await supabase.from('orders').update({
-        status:              'cancelled',
-        cancellation_reason: cancelReason.trim(),
-        cancelled_by:        'customer',
+      const { error } = await supabase.from('orders').update({
+        status: 'cancelled', cancellation_reason: reason,
+        cancelled_by: 'customer', updated_at: new Date().toISOString(),
       }).eq('id', order.id)
-      setShowCancelModal(false)
-      Alert.alert('Order Cancelled', 'Your order has been cancelled.', [
+      if (error) throw error
+
+      await supabase.from('notifications').insert({
+        user_id: user.id,
+        title: 'Order Cancelled',
+        message: `Your order #${order.order_number} has been cancelled.`,
+        type: 'order',
+        data: { order_id: order.id, status: 'cancelled' },
+        body: `Your order #${order.order_number} has been cancelled.`,
+        is_read: false, sent_push: false,
+        created_at: new Date().toISOString(),
+      })
+
+      setShowCancel(false)
+      Alert.alert('Cancelled', 'Your order has been cancelled.', [
         { text: 'OK', onPress: () => router.push('/(customer)/orders' as any) },
       ])
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Failed to cancel')
-    } finally { setCancelling(false) }
+    } finally {
+      setCancelling(false)
+    }
   }
 
-  // ── Guard ──────────────────────────────────────────────────────────────────
+  // ── Accept quote ──────────────────────────────────────────────────────────
+  const handleAcceptQuote = async () => {
+    if (!order) return
+    Alert.alert(
+      'Accept Quote?',
+      `Confirm order for ₹${Number(order.quoted_amount).toFixed(2)}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, Accept',
+          onPress: async () => {
+            setAcceptingQuote(true)
+            try {
+              const { error } = await supabase.from('orders').update({
+                custom_order_status: 'confirmed',
+                total_amount: order.quoted_amount,
+                updated_at: new Date().toISOString(),
+              }).eq('id', order.id)
+              if (error) throw error
+              await loadOrder()
+              Alert.alert('✅ Confirmed!', 'Your custom order has been confirmed.')
+            } catch (e: any) {
+              Alert.alert('Error', e?.message)
+            } finally {
+              setAcceptingQuote(false)
+            }
+          },
+        },
+      ]
+    )
+  }
+
+  // ── Reorder ───────────────────────────────────────────────────────────────
+  const handleReorder = () => {
+    if (!order?.items?.length) return
+    Alert.alert(
+      'Reorder',
+      `Add ${order.items.length} item${order.items.length !== 1 ? 's' : ''} to cart?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reorder',
+          onPress: () => {
+            if (order.order_type === 'restaurant' && order.merchant_id) {
+              router.push(`/(customer)/restaurant/${order.merchant_id}` as any)
+            } else {
+              router.push('/(customer)/store' as any)
+            }
+          },
+        },
+      ]
+    )
+  }
+
+  // ── Guards ────────────────────────────────────────────────────────────────
   if (loading) return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
       <Stack.Screen options={{ title: 'Order Details' }} />
@@ -296,591 +327,355 @@ export default function OrderDetailPage() {
   )
   if (!order) return null
 
-  const isStore    = order.order_type === 'store' || order.merchant_id === null
-  const isActive   = ACTIVE.includes(order.status)
-  const canCancel  = CANCELLABLE.includes(order.status)
+  // ── Derived state ─────────────────────────────────────────────────────────
+  const isStore    = order.order_type === 'store'
+  const isCustom   = order.order_type === 'custom'
+  const isPlatform = isStore || isCustom || order.platform_handled === true
+  const isActive   = ACTIVE_STATUSES.includes(order.status)
+  const canCancel  = CANCELLABLE_STATUSES.includes(order.status)
   const isDelivered = order.status === 'delivered'
-  const isCancelled = order.status === 'cancelled'
-  const currentStep = STATUS_ORDER.indexOf(order.status)
-  const timeline    = isStore ? STORE_TIMELINE : TIMELINE
+  const isCancelled = order.status === 'cancelled' || order.status === 'rejected'
+  const canReorder  = isDelivered || isCancelled
 
- 
+  const timeline = isCustom ? CUSTOM_TIMELINE : isStore ? STORE_TIMELINE : RESTAURANT_TIMELINE
 
-const toLatLng = (lat?: number | null, lng?: number | null): LatLng | null =>
-  typeof lat === 'number' && typeof lng === 'number'
-    ? { latitude: lat, longitude: lng }
-    : null
+  // ── Map coords ────────────────────────────────────────────────────────────
+  const deliveryCoords = toLatLng(
+    order.delivery_latitude  ?? (order as any).deliverylatitude,
+    order.delivery_longitude ?? (order as any).deliverylongitude,
+  )
+  const merchantCoords = toLatLng(merchant?.latitude, merchant?.longitude)
+  const hubLat    = order.hub_origin?.lat ?? (order as any).huborigin?.lat ?? null
+  const hubLng    = order.hub_origin?.lng ?? (order as any).huborigin?.lng ?? null
+  const hubCoords = toLatLng(hubLat, hubLng)
+  const originCoords = isPlatform ? hubCoords : merchantCoords
 
-const deliveryCoords = toLatLng(order?.deliverylatitude, order?.deliverylongitude)
-const merchantCoords = toLatLng(merchant?.latitude, merchant?.longitude)
-const hubCoords = toLatLng(order?.huborigin?.lat, order?.huborigin?.lng)
-// driverCoords already looks like LatLng in your state; ensure it is exactly LatLng|null
+  const mapCenter: LatLng | null = driverCoords ?? originCoords ?? deliveryCoords
+  const initialRegion: Region | undefined = mapCenter
+    ? { ...mapCenter, latitudeDelta: 0.025, longitudeDelta: 0.025 }
+    : undefined
+  const liveRegion: Region | undefined = driverCoords
+    ? { ...driverCoords, latitudeDelta: 0.015, longitudeDelta: 0.015 }
+    : initialRegion
 
-const mapCenter: LatLng | null =
-  driverCoords ?? merchantCoords ?? hubCoords ?? deliveryCoords
+  // Map visibility conditions
+  const driverAssigned = !!order.driver_id && TRACKABLE_STATUSES.includes(order.status)
+  const hasLiveLocation = !!driverCoords
 
-const hasCenter = !!mapCenter
+  const headerColor = isCancelled ? '#EF4444'
+    : isDelivered ? '#10B981'
+    : isCustom    ? '#065F46'
+    : isStore     ? '#5B21B6'
+    : COLORS.primary
 
-const initialRegion: Region | undefined = mapCenter
-  ? { ...mapCenter, latitudeDelta: 0.02, longitudeDelta: 0.02 }
-  : undefined
+  const supportUrl = getSupportWhatsApp(settings, order.order_number)
 
-const liveRegion: Region | undefined = driverCoords
-  ? { ...driverCoords, latitudeDelta: 0.015, longitudeDelta: 0.015 }
-  : initialRegion
-
-  const STAR_LABELS: Record<number, string> = {
-    5: '🎉 Excellent!', 4: '😊 Good', 3: '😐 Okay', 2: '😕 Not great', 1: '😢 Poor',
-  }
-  
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
       <Stack.Screen options={{
-        title: `Order #${order.order_number}`,
-        headerStyle:      { backgroundColor: isStore ? '#5B21B6' : COLORS.primary },
+        title:            `Order #${order.order_number}`,
+        headerStyle:      { backgroundColor: headerColor },
         headerTintColor:  '#fff',
         headerTitleStyle: { fontWeight: '800' },
+        headerRight: () => (
+          <TouchableOpacity
+            onPress={() => router.push('/(customer)/notifications' as any)}
+            style={{ marginRight: 14 }}
+          >
+            <Text style={{ fontSize: 20 }}>🔔</Text>
+          </TouchableOpacity>
+        ),
       }} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
+        }
+        contentContainerStyle={{ paddingBottom: 50 }}
       >
-        {/* ── Status Hero ──────────────────────────────────────────────── */}
-        <View style={[
-          S.hero,
-          isCancelled && { backgroundColor: '#EF4444' },
-          isDelivered && { backgroundColor: '#10B981' },
-          isStore && !isCancelled && !isDelivered && { backgroundColor: '#5B21B6' },
-        ]}>
-          <Text style={{ fontSize: 48, marginBottom: 8 }}>
-            {isDelivered ? '🎉' : isCancelled ? '❌' : isStore ? '🛍️' : isActive ? '🔄' : '📋'}
-          </Text>
-          <Text style={S.heroStatus}>
-            {order.status.replace(/_/g, ' ').toUpperCase()}
-          </Text>
-          <Text style={S.heroSub}>Order #{order.order_number}</Text>
-          {isStore && (
-            <View style={S.sourceChip}>
-              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>
-                🛍️ PBExpress Store · Patti, Punjab
-              </Text>
-            </View>
-          )}
-          {isActive && order.estimated_delivery_time && (
-            <View style={S.etaChip}>
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>
-                🕐 ETA {new Date(order.estimated_delivery_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            </View>
-          )}
-          {isDelivered && order.actual_delivery_time && (
-            <View style={S.etaChip}>
-              <Text style={{ color: '#fff', fontWeight: '600', fontSize: 12 }}>
-                Delivered at {new Date(order.actual_delivery_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            </View>
-          )}
-        </View>
+        {/* ── Status Hero ─────────────────────────────────────────────── */}
+        <StatusHero order={order} />
 
-        {/* ── Live Map ──────────────────────────────────────────────────── */}
-     {isActive && initialRegion ? (
- <MapView
-  style={S.map}
-  provider={PROVIDER_GOOGLE}
-  initialRegion={initialRegion}
-  region={liveRegion}
-  showsUserLocation
->
-            {merchantCoords && (
-              <Marker coordinate={merchantCoords} title={merchant?.business_name ?? 'Restaurant'} pinColor="#FF6B35" />
+        {/* ── Custom Order Flow ────────────────────────────────────────── */}
+        {isCustom && (
+          <CustomOrderFlow
+            order={order}
+            onAcceptQuote={
+              (order.custom_order_status ?? order.status) === 'quoted' && order.quoted_amount
+                ? handleAcceptQuote
+                : undefined
+            }
+          />
+        )}
+
+        {/* ── Live Map ─────────────────────────────────────────────────── */}
+        {!driverAssigned ? (
+          // Not yet assigned
+          isActive && (
+            <View style={S.mapPlaceholder}>
+              <Text style={{ fontSize: 32, marginBottom: 8 }}>🛵</Text>
+              <Text style={{ fontWeight: '700', color: '#1F2937', fontSize: 14 }}>
+                Live tracking coming soon
+              </Text>
+              <Text style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', marginTop: 4 }}>
+                Map will appear once a driver is assigned to your order.
+              </Text>
+            </View>
+          )
+        ) : !hasLiveLocation ? (
+          // Assigned but no location yet
+          <View style={[S.mapPlaceholder, { backgroundColor: '#FFF7ED', borderColor: '#FED7AA' }]}>
+            <Text style={{ fontSize: 32, marginBottom: 8 }}>📡</Text>
+            <Text style={{ fontWeight: '700', color: '#92400E', fontSize: 14 }}>
+              Driver assigned — waiting for location
+            </Text>
+            <Text style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', marginTop: 4 }}>
+              Live map will appear once your driver shares their location.
+            </Text>
+            {driver && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 8 }}>
+                <Text style={{ fontSize: 13, color: '#92400E', fontWeight: '700' }}>
+                  🛵 {driver.full_name ?? 'Driver'}
+                </Text>
+                {driver.phone && (
+                  <TouchableOpacity
+                    onPress={() => Linking.openURL(`tel:${driver.phone}`)}
+                    style={{ backgroundColor: '#F97316', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 5 }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 11 }}>📞 Call</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
-            {isStore && hubCoords && (
-              <Marker coordinate={hubCoords} title="PBExpress Hub — Patti" pinColor="#7C3AED" />
-            )}
-            {deliveryCoords && (
-              <Marker coordinate={deliveryCoords} title="Your Location" pinColor="#10B981" />
-            )}
-            {driverCoords && (
-              <Marker coordinate={driverCoords} title="Driver" pinColor="#3B82F6" />
-            )}
-            {driverCoords && deliveryCoords && (
-              <Polyline
-                coordinates={[driverCoords, deliveryCoords]}
-                strokeColor={COLORS.primary} strokeWidth={3} lineDashPattern={[6, 3]}
+          </View>
+        ) : (
+          // ✅ Driver + live location → full map
+          <View style={S.mapWrap}>
+            <MapView
+              style={S.map}
+              provider={PROVIDER_GOOGLE}
+              initialRegion={liveRegion ?? initialRegion}
+              region={liveRegion}
+              showsUserLocation
+              fallbackLatitude={driverCoords?.latitude}
+              fallbackLongitude={driverCoords?.longitude}
+              fallbackLabel="Driver Location"
+            >
+              {originCoords && (
+                <Marker
+                  coordinate={originCoords}
+                  title={isPlatform
+                    ? (order.hub_origin?.label ?? 'PBExpress Hub')
+                    : (merchant?.business_name ?? 'Restaurant')}
+                  pinColor={isPlatform ? '#7C3AED' : '#FF6B35'}
+                />
+              )}
+              {deliveryCoords && (
+                <Marker coordinate={deliveryCoords} title="Your Address" pinColor="#10B981" />
+              )}
+              <Marker
+                coordinate={driverCoords!}
+                title={`🛵 ${driver?.full_name ?? 'Driver'}`}
+                pinColor="#3B82F6"
               />
+              {deliveryCoords && (
+                <Polyline
+                  coordinates={[driverCoords!, deliveryCoords]}
+                  strokeColor={COLORS.primary}
+                  strokeWidth={3}
+                />
+              )}
+            </MapView>
+
+            <View style={S.livePill}>
+              <View style={S.liveDot} />
+              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>
+                {driver?.full_name ?? 'Driver'} is on the way
+              </Text>
+            </View>
+
+            {deliveryCoords && (
+              <View style={S.distancePill}>
+                <Text style={{ color: '#1F2937', fontSize: 11, fontWeight: '700' }}>
+                  📍 {order.delivery_distance_km
+                    ? `${Number(order.delivery_distance_km).toFixed(1)} km away`
+                    : 'Tracking live'}
+                </Text>
+              </View>
             )}
-  </MapView>
-) : isActive ? (
-  <View style={{ padding: 12 }}>
-    <Text style={{ color: COLORS.textMuted }}>Tracking will appear once location is available.</Text>
-  </View>
-) : null}
-
-        {/* ── Status Timeline ───────────────────────────────────────────── */}
-        {!isCancelled && (
-          <View style={S.section}>
-            <Text style={S.sectionTitle}>📍 Order Progress</Text>
-            {timeline.map((step, idx) => {
-              const stepIdx   = STATUS_ORDER.indexOf(step.key)
-              const done      = stepIdx <= currentStep
-              const isCurrent = step.key === order.status ||
-                (step.key === 'pickedup' && order.status === 'assigned')
-              const nextDone  = idx < timeline.length - 1 &&
-                STATUS_ORDER.indexOf(timeline[idx + 1].key) <= currentStep
-
-              return (
-                <View key={step.key} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                  <View style={{ alignItems: 'center', width: 38 }}>
-                    <View style={[
-                      S.dot,
-                      done      && S.dotDone,
-                      isCurrent && S.dotCurrent,
-                      !done     && S.dotPending,
-                    ]}>
-                      {done
-                        ? <Text style={{ fontSize: 13 }}>{step.emoji}</Text>
-                        : <View style={S.dotEmpty} />
-                      }
-                    </View>
-                    {idx < timeline.length - 1 && (
-                      <View style={[S.line, nextDone && S.lineDone]} />
-                    )}
-                  </View>
-                  <View style={{ flex: 1, paddingLeft: 12, paddingBottom: 22, paddingTop: 5 }}>
-                    <Text style={[
-                      S.stepLabel,
-                      done      && { color: COLORS.text, fontWeight: '700' },
-                      isCurrent && { color: COLORS.primary, fontWeight: '800' },
-                    ]}>
-                      {step.label}
-                    </Text>
-                    {isCurrent && (
-                      <Text style={{ fontSize: 11, color: COLORS.primary, marginTop: 2, fontWeight: '600' }}>
-                        ● Current status
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              )
-            })}
           </View>
         )}
 
-        {/* ── Cancelled Banner ──────────────────────────────────────────── */}
+        {/* ── Order Timeline ───────────────────────────────────────────── */}
+        {!isCancelled && !isCustom && (
+          <OrderTimeline timeline={timeline} status={order.status} />
+        )}
+
+        {/* ── Cancelled Banner ─────────────────────────────────────────── */}
         {isCancelled && (
           <View style={S.cancelBanner}>
-            <Text style={{ fontSize: 16, fontWeight: '900', color: '#991B1B', marginBottom: 4 }}>
-              ❌ Order Cancelled
+            <Text style={S.cancelTitle}>
+              {order.status === 'rejected' ? '🚫 Order Rejected' : '❌ Order Cancelled'}
             </Text>
             {order.cancellation_reason && (
-              <Text style={{ color: '#7F1D1D', fontSize: 13 }}>
-                Reason: {order.cancellation_reason}
-              </Text>
+              <Text style={S.cancelReason}>Reason: {order.cancellation_reason}</Text>
             )}
             {order.cancelled_by && (
-              <Text style={{ color: '#B91C1C', fontSize: 12, marginTop: 3 }}>
-                Cancelled by: {order.cancelled_by}
+              <Text style={S.cancelBy}>
+                Cancelled by: {order.cancelled_by === 'customer' ? 'You' : order.cancelled_by}
               </Text>
             )}
           </View>
         )}
 
-        {/* ── Source / Merchant ─────────────────────────────────────────── */}
-        <View style={S.section}>
-          <Text style={S.sectionTitle}>
-            {isStore ? '🛍️ Order Source' : '🏪 Restaurant'}
-          </Text>
-          {isStore ? (
-            <View style={S.storeOriginCard}>
-              <Text style={{ fontSize: 28, marginRight: 12 }}>🏪</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '800', color: '#5B21B6', fontSize: 15 }}>
-                  PBExpress Store
-                </Text>
-                <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
-                  Patti, Punjab 143416
-                </Text>
-                {order.hub_origin && (
-                  <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
-                    📍 {order.hub_origin.label}
-                  </Text>
-                )}
-              </View>
-              <TouchableOpacity
-                style={S.contactBtn}
-                onPress={() => Linking.openURL('tel:+918400009045')}
-              >
-                <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 13 }}>📞 Help</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              <Text style={{ fontWeight: '800', fontSize: 15, color: COLORS.text }}>
-                {merchant?.business_name}
-              </Text>
-              {merchant?.address && (
-                <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 3, lineHeight: 18 }}>
-                  {merchant.address}
-                </Text>
-              )}
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-                {merchant?.phone && (
-                  <TouchableOpacity
-                    style={S.contactBtn}
-                    onPress={() => Linking.openURL(`tel:${merchant.phone}`)}
-                  >
-                    <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 13 }}>📞 Call</Text>
-                  </TouchableOpacity>
-                )}
-                {merchant?.phone && (
-                  <TouchableOpacity
-                    style={S.contactBtn}
-                    onPress={() => Linking.openURL(
-                      `https://wa.me/${merchant.phone?.replace(/\D/g, '')}?text=Hi! My order is %23${order.order_number}`
-                    )}
-                  >
-                    <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 13 }}>💬 WhatsApp</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </>
-          )}
-
-          {/* Driver card */}
-          {driver && (isActive || isDelivered) && (
-            <View style={S.driverCard}>
-              <Text style={{ fontSize: 28 }}>🛵</Text>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={{ fontWeight: '800', color: COLORS.text, fontSize: 15 }}>
-                  {driver.full_name || 'Your Driver'}
-                </Text>
-                <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 1 }}>Delivery Partner</Text>
-              </View>
-              {driver.phone && (
-                <TouchableOpacity
-                  style={S.callBtn}
-                  onPress={() => Linking.openURL(`tel:${driver.phone}`)}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>📞 Call</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </View>
-
-        {/* ── Items ─────────────────────────────────────────────────────── */}
-        <View style={S.section}>
-          <Text style={S.sectionTitle}>
-            {isStore ? '🛍️ Ordered Products' : '🛒 Items'} ({(order.items ?? []).length})
-          </Text>
-          {(order.items ?? []).map((item: any, i: number) => {
-            const isFreeItem = item.is_free || item.price === 0
-            const disc       = item.discount_percentage ? item.price * item.discount_percentage / 100 : 0
-            const effective  = (item.price - disc) * item.quantity
-            return (
-              <View key={item.id ?? i} style={[S.itemRow, isFreeItem && { backgroundColor: '#F0FDF4' }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '700', color: isFreeItem ? '#065F46' : COLORS.text, fontSize: 14 }} numberOfLines={2}>
-                    {item.name}
-                  </Text>
-                  {item.category && (
-                    <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>{item.category}</Text>
-                  )}
-                  {isFreeItem && (
-                    <View style={{ alignSelf: 'flex-start', backgroundColor: '#16A34A', borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, marginTop: 3 }}>
-                      <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>FREE</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={{ color: '#6B7280', marginHorizontal: 14, fontSize: 13 }}>
-                  ×{item.quantity}
-                </Text>
-                <Text style={{ fontWeight: '700', color: isFreeItem ? '#065F46' : COLORS.text }}>
-                  {isFreeItem ? 'FREE' : `₹${effective.toFixed(0)}`}
-                </Text>
-              </View>
-            )
-          })}
-        </View>
-
-        {/* ── Bill ──────────────────────────────────────────────────────── */}
-        <View style={S.section}>
-          <Text style={S.sectionTitle}>🧾 Bill Details</Text>
-          <BillRow label="Subtotal" value={`₹${Number(order.subtotal).toFixed(2)}`} />
-          {Number(order.discount) > 0 && (
-            <BillRow
-              label={`Promo${order.promo_code ? ` (${order.promo_code})` : ''}`}
-              value={`-₹${Number(order.discount).toFixed(2)}`}
-              green
-            />
-          )}
-          <BillRow label="Delivery Fee" value={`₹${Number(order.delivery_fee).toFixed(2)}`} />
-          {Number(order.tax) > 0 && (
-            <BillRow label="Taxes & Fees" value={`₹${Number(order.tax).toFixed(2)}`} />
-          )}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 14, borderTopWidth: 2, borderTopColor: '#F3F4F6', marginTop: 6 }}>
-            <Text style={{ fontSize: 17, fontWeight: '900', color: COLORS.text }}>Total Paid</Text>
-            <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.primary }}>
-              ₹{Number(order.total_amount).toFixed(2)}
+        {/* ── Custom Category ──────────────────────────────────────────── */}
+        {isCustom && order.custom_category && (
+          <View style={[S.infoCard, { backgroundColor: '#F0FDF4', borderColor: '#A7F3D0' }]}>
+            <Text style={{ fontSize: 13, color: '#065F46', fontWeight: '700' }}>
+              📂 Category:{' '}
+              {order.custom_category.charAt(0).toUpperCase() + order.custom_category.slice(1)}
             </Text>
           </View>
-          <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
-            {order.payment_method?.toUpperCase()} · {order.payment_status?.toUpperCase()}
-            {order.delivery_distance_km
-              ? `  ·  📏 ${Number(order.delivery_distance_km).toFixed(1)} km${isStore ? ' from Patti' : ''}`
-              : ''
+        )}
+
+        {/* ── Items ────────────────────────────────────────────────────── */}
+        <OrderItems items={order.items ?? []} isStore={isStore || isCustom} />
+
+        {/* ── Bill ─────────────────────────────────────────────────────── */}
+        <BillSection order={order} isStore={isStore || isCustom} />
+
+        {/* ── Delivery Address ─────────────────────────────────────────── */}
+        <DeliverySection order={order} />
+
+        {/* ── Order Dates ──────────────────────────────────────────────── */}
+        <OrderMeta order={order} />
+
+        {/* ── Merchant / Driver ────────────────────────────────────────── */}
+        <MerchantSection
+          order={order}
+          merchant={merchant}
+          driver={driver}
+          isStore={isStore || isCustom}
+          isActive={isActive}
+          isDelivered={isDelivered}
+        />
+
+        {/* ── Review Section ────────────────────────────────────────────── */}
+        {isDelivered && (
+          <ReviewSection
+            orderId={order.id}
+            customerId={user!.id}
+            merchantId={order.merchant_id}
+            driverId={order.driver_id}
+            orderItems={order.items ?? []}
+            isStore={isStore}
+            isCustom={isCustom}
+            onDone={rev =>
+              setOrder(prev =>
+                prev ? { ...prev, rating: rev.overall_rating ?? rev.rating } : prev
+              )
             }
-          </Text>
+          />
+        )}
+
+        {/* ── Action Buttons ────────────────────────────────────────────── */}
+        <View style={S.actions}>
+          {canCancel && (
+            <TouchableOpacity style={S.cancelBtn} onPress={() => setShowCancel(true)}>
+              <Text style={{ color: '#DC2626', fontWeight: '800', fontSize: 14 }}>❌ Cancel Order</Text>
+            </TouchableOpacity>
+          )}
+          {canReorder && (
+            <TouchableOpacity style={S.reorderBtn} onPress={handleReorder}>
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>🔁 Reorder</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={S.helpBtn}
+            onPress={() => Linking.openURL(supportUrl)}
+          >
+            <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 14 }}>💬 Need Help?</Text>
+          </TouchableOpacity>
         </View>
-
-        {/* ── Delivery Address ──────────────────────────────────────────── */}
-        <View style={S.section}>
-          <Text style={S.sectionTitle}>📍 Delivery Address</Text>
-          {order.delivery_address_label && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-              <Text style={{ fontSize: 16 }}>
-                {order.delivery_address_label === 'Home' ? '🏠'
-                  : order.delivery_address_label === 'Work' ? '🏢' : '📍'}
-              </Text>
-              <Text style={{ fontWeight: '700', color: COLORS.text }}>{order.delivery_address_label}</Text>
-            </View>
-          )}
-          {order.recipient_name && (
-            <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 4 }}>
-              👤 {order.recipient_name}
-            </Text>
-          )}
-          <Text style={{ fontSize: 14, color: '#4B5563', lineHeight: 22 }}>
-            {order.delivery_address}
-          </Text>
-          {order.delivery_instructions && (
-            <View style={S.noteBox}>
-              <Text style={{ fontSize: 13, color: '#92400E' }}>
-                📋 {order.delivery_instructions}
-              </Text>
-            </View>
-          )}
-          {order.special_instructions && (
-            <View style={S.noteBox}>
-              <Text style={{ fontSize: 13, color: COLORS.text }}>
-                📝 {order.special_instructions}
-              </Text>
-            </View>
-          )}
-          {order.customer_notes && (
-            <View style={S.noteBox}>
-              <Text style={{ fontSize: 13, color: COLORS.text }}>
-                💬 {order.customer_notes}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* ── Review ────────────────────────────────────────────────────── */}
-        {isDelivered && !reviewDone && (
-          <View style={S.section}>
-            <Text style={S.sectionTitle}>⭐ Rate Your Experience</Text>
-            {!showReviewForm ? (
-              <TouchableOpacity style={S.reviewCta} onPress={() => setShowReviewForm(true)}>
-                <Text style={{ fontSize: 32 }}>⭐</Text>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={{ fontWeight: '800', color: COLORS.text, fontSize: 15 }}>
-                    How was your {isStore ? 'order' : 'food'}?
-                  </Text>
-                  <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
-                    Help others with your feedback
-                  </Text>
-                </View>
-                <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 20 }}>→</Text>
-              </TouchableOpacity>
-            ) : (
-              <View>
-                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 10 }}>
-                  {[1,2,3,4,5].map(s => (
-                    <TouchableOpacity key={s} onPress={() => setStarRating(s)}>
-                      <Text style={{ fontSize: 38, opacity: s <= starRating ? 1 : 0.25 }}>⭐</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <Text style={{ textAlign: 'center', fontWeight: '800', color: COLORS.text, marginBottom: 14, fontSize: 16 }}>
-                  {STAR_LABELS[starRating]}
-                </Text>
-                <TextInput
-                  style={S.reviewInput}
-                  multiline numberOfLines={3}
-                  placeholder="Share your experience (optional)..."
-                  value={reviewText}
-                  onChangeText={setReviewText}
-                  placeholderTextColor="#9CA3AF"
-                  textAlignVertical="top"
-                />
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                  <TouchableOpacity style={S.reviewCancelBtn} onPress={() => setShowReviewForm(false)}>
-                    <Text style={{ fontWeight: '700', color: '#6B7280' }}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[S.reviewSubmitBtn, submittingReview && { opacity: 0.6 }]}
-                    onPress={handleSubmitReview}
-                    disabled={submittingReview}
-                  >
-                    {submittingReview
-                      ? <ActivityIndicator color="#fff" size="small" />
-                      : <Text style={{ color: '#fff', fontWeight: '800' }}>Submit Review</Text>
-                    }
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Review done */}
-        {isDelivered && reviewDone && (
-          <View style={S.section}>
-            <View style={{ alignItems: 'center', paddingVertical: 8 }}>
-              <Text style={{ fontSize: 36, marginBottom: 8 }}>🙏</Text>
-              <Text style={{ fontWeight: '800', color: COLORS.text, fontSize: 16 }}>Review Submitted</Text>
-              <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
-                Thank you for your feedback!
-              </Text>
-              {order.rating && (
-                <Text style={{ marginTop: 8, fontSize: 20 }}>{'⭐'.repeat(order.rating)}</Text>
-              )}
-            </View>
-          </View>
-        )}
-
-        {/* ── Reorder (restaurant only) ─────────────────────────────────── */}
-        {isDelivered && !isStore && (
-          <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
-            <TouchableOpacity
-              style={S.reorderBtn}
-              onPress={() => router.push(`/(customer)/restaurant/${order.merchant_id}` as any)}
-            >
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
-                🔄 Reorder from {merchant?.business_name}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ── Shop again (store orders) ──────────────────────────────────── */}
-        {isDelivered && isStore && (
-          <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
-            <TouchableOpacity
-              style={[S.reorderBtn, { backgroundColor: '#5B21B6' }]}
-              onPress={() => router.push('/(customer)/store' as any)}
-            >
-              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
-                🛍️ Shop Again in PBExpress Store
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ── Cancel ───────────────────────────────────────────────────── */}
-        {canCancel && (
-          <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
-            <TouchableOpacity style={S.cancelBtn} onPress={() => setShowCancelModal(true)}>
-              <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14 }}>❌ Cancel This Order</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <View style={{ height: 48 }} />
       </ScrollView>
 
-      {/* ── Cancel Modal ──────────────────────────────────────────────── */}
-      {showCancelModal && (
-        <View style={S.overlay}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <View style={S.modal}>
-              <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text, marginBottom: 4, textAlign: 'center' }}>
-                Cancel Order #{order.order_number}?
-              </Text>
-              <Text style={{ color: '#6B7280', textAlign: 'center', marginBottom: 16, fontSize: 13 }}>
-                Select a reason or describe below
-              </Text>
-              {CANCEL_REASONS.map(r => (
-                <TouchableOpacity
-                  key={r}
-                  style={[S.reasonBtn, cancelReason === r && S.reasonBtnActive]}
-                  onPress={() => setCancelReason(r)}
-                >
-                  <Text style={[{ fontWeight: '600', color: '#4B5563', fontSize: 13 }, cancelReason === r && { color: COLORS.primary }]}>
-                    {cancelReason === r ? '● ' : '○ '}{r}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-              <TextInput
-                style={S.reasonInput}
-                placeholder="Or type your own reason..."
-                value={cancelReason}
-                onChangeText={setCancelReason}
-                placeholderTextColor="#9CA3AF"
-              />
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-                <TouchableOpacity
-                  style={[S.modalBtn, { backgroundColor: '#F3F4F6', flex: 1 }]}
-                  onPress={() => { setShowCancelModal(false); setCancelReason('') }}
-                >
-                  <Text style={{ fontWeight: '700', color: '#6B7280' }}>Keep Order</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[S.modalBtn, { backgroundColor: '#EF4444', flex: 1 }, (!cancelReason.trim() || cancelling) && { opacity: 0.5 }]}
-                  onPress={handleCancelOrder}
-                  disabled={!cancelReason.trim() || cancelling}
-                >
-                  {cancelling
-                    ? <ActivityIndicator color="#fff" size="small" />
-                    : <Text style={{ color: '#fff', fontWeight: '800' }}>Cancel Order</Text>
-                  }
-                </TouchableOpacity>
-              </View>
-            </View>
-          </ScrollView>
+      {/* ── Cancel Modal ─────────────────────────────────────────────────── */}
+      <CancelModal
+        visible={showCancel}
+        orderNumber={order.order_number}
+        cancelling={cancelling}
+        onConfirm={handleCancelOrder}
+        onDismiss={() => setShowCancel(false)}
+      />
+
+      {/* ── Quote accepting overlay ───────────────────────────────────────── */}
+      {acceptingQuote && (
+        <View style={S.quoteOverlay}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={{ marginTop: 10, color: '#fff', fontWeight: '700' }}>Confirming quote…</Text>
         </View>
       )}
     </View>
   )
 }
 
+// ── OrderMeta sub-component ───────────────────────────────────────────────────
+function OrderMeta({ order }: { order: OrderDetail }) {
+  const rows = [
+    { label: '🕐 Placed',        value: fmtDateTime(order.created_at) },
+    { label: '🔄 Last Updated',  value: fmtDateTime(order.updated_at) },
+    { label: '⏱️ Est. Delivery', value: fmtDateTime(order.estimated_delivery_time) },
+    ...(order.actual_delivery_time
+      ? [{ label: '✅ Delivered At', value: fmtDateTime(order.actual_delivery_time) }]
+      : []),
+    ...(order.preparation_time
+      ? [{ label: '🍳 Prep Time',   value: `${order.preparation_time} min` }]
+      : []),
+  ]
+
+  return (
+    <View style={S2.section}>
+      <Text style={S2.title}>🗓️ Order Timeline</Text>
+      {rows.map(r => (
+        <View key={r.label} style={S2.row}>
+          <Text style={S2.lbl}>{r.label}</Text>
+          <Text style={S2.val}>{r.value}</Text>
+        </View>
+      ))}
+    </View>
+  )
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
-  hero:         { backgroundColor: COLORS.primary, padding: 28, alignItems: 'center' },
-  heroStatus:   { fontSize: 22, fontWeight: '900', color: '#fff', marginBottom: 4 },
-  heroSub:      { fontSize: 14, color: 'rgba(255,255,255,0.8)' },
-  sourceChip:   { marginTop: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5 },
-  etaChip:      { marginTop: 10, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
-  map:          { height: 210, width: '100%' },
-  section:      { backgroundColor: '#fff', marginHorizontal: 16, marginTop: 10, borderRadius: 16, padding: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: COLORS.text, marginBottom: 14 },
-  dot:          { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  dotDone:      { backgroundColor: '#D1FAE5', borderWidth: 2, borderColor: '#10B981' },
-  dotCurrent:   { backgroundColor: '#FFF3EE', borderWidth: 2.5, borderColor: COLORS.primary },
-  dotPending:   { backgroundColor: '#F3F4F6', borderWidth: 2, borderColor: '#D1D5DB' },
-  dotEmpty:     { width: 10, height: 10, borderRadius: 5, backgroundColor: '#D1D5DB' },
-  line:         { width: 2, height: 26, backgroundColor: '#E5E7EB', marginTop: 2 },
-  lineDone:     { backgroundColor: '#10B981' },
-  stepLabel:    { fontSize: 14, color: '#9CA3AF', fontWeight: '500' },
-  cancelBanner: { marginHorizontal: 16, marginTop: 10, backgroundColor: '#FEF2F2', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#FECACA' },
-  storeOriginCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F3FF', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#DDD6FE' },
-  contactBtn:   { borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9 },
-  driverCard:   { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F9FF', borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#BAE6FD' },
-  callBtn:      { backgroundColor: COLORS.primary, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9 },
-  itemRow:      { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', borderRadius: 8, paddingHorizontal: 4 },
-  noteBox:      { backgroundColor: '#FFF7F4', borderRadius: 10, padding: 10, marginTop: 10, borderWidth: 1, borderColor: '#FFD5C2' },
-  reviewCta:    { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF7F4', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#FED7AA' },
-  reviewInput:  { borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, padding: 12, fontSize: 14, color: COLORS.text, minHeight: 80 },
-  reviewCancelBtn:  { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: '#F3F4F6' },
-  reviewSubmitBtn:  { flex: 2, alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: COLORS.primary },
-  reorderBtn:   { backgroundColor: COLORS.primary, borderRadius: 14, padding: 16, alignItems: 'center' },
-  cancelBtn:    { borderWidth: 1.5, borderColor: '#EF4444', borderRadius: 14, padding: 14, alignItems: 'center' },
-  overlay:      { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 100 },
-  modal:        { backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '90%', elevation: 16, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 16, shadowOffset: { width: 0, height: 4 } },
-  reasonBtn:    { paddingVertical: 11, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1.5, borderColor: '#E5E7EB', marginBottom: 8 },
-  reasonBtnActive: { borderColor: COLORS.primary, backgroundColor: '#FFF3EE' },
-  reasonInput:  { borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12, padding: 12, fontSize: 14, color: COLORS.text, marginTop: 6, minHeight: 70 },
-  modalBtn:     { alignItems: 'center', paddingVertical: 13, borderRadius: 12 },
+  mapWrap:       { marginHorizontal: 16, marginTop: 10, borderRadius: 16, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  map:           { width: '100%', height: 240 },
+  livePill:      { position: 'absolute', top: 10, left: 10, backgroundColor: '#16A34A', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  liveDot:       { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
+  distancePill:  { position: 'absolute', bottom: 10, right: 10, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
+  mapPlaceholder:{ margin: 16, backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB', minHeight: 110 },
+
+  cancelBanner:  { marginHorizontal: 16, marginTop: 10, backgroundColor: '#FEF2F2', borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: '#FECACA' },
+  cancelTitle:   { fontSize: 16, fontWeight: '900', color: '#991B1B', marginBottom: 6 },
+  cancelReason:  { color: '#7F1D1D', fontSize: 13, marginBottom: 3 },
+  cancelBy:      { color: '#B91C1C', fontSize: 12 },
+
+  infoCard:      { marginHorizontal: 16, marginTop: 8, borderRadius: 12, padding: 12, borderWidth: 1 },
+
+  actions:       { marginHorizontal: 16, marginTop: 12, gap: 10 },
+  cancelBtn:     { borderWidth: 2, borderColor: '#DC2626', borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: '#FEF2F2' },
+  reorderBtn:    { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  helpBtn:       { borderWidth: 1.5, borderColor: '#15803D', borderRadius: 14, paddingVertical: 13, alignItems: 'center', backgroundColor: '#F0FDF4' },
+
+  quoteOverlay:  { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+})
+
+const S2 = StyleSheet.create({
+  section: { backgroundColor: '#fff', marginHorizontal: 16, marginTop: 10, borderRadius: 16, padding: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
+  title:   { fontSize: 15, fontWeight: '800', color: '#1F2937', marginBottom: 12 },
+  row:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#F9FAFB' },
+  lbl:     { fontSize: 13, color: '#6B7280', flex: 1 },
+  val:     { fontSize: 13, color: '#1F2937', fontWeight: '600', flex: 1.4, textAlign: 'right' },
 })

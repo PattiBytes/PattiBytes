@@ -516,12 +516,14 @@ export default function CartPage() {
         />
 
         {/* ── Free Delivery Progress Bar ────────────────────────────── */}
-        <FreeDeliveryBar
-          subtotal={subtotal}
-          threshold={appSettings?.free_delivery_above}
-          freeDeliveryPromoApplied={freeDeliveryPromoApplied}
-          freeDeliveryPromoCode={freeDeliveryPromoApplied ? appliedPromo?.code : undefined}
-        />
+       <FreeDeliveryBar
+  subtotal={subtotal}
+  threshold={appSettings?.free_delivery_above}
+  deliveryFeeEnabled={appSettings?.delivery_fee_enabled !== false}  // ← new
+  freeDeliveryPromoApplied={freeDeliveryPromoApplied}
+  freeDeliveryPromoCode={freeDeliveryPromoApplied ? appliedPromo?.code : undefined}
+/>
+
 
         {/* ── Minimum Order Warning ─────────────────────────────────── */}
         {belowMin && (

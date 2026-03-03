@@ -7,20 +7,19 @@ export type { SavedAddress, PromoCode }
 export { PATTI_HUB } from '../../services/location'
 
 // ─── CartItem — MUST match CartContext.CartItem exactly ───────────────────────
-// Note: is_veg is boolean | null | undefined (nullable in DB + CartContext)
 export interface CartItem {
   id:                   string
   name:                 string
   price:                number
   quantity:             number
   image_url?:           string | null
-  is_veg?:              boolean | null    // ← null allowed (matches CartContext)
+  is_veg?:              boolean | null
   category?:            string | null
   discount_percentage?: number | null
   merchant_id?:         string
 }
 
-// ─── Cart object from CartContext ──────────────────────────────────────────────
+// ─── Cart object from CartContext ─────────────────────────────────────────────
 export interface Cart {
   merchant_id:   string
   merchant_name: string
@@ -28,46 +27,71 @@ export interface Cart {
   subtotal:      number
 }
 
-// ─── Order type (maps to orders.order_type column) ────────────────────────────
+// ─── Order type (maps to orders.order_type column) ───────────────────────────
 export type OrderType = 'restaurant' | 'store' | 'custom'
 
-// ─── app_settings row — all columns used across cart + checkout ───────────────
-export interface AppSettings {
-  // Core flags
-  delivery_fee_enabled:         boolean
-  delivery_fee_show_to_customer:boolean
-
-  // Distance tiers
-  base_delivery_radius_km:      number    // base_delivery_radius_km column
-  per_km_fee_beyond_base:       number    // per_km_fee_beyond_base column
-  base_delivery_fee:            number    // base_delivery_fee column
-  per_km_rate:                  number    // per_km_rate column
-
-  // Thresholds
-  free_delivery_above:          number | null   // free_delivery_above column
-  min_order_amount:             number | null
-
-  // Tax
-  tax_percentage:               number
-
-  // Hub origin (NEW columns added via SQL above)
-  hub_latitude:                 number | null   // hub_latitude column
-  hub_longitude:                number | null   // hub_longitude column
-
-  // Schedule
-  delivery_fee_schedule?:       DeliveryFeeSchedule | null
-}
-
-// ─── Delivery fee schedule shape ──────────────────────────────────────────────
+// ─── Delivery fee schedule shape ─────────────────────────────────────────────
 export interface DayFee { fee: number; enabled: boolean }
 export interface DeliveryFeeSchedule {
-  ui?:       { show_to_customer?: boolean }
-  weekly?:   Record<string, DayFee>
-  overrides?:any[]
-  timezone?: string
+  ui?:        { show_to_customer?: boolean }
+  weekly?:    Record<string, DayFee>
+  overrides?: any[]
+  timezone?:  string
 }
 
-// ─── Merchant row (fields used in cart) ───────────────────────────────────────
+// ─── app_settings row ────────────────────────────────────────────────────────
+export interface AppSettings {
+  // ── Delivery fee ────────────────────────────────────────────────────────
+  delivery_fee_enabled:           boolean
+  delivery_fee_show_to_customer:  boolean
+  base_delivery_radius_km:        number
+  per_km_fee_beyond_base:         number
+  base_delivery_fee:              number
+  per_km_rate:                    number
+  free_delivery_above:            number | null
+  min_order_amount:               number | null
+  tax_percentage:                 number
+  hub_latitude:                   number
+  hub_longitude:                  number
+  delivery_fee_schedule:          DeliveryFeeSchedule | null
+
+  // ── App identity ─────────────────────────────────────────────────────────
+  app_name:                       string
+  support_phone:                  string | null   // ✅ was `any`
+  support_email:                  string | null   // ✅ added
+  business_address:               string | null   // ✅ was `string`, now nullable
+  app_logo_url:                   string | null   // ✅ added
+
+  // ── Social ───────────────────────────────────────────────────────────────
+  facebook_url:                   string | null
+  instagram_url:                  string | null
+  twitter_url:                    string | null
+  youtube_url:                    string | null
+  website_url:                    string | null
+  custom_links:                   any[] | null
+
+  // ── Discovery ────────────────────────────────────────────────────────────
+  customer_search_radius_km:      number | null
+
+  // ── Announcement ─────────────────────────────────────────────────────────
+  announcement: {                                 // ✅ added
+    type:         string
+    title:        string
+    message:      string
+    enabled:      boolean
+    start_at:     string | null
+    end_at:       string | null
+    link_url:     string | null
+    image_url:    string | null
+    dismiss_key:  string | null
+    dismissible:  boolean
+  } | null
+
+  // ── Display ───────────────────────────────────────────────────────────────
+  show_menu_images:               boolean
+}
+
+// ─── Merchant row (fields used in cart) ──────────────────────────────────────
 export interface MerchantGeo {
   latitude:              number | null
   longitude:             number | null

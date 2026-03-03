@@ -11,17 +11,12 @@ const META: Record<OrderType, { label: string; emoji: string; color: string; bg:
 }
 
 interface Props {
-  merchantName:   string
-  merchantId:     string | null
-  /**
-   * Restaurant orders → show restaurant→customer km (the last leg only).
-   * Store/Custom orders → show hub→customer km.
-   */
-  displayDistKm:  number
-  orderType:      OrderType
-  estimatedTime:  string
-  /** Fee was calculated on this distance (full chain for restaurant orders). */
-  feeDistKm?:     number
+  merchantName:    string
+  merchantId:      string | null
+  displayDistKm:   number
+  orderType:       OrderType
+  estimatedTime:   string
+  feeDistKm?:      number
   isFreeDelivery?: boolean
 }
 
@@ -37,12 +32,18 @@ export default function CartHeader({
   const router = useRouter()
   const m      = META[orderType]
 
-  // Restaurant orders: display only merchant→customer, note full chain in sub-label
-  const isRestaurant   = orderType === 'restaurant'
-  const showChainNote  = isRestaurant && feeDistKm && feeDistKm > displayDistKm
+  const isRestaurant = orderType === 'restaurant'
+
+  // Show the fee chain note only when there's a meaningful difference
+  // (full route is longer than display distance) — no hub branding shown
+  const showChainNote = isRestaurant
+    && !isFreeDelivery
+    && !!feeDistKm
+    && feeDistKm > displayDistKm + 0.2   // >0.2 km diff to avoid noise
 
   return (
     <View style={S.wrap}>
+
       {/* Order type badge */}
       <View style={[S.badge, { backgroundColor: m.bg }]}>
         <Text style={{ fontSize: 12 }}>{m.emoji}</Text>
@@ -63,8 +64,7 @@ export default function CartHeader({
           <View style={S.metaRow}>
             {displayDistKm > 0 && (
               <Text style={S.meta}>
-                📍 {displayDistKm.toFixed(1)} km
-                {isRestaurant ? ' to you' : ' from Patti'}
+                📍 {displayDistKm.toFixed(1)} km away
               </Text>
             )}
             {!!estimatedTime && (
@@ -72,10 +72,10 @@ export default function CartHeader({
             )}
           </View>
 
-          {/* Sub-label — explains full chain fee basis to transparency-minded users */}
-          {showChainNote && !isFreeDelivery && (
+          {/* Transparent fee note — distance only, no internal route shown */}
+          {showChainNote && (
             <Text style={S.chainNote}>
-              ℹ️ Fee based on full route: Patti hub → restaurant → you ({feeDistKm!.toFixed(1)} km)
+              ℹ️ Delivery fee covers the full route ({feeDistKm!.toFixed(1)} km total)
             </Text>
           )}
         </View>
@@ -95,14 +95,14 @@ export default function CartHeader({
 }
 
 const S = StyleSheet.create({
-  wrap:       { backgroundColor: '#fff', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  badge:      { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 10 },
-  badgeTxt:   { fontSize: 11, fontWeight: '800' },
-  freeTag:    { backgroundColor: '#15803D', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, marginLeft: 4 },
-  row:        { flexDirection: 'row', alignItems: 'flex-start' },
-  name:       { fontWeight: '800', color: '#111827', fontSize: 15 },
-  metaRow:    { flexDirection: 'row', gap: 10, marginTop: 2, flexWrap: 'wrap' },
-  meta:       { fontSize: 11, color: '#9CA3AF' },
-  chainNote:  { fontSize: 10, color: '#B45309', marginTop: 4, lineHeight: 14 },
-  addBtn:     { paddingLeft: 10, paddingTop: 2 },
+  wrap:      { backgroundColor: '#fff', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  badge:     { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 10 },
+  badgeTxt:  { fontSize: 11, fontWeight: '800' },
+  freeTag:   { backgroundColor: '#15803D', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, marginLeft: 4 },
+  row:       { flexDirection: 'row', alignItems: 'flex-start' },
+  name:      { fontWeight: '800', color: '#111827', fontSize: 15 },
+  metaRow:   { flexDirection: 'row', gap: 10, marginTop: 2, flexWrap: 'wrap' },
+  meta:      { fontSize: 11, color: '#9CA3AF' },
+  chainNote: { fontSize: 10, color: '#B45309', marginTop: 4, lineHeight: 14 },
+  addBtn:    { paddingLeft: 10, paddingTop: 2 },
 })

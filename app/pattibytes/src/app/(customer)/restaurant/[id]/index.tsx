@@ -1,21 +1,23 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useMemo, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet, RefreshControl, ScrollView, Alert } from 'react-native';
+import {
+  View, ActivityIndicator, StyleSheet,
+  RefreshControl, ScrollView, Alert,
+} from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { COLORS } from '../../../../../src/lib/constants';
 import { useRestaurantScreenData } from '../../../../../src/hooks/useRestaurantScreenData';
 
-import RestaurantHeader from '../../../../../src/components/restaurant/RestaurantHeader';
+import RestaurantHeader  from '../../../../../src/components/restaurant/RestaurantHeader';
 import RestaurantTabs, { RestaurantTabKey } from '../../../../../src/components/restaurant/RestaurantTabs';
-import MenuTab from '../../../../../src/components/restaurant/MenuTab';
-import InfoTab from '../../../../../src/components/restaurant/InfoTab';
-import ReviewsTab from '../../../../../src/components/restaurant/ReviewsTab';
-import BottomCartBar from '../../../../../src/components/restaurant/BottomCartBar';
+import MenuTab           from '../../../../../src/components/restaurant/MenuTab';
+import InfoTab           from '../../../../../src/components/restaurant/InfoTab';
+import ReviewsTab        from '../../../../../src/components/restaurant/ReviewsTab';
+import BottomCartBar     from '../../../../../src/components/restaurant/BottomCartBar';
+import { useCart }       from '../../../../../src/contexts/CartContext';
 
-import { useCart } from '../../../../../src/contexts/CartContext';
-
-function merchantNameOf(m: any) {
+function merchantNameOf(m: any): string {
   return String(m?.business_name ?? m?.businessname ?? m?.businessName ?? 'Restaurant');
 }
 
@@ -48,7 +50,6 @@ export default function RestaurantScreen() {
     submitReview,
   } = useRestaurantScreenData(String(id || ''));
 
-  // CartContext in your codebase uses addToCart(item, merchantName) and item keys like merchantid/imageurl/discountpercentage. [file:1]
   const { cart, addToCart, updateQuantity, clearCart } = useCart();
 
   const [activeTab, setActiveTab] = useState<RestaurantTabKey>('menu');
@@ -59,27 +60,25 @@ export default function RestaurantScreen() {
   }, [appSettings]);
 
   const cartCount = useMemo(() => {
-    const items = cart?.items ?? [];
-    return items.reduce((s: number, it: any) => s + Number(it.quantity ?? 0), 0);
+    return (cart?.items ?? []).reduce((s: number, it: any) => s + Number(it.quantity ?? 0), 0);
   }, [cart?.items]);
 
   const cartTotal = useMemo(() => {
-  const items = cart?.items ?? [];
-  return items.reduce((sum: number, it: any) => {
-    const mrp = Number(it.price ?? 0);
-    const dp = Number(it.discount_percentage ?? 0);
-    const price = dp > 0 ? mrp * (1 - dp / 100) : mrp;
-    return sum + price * Number(it.quantity ?? 0);
-  }, 0);
-}, [cart?.items]);
+    return (cart?.items ?? []).reduce((sum: number, it: any) => {
+      const mrp = Number(it.price ?? 0);
+      const dp  = Number(it.discount_percentage ?? 0);
+      const price = dp > 0 ? mrp * (1 - dp / 100) : mrp;
+      return sum + price * Number(it.quantity ?? 0);
+    }, 0);
+  }, [cart?.items]);
 
-const cartBelongsToThis = useMemo(() => {
-  const merchId = String(merchant?.id ?? '');
-  const cartMerchId = String((cart as any)?.merchant_id ?? (cart as any)?.merchantid ?? '');
-  return Boolean(merchId && cartMerchId && merchId === cartMerchId);
-}, [cart, merchant?.id]);
+  const cartBelongsToThis = useMemo(() => {
+    const merchId     = String(merchant?.id ?? '');
+    const cartMerchId = String((cart as any)?.merchant_id ?? (cart as any)?.merchantid ?? '');
+    return Boolean(merchId && cartMerchId && merchId === cartMerchId);
+  }, [cart, merchant?.id]);
 
-
+  // ── Guards ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={S.center}>
@@ -97,73 +96,72 @@ const cartBelongsToThis = useMemo(() => {
     );
   }
 
-  const getQty = (menuItemId: string) => {
+  // ── Cart helpers ──────────────────────────────────────────────────────────
+  const getQty = (menuItemId: string): number => {
     const found = (cart?.items ?? []).find((x: any) => String(x.id) === String(menuItemId));
     return Number(found?.quantity ?? 0);
   };
 
   const toCartItem = (item: any, quantity = 1) => ({
-  id: String(item.id),
-  name: String(item.name ?? ''),
-  price: Number(item.price ?? 0),
-  quantity,
-  image_url: item.image_url ?? null,
-  discount_percentage: Number(item.discount_percentage ?? 0) || 0,
-  is_veg: item.is_veg ?? null,
-  category: item.category ?? null,
-  merchant_id: String(merchant.id),
-});
-
+    id:                  String(item.id),
+    name:                String(item.name ?? ''),
+    price:               Number(item.price ?? 0),
+    quantity,
+    image_url:           item.image_url ?? null,
+    discount_percentage: Number(item.discount_percentage ?? 0) || 0,
+    is_veg:              item.is_veg ?? null,
+    category:            item.category ?? null,
+    merchant_id:         String(merchant.id),
+  });
 
   const handleAddOrInc = async (item: any) => {
-  const currentQty = getQty(String(item.id));
+    const currentQty     = getQty(String(item.id));
+    const merchId        = String(merchant.id);
+    const merchName      = merchantNameOf(merchant);
+    const cartMerchantId = String((cart as any)?.merchant_id ?? (cart as any)?.merchantid ?? '');
+    const cartHasItems   = (cart?.items?.length ?? 0) > 0;
 
-  const merchId = String(merchant.id);
-  const merchName = merchantNameOf(merchant);
-
-  const cartMerchantId = String((cart as any)?.merchant_id ?? (cart as any)?.merchantid ?? '');
-  const cartHasItems = (cart?.items?.length ?? 0) > 0;
-
-  if (cartMerchantId && cartMerchantId !== merchId && cartHasItems) {
-    Alert.alert(
-      'Different restaurant',
-      'Your cart has items from another restaurant. Clear cart and add this item?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear & Add',
-          style: 'destructive',
-          onPress: async () => {
-            await clearCart?.();
-            addToCart?.(toCartItem(item, 1), merchId, merchName);
+    if (cartMerchantId && cartMerchantId !== merchId && cartHasItems) {
+      Alert.alert(
+        'Different restaurant',
+        'Your cart has items from another restaurant. Clear cart and add this item?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Clear & Add',
+            style: 'destructive',
+            onPress: async () => {
+              await clearCart?.();
+              addToCart?.(toCartItem(item, 1), merchId, merchName);
+            },
           },
-        },
-      ]
-    );
-    return;
-  }
+        ],
+      );
+      return;
+    }
 
-  if (currentQty <= 0) {
-    addToCart?.(toCartItem(item, 1), merchId, merchName);
-    return;
-  }
-
-  updateQuantity?.(String(item.id), currentQty + 1);
-};
-
+    if (currentQty <= 0) {
+      addToCart?.(toCartItem(item, 1), merchId, merchName);
+    } else {
+      updateQuantity?.(String(item.id), currentQty + 1);
+    }
+  };
 
   const handleDec = (item: any) => {
     const qty = getQty(String(item.id));
     updateQuantity?.(String(item.id), Math.max(0, qty - 1));
   };
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={S.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={COLORS.primary} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={COLORS.primary} />
+        }
         stickyHeaderIndices={[1]}
         contentContainerStyle={{ paddingBottom: 220 }}
       >
@@ -178,7 +176,11 @@ const cartBelongsToThis = useMemo(() => {
           onGoCart={() => router.push('/(customer)/cart' as any)}
         />
 
-        <RestaurantTabs active={activeTab} onChange={setActiveTab} reviewsCount={reviews.length} />
+        <RestaurantTabs
+          active={activeTab}
+          onChange={setActiveTab}
+          reviewsCount={reviews.length}
+        />
 
         {activeTab === 'menu' && (
           <MenuTab
@@ -188,13 +190,12 @@ const cartBelongsToThis = useMemo(() => {
             trending={trending}
             trendingLoading={trendingLoading}
             offerByMenuItemId={offerByMenuItemId}
-
-            onAddItem={(item) => handleAddOrInc(item)}
-            onInc={(item) => handleAddOrInc(item)}
-            onDec={(item) => handleDec(item)}
-            getQty={(itemId) => getQty(itemId)} onOpenTrendingItem={function (t: any): void {
-              throw new Error('Function not implemented.');
-            } }          />
+            onAddItem={handleAddOrInc}
+            onInc={handleAddOrInc}
+            onDec={handleDec}
+            getQty={getQty}
+            onOpenTrendingItem={() => {}}
+          />
         )}
 
         {activeTab === 'info' && <InfoTab merchant={merchant} />}
@@ -207,8 +208,12 @@ const cartBelongsToThis = useMemo(() => {
             hasDeliveredOrder={hasDeliveredOrder}
             deliveredOrderId={deliveredOrderId}
             alreadyReviewed={alreadyReviewed}
-            notificationEnabled={notificationPrefs?.review_updates === undefined ? true : Boolean(notificationPrefs.review_updates)}
-            onToggleNotification={(v) => setNotificationPref('review_updates', v)}
+            notificationEnabled={
+              notificationPrefs?.review_updates === undefined
+                ? true
+                : Boolean(notificationPrefs.review_updates)
+            }
+            onToggleNotification={v => setNotificationPref('review_updates', v)}
             onSubmitReview={submitReview}
           />
         )}
@@ -227,5 +232,5 @@ const cartBelongsToThis = useMemo(() => {
 
 const S = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF' },
+  center:    { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF' },
 });

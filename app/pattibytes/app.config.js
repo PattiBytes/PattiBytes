@@ -53,7 +53,7 @@ export default {
   
 },
 
-    web: { bundler: "metro", output: "static" },
+    web: { bundler: "metro", output: "single" },
 
     plugins: [
   "expo-router",

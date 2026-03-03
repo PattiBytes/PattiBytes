@@ -4,9 +4,11 @@ import { COLORS } from '../../lib/constants'
 import { freeDeliveryProgress } from './utils'
 
 interface Props {
-  subtotal:                number
+  subtotal:                  number
   /** app_settings.free_delivery_above */
-  threshold:               number | null | undefined
+  threshold:                 number | null | undefined
+  /** app_settings.delivery_fee_enabled — bar is hidden when fees are off */
+  deliveryFeeEnabled?:       boolean
   /** True when a free_delivery promo code is active */
   freeDeliveryPromoApplied?: boolean
   freeDeliveryPromoCode?:    string
@@ -15,16 +17,32 @@ interface Props {
 export default function FreeDeliveryBar({
   subtotal,
   threshold,
+  deliveryFeeEnabled       = true,
   freeDeliveryPromoApplied = false,
   freeDeliveryPromoCode,
 }: Props) {
-  // If promo has already waived the fee, show locked state immediately
+
+  // ── Visibility gate ────────────────────────────────────────────────────────
+  // Render ONLY when there is a genuine free-delivery offer available:
+  //
+  //   A) A free-delivery promo code is already applied, OR
+  //   B) Delivery fees ARE enabled AND app_settings.free_delivery_above is set
+  //
+  // When delivery fees are already disabled (delivery_fee_enabled = false in
+  // app_settings) there is nothing to "unlock" — hide the bar entirely.
+  const thresholdActive = deliveryFeeEnabled && !!threshold && threshold > 0
+  const hasOffer        = freeDeliveryPromoApplied || thresholdActive
+
+  if (!hasOffer) return null
+
+  // ── A) Promo already applied → locked green banner ─────────────────────────
   if (freeDeliveryPromoApplied) {
     return (
-      <View style={[S.wrap, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+      <View style={[S.wrap, S.wrapGreen]}>
         <View style={S.row}>
-          <Text style={[S.label, { color: '#065F46' }]}>
-            🚚 Free delivery unlocked{freeDeliveryPromoCode ? ` via ${freeDeliveryPromoCode}` : ''}!
+          <Text style={[S.label, S.labelGreen]}>
+            🚚 Free delivery unlocked
+            {freeDeliveryPromoCode ? ` · ${freeDeliveryPromoCode}` : ''}!
           </Text>
           <Text style={[S.pct, { color: '#15803D' }]}>100%</Text>
         </View>
@@ -35,11 +53,9 @@ export default function FreeDeliveryBar({
     )
   }
 
-  // No threshold configured → hide bar
-  if (!threshold || threshold <= 0) return null
-
-  const pct       = freeDeliveryProgress(subtotal, threshold)
-  const remaining = Math.max(0, threshold - subtotal)
+  // ── B) Threshold progress bar ──────────────────────────────────────────────
+  const pct       = freeDeliveryProgress(subtotal, threshold!)
+  const remaining = Math.max(0, threshold! - subtotal)
   const achieved  = remaining === 0
 
   return (
@@ -65,7 +81,7 @@ export default function FreeDeliveryBar({
       </View>
       {!achieved && (
         <Text style={S.sub}>
-          Free delivery on orders ≥ ₹{threshold.toFixed(0)}
+          Free delivery on orders ≥ ₹{threshold!.toFixed(0)}
         </Text>
       )}
     </View>
