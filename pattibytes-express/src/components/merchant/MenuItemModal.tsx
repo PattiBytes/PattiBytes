@@ -1,730 +1,606 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { menuService } from '@/services/menu';
-import { MenuItem } from '@/types';
+import React, {
+  useMemo, useState, useEffect, useRef, useCallback,
+} from 'react';
 import {
-  X,
-  Upload,
-  Link2,
-  Trash2,
-  CheckCircle2,
-  AlertTriangle,
-  Clipboard,
-  Copy,
+  X, Upload, Link2, Trash2,
+  CheckCircle2, AlertTriangle, Clipboard, Copy, Loader2, CloudOff,
 } from 'lucide-react';
-import { toast } from 'react-toastify';
+import { toast }              from 'react-toastify';
+import { menuService }        from '@/services/menu';
+import { MenuItem }           from '@/types';
 import { uploadToCloudinary } from '@/lib/cloudinary';
+import { useMenuItemAutosave } from '@/hooks/useMenuItemAutosave';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 interface MenuItemModalProps {
-  item: MenuItem | null;
+  item:       MenuItem | null;
   merchantId: string;
-  onClose: () => void;
-  onSuccess: () => void;
+  onClose:    () => void;
+  onSuccess:  () => void;
 }
 
+interface FormState {
+  name:                string;
+  description:         string;
+  price:               number;
+  category:            string;
+  custom_category:     string;
+  image_url:           string;
+  is_available:        boolean;
+  is_veg:              boolean;
+  preparation_time:    number;
+  discount_percentage: number;
+  category_id:         string | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pure helpers
+// ─────────────────────────────────────────────────────────────────────────────
 function isValidHttpUrl(v: string) {
-  try {
-    const u = new URL(v);
-    return u.protocol === 'http:' || u.protocol === 'https:';
-  } catch {
-    return false;
-  }
+  try { const u = new URL(v); return u.protocol === 'http:' || u.protocol === 'https:'; }
+  catch { return false; }
 }
-
 function isDataImageUrl(v: string) {
-  const s = String(v || '').trim();
-  return /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(s);
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(String(v || '').trim());
 }
-
 function isValidImageSource(v: string) {
-  if (!v) return true; // optional
-  return isValidHttpUrl(v) || isDataImageUrl(v);
+  return !v || isValidHttpUrl(v) || isDataImageUrl(v);
 }
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
+function clamp(n: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, n)); }
 function extFromMime(mime: string) {
-  const m = (mime || '').toLowerCase();
-  if (m.includes('png')) return 'png';
+  const m = mime.toLowerCase();
+  if (m.includes('png'))  return 'png';
   if (m.includes('webp')) return 'webp';
-  if (m.includes('gif')) return 'gif';
-  if (m.includes('jpeg') || m.includes('jpg')) return 'jpg';
-  return 'png';
+  if (m.includes('gif'))  return 'gif';
+  return 'jpg';
 }
-
-function dataUrlToFile(dataUrl: string, filenameBase = 'pasted-image') {
-  const s = dataUrl.trim();
-  const match = s.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+function dataUrlToFile(dataUrl: string, base = 'pasted-image') {
+  const match = dataUrl.trim().match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
   if (!match) throw new Error('Invalid data URL');
-  const mime = match[1];
-  const b64 = match[2];
-
-  const binary = atob(b64);
-  const len = binary.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
-
-  const ext = extFromMime(mime);
-  const file = new File([bytes], `${filenameBase}.${ext}`, { type: mime });
-  return file;
+  const [, mime, b64] = match;
+  const raw = atob(b64);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return new File([bytes], `${base}.${extFromMime(mime)}`, { type: mime });
 }
-
 async function copyText(text: string) {
-  const s = String(text || '');
-  if (!s) return;
-
-  // Clipboard API needs secure context in many browsers. [web:144]
-  if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
-    await navigator.clipboard.writeText(s);
-    return;
+  if (!text) return;
+  if (navigator?.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text); return;
   }
-
-  // Fallback
   const ta = document.createElement('textarea');
-  ta.value = s;
-  ta.style.position = 'fixed';
-  ta.style.left = '-9999px';
-  ta.style.top = '-9999px';
-  document.body.appendChild(ta);
-  ta.focus();
-  ta.select();
-  document.execCommand('copy');
-  document.body.removeChild(ta);
+  ta.value = text;
+  Object.assign(ta.style, { position: 'fixed', left: '-9999px', top: '-9999px' });
+  document.body.appendChild(ta); ta.select();
+  document.execCommand('copy'); document.body.removeChild(ta);
 }
 
-export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: MenuItemModalProps) {
-  const [imageMode, setImageMode] = useState<'upload' | 'link'>(() =>
-    item?.image_url ? 'link' : 'upload'
+// ─────────────────────────────────────────────────────────────────────────────
+// AutoSave Badge
+// ─────────────────────────────────────────────────────────────────────────────
+function AutoSaveBadge({
+  saving, savedAt, hasUnsaved,
+}: { saving: boolean; savedAt: Date | null; hasUnsaved: boolean }) {
+  if (saving) return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full font-semibold animate-pulse">
+      <Loader2 size={11} className="animate-spin" /> Saving…
+    </span>
   );
+  if (hasUnsaved) return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-orange-700 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-full font-semibold">
+      <CloudOff size={11} /> Unsaved
+    </span>
+  );
+  if (savedAt) return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full font-semibold">
+      <CheckCircle2 size={11} />
+      Saved {savedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+    </span>
+  );
+  return null;
+}
 
-  const [formData, setFormData] = useState({
-    name: item?.name || '',
-    description: item?.description || '',
-    price: Number(item?.price ?? 0),
-    category: item?.category || 'Main Course',
-    custom_category: '',
-    image_url: item?.image_url || '',
-    is_available: item?.is_available ?? true,
-    is_veg: item?.is_veg ?? true,
-    preparation_time: Number((item as any)?.preparation_time ?? 30),
-    discount_percentage: Number((item as any)?.discount_percentage ?? 0),
-    category_id: (item as any)?.category_id ?? null,
-  });
+// ─────────────────────────────────────────────────────────────────────────────
+// ImagePickerSection
+// ─────────────────────────────────────────────────────────────────────────────
+interface ImagePickerProps {
+  imageUrl:   string;
+  onChange:   (url: string) => void;
+  onAutosave: (url: string) => void;
+}
 
+function ImagePickerSection({ imageUrl, onChange, onAutosave }: ImagePickerProps) {
+  const [mode,      setMode]      = useState<'upload' | 'link'>(() => imageUrl ? 'link' : 'upload');
   const [uploading, setUploading] = useState(false);
-  const [loading, setLoading] = useState(false);
-const [autoSaving, setAutoSaving] = useState(false);
 
-const lastSavedRef = useRef<Record<string, any>>({});
-const pendingPatchRef = useRef<Record<string, any> | null>(null);
-const saveTimerRef = useRef<number | null>(null);
-const savingRef = useRef(false);
-
-useEffect(() => {
-  // Seed "last saved" with current DB values so we don't re-save unchanged fields
-  lastSavedRef.current = item ? { ...item } : {};
-  pendingPatchRef.current = null;
-
-  return () => {
-    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-  };
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [item?.id]);
-
-const scheduleAutosave = useCallback(
-  (patch: Record<string, any>) => {
-    // Autosave can only update an existing row.
-    if (!item?.id) return;
-
-    // Merge patches (so multiple changes within debounce become 1 update)
-    pendingPatchRef.current = {
-      ...(pendingPatchRef.current || {}),
-      ...patch,
-      updated_at: new Date().toISOString(),
-    };
-
-    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-
-    saveTimerRef.current = window.setTimeout(async () => {
-      if (!pendingPatchRef.current) return;
-
-      // If a save is in-flight, try again shortly (keeps it robust)
-      if (savingRef.current) {
-        scheduleAutosave({});
-        return;
-      }
-
-      // Remove unchanged fields to avoid useless updates
-      const raw = pendingPatchRef.current;
-      pendingPatchRef.current = null;
-
-      const toSend: Record<string, any> = {};
-      for (const k of Object.keys(raw)) {
-        if (k === 'updated_at') continue;
-        if (raw[k] !== lastSavedRef.current[k]) toSend[k] = raw[k];
-      }
-
-      if (Object.keys(toSend).length === 0) return;
-
-      savingRef.current = true;
-      setAutoSaving(true);
-      try {
-        await menuService.updateMenuItem(item.id, { ...toSend, updated_at: new Date().toISOString() });
-        lastSavedRef.current = { ...lastSavedRef.current, ...toSend };
-      } catch (e) {
-        console.error('Autosave failed:', e);
-      } finally {
-        savingRef.current = false;
-        setAutoSaving(false);
-      }
-    }, 700);
-  },
-  [item?.id]
-);
-
-  // Ref for the modal container to attach paste listener
-  const modalRef = useRef<HTMLDivElement>(null);
-
-  const resolvedCategory = useMemo(() => {
-    if (formData.category === '__custom__') {
-      return (formData.custom_category || '').trim() || 'Main Course';
-    }
-    return formData.category || 'Main Course';
-  }, [formData.category, formData.custom_category]);
-
-  const imageOk = useMemo(() => isValidImageSource(formData.image_url), [formData.image_url]);
-
-  const discountOk = useMemo(() => {
-    const d = Number(formData.discount_percentage ?? 0);
-    return Number.isFinite(d) && d >= 0 && d <= 100;
-  }, [formData.discount_percentage]);
-
-  const uploadFile = useCallback(async (file: File) => {
+  const doUpload = useCallback(async (file: File) => {
     setUploading(true);
     try {
-     const url = await uploadToCloudinary(file, 'menu-items');
-     setFormData((p) => ({ ...p, image_url: url }));
-     scheduleAutosave({ image_url: url });
-      toast.success('Image uploaded successfully');
+      const url = await uploadToCloudinary(file, 'menu-items');
+      onChange(url);
+      onAutosave(url);
+      toast.success('Image uploaded & saved');
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to upload image');
+      toast.error(err?.message || 'Upload failed');
     } finally {
       setUploading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onChange, onAutosave]);
 
-  const uploadDataUrl = useCallback(
-    async (dataUrl: string) => {
-      const file = dataUrlToFile(dataUrl, 'dataurl-image');
-      await uploadFile(file);
-    },
-    [uploadFile]
-  );
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      await uploadFile(file);
-      e.currentTarget.value = ''; // reset
-    }
+    if (file) { await doUpload(file); e.currentTarget.value = ''; }
   };
 
-  const handlePaste = useCallback(
-    async (e: ClipboardEvent) => {
-      // 1) Pasted image file
-      if (e.clipboardData && e.clipboardData.files.length > 0) {
-        const file = e.clipboardData.files[0];
-        if (file.type.startsWith('image/')) {
-          e.preventDefault();
-          await uploadFile(file);
-          return;
-        }
-      }
-
-      // 2) Pasted text (URL or data URL)
-      const text = e.clipboardData?.getData('text/plain')?.trim() || '';
-      if (!text) return;
-
-      // If it’s a data URL image → upload it (recommended) and replace image_url
-      if (isDataImageUrl(text)) {
-        e.preventDefault();
-        toast.info('Uploading pasted data image…');
-        await uploadDataUrl(text);
-        return;
-      }
-
-      // If it’s a normal URL → set it (works for “Copy image address”)
-      if (isValidHttpUrl(text)) {
-        // Only hijack paste when link mode, otherwise let paste behave normally in inputs
-        if (imageMode === 'link') {
-          e.preventDefault();
-          setFormData((p) => ({ ...p, image_url: text }));
-          toast.success('Image link pasted');
-        }
-      }
-    },
-    [imageMode, uploadDataUrl, uploadFile]
-  );
-
-  // Attach paste listener within modal scope
-  useEffect(() => {
-    const el = modalRef.current;
-    if (!el) return;
-
-    const listener = (e: any) => handlePaste(e);
-    el.addEventListener('paste', listener);
-    return () => el.removeEventListener('paste', listener);
-  }, [handlePaste]);
-
-  // Manual "Paste Image" button handler (uses Async Clipboard API)
-  const handleManualPasteClick = async () => {
+  const handleClipboardBtn = async () => {
     try {
-      // If available, this can read clipboard images (requires permission in many browsers). [web:144]
       if (typeof navigator?.clipboard?.read === 'function') {
         const items = await navigator.clipboard.read();
-        for (const item of items) {
-          const type = item.types.find((t) => t.startsWith('image/'));
+        for (const ci of items) {
+          const type = ci.types.find(t => t.startsWith('image/'));
           if (type) {
-            const blob = await item.getType(type);
-            const file = new File([blob], 'pasted-image.png', { type });
-            await uploadFile(file);
+            const blob = await ci.getType(type);
+            await doUpload(new File([blob], 'clipboard.png', { type }));
             return;
           }
         }
-        toast.info('No image found in clipboard');
+        toast.info('No image in clipboard');
         return;
       }
-
-      toast.error('Clipboard read not supported. Use Ctrl+V instead.');
-    } catch (err) {
-      console.error(err);
-      toast.error('Unable to read clipboard. Try Ctrl+V instead.');
-    }
+      toast.error('Use Ctrl+V to paste instead');
+    } catch { toast.error('Clipboard blocked — use Ctrl+V'); }
   };
 
-  const removeImage = () => {
-  setFormData((p) => ({ ...p, image_url: '' }));
-  scheduleAutosave({ image_url: '' });
-};
+  const imageOk = isValidImageSource(imageUrl);
 
+  return (
+    <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold text-gray-900">Item Image</span>
+        <div className="flex gap-1.5">
+          {(['upload', 'link'] as const).map(m => (
+            <button key={m} type="button" onClick={() => setMode(m)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                mode === m
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              }`}>
+              {m === 'upload' ? '⬆ Upload' : '🔗 Link'}
+            </button>
+          ))}
+        </div>
+      </div>
 
-  const handleCopyImageLink = async () => {
+      <div className="flex flex-col sm:flex-row gap-4">
+        {/* Preview */}
+        <div className="w-full sm:w-36 shrink-0 space-y-2">
+          {imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imageUrl} alt="Preview"
+              className="w-full h-36 object-cover rounded-xl border bg-white shadow-sm"
+              onError={e => (e.currentTarget.src = '/placeholder-food.png')}
+            />
+          ) : (
+            <div
+              onClick={() => mode === 'upload' && document.getElementById('menu-img-input')?.click()}
+              className="w-full h-36 bg-white rounded-xl flex flex-col items-center justify-center border-2 border-dashed border-gray-300 cursor-pointer hover:border-primary hover:bg-orange-50 transition"
+            >
+              {uploading
+                ? <Loader2 className="animate-spin text-primary" size={28} />
+                : mode === 'link'
+                  ? <Link2 className="text-gray-300" size={28} />
+                  : <Upload className="text-gray-300" size={28} />
+              }
+              <span className="text-[10px] text-gray-400 mt-2 font-semibold">
+                {uploading ? 'Uploading…' : 'Click or Ctrl+V'}
+              </span>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-1.5">
+            <button type="button"
+              onClick={() => { onChange(''); onAutosave(''); }}
+              disabled={!imageUrl}
+              className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg border bg-white hover:bg-red-50 hover:border-red-300 text-xs font-semibold disabled:opacity-40 transition"
+            >
+              <Trash2 size={13} /> Remove
+            </button>
+            <button type="button"
+              onClick={async () => { await copyText(imageUrl); if (imageUrl) toast.success('Copied!'); }}
+              disabled={!imageUrl}
+              className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg border bg-white hover:bg-gray-100 text-xs font-semibold disabled:opacity-40 transition"
+            >
+              <Copy size={13} /> Copy
+            </button>
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="flex-1 min-w-0">
+          {mode === 'upload' ? (
+            <div className="space-y-3">
+              <input type="file" accept="image/*" id="menu-img-input"
+                className="hidden" disabled={uploading} onChange={handleFileInput}
+              />
+              <div className="flex flex-wrap gap-2">
+                <label htmlFor="menu-img-input"
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border bg-white text-gray-800 font-semibold text-sm cursor-pointer hover:bg-gray-50 transition ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <Upload size={15} />
+                  {uploading ? 'Uploading…' : 'Choose file'}
+                </label>
+                <button type="button" disabled={uploading} onClick={handleClipboardBtn}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border bg-white text-gray-800 font-semibold text-sm hover:bg-gray-50 disabled:opacity-50 transition">
+                  <Clipboard size={15} /> Paste
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Press{' '}
+                <kbd className="px-1.5 py-0.5 rounded bg-gray-200 font-mono text-[10px]">Ctrl+V</kbd>
+                {' '}anywhere in this modal to paste a screenshot — uploads & <strong>autosaves</strong> immediately.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input type="text" value={imageUrl}
+                  onChange={e => onChange(e.target.value)}
+                  onBlur={e => {
+                    const url = e.target.value.trim();
+                    if (url && isValidHttpUrl(url)) onAutosave(url);
+                  }}
+                  placeholder="https://cdn.example.com/img.jpg"
+                  className={`w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition ${
+                    imageOk ? 'border-gray-300' : 'border-red-400 bg-red-50'
+                  }`}
+                />
+                {imageUrl && (imageOk
+                  ? <CheckCircle2 className="text-green-500 shrink-0" size={18} />
+                  : <AlertTriangle className="text-red-500 shrink-0" size={18} />
+                )}
+              </div>
+              {!imageOk && <p className="text-xs text-red-600">Must be a valid http/https URL or data:image string.</p>}
+              <p className="text-xs text-gray-500">Tip: Paste URL with Ctrl+V. Saves when you leave this field.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Modal
+// ─────────────────────────────────────────────────────────────────────────────
+const IC = 'w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition';
+const LC = 'block text-sm font-medium text-gray-700 mb-1.5';
+
+export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: MenuItemModalProps) {
+  const {
+    autoSaving, savedAt, hasUnsaved,
+    schedule, flushNow, seedLastSaved, cancel,
+  } = useMenuItemAutosave(item?.id);
+
+  const [form, setForm] = useState<FormState>({
+    name:                item?.name                               || '',
+    description:         item?.description                        || '',
+    price:               Number(item?.price                       ?? 0),
+    category:            item?.category                           || 'Main Course',
+    custom_category:     '',
+    image_url:           item?.image_url                          || '',
+    is_available:        item?.is_available                       ?? true,
+    is_veg:              item?.is_veg                             ?? true,
+    preparation_time:    Number((item as any)?.preparation_time   ?? 30),
+    discount_percentage: Number((item as any)?.discount_percentage ?? 0),
+    category_id:         (item as any)?.category_id               ?? null,
+  });
+
+  const [submitting, setSubmitting] = useState(false);
+  const [uploading,  setUploading]  = useState(false);
+  const [closing,    setClosing]    = useState(false);  // ✅ flush-then-close guard
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    seedLastSaved(item ? { ...item } : {});
+    return () => cancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.id]);
+
+  const set = useCallback(<K extends keyof FormState>(k: K, v: FormState[K]) =>
+    setForm(p => ({ ...p, [k]: v })), []);
+
+  const resolvedCategory = useMemo(() => {
+    if (form.category === '__custom__') return form.custom_category.trim() || 'Main Course';
+    return form.category || 'Main Course';
+  }, [form.category, form.custom_category]);
+
+  const discountOk = useMemo(() => {
+    const d = Number(form.discount_percentage ?? 0);
+    return Number.isFinite(d) && d >= 0 && d <= 100;
+  }, [form.discount_percentage]);
+
+  // ── Global paste (Ctrl+V anywhere in modal) ───────────────────────────────
+  const uploadFile = useCallback(async (file: File) => {
+    setUploading(true);
     try {
-      if (!formData.image_url) return toast.info('No image to copy');
-      await copyText(formData.image_url);
-      toast.success('Image link copied');
-    } catch {
-      toast.error('Failed to copy');
-    }
-  };
+      const url = await uploadToCloudinary(file, 'menu-items');
+      set('image_url', url);
+      schedule({ image_url: url });
+      toast.success('Image uploaded & saved');
+    } catch (err: any) {
+      toast.error(err?.message || 'Upload failed');
+    } finally { setUploading(false); }
+  }, [set, schedule]);
 
+  const handleModalPaste = useCallback(async (e: ClipboardEvent) => {
+    if (e.clipboardData?.files.length) {
+      const f = e.clipboardData.files[0];
+      if (f.type.startsWith('image/')) { e.preventDefault(); await uploadFile(f); return; }
+    }
+    const text = e.clipboardData?.getData('text/plain')?.trim() || '';
+    if (!text) return;
+    if (isDataImageUrl(text)) {
+      e.preventDefault();
+      toast.info('Uploading pasted image…');
+      await uploadFile(dataUrlToFile(text, 'paste'));
+      return;
+    }
+    // Intercept pasted URL only when the focused element is NOT a text input
+    if (isValidHttpUrl(text)) {
+      const active = document.activeElement;
+      const isTyping = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+      if (!isTyping) {
+        e.preventDefault();
+        set('image_url', text);
+        schedule({ image_url: text });
+        toast.success('Image link pasted & saved');
+      }
+    }
+  }, [uploadFile, set, schedule]);
+
+  useEffect(() => {
+    const el = modalRef.current;
+    if (!el) return;
+    const h = (e: Event) => handleModalPaste(e as ClipboardEvent);
+    el.addEventListener('paste', h);
+    return () => el.removeEventListener('paste', h);
+  }, [handleModalPaste]);
+
+  // ── Safe close — flush any pending autosave first ─────────────────────────
+  // ✅ This is the key fix: pressing Cancel/X will await any queued save
+  //    before closing, so no data is ever lost.
+  const handleClose = useCallback(async () => {
+    if (closing) return;
+    setClosing(true);
+    try {
+      await flushNow(); // no-op if nothing pending
+    } finally {
+      setClosing(false);
+      onClose();
+    }
+  }, [closing, flushNow, onClose]);
+
+  // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const name  = form.name.trim();
+    const price = Number(form.price  ?? 0);
+    const prep  = Number(form.preparation_time  ?? 0);
+    const disc  = Number(form.discount_percentage ?? 0);
 
-    const name = formData.name.trim();
-    const price = Number(formData.price ?? 0);
-    const prep = Number(formData.preparation_time ?? 0);
-    const disc = Number(formData.discount_percentage ?? 0);
-
-    if (!name) return toast.error('Name is required');
+    if (!name)                               return toast.error('Name is required');
     if (!Number.isFinite(price) || price < 0) return toast.error('Invalid price');
-    if (!Number.isFinite(prep) || prep < 0) return toast.error('Invalid preparation time');
-    if (!discountOk) return toast.error('Discount must be 0 to 100');
-    if (!imageOk) return toast.error('Image must be a valid URL or data:image;base64');
+    if (!Number.isFinite(prep)  || prep  < 0) return toast.error('Invalid prep time');
+    if (!discountOk)                         return toast.error('Discount must be 0–100');
+    if (!isValidImageSource(form.image_url)) return toast.error('Invalid image URL');
 
-    setLoading(true);
+    setSubmitting(true);
     try {
-      // If user still has a data URL at submit time, auto-upload it and use the Cloudinary URL
-      let finalImageUrl = (formData.image_url || '').trim();
-      if (finalImageUrl && isDataImageUrl(finalImageUrl)) {
+      let finalImg = form.image_url.trim();
+      if (finalImg && isDataImageUrl(finalImg)) {
         toast.info('Uploading image…');
-        const file = dataUrlToFile(finalImageUrl, 'menu-item');
         setUploading(true);
         try {
-          finalImageUrl = await uploadToCloudinary(file, 'menu-items');
-          setFormData((p) => ({ ...p, image_url: finalImageUrl }));
-        } finally {
-          setUploading(false);
-        }
+          finalImg = await uploadToCloudinary(dataUrlToFile(finalImg, 'menu-item'), 'menu-items');
+          set('image_url', finalImg);
+        } finally { setUploading(false); }
       }
 
       const payload: any = {
         name,
-        description: (formData.description || '').trim(),
-        price: Number(price),
-        category: resolvedCategory,
-        image_url: finalImageUrl || '',
-        is_available: Boolean(formData.is_available),
-        is_veg: Boolean(formData.is_veg),
-        preparation_time: clamp(Number(prep), 0, 10000),
+        description:         form.description.trim(),
+        price:               Number(price),
+        category:            resolvedCategory,
+        image_url:           finalImg || '',
+        is_available:        Boolean(form.is_available),
+        is_veg:              Boolean(form.is_veg),
+        preparation_time:    clamp(Number(prep), 0, 10_000),
         discount_percentage: clamp(Number(disc), 0, 100),
-        category_id: formData.category_id || null,
-        updated_at: new Date().toISOString(),
+        category_id:         form.category_id || null,
+        updated_at:          new Date().toISOString(),
       };
 
       if (item) {
         await menuService.updateMenuItem(item.id, payload);
-        toast.success('Menu item updated successfully');
+        toast.success('Menu item updated');
       } else {
-        await menuService.createMenuItem({
-          ...payload,
-          merchant_id: merchantId,
-          created_at: new Date().toISOString(),
-        });
-        toast.success('Menu item added successfully');
+        await menuService.createMenuItem({ ...payload, merchant_id: merchantId, created_at: new Date().toISOString() });
+        toast.success('Menu item added');
       }
-
+      cancel(); // clear any pending autosave queue
       onSuccess();
       onClose();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to save menu item');
-    } finally {
-      setLoading(false);
-    }
+      toast.error(err?.message || 'Failed to save');
+    } finally { setSubmitting(false); }
   };
 
+  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      {/* Attach ref here to capture paste events anywhere in the modal */}
-      <div
-        ref={modalRef}
-        className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
-      >
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-5 sm:px-6 py-4 flex items-center justify-between">
-          <div className="min-w-0">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
-              {item ? 'Edit Menu Item' : 'Add Menu Item'}
-            </h2>
-            <p className="text-xs text-gray-600 mt-1">
-              Tip: Paste image (Ctrl+V) or paste an image link / data:image;base64.
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+      <div ref={modalRef} className="bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl">
+
+        {/* ── Header ── */}
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-4 flex items-center gap-3 rounded-t-2xl">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl font-bold text-gray-900">
+                {item ? 'Edit Menu Item' : 'Add Menu Item'}
+              </h2>
+              {item && (
+                <AutoSaveBadge saving={autoSaving} savedAt={savedAt} hasUnsaved={hasUnsaved} />
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {item
+                ? 'Changes autosave in background — even after clicking Cancel'
+                : 'Fill in details and click Add Item to save'
+              }
             </p>
           </div>
           <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-50"
+            onClick={handleClose}
+            disabled={closing}
+            className="shrink-0 text-gray-400 hover:text-gray-700 p-2 rounded-xl hover:bg-gray-100 transition disabled:opacity-50"
           >
-            <X size={22} />
+            {closing ? <Loader2 size={20} className="animate-spin" /> : <X size={20} />}
           </button>
         </div>
-{autoSaving && <p className="text-xs text-gray-500">Saving…</p>}
 
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-6">
-          {/* Image */}
-          <div className="rounded-2xl border p-4 bg-gray-50">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <label className="block text-sm font-bold text-gray-900">Item Image</label>
+        {/* ── Scrollable Body ── */}
+        <div className="overflow-y-auto flex-1">
+          <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-5">
 
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setImageMode('upload')}
-                  className={`px-3 py-1.5 rounded-xl text-sm font-semibold border ${
-                    imageMode === 'upload'
-                      ? 'bg-primary text-white border-primary'
-                      : 'bg-white text-gray-700 border-gray-300'
-                  }`}
-                >
-                  Upload
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImageMode('link')}
-                  className={`px-3 py-1.5 rounded-xl text-sm font-semibold border ${
-                    imageMode === 'link'
-                      ? 'bg-primary text-white border-primary'
-                      : 'bg-white text-gray-700 border-gray-300'
-                  }`}
-                >
-                  Use Link
-                </button>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="w-full sm:w-40">
-                {formData.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={formData.image_url}
-                    alt="Preview"
-                    className="w-full h-40 object-cover rounded-xl border bg-white"
-                  />
-                ) : (
-                  <div
-                    className="w-full h-40 bg-white rounded-xl flex flex-col items-center justify-center border cursor-pointer hover:bg-gray-50 transition"
-                    onClick={() => document.getElementById('image-upload')?.click()}
-                  >
-                    {imageMode === 'link' ? (
-                      <Link2 className="text-gray-400" size={32} />
-                    ) : (
-                      <Upload className="text-gray-400" size={32} />
-                    )}
-                    <span className="text-[10px] text-gray-400 mt-2 font-medium">Click or Paste</span>
-                  </div>
-                )}
-
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={removeImage}
-                    disabled={!formData.image_url}
-                    className="px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    <Trash2 size={16} />
-                    Remove
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleCopyImageLink}
-                    disabled={!formData.image_url}
-                    className="px-3 py-2 rounded-xl border bg-white hover:bg-gray-50 font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-                    title="Copy image link"
-                  >
-                    <Copy size={16} />
-                    Copy
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 min-w-0">
-                {imageMode === 'upload' ? (
-                  <>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                      id="image-upload"
-                      disabled={uploading}
-                    />
-
-                    <div className="flex flex-wrap gap-2">
-                      <label
-                        htmlFor="image-upload"
-                        className="cursor-pointer inline-flex items-center gap-2 bg-white text-gray-800 px-4 py-2 rounded-xl border hover:bg-gray-50 font-semibold"
-                      >
-                        <Upload size={16} />
-                        {uploading ? 'Uploading…' : 'Choose image'}
-                      </label>
-
-                      <button
-                        type="button"
-                        onClick={handleManualPasteClick}
-                        disabled={uploading}
-                        className="inline-flex items-center gap-2 bg-white text-gray-800 px-4 py-2 rounded-xl border hover:bg-gray-50 font-semibold"
-                        title="Paste from clipboard"
-                      >
-                        <Clipboard size={16} />
-                        Paste
-                      </button>
-                    </div>
-
-                    <p className="text-xs text-gray-600 mt-2">
-                      Uploads to Cloudinary folder: <span className="font-mono">menu-items</span>.
-                      <br />
-                      You can also press <strong>Ctrl+V</strong> anywhere in this modal to paste an image,
-                      or paste a link / data:image;base64.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={formData.image_url}
-                        onChange={(e) => setFormData((p) => ({ ...p, image_url: e.target.value }))}
-                        placeholder="https://... OR data:image/jpeg;base64,..."
-                        className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent ${
-                          imageOk ? 'border-gray-300' : 'border-red-400'
-                        }`}
-                      />
-                      {imageOk ? (
-                        <CheckCircle2 className="text-green-600 shrink-0" size={18} />
-                      ) : (
-                        <AlertTriangle className="text-red-600 shrink-0" size={18} />
-                      )}
-                    </div>
-
-                    {!imageOk && (
-                      <p className="text-xs text-red-600 mt-1">
-                        Use a valid https/http URL or a data:image/*;base64,... string.
-                      </p>
-                    )}
-
-                    <p className="text-xs text-gray-600 mt-2">
-                      Tip: “Copy image address” → paste here. For data URLs, we auto-upload to Cloudinary on save.
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Item Name *</label>
-            <input
-  value={formData.name}
-  onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-  onBlur={() => {
-    const v = formData.name.trim();
-    if (v) scheduleAutosave({ name: v });
-  }}
-/>
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
+            <ImagePickerSection
+              imageUrl={form.image_url}
+              onChange={url => set('image_url', url)}
+              onAutosave={url => schedule({ image_url: url })}
             />
-          </div>
 
-          {/* Price & Category */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Price (₹) *</label>
-             <input
-  type="number"
-  value={formData.price}
-  onChange={(e) => setFormData((p) => ({ ...p, price: Number(e.target.value) }))}
-  onBlur={() => scheduleAutosave({ price: Number(formData.price || 0) })}
-/>
-
+              <label className={LC}>Item Name *</label>
+              <input type="text" required value={form.name}
+                placeholder="e.g. Butter Chicken"
+                onChange={e => set('name', e.target.value)}
+                onBlur={() => { const v = form.name.trim(); if (v) schedule({ name: v }); }}
+                className={IC}
+              />
             </div>
 
+            {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData((p) => ({ ...p, category: e.target.value }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
-                required
-              >
-                <option value="Starter">Starter</option>
-                <option value="Main Course">Main Course</option>
-                <option value="Dessert">Dessert</option>
-                <option value="Beverage">Beverage</option>
-                <option value="Snack">Snack</option>
-                <option value="Combo">Combo</option>
-                <option value="__custom__">Custom…</option>
-              </select>
+              <label className={LC}>Description</label>
+              <textarea rows={3} value={form.description}
+                placeholder="Short description shown to customers"
+                onChange={e => set('description', e.target.value)}
+                onBlur={() => schedule({ description: form.description.trim() })}
+                className={IC}
+              />
             </div>
 
-            {formData.category === '__custom__' && (
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Custom category</label>
-                <input
-                  type="text"
-                  value={formData.custom_category}
-                  onChange={(e) => setFormData((p) => ({ ...p, custom_category: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
-                  placeholder="e.g. Tandoor, Rolls, Thali"
+            {/* Price + Category */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={LC}>Price (₹) *</label>
+                <input type="number" min={0} step="0.01" required value={form.price}
+                  onChange={e => set('price', Number(e.target.value))}
+                  onBlur={() => schedule({ price: Number(form.price || 0) })}
+                  className={IC}
                 />
               </div>
-            )}
-          </div>
-
-          {/* Prep time & Discount & Category ID */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Prep time (min)</label>
-              <input
-                type="number"
-                min={0}
-                value={formData.preparation_time}
-                onChange={(e) => setFormData((p) => ({ ...p, preparation_time: Number(e.target.value) }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
+              <div>
+                <label className={LC}>Category *</label>
+                <select required value={form.category} className={IC}
+                  onChange={e => {
+                    set('category', e.target.value);
+                    if (e.target.value !== '__custom__') schedule({ category: e.target.value });
+                  }}>
+                  {['Starter','Main Course','Dessert','Beverage','Snack','Combo'].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                  <option value="__custom__">Custom…</option>
+                </select>
+              </div>
+              {form.category === '__custom__' && (
+                <div className="sm:col-span-2">
+                  <label className={LC}>Custom category name</label>
+                  <input type="text" value={form.custom_category} placeholder="e.g. Tandoor, Rolls"
+                    onChange={e => set('custom_category', e.target.value)}
+                    onBlur={() => schedule({ category: form.custom_category.trim() || 'Main Course' })}
+                    className={IC}
+                  />
+                </div>
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Discount (%)</label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={formData.discount_percentage}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, discount_percentage: Number(e.target.value) }))
-                }
-                className={`w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent ${
-                  discountOk ? 'border-gray-300' : 'border-red-400'
-                }`}
-              />
-              {!discountOk && <p className="text-xs text-red-600 mt-1">0 to 100 only</p>}
+            {/* Prep / Discount / Category ID */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className={LC}>Prep time (min)</label>
+                <input type="number" min={0} value={form.preparation_time}
+                  onChange={e => set('preparation_time', Number(e.target.value))}
+                  onBlur={() => schedule({ preparation_time: Number(form.preparation_time || 0) })}
+                  className={IC}
+                />
+              </div>
+              <div>
+                <label className={LC}>Discount (%)</label>
+                <input type="number" min={0} max={100} value={form.discount_percentage}
+                  onChange={e => set('discount_percentage', Number(e.target.value))}
+                  onBlur={() => { if (discountOk) schedule({ discount_percentage: Number(form.discount_percentage || 0) }); }}
+                  className={`${IC} ${discountOk ? '' : '!border-red-400 bg-red-50'}`}
+                />
+                {!discountOk && <p className="text-xs text-red-600 mt-1">Must be 0–100</p>}
+              </div>
+              <div>
+                <label className={LC}>Category ID</label>
+                <input type="text" value={form.category_id || ''} placeholder="UUID or blank"
+                  onChange={e => set('category_id', e.target.value || null)}
+                  onBlur={() => schedule({ category_id: form.category_id || null })}
+                  className={IC}
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Category ID (optional)</label>
-              <input
-                type="text"
-                value={formData.category_id || ''}
-                onChange={(e) => setFormData((p) => ({ ...p, category_id: e.target.value || null }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
-                placeholder="UUID or blank"
-              />
+            {/* Checkboxes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {([
+                { key: 'is_veg'       as const, label: 'Vegetarian', sub: 'Shown as Veg' },
+                { key: 'is_available' as const, label: 'Available',  sub: 'Visible to customers' },
+              ]).map(({ key, label, sub }) => (
+                <label key={key} className="flex items-center gap-3 rounded-xl border px-4 py-3 hover:bg-gray-50 cursor-pointer transition">
+                  <input type="checkbox" checked={Boolean(form[key])}
+                    onChange={e => { set(key, e.target.checked); schedule({ [key]: e.target.checked }); }}
+                    className="w-5 h-5 text-primary rounded focus:ring-primary"
+                  />
+                  <span className="font-semibold text-gray-800 text-sm">{label}</span>
+                  <span className="text-xs text-gray-400 ml-auto">{sub}</span>
+                </label>
+              ))}
             </div>
-          </div>
 
-          {/* Checkboxes */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="flex items-center gap-2 rounded-xl border px-4 py-3 hover:bg-gray-50 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.is_veg}
-                onChange={(e) => setFormData((p) => ({ ...p, is_veg: e.target.checked }))}
-                className="w-5 h-5 text-primary rounded focus:ring-primary"
-              />
-              <span className="text-gray-800 font-semibold">Vegetarian</span>
-              <span className="text-xs text-gray-500 ml-auto">Shown as Veg</span>
-            </label>
-
-            <label className="flex items-center gap-2 rounded-xl border px-4 py-3 hover:bg-gray-50 cursor-pointer">
-            <input
-  type="checkbox"
-  checked={formData.is_available}
-  onChange={(e) => {
-    setFormData((p) => ({ ...p, is_available: e.target.checked }));
-    scheduleAutosave({ is_available: e.target.checked });
-  }}
-/>
-
-              <span className="text-gray-800 font-semibold">Available</span>
-              <span className="text-xs text-gray-500 ml-auto">Visible to customers</span>
-            </label>
-          </div>
-
-          {/* Actions */}
-          <div className="sticky bottom-0 bg-white pt-2 pb-1">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading || uploading}
-                className="flex-1 px-6 py-3 bg-primary text-white rounded-xl hover:bg-orange-600 font-semibold disabled:opacity-50"
-              >
-                {loading ? 'Saving…' : item ? 'Update Item' : 'Add Item'}
-              </button>
+            {/* ── Footer actions ── */}
+            <div className="sticky bottom-0 bg-white pt-3 pb-1 border-t border-gray-100 -mx-5 sm:-mx-6 px-5 sm:px-6">
+              <div className="flex gap-3">
+                <button type="button" onClick={handleClose} disabled={closing}
+                  className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-semibold transition flex items-center justify-center gap-2 disabled:opacity-60">
+                  {closing && <Loader2 size={15} className="animate-spin" />}
+                  {closing ? 'Saving…' : 'Cancel'}
+                </button>
+                <button type="submit" disabled={submitting || uploading || closing}
+                  className="flex-1 px-6 py-3 bg-primary text-white rounded-xl hover:bg-orange-600 font-semibold disabled:opacity-50 transition flex items-center justify-center gap-2">
+                  {(submitting || uploading) && <Loader2 size={15} className="animate-spin" />}
+                  {submitting ? 'Saving…' : uploading ? 'Uploading…' : item ? 'Update Item' : 'Add Item'}
+                </button>
+              </div>
             </div>
-          </div>
-        </form>
+
+          </form>
+        </div>
       </div>
     </div>
   );
