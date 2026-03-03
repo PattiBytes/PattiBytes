@@ -117,6 +117,74 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
 
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+const [autoSaving, setAutoSaving] = useState(false);
+
+const lastSavedRef = useRef<Record<string, any>>({});
+const pendingPatchRef = useRef<Record<string, any> | null>(null);
+const saveTimerRef = useRef<number | null>(null);
+const savingRef = useRef(false);
+
+useEffect(() => {
+  // Seed "last saved" with current DB values so we don't re-save unchanged fields
+  lastSavedRef.current = item ? { ...item } : {};
+  pendingPatchRef.current = null;
+
+  return () => {
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+  };
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [item?.id]);
+
+const scheduleAutosave = useCallback(
+  (patch: Record<string, any>) => {
+    // Autosave can only update an existing row.
+    if (!item?.id) return;
+
+    // Merge patches (so multiple changes within debounce become 1 update)
+    pendingPatchRef.current = {
+      ...(pendingPatchRef.current || {}),
+      ...patch,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+
+    saveTimerRef.current = window.setTimeout(async () => {
+      if (!pendingPatchRef.current) return;
+
+      // If a save is in-flight, try again shortly (keeps it robust)
+      if (savingRef.current) {
+        scheduleAutosave({});
+        return;
+      }
+
+      // Remove unchanged fields to avoid useless updates
+      const raw = pendingPatchRef.current;
+      pendingPatchRef.current = null;
+
+      const toSend: Record<string, any> = {};
+      for (const k of Object.keys(raw)) {
+        if (k === 'updated_at') continue;
+        if (raw[k] !== lastSavedRef.current[k]) toSend[k] = raw[k];
+      }
+
+      if (Object.keys(toSend).length === 0) return;
+
+      savingRef.current = true;
+      setAutoSaving(true);
+      try {
+        await menuService.updateMenuItem(item.id, { ...toSend, updated_at: new Date().toISOString() });
+        lastSavedRef.current = { ...lastSavedRef.current, ...toSend };
+      } catch (e) {
+        console.error('Autosave failed:', e);
+      } finally {
+        savingRef.current = false;
+        setAutoSaving(false);
+      }
+    }, 700);
+  },
+  [item?.id]
+);
 
   // Ref for the modal container to attach paste listener
   const modalRef = useRef<HTMLDivElement>(null);
@@ -138,14 +206,16 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
   const uploadFile = useCallback(async (file: File) => {
     setUploading(true);
     try {
-      const url = await uploadToCloudinary(file, 'menu-items');
-      setFormData((p) => ({ ...p, image_url: url }));
+     const url = await uploadToCloudinary(file, 'menu-items');
+     setFormData((p) => ({ ...p, image_url: url }));
+     scheduleAutosave({ image_url: url });
       toast.success('Image uploaded successfully');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to upload image');
     } finally {
       setUploading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const uploadDataUrl = useCallback(
@@ -237,7 +307,11 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
     }
   };
 
-  const removeImage = () => setFormData((p) => ({ ...p, image_url: '' }));
+  const removeImage = () => {
+  setFormData((p) => ({ ...p, image_url: '' }));
+  scheduleAutosave({ image_url: '' });
+};
+
 
   const handleCopyImageLink = async () => {
     try {
@@ -337,6 +411,7 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
             <X size={22} />
           </button>
         </div>
+{autoSaving && <p className="text-xs text-gray-500">Saving…</p>}
 
         <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-6">
           {/* Image */}
@@ -495,12 +570,13 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Item Name *</label>
             <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-              className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
-              required
-            />
+  value={formData.name}
+  onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
+  onBlur={() => {
+    const v = formData.name.trim();
+    if (v) scheduleAutosave({ name: v });
+  }}
+/>
           </div>
 
           {/* Description */}
@@ -518,15 +594,13 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Price (₹) *</label>
-              <input
-                type="number"
-                value={formData.price}
-                onChange={(e) => setFormData((p) => ({ ...p, price: Number(e.target.value) }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
-                required
-                min="0"
-                step="0.01"
-              />
+             <input
+  type="number"
+  value={formData.price}
+  onChange={(e) => setFormData((p) => ({ ...p, price: Number(e.target.value) }))}
+  onBlur={() => scheduleAutosave({ price: Number(formData.price || 0) })}
+/>
+
             </div>
 
             <div>
@@ -617,12 +691,15 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
             </label>
 
             <label className="flex items-center gap-2 rounded-xl border px-4 py-3 hover:bg-gray-50 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.is_available}
-                onChange={(e) => setFormData((p) => ({ ...p, is_available: e.target.checked }))}
-                className="w-5 h-5 text-primary rounded focus:ring-primary"
-              />
+            <input
+  type="checkbox"
+  checked={formData.is_available}
+  onChange={(e) => {
+    setFormData((p) => ({ ...p, is_available: e.target.checked }));
+    scheduleAutosave({ is_available: e.target.checked });
+  }}
+/>
+
               <span className="text-gray-800 font-semibold">Available</span>
               <span className="text-xs text-gray-500 ml-auto">Visible to customers</span>
             </label>
