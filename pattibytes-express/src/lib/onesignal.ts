@@ -1,37 +1,24 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // ── Window-level flags survive HMR module resets ─────────────────────────────
-// Module-level vars (let _initPromise) reset on every hot reload.
-// window.__os* persists across HMR, preventing double-init and retry-on-domain-fail.
 declare global {
   interface Window {
-    __osInitialized?: boolean;  // SDK init succeeded
-    __osInitFailed?: boolean;   // SDK init permanently failed (domain error)
-    __osInitPromise?: Promise<boolean>; // deduplicates concurrent calls
+    __osInitialized?: boolean;
+    __osInitFailed?: boolean;
+    __osInitPromise?: Promise<boolean>;
   }
 }
 
-// ── Registered production domains ────────────────────────────────────────────
-// OneSignal.init() is HARD domain-locked to whatever you register in the dashboard.
-// Adding localhost here will just make it reach OneSignal.init() which then throws.
-// ✅ DO NOT add localhost — it will never work unless you register it in your
-//    OneSignal dashboard AND use https (e.g. via ngrok).
 const PROD_HOSTS = new Set([
   'pbexpress.pattibytes.com',
-  // 'staging.pattibytes.com', // add if you have a staging domain
+  // 'staging.pattibytes.com',
 ]);
 
 export async function initOneSignal(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
-
-  // ✅ Permanently failed on this domain (e.g. not registered) — don't retry
-  if (window.__osInitFailed) return false;
-
-  // ✅ Already initialized successfully — return immediately (survives HMR)
-  if (window.__osInitialized) return true;
-
-  // ✅ Already in progress — return same promise (deduplicates parallel calls)
-  if (window.__osInitPromise) return window.__osInitPromise;
+  if (window.__osInitFailed)   return false;
+  if (window.__osInitialized)  return true;
+  if (window.__osInitPromise)  return window.__osInitPromise;
 
   const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
   if (!appId) {
@@ -39,10 +26,9 @@ export async function initOneSignal(): Promise<boolean> {
     return false;
   }
 
-  // ✅ Skip silently on non-production domains (localhost, preview, etc.)
   const hostname = window.location.hostname;
   if (!PROD_HOSTS.has(hostname)) {
-    // No warn — this is expected during development
+    // Silent skip — expected on localhost/preview
     return false;
   }
 
@@ -51,12 +37,13 @@ export async function initOneSignal(): Promise<boolean> {
       const OneSignal = (await import('react-onesignal')).default;
       await OneSignal.init({
         appId,
-        serviceWorkerPath:  '/sw.js',
-        serviceWorkerParam: { scope: '/' },
+        // ✅ No serviceWorkerPath / serviceWorkerParam —
+        // OneSignal v16 always self-registers /OneSignalSDKWorker.js
+        // Setting serviceWorkerPath to /sw.js caused the 404 error
         welcomeNotification: { disable: true, message: '' },
       });
       window.__osInitialized = true;
-      window.__osInitPromise = undefined;
+      window.__osInitPromise  = undefined;
       console.log('[OneSignal] initialized ✓');
       return true;
     } catch (e: any) {
@@ -64,23 +51,20 @@ export async function initOneSignal(): Promise<boolean> {
       window.__osInitPromise = undefined;
 
       if (msg.includes('already initialized')) {
-        // ✅ HMR re-fired init on an already-running SDK — treat as success
         window.__osInitialized = true;
         console.info('[OneSignal] already initialized (HMR) — OK');
         return true;
       }
 
       if (msg.includes('Can only be used on') || msg.includes('domain')) {
-        // ✅ Permanent domain error — stop all future retries
         window.__osInitFailed = true;
         console.warn(
-          `[OneSignal] Domain "${hostname}" not registered in OneSignal dashboard. ` +
+          `[OneSignal] Domain "${hostname}" not registered. ` +
           'Add it at: https://dashboard.onesignal.com → Settings → Web Configuration'
         );
         return false;
       }
 
-      // Transient error (network, etc.) — allow retry next call
       console.warn('[OneSignal] init failed (will retry):', msg);
       return false;
     }
@@ -93,7 +77,6 @@ export async function loginOneSignal(userId: string, role: string): Promise<void
   if (typeof window === 'undefined') return;
   const ok = await initOneSignal();
   if (!ok) return;
-
   try {
     const OneSignal = (await import('react-onesignal')).default;
     await OneSignal.login(userId);

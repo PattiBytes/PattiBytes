@@ -1,43 +1,33 @@
- 
-/* pattibytes-express service worker v5 — OneSignal + safe caching */
+/* pattibytes-express service worker v5 — caching only */
+/* OneSignal push is handled by /OneSignalSDKWorker.js  */
 
-// ✅ MUST be first — OneSignal takes over push + notificationclick
-importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
-
-const CACHE_NAME    = 'pattibytes-express-v5'; // bumped — clears old v4 caches
+const CACHE_NAME     = 'pattibytes-express-v5';
 const APP_SHELL_URLS = ['/', '/icon-192.png', '/icon-512.png', '/favicon.ico'];
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-const isSameOrigin = (url) => url.origin === self.location.origin;
-
-const isSupabaseLike = (url) => {
+const isSameOrigin    = (url) => url.origin === self.location.origin;
+const isSupabaseLike  = (url) => {
   const h = url.hostname;
-  return (
-    h.endsWith('.supabase.co') ||
-    h.endsWith('.workers.dev') ||
-    h === 'supabase-proxy.sbpbexpresspattibytescom.workers.dev'
-  );
+  return h.endsWith('.supabase.co') || h.endsWith('.workers.dev') ||
+         h === 'supabase-proxy.sbpbexpresspattibytescom.workers.dev';
 };
-
-const isApiRequest       = (url) => isSameOrigin(url) && url.pathname.startsWith('/api/');
-const isAuthPage         = (url) => isSameOrigin(url) && (
+const isApiRequest    = (url) => isSameOrigin(url) && url.pathname.startsWith('/api/');
+const isAuthPage      = (url) => isSameOrigin(url) && (
   url.pathname.startsWith('/login')  ||
   url.pathname.startsWith('/signup') ||
   url.pathname.startsWith('/auth/')
 );
-const isNextStaticAsset  = (url) => isSameOrigin(url) && (
+const isNextStatic    = (url) => isSameOrigin(url) && (
   url.pathname.startsWith('/_next/static/') ||
   url.pathname.startsWith('/assets/')
 );
-const isStaticPublicAsset = (url) => isSameOrigin(url) && (
+const isStaticAsset   = (url) => isSameOrigin(url) && (
   url.pathname.startsWith('/icon-') ||
   url.pathname === '/favicon.ico'   ||
   /\.(png|jpe?g|webp|svg|gif|ico)$/.test(url.pathname)
 );
-const isAudio = (url) =>
+const isAudio         = (url) =>
   url.pathname.startsWith('/sounds/') || url.pathname.endsWith('.mp3');
 
-// ── strategies ───────────────────────────────────────────────────────────────
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
@@ -65,7 +55,6 @@ async function networkFirstNavigation(request) {
   }
 }
 
-// ── lifecycle ─────────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
@@ -84,33 +73,24 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-// ── fetch ─────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
-
   const url = new URL(req.url);
 
-  // Never intercept: Supabase, audio, API routes, auth pages
   if ((!isSameOrigin(url) && isSupabaseLike(url)) ||
-      isAudio(url) || isApiRequest(url) || isAuthPage(url)) {
+       isAudio(url) || isApiRequest(url) || isAuthPage(url)) {
     event.respondWith(fetch(req));
     return;
   }
-
-  // Navigations → network-first with offline fallback
   if (req.mode === 'navigate') {
     event.respondWith(networkFirstNavigation(req));
     return;
   }
-
-  // Static assets → cache-first
-  if (isNextStaticAsset(url) || isStaticPublicAsset(url)) {
+  if (isNextStatic(url) || isStaticAsset(url)) {
     event.respondWith(cacheFirst(req));
     return;
   }
-
-  // Default → try network, fall back to cache
   event.respondWith((async () => {
     try { return await fetch(req); }
     catch {
@@ -122,7 +102,5 @@ self.addEventListener('fetch', (event) => {
   })());
 });
 
-// ── push & notificationclick ──────────────────────────────────────────────────
-// ✅ Handled entirely by OneSignal (importScripts at top)
-// DO NOT add duplicate self.addEventListener('push') or 'notificationclick' here
-// — they would fire twice and break OneSignal's click routing
+// push and notificationclick are NOT here —
+// they are handled by /OneSignalSDKWorker.js
