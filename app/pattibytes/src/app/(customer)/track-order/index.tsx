@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import { View, Text, StyleSheet } from 'react-native'
-import MapView, { Marker, UrlTile } from 'react-native-maps'
+// ✅ Import from your shim — NOT from 'react-native-maps'
+import MapView, { Marker } from '../../../components/MapView'
 import { useLocalSearchParams } from 'expo-router'
 import { useOrderTracking } from '../../../hooks/useOrderTracking'
 
@@ -10,12 +11,12 @@ export default function TrackOrderScreen() {
 
   const initialRegion = useMemo(
     () => ({
-      latitude: loc?.lat ?? 30.901,
-      longitude: loc?.lng ?? 75.8573,
-      latitudeDelta: 0.05,
+      latitude:      loc?.lat ?? 30.901,
+      longitude:     loc?.lng ?? 75.8573,
+      latitudeDelta:  0.05,
       longitudeDelta: 0.05,
     }),
-    [loc?.lat, loc?.lng]
+    [loc?.lat, loc?.lng],
   )
 
   return (
@@ -23,18 +24,15 @@ export default function TrackOrderScreen() {
       <Text style={S.header}>
         Track Order{orderId ? ` #${orderId}` : ''}
       </Text>
+
       <MapView style={S.map} initialRegion={initialRegion}>
-        <UrlTile
-          urlTemplate={`https://us1.locationiq.com/v3/streets/r/{z}/{x}/{y}.png?key=${process.env.EXPO_PUBLIC_LOCATIONIQ_KEY}`}
-          maximumZ={19}
-        />
         {loc && (
           <Marker
             coordinate={{ latitude: loc.lat, longitude: loc.lng }}
             title="Driver"
-            rotation={loc.heading ?? undefined}
           />
         )}
+        {/* UrlTile removed — MapLibre shim uses OpenFreeMap tiles built-in */}
       </MapView>
     </View>
   )
@@ -42,6 +40,6 @@ export default function TrackOrderScreen() {
 
 const S = StyleSheet.create({
   container: { flex: 1 },
-  header: { padding: 12, fontSize: 16, fontWeight: '700' },
-  map: { flex: 1 },
+  header:    { padding: 12, fontSize: 16, fontWeight: '700' },
+  map:       { flex: 1 },
 })

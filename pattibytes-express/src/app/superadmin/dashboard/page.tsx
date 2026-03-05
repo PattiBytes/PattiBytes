@@ -258,79 +258,85 @@ const loadRecentOrders = async () => {
   try {
     const { data: orders, error } = await supabase
       .from('orders')
-      .select(`
-        id,
-        order_number,
-        total_amount,
-        status,
-        created_at,
-        customer_id,
-        customer_notes,
-        customer_phone
-      `)
+      .select(
+        `
+          id,
+          order_number,
+          total_amount,
+          status,
+          created_at,
+          customer_id,
+          customer_notes,
+          customer_phone
+        `
+      )
       .order('created_at', { ascending: false })
       .limit(10);
 
     if (error) throw error;
 
-    const list = (orders as any[]) || [];
+    const list = (orders ?? []) as Array<{
+      id: string;
+      order_number?: string | number | null;
+      total_amount?: number | null;
+      status?: string | null;
+      created_at: string;
+      customer_id?: string | null;
+      customer_notes?: string | null;
+      customer_phone?: string | null;
+    }>;
 
-    // ✅ FIXED: Process customer names properly with correct column name
-     const withCustomers = await Promise.all(
-      list.map(async (order: any) => {
-        let customer_name = 'Unknown';
-
-        if (!order.customer_id) {
-          // Walk-in order - extract name from customer_notes
-          if (order.customer_notes) {
-            // Try to extract name from various formats
-            const notes = String(order.customer_notes).trim();
-            
-            if (notes.includes('Walk-in:')) {
-              // Format: "Walk-in: Name\nPhone: ..."
-              customer_name = notes
-                .replace('Walk-in:', '')
-                .split('\n')[0]
-                .trim();
-            } else if (notes.includes('Name:')) {
-              // Format: "Name: John\nPhone: ..."
-              const nameMatch = notes.match(/Name:\s*(.+?)(?:\n|$)/i);
-              customer_name = nameMatch ? nameMatch[1].trim() : notes.split('\n')[0].trim();
-            } else {
-              // Just use first line
-              customer_name = notes.split('\n')[0].trim() || 'Walk-in Customer';
-            }
-          } else if (order.customer_phone) {
-            customer_name = `Walk-in (${order.customer_phone})`;
-          } else {
-            customer_name = 'Walk-in Customer';
-          }
-          
-          // Add walk-in emoji indicator
-          customer_name = `🚶 ${customer_name}`;
-        } else {
-          // Regular customer - fetch from profiles using full_name
-          const { data: customer } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', order.customer_id)
-            .maybeSingle();
-
-          customer_name = customer?.full_name || 'Unknown';
-        }
-
-        return {
-          ...order,
-          customer_name,
-        };
-      })
+    const customerIds = Array.from(
+      new Set(list.map((o) => o.customer_id).filter((id): id is string => typeof id === 'string' && id.length > 0))
     );
 
+    let nameMap = new Map<string, string | null>();
+
+    // IMPORTANT: only call .in() when we actually have ids
+    if (customerIds.length > 0) {
+      const { data: customers, error: custErr } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', customerIds);
+
+      if (custErr) throw custErr;
+
+      nameMap = new Map((customers ?? []).map((c: any) => [c.id, c.full_name]));
+    }
+
+    const withCustomers = list.map((order) => {
+      // Walk-in / unknown customer_id
+      if (!order.customer_id) {
+        let customer_name = 'Walk-in Customer';
+        const notes = String(order.customer_notes ?? '').trim();
+
+        if (notes) {
+          if (notes.includes('Walk-in:')) customer_name = notes.replace('Walk-in:', '').split('\n')[0].trim();
+          else {
+            const m = notes.match(/Name:\s*(.+?)(?:\n|$)/i);
+            customer_name = (m?.[1] || notes.split('\n')[0] || 'Walk-in Customer').trim();
+          }
+        } else if (order.customer_phone) {
+          customer_name = `Walk-in (${order.customer_phone})`;
+        }
+
+        return { ...order, customer_name: `🚶 ${customer_name}` };
+      }
+
+      // Normal customer
+      return {
+        ...order,
+        customer_name: nameMap.get(order.customer_id) || 'Unknown',
+      };
+    });
+
     setRecentOrders(withCustomers);
-  } catch (error) {
-    console.error('Failed to load recent orders', error);
+  } catch (e: any) {
+    // Better logging than "{}"
+    console.error('Failed to load recent orders:', e?.message || e, e);
   }
 };
+
 
 
   const getStatusColor = (status: string) => {

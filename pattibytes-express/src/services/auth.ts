@@ -1,217 +1,168 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
 
+const PROFILE_FIELDS =
+  'id,email,full_name,phone,role,approval_status,profile_completed,is_active,created_at';
+
+// ── Module-level cache ────────────────────────────────────────────────────────
+let cachedProfile: any = null;
+let cacheTimestamp = 0;
+const CACHE_TTL = 5 * 60_000; // 5 minutes (increased from 1m — profile rarely changes)
+
+async function waitForProfile(userId: string, maxRetries = 6, delayMs = 400): Promise<any> {
+  for (let i = 0; i < maxRetries; i++) {
+    const { data } = await supabase
+      .from('profiles').select(PROFILE_FIELDS).eq('id', userId).maybeSingle();
+    if (data) return data;
+    if (i < maxRetries - 1) await new Promise(r => setTimeout(r, delayMs));
+  }
+  return null;
+}
+
 export const authService = {
-  async signup(email: string, password: string, fullName: string, phone: string, role: string = 'customer') {
+  async signup(
+    email: string, password: string,
+    fullName: string, phone: string, role = 'customer'
+  ) {
     try {
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            phone,
-            role,
-          },
-        },
+      const { data: authData, error } = await supabase.auth.signUp({
+        email, password,
+        options: { data: { full_name: fullName, phone, role } },
       });
+      if (error) throw error;
+      if (!authData.user) throw new Error('Signup failed — no user returned');
 
-      if (signUpError) throw signUpError;
-      if (!authData.user) throw new Error('Signup failed - no user returned');
-
-      console.log('User created:', authData.user.id);
-
-      // Wait for trigger to create profile
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // Verify profile exists
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authData.user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        console.error('Profile verification error:', profileError);
-      }
+      let profile = await waitForProfile(authData.user.id);
 
       if (!profile) {
-        console.log('Profile not created by trigger, creating manually...');
-        
-        const { data: newProfile, error: createError } = await supabase
+        const { data: np, error: ce } = await supabase
           .from('profiles')
-          .insert({
+          .upsert({
             id: authData.user.id,
             email: authData.user.email!,
-            full_name: fullName,
-            phone,
-            role,
+            full_name: fullName, phone, role,
             approval_status: role === 'customer' ? 'approved' : 'pending',
             profile_completed: role === 'customer',
             is_active: true,
-          })
-          .select()
+          }, { onConflict: 'id' })
+          .select(PROFILE_FIELDS)
           .single();
-
-        if (createError) {
-          console.error('Manual profile creation error:', createError);
-          throw new Error('Failed to create profile. Please contact support.');
-        }
-
-        console.log('Profile created manually:', newProfile);
+        if (ce) throw new Error('Failed to create profile. Please contact support.');
+        profile = np;
       }
 
-      // Create access request for merchant/driver
+      // Fire-and-forget access request
       if (role === 'merchant' || role === 'driver') {
-        const { error: requestError } = await supabase
-          .from('access_requests')
-          .insert({
-            user_id: authData.user.id,
-            requested_role: role,
-            status: 'pending',
-          });
-
-        if (requestError) {
-          console.error('Access request error:', requestError);
-        }
+        supabase.from('access_requests')
+          .insert({ user_id: authData.user.id, requested_role: role, status: 'pending' })
+          .then(({ error: e }) => { if (e) console.error('Access request:', e); });
       }
 
-      // ✅ FIX: Return object with userId property
-      return { 
-        user: authData.user,
-        userId: authData.user.id 
-      };
+      return { user: authData.user, userId: authData.user.id };
     } catch (error: any) {
-      console.error('Signup failed:', error);
-      
-      if (error.message?.includes('rate limit')) {
-        throw new Error('Too many signup attempts. Please wait 10 minutes.');
-      }
-      
-      if (error.message?.includes('already registered')) {
+      if (error.message?.includes('rate limit'))
+        throw new Error('Too many attempts. Please wait 10 minutes.');
+      if (error.message?.includes('already registered'))
         throw new Error('This email is already registered. Please login.');
-      }
-      
       throw new Error(error.message || 'Signup failed. Please try again.');
     }
   },
 
   async login(email: string, password: string) {
-    try {
-      console.log('Attempting login for:', email);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        console.error('Login error:', error);
-        
-        if (error.message?.includes('Email not confirmed')) {
-          throw new Error('Please confirm your email first.');
-        }
-        if (error.message?.includes('Invalid login credentials')) {
-          throw new Error('Invalid email or password');
-        }
-        throw new Error(error.message || 'Login failed');
-      }
-      
-      if (!data.user) {
-        throw new Error('Login failed - no user returned');
-      }
-
-      console.log('Login successful, user ID:', data.user.id);
-
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .maybeSingle();
-
-      if (profileError) {
-        console.error('Profile fetch error:', profileError);
-        throw new Error('Failed to load profile. Please try again.');
-      }
-
-      if (!profile) {
-        console.log('Profile not found, creating...');
-        
-        const { data: newProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert({
-            id: data.user.id,
-            email: data.user.email!,
-            full_name: data.user.user_metadata?.full_name || '',
-            phone: data.user.user_metadata?.phone || '',
-            role: data.user.user_metadata?.role || 'customer',
-            approval_status: 'approved',
-            profile_completed: true,
-            is_active: true,
-          })
-          .select()
-          .single();
-
-        if (createError) {
-          console.error('Profile creation error:', createError);
-          throw new Error('Failed to create profile. Please contact support.');
-        }
-
-        return newProfile;
-      }
-
-      console.log('Profile loaded successfully:', profile.role);
-      return profile;
-    } catch (error: any) {
-      console.error('Login failed:', error);
-      throw error;
+    if (error) {
+      if (error.message?.includes('Email not confirmed'))
+        throw new Error('Please confirm your email first.');
+      if (error.message?.includes('Invalid login credentials'))
+        throw new Error('Invalid email or password');
+      throw new Error(error.message || 'Login failed');
     }
+    if (!data.user) throw new Error('Login failed — no user returned');
+
+    const { data: profile, error: pe } = await supabase
+      .from('profiles').select(PROFILE_FIELDS).eq('id', data.user.id).maybeSingle();
+
+    if (pe) throw new Error('Failed to load profile. Please try again.');
+
+    if (!profile) {
+      const { data: np, error: ce } = await supabase
+        .from('profiles')
+        .upsert({
+          id: data.user.id,
+          email: data.user.email!,
+          full_name: data.user.user_metadata?.full_name || '',
+          phone: data.user.user_metadata?.phone || '',
+          role: data.user.user_metadata?.role || 'customer',
+          approval_status: 'approved',
+          profile_completed: true,
+          is_active: true,
+        }, { onConflict: 'id' })
+        .select(PROFILE_FIELDS).single();
+      if (ce) throw new Error('Failed to create profile. Please contact support.');
+      cachedProfile = np;
+      cacheTimestamp = Date.now();
+      return np;
+    }
+
+    cachedProfile = profile;
+    cacheTimestamp = Date.now();
+    return profile;
   },
 
   async loginWithGoogle() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
-
     if (error) throw error;
     return data;
   },
 
   async logout() {
+    cachedProfile = null;
+    cacheTimestamp = 0;
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   },
 
   async getCurrentUser() {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    
-    if (error || !user) return null;
+    // ✅ Return in-memory cache if fresh (5 min TTL)
+    if (cachedProfile && Date.now() - cacheTimestamp < CACHE_TTL) {
+      return cachedProfile;
+    }
+
+    // ✅ Use getSession() — reads from memory/localStorage, NO network call
+    // getUser() hits the Supabase Auth server every time — avoid it here
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session?.user) {
+      cachedProfile = null;
+      return null;
+    }
 
     const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle();
+      .from('profiles').select(PROFILE_FIELDS).eq('id', session.user.id).maybeSingle();
 
-    return profile;
+    cachedProfile = profile ?? null;
+    cacheTimestamp = Date.now();
+    return cachedProfile;
   },
 
   async resetPassword(email: string) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth/reset-password`,
     });
-
     if (error) throw error;
   },
 
   async updatePassword(newPassword: string) {
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;
+  },
+
+  invalidateCache() {
+    cachedProfile = null;
+    cacheTimestamp = 0;
   },
 };

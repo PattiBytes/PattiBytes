@@ -1,153 +1,113 @@
 'use client';
-
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { supabase } from '@/lib/supabase';
-import { Bell, X, Trash2 } from 'lucide-react';
+import { Bell, X, Trash2, BellOff, BellRing, CheckCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { notificationService } from '@/services/notifications';
+import { notificationService, type NotificationRow } from '@/services/notifications';
+import { getPushPermission, requestPushPermission } from '@/lib/onesignal';
 
-interface Notification {
-  id: string;
-  title: string;
-  body?: string;
-  type: string;
-  is_read: boolean;
-  created_at: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data?: any;
-}
+const ICON_MAP: Record<string, string> = {
+  new_order: '📦', order_confirmed: '✅', order_ready: '🍽️',
+  out_for_delivery: '🚚', delivered: '🎉', delivery_assigned: '🚚',
+  access_approved: '✅', access_rejected: '❌', order: '🛒',
+  delivery: '🚗', system: '🔔', quote: '💬', custom: '✦',
+};
 
 export default function NotificationsPanel() {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [showPanel, setShowPanel] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
+  const [unreadCount, setUnreadCount]     = useState(0);
+  const [showPanel, setShowPanel]         = useState(false);
+  const [loading, setLoading]             = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+  const [requestingPush, setRequestingPush] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      loadNotifications();
-      loadUnreadCount();
-
-      const channel = supabase
-        .channel('notifications')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'notifications',
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
-            loadNotifications();
-            loadUnreadCount();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
-  const loadNotifications = async () => {
-    if (!user) return;
-
+  const loadAll = useCallback(async () => {
+    if (!user?.id) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-      setNotifications(data as Notification[]);
-    } catch (error) {
-      console.error('Failed to load notifications:', error);
+      const [notifs, count] = await Promise.all([
+        notificationService.getUserNotifications(user.id, 30),
+        notificationService.getUnreadCount(user.id),
+      ]);
+      setNotifications(notifs);
+      setUnreadCount(count);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
-  // ✅ FIX: Properly handle the async function
-  const loadUnreadCount = async () => {
-    if (!user) return;
+  // Load push permission state
+  useEffect(() => {
+    getPushPermission().then(setPushPermission);
+  }, []);
 
-    try {
-      const count = await notificationService.getUnreadCount(user.id);
-      setUnreadCount(count);
-    } catch (error) {
-      console.error('Failed to load unread count:', error);
-      setUnreadCount(0);
-    }
-  };
+  // Subscribe to realtime + load on mount
+  useEffect(() => {
+    if (!user?.id) return;
+    loadAll();
 
-  const handleMarkAsRead = async (notificationId: string) => {
-    try {
-      await notificationService.markAsRead(notificationId);
-      await loadNotifications();
-      await loadUnreadCount();
-    } catch (error) {
-      console.error('Failed to mark as read:', error);
-    }
+    const unsub = notificationService.subscribeToNotifications(user.id, (row) => {
+      setNotifications(prev => [row, ...prev].slice(0, 30));
+      setUnreadCount(c => c + 1);
+      // In-tab visual notification (when panel is closed)
+      if (!showPanel && typeof window !== 'undefined' && document.hidden) {
+        // OneSignal handles actual push — this is just a tab-title badge
+        document.title = `(${unreadCount + 1}) PattiBytes Express`;
+      }
+    });
+
+    return unsub;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  // Reset title when panel opens
+  useEffect(() => {
+    if (showPanel) document.title = 'PattiBytes Express';
+  }, [showPanel]);
+
+  const handleMarkAsRead = async (id: string) => {
+    await notificationService.markAsRead(id);
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    setUnreadCount(c => Math.max(0, c - 1));
   };
 
   const handleMarkAllAsRead = async () => {
-    if (!user) return;
-    try {
-      await notificationService.markAllAsRead(user.id);
-      await loadNotifications();
-      await loadUnreadCount();
-    } catch (error) {
-      console.error('Failed to mark all as read:', error);
-    }
+    if (!user?.id) return;
+    await notificationService.markAllAsRead(user.id);
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    setUnreadCount(0);
   };
 
-  const handleDeleteNotification = async (notificationId: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      await notificationService.deleteNotification(notificationId);
-      await loadNotifications();
-      await loadUnreadCount();
-    } catch (error) {
-      console.error('Failed to delete notification:', error);
-    }
+    const wasUnread = notifications.find(n => n.id === id)?.is_read === false;
+    await notificationService.deleteNotification(id);
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    if (wasUnread) setUnreadCount(c => Math.max(0, c - 1));
   };
 
-  const getNotificationIcon = (type: string) => {
-    const icons: Record<string, string> = {
-      new_order: '📦',
-      order_confirmed: '✅',
-      order_ready: '🍽️',
-      out_for_delivery: '🚚',
-      delivered: '🎉',
-      delivery_assigned: '🚚',
-      access_approved: '✅',
-      access_rejected: '❌',
-      order: '🛒',
-      delivery: '🚗',
-      system: '🔔',
-    };
-    return icons[type] || '🔔';
+  const handleRequestPush = async () => {
+    setRequestingPush(true);
+    const granted = await requestPushPermission();
+    setPushPermission(granted ? 'granted' : 'denied');
+    setRequestingPush(false);
   };
 
   return (
     <div className="relative">
+      {/* Bell trigger */}
       <button
-        onClick={() => setShowPanel(!showPanel)}
+        onClick={() => setShowPanel(v => !v)}
         className="relative p-1.5 sm:p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
         aria-label="Notifications"
       >
         <Bell size={20} className="sm:hidden" />
         <Bell size={24} className="hidden sm:block" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 sm:top-0 sm:right-0 bg-red-500 text-white text-[10px] sm:text-xs font-bold rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center animate-pulse">
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -155,83 +115,126 @@ export default function NotificationsPanel() {
 
       {showPanel && (
         <>
-          <div
-            className="fixed inset-0 z-40 bg-black/20 sm:bg-transparent"
-            onClick={() => setShowPanel(false)}
-          />
-          <div className="fixed sm:absolute left-0 right-0 sm:left-auto sm:right-0 bottom-0 sm:bottom-auto sm:top-full sm:mt-2 w-full sm:w-96 bg-white rounded-t-2xl sm:rounded-lg shadow-2xl z-50 max-h-[85vh] sm:max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
-              <h3 className="font-bold text-gray-900 text-base sm:text-lg">
-                Notifications {unreadCount > 0 && `(${unreadCount})`}
+          {/* Backdrop */}
+          <div className="fixed inset-0 z-40 bg-black/20 sm:bg-transparent" onClick={() => setShowPanel(false)} />
+
+          {/* Panel */}
+          <div className="fixed sm:absolute left-0 right-0 sm:left-auto sm:right-0 bottom-0 sm:bottom-auto sm:top-full sm:mt-2 w-full sm:w-96 bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl z-50 max-h-[88vh] sm:max-h-[80vh] overflow-hidden flex flex-col border">
+
+            {/* Header */}
+            <div className="p-3 sm:p-4 border-b flex items-center justify-between bg-white sticky top-0 z-10">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                Notifications
+                {unreadCount > 0 && (
+                  <span className="bg-red-500 text-white text-xs font-black px-2 py-0.5 rounded-full">
+                    {unreadCount}
+                  </span>
+                )}
               </h3>
               <div className="flex items-center gap-2">
                 {unreadCount > 0 && (
                   <button
                     onClick={handleMarkAllAsRead}
-                    className="text-xs sm:text-sm text-primary hover:underline font-medium"
+                    className="flex items-center gap-1 text-xs text-primary hover:underline font-semibold"
                   >
-                    Mark all read
+                    <CheckCheck size={14} /> All read
                   </button>
                 )}
-                <button
-                  onClick={() => setShowPanel(false)}
-                  className="text-gray-400 hover:text-gray-600 p-1"
-                  aria-label="Close"
-                >
-                  <X size={20} />
+                <button onClick={() => setShowPanel(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded">
+                  <X size={18} />
                 </button>
               </div>
             </div>
 
+            {/* Push permission banner — shows for web users when not yet granted */}
+            {pushPermission === 'default' && (
+              <div className="bg-violet-50 border-b border-violet-100 px-4 py-3 flex items-center gap-3">
+                <BellRing className="w-5 h-5 text-violet-600 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-violet-900">Enable push notifications</p>
+                  <p className="text-xs text-violet-700">Get order updates even when the tab is closed</p>
+                </div>
+                <button
+                  onClick={handleRequestPush}
+                  disabled={requestingPush}
+                  className="shrink-0 bg-violet-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition"
+                >
+                  {requestingPush ? 'Enabling…' : 'Enable'}
+                </button>
+              </div>
+            )}
+
+            {pushPermission === 'denied' && (
+              <div className="bg-gray-50 border-b px-4 py-2 flex items-center gap-2">
+                <BellOff className="w-4 h-4 text-gray-400 shrink-0" />
+                <p className="text-xs text-gray-500">
+                  Push blocked — enable in browser settings → Site settings
+                </p>
+              </div>
+            )}
+
+            {pushPermission === 'granted' && (
+              <div className="bg-green-50 border-b px-4 py-2 flex items-center gap-2">
+                <Bell className="w-4 h-4 text-green-600 shrink-0" />
+                <p className="text-xs text-green-700 font-semibold">Push notifications active ✓</p>
+              </div>
+            )}
+
+            {/* List */}
             <div className="flex-1 overflow-y-auto">
               {loading ? (
-                <div className="p-8 text-center text-gray-600">
-                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary mx-auto mb-2"></div>
-                  Loading...
+                <div className="p-8 text-center text-gray-400">
+                  <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                  Loading…
                 </div>
               ) : notifications.length === 0 ? (
-                <div className="p-8 text-center">
-                  <Bell size={48} className="mx-auto text-gray-400 mb-3" />
-                  <p className="text-gray-600 text-sm sm:text-base font-medium">No notifications yet</p>
-                  <p className="text-gray-500 text-xs sm:text-sm mt-1">We&apos;ll notify you when something arrives</p>
+                <div className="p-10 text-center">
+                  <Bell size={40} className="mx-auto text-gray-300 mb-3" />
+                  <p className="text-gray-600 font-semibold text-sm">No notifications yet</p>
+                  <p className="text-gray-400 text-xs mt-1">We&apos;ll notify you when something arrives</p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-200">
-                  {notifications.map((notification) => (
+                <div className="divide-y">
+                  {notifications.map(n => (
                     <div
-                      key={notification.id}
-                      className={`p-3 sm:p-4 hover:bg-gray-50 active:bg-gray-100 cursor-pointer transition-colors relative group ${
-                        !notification.is_read ? 'bg-blue-50' : ''
+                      key={n.id}
+                      onClick={() => !n.is_read && handleMarkAsRead(n.id)}
+                      className={`p-3 sm:p-4 transition cursor-pointer group relative hover:bg-gray-50 ${
+                        !n.is_read ? 'bg-blue-50/70' : ''
                       }`}
-                      onClick={() => handleMarkAsRead(notification.id)}
                     >
-                      <div className="flex items-start gap-2 sm:gap-3">
-                        <span className="text-xl sm:text-2xl flex-shrink-0">{getNotificationIcon(notification.type)}</span>
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl shrink-0 mt-0.5">
+                          {ICON_MAP[n.type] ?? '🔔'}
+                        </span>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between mb-1">
-                            <p className="font-medium text-gray-900 text-xs sm:text-sm pr-2">
-                              {notification.title}
-                            </p>
-                            {!notification.is_read && (
-                              <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-1"></div>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-gray-900 line-clamp-1">{n.title}</p>
+                            {!n.is_read && (
+                              <span className="w-2 h-2 bg-primary rounded-full shrink-0 mt-1.5" />
                             )}
                           </div>
-                          {notification.body && (
-                            <p className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2 line-clamp-2">{notification.body}</p>
-                          )}
-                          <div className="flex items-center justify-between">
-                            <p className="text-[10px] sm:text-xs text-gray-500">
-                              {formatDistanceToNow(new Date(notification.created_at), {
-                                addSuffix: true,
-                              })}
+                          {(n.body ?? n.message) && (
+                            <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
+                              {n.body ?? n.message}
                             </p>
-                            <button
-                              onClick={(e) => handleDeleteNotification(notification.id, e)}
-                              className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 p-1 transition-all"
-                              aria-label="Delete notification"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                          )}
+                          <div className="flex items-center justify-between mt-1.5">
+                            <span className="text-[10px] text-gray-400">
+                              {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                            </span>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                              {n.sent_push && (
+                                <span title="Push sent" className="text-[10px] text-violet-400">📤</span>
+                              )}
+                              <button
+                                onClick={e => handleDelete(n.id, e)}
+                                className="text-red-400 hover:text-red-600 p-1 rounded transition"
+                                aria-label="Delete"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>

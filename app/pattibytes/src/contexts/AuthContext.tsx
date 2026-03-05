@@ -15,12 +15,12 @@ import {
 
 type AuthCtx = {
   [x: string]: any
-  user: User | null
-  profile: Profile | null
-  loading: boolean
-  pushToken: string | null
+  user:           User | null
+  profile:        Profile | null
+  loading:        boolean
+  pushToken:      string | null
   refreshProfile: () => Promise<void>
-  signOut: () => Promise<void>
+  signOut:        () => Promise<void>
 }
 
 const AuthContext = createContext<AuthCtx | undefined>(undefined)
@@ -32,15 +32,18 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser]           = useState<User | null>(null)
-  const [profile, setProfile]     = useState<Profile | null>(null)
-  const [loading, setLoading]     = useState(true)
+  const [user,      setUser]      = useState<User | null>(null)
+  const [profile,   setProfile]   = useState<Profile | null>(null)
+  const [loading,   setLoading]   = useState(true)
   const [pushToken, setPushToken] = useState<string | null>(null)
 
-  const mounted  = useRef(true)
-  const inflight = useRef<Promise<Profile | null> | null>(null)
-  const lastUid  = useRef<string | null>(null)
+  const mounted      = useRef(true)
+  const inflight     = useRef<Promise<Profile | null> | null>(null)
+  const lastUid      = useRef<string | null>(null)
+  // ✅ prevents duplicate push registration calls within same session
+  const pushRegistered = useRef<Set<string>>(new Set())
 
+  // ── Profile loader (deduped) ─────────────────────────────────────────────
   const loadProfile = useCallback(async (uid: string, force = false) => {
     if (!force && lastUid.current === uid && inflight.current) {
       return inflight.current
@@ -48,10 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const p = inflight.current = getMyProfile(uid)
     const result = await p
     inflight.current = null
-    if (mounted.current) {
-      setProfile(result)
-      // ✅ lastUid is already set in handleSignedIn — don't overwrite here
-    }
+    if (mounted.current) setProfile(result)
     return result
   }, [])
 
@@ -65,34 +65,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
   }, [user?.id])
 
+  // ── Push registration — fire-and-forget, never blocks UI ─────────────────
+  const registerPushAsync = useCallback((uid: string) => {
+    if (pushRegistered.current.has(uid)) return
+    pushRegistered.current.add(uid)
+    registerForPushNotifications(uid)
+      .then(token => {
+        if (mounted.current && token) setPushToken(token)
+      })
+      .catch(() => {
+        // allow retry next time
+        pushRegistered.current.delete(uid)
+      })
+  }, [])
+
+  // ── Handle sign-in ────────────────────────────────────────────────────────
+  // Only awaits what is needed to render the app (user + profile).
+  // Push token runs in background — does NOT delay setLoading(false).
   const handleSignedIn = useCallback(async (u: User) => {
     if (!mounted.current) return
-
-    // ✅ Set lastUid IMMEDIATELY (synchronously) before any await
-    // This is the fix — prevents onAuthStateChange SIGNED_IN from
-    // racing with getSession() and calling handleSignedIn twice
-    lastUid.current = u.id
-
+    lastUid.current = u.id      // synchronous — blocks duplicate calls
     setUser(u)
-    await loadProfile(u.id)
-    const token = await registerForPushNotifications(u.id)
-    if (mounted.current && token) setPushToken(token)
-  }, [loadProfile])
+    await loadProfile(u.id)     // ✅ loading-critical — await this
+    registerPushAsync(u.id)     // ✅ NOT loading-critical — fire and forget
+  }, [loadProfile, registerPushAsync])
 
+  // ── Bootstrap ─────────────────────────────────────────────────────────────
   useEffect(() => {
     mounted.current = true
 
-    // 1. Hydrate existing session on app start
     ;(async () => {
-      const { data } = await supabase.auth.getSession()
-      const u = data.session?.user ?? null
-      if (!mounted.current) return
-      if (u) await handleSignedIn(u)
-      else { setUser(null); setProfile(null) }
-      setLoading(false)
+      try {
+        const { data } = await supabase.auth.getSession()
+        const u = data.session?.user ?? null
+        if (!mounted.current) return
+        if (u) await handleSignedIn(u)
+        else { setUser(null); setProfile(null) }
+      } catch (e) {
+        console.warn('[AuthContext] bootstrap error:', e)
+      } finally {
+        // ✅ fires as soon as session + profile ready
+        // push token continues in background
+        if (mounted.current) setLoading(false)
+      }
     })()
 
-    // 2. Auth state changes
+    // ── Auth state changes ────────────────────────────────────────────────
     const { data: sub } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session) => {
         if (!mounted.current) return
@@ -103,24 +121,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfile(null)
           setPushToken(null)
           inflight.current = null
-          lastUid.current = null
+          lastUid.current  = null
+          pushRegistered.current.clear()
           return
         }
 
-        // TOKEN_REFRESHED fires frequently — only update user object, skip everything else
+        // TOKEN_REFRESHED fires frequently — skip heavy operations
         if (event === 'TOKEN_REFRESHED') {
           setUser(prev => (prev?.id === u?.id ? prev : u))
           return
         }
 
         if (u) {
-          // ✅ lastUid.current is now set synchronously in handleSignedIn
-          // so this check correctly prevents the race condition
           if (lastUid.current !== u.id) {
-            resetPushRegistration() // different user — allow fresh registration
+            resetPushRegistration()
+            pushRegistered.current.clear()
             await handleSignedIn(u)
           } else {
-            // Same user already being handled — just update user object
             setUser(u)
           }
         } else {
@@ -137,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [handleSignedIn])
 
-  // 3. Re-register when app comes back to foreground (1hr cooldown in handler)
+  // ── Foreground re-registration (1hr cooldown inside handler) ─────────────
   useEffect(() => {
     if (!user?.id) return
     const cleanup = setupForegroundReregistration(user.id)
