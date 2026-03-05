@@ -67,4 +67,6 @@ node_modules/
 
 # dataconnect generated files
 .dataconnect
-app/pattibytes/pattibytes-express-firebase-adminsdk-fbsvc-01187f1f3e.json
+
+app/pattibytes/pattibytes-express-firebase-adminsdk-fbsvc-7afd64a72a.json
+pattibytes-express-firebase-adminsdk-fbsvc-7afd64a72a.json

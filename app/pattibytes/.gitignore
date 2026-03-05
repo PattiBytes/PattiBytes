@@ -57,5 +57,5 @@ app/pattibytes/.env*.local
 .env.local
 
 .env.local
-app/pattibytes/pattibytes-express-firebase-adminsdk-fbsvc-77761827e6.json
-pattibytes-express-firebase-adminsdk-fbsvc-77761827e6.json
+app/pattibytes/pattibytes-express-firebase-adminsdk-fbsvc-7afd64a72a.json
+pattibytes-express-firebase-adminsdk-fbsvc-7afd64a72a.json
