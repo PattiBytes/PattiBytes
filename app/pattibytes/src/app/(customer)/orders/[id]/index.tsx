@@ -1,9 +1,16 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator, Alert, RefreshControl,
-  Platform, Linking,
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  Platform,
+  Linking,
 } from 'react-native'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import Constants from 'expo-constants'
@@ -15,34 +22,28 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE, canUseMapLibre } from '../.
 import type { Region } from '../../../../components/MapView'
 
 // ── Order sub-components ──────────────────────────────────────────────────────
-import StatusHero      from '../../../../components/orders/StatusHero'
-import OrderTimeline   from '../../../../components/orders/OrderTimeline'
+import StatusHero from '../../../../components/orders/StatusHero'
+import OrderTimeline from '../../../../components/orders/OrderTimeline'
 import CustomOrderFlow from '../../../../components/orders/CustomOrderFlow'
-import OrderItems      from '../../../../components/orders/OrderItems'
-import BillSection     from '../../../../components/orders/BillSection'
+import OrderItems from '../../../../components/orders/OrderItems'
+import BillSection from '../../../../components/orders/BillSection'
 import DeliverySection from '../../../../components/orders/DeliverySection'
 import MerchantSection from '../../../../components/orders/MerchantSection'
-import ReviewSection   from '../../../../components/orders/ReviewSection'
-import CancelModal     from '../../../../components/orders/CancelModal'
+import ReviewSection from '../../../../components/orders/ReviewSection'
+import CancelModal from '../../../../components/orders/CancelModal'
 import {
-  ACTIVE_STATUSES, CANCELLABLE_STATUSES,
-  RESTAURANT_TIMELINE, STORE_TIMELINE, CUSTOM_TIMELINE,
-  STATUS_ORDER, TRACKABLE_STATUSES,
+  ACTIVE_STATUSES,
+  CANCELLABLE_STATUSES,
+  RESTAURANT_TIMELINE,
+  STORE_TIMELINE,
+  CUSTOM_TIMELINE,
+  STATUS_ORDER,
+  TRACKABLE_STATUSES,
 } from '../../../../components/orders/constants'
-import type { OrderDetail, DriverInfo, LatLng } from '../../../../components/orders/types'
-import { useAppSettings , getSupportWhatsApp } from '../../../../hooks/useAppSettings'
 
-
-// ── MerchantInfo — defined at module level (not inside the component) ─────────
-type MerchantInfo = {
-  id:            string
-  business_name: string        // ✅ snake_case — matches Supabase column
-  logo_url:      string | null
-  phone:         string | null
-  address:       string | null
-  latitude:      number | null
-  longitude:     number | null
-}
+// ✅ Import MerchantInfo from the shared orders types (avoid redefining it here)
+import type { OrderDetail, DriverInfo, LatLng, MerchantInfo } from '../../../../components/orders/types'
+import { useAppSettings, getSupportWhatsApp } from '../../../../hooks/useAppSettings'
 
 // ── Push safety guard ─────────────────────────────────────────────────────────
 const canUsePush =
@@ -60,7 +61,9 @@ function parseLocation(v: unknown): { lat: number; lng: number } | null {
     try {
       const o = JSON.parse(v)
       if (typeof o.lat === 'number' && typeof o.lng === 'number') return o
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
   return null
 }
@@ -75,28 +78,33 @@ function fmtDateTime(iso?: string | null) {
   if (!iso) return '—'
   try {
     return new Date(iso).toLocaleString('en-IN', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     })
-  } catch { return iso }
+  } catch {
+    return iso
+  }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function OrderDetailPage() {
-  const { id }   = useLocalSearchParams<{ id: string }>()
-  const router   = useRouter()
+  const { id } = useLocalSearchParams<{ id: string }>()
+  const router = useRouter()
   const { user } = useAuth()
   const { settings } = useAppSettings()
 
-  const [order,         setOrder]         = useState<OrderDetail | null>(null)
-  const [merchant,      setMerchant]      = useState<MerchantInfo | null>(null)
-  const [driver,        setDriver]        = useState<DriverInfo | null>(null)
-  const [loading,       setLoading]       = useState(true)
-  const [refreshing,    setRefreshing]    = useState(false)
-  const [driverCoords,  setDriverCoords]  = useState<LatLng | null>(null)
-  const [showCancel,    setShowCancel]    = useState(false)
-  const [cancelling,    setCancelling]    = useState(false)
-  const [acceptingQuote,setAcceptingQuote]= useState(false)
+  const [order, setOrder] = useState<OrderDetail | null>(null)
+  const [merchant, setMerchant] = useState<MerchantInfo | null>(null)
+  const [driver, setDriver] = useState<DriverInfo | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [driverCoords, setDriverCoords] = useState<LatLng | null>(null)
+  const [showCancel, setShowCancel] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [acceptingQuote, setAcceptingQuote] = useState(false)
 
   const orderIdRef = useRef<string | null>(null)
 
@@ -139,15 +147,16 @@ export default function OrderDetailPage() {
       // Parse driver location
       const dl = parseLocation(o.driver_location)
       if (dl) setDriverCoords({ latitude: dl.lat, longitude: dl.lng })
-      else    setDriverCoords(null)
+      else setDriverCoords(null)
 
       // Load merchant (restaurant orders only)
       if (o.merchant_id && o.order_type === 'restaurant') {
         const { data: m } = await supabase
           .from('merchants')
-          .select('id,business_name,logo_url,phone,address,latitude,longitude') // ✅ snake_case
+          .select('id,business_name,logo_url,phone,address,latitude,longitude')
           .eq('id', o.merchant_id)
           .maybeSingle()
+
         setMerchant(m ? (m as MerchantInfo) : null)
       } else {
         setMerchant(null)
@@ -173,23 +182,29 @@ export default function OrderDetailPage() {
     }
   }, [id, user, router])
 
-  useEffect(() => { loadOrder() }, [loadOrder])
+  useEffect(() => {
+    loadOrder()
+  }, [loadOrder])
 
   // ── Real-time updates ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!id) return
     const sub = supabase
       .channel(`order-detail-${id}`)
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${id}`,
-      }, payload => {
-        const u = payload.new as Partial<OrderDetail>
-        setOrder(prev => prev ? { ...prev, ...u } : null)
-        const dl = parseLocation(u.driver_location)
-        if (dl) setDriverCoords({ latitude: dl.lat, longitude: dl.lng })
-      })
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${id}` },
+        payload => {
+          const u = payload.new as Partial<OrderDetail>
+          setOrder(prev => (prev ? { ...prev, ...u } : null))
+          const dl = parseLocation(u.driver_location)
+          if (dl) setDriverCoords({ latitude: dl.lat, longitude: dl.lng })
+        }
+      )
       .subscribe()
-    return () => { sub.unsubscribe() }
+    return () => {
+      sub.unsubscribe()
+    }
   }, [id])
 
   // ── Push notification tap ─────────────────────────────────────────────────
@@ -203,10 +218,16 @@ export default function OrderDetailPage() {
         else if (data?.order_id) router.push(`/(customer)/orders/${data.order_id}` as any)
       })
     })
-    return () => { sub?.remove?.() }
+    return () => {
+      sub?.remove?.()
+    }
   }, [id, loadOrder, router])
 
-  const onRefresh = async () => { setRefreshing(true); await loadOrder(); setRefreshing(false) }
+  const onRefresh = async () => {
+    setRefreshing(true)
+    await loadOrder()
+    setRefreshing(false)
+  }
 
   // ── Cancel order ──────────────────────────────────────────────────────────
   const handleCancelOrder = async (reason: string) => {
@@ -220,9 +241,10 @@ export default function OrderDetailPage() {
         [
           {
             text: '💬 Contact Support',
-            onPress: () => Linking.openURL(
-              `https://wa.me/${phone}?text=Hi! Help cancelling order %23${order.order_number}`
-            ),
+            onPress: () =>
+              Linking.openURL(
+                `https://wa.me/${phone}?text=Hi! Help cancelling order %23${order.order_number}`
+              ),
           },
           { text: 'OK', style: 'cancel' },
         ]
@@ -233,13 +255,20 @@ export default function OrderDetailPage() {
     setCancelling(true)
     try {
       await supabase.from('order_cancellations').insert({
-        order_id: order.id, customer_id: user.id,
-        reason, cancelled_at: new Date().toISOString(),
+        order_id: order.id,
+        customer_id: user.id,
+        reason,
+        cancelled_at: new Date().toISOString(),
       })
-      const { error } = await supabase.from('orders').update({
-        status: 'cancelled', cancellation_reason: reason,
-        cancelled_by: 'customer', updated_at: new Date().toISOString(),
-      }).eq('id', order.id)
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          status: 'cancelled',
+          cancellation_reason: reason,
+          cancelled_by: 'customer',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', order.id)
       if (error) throw error
 
       await supabase.from('notifications').insert({
@@ -249,7 +278,8 @@ export default function OrderDetailPage() {
         type: 'order',
         data: { order_id: order.id, status: 'cancelled' },
         body: `Your order #${order.order_number} has been cancelled.`,
-        is_read: false, sent_push: false,
+        is_read: false,
+        sent_push: false,
         created_at: new Date().toISOString(),
       })
 
@@ -267,33 +297,32 @@ export default function OrderDetailPage() {
   // ── Accept quote ──────────────────────────────────────────────────────────
   const handleAcceptQuote = async () => {
     if (!order) return
-    Alert.alert(
-      'Accept Quote?',
-      `Confirm order for ₹${Number(order.quoted_amount).toFixed(2)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Yes, Accept',
-          onPress: async () => {
-            setAcceptingQuote(true)
-            try {
-              const { error } = await supabase.from('orders').update({
+    Alert.alert('Accept Quote?', `Confirm order for ₹${Number(order.quoted_amount).toFixed(2)}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Yes, Accept',
+        onPress: async () => {
+          setAcceptingQuote(true)
+          try {
+            const { error } = await supabase
+              .from('orders')
+              .update({
                 custom_order_status: 'confirmed',
                 total_amount: order.quoted_amount,
                 updated_at: new Date().toISOString(),
-              }).eq('id', order.id)
-              if (error) throw error
-              await loadOrder()
-              Alert.alert('✅ Confirmed!', 'Your custom order has been confirmed.')
-            } catch (e: any) {
-              Alert.alert('Error', e?.message)
-            } finally {
-              setAcceptingQuote(false)
-            }
-          },
+              })
+              .eq('id', order.id)
+            if (error) throw error
+            await loadOrder()
+            Alert.alert('✅ Confirmed!', 'Your custom order has been confirmed.')
+          } catch (e: any) {
+            Alert.alert('Error', e?.message)
+          } finally {
+            setAcceptingQuote(false)
+          }
         },
-      ]
-    )
+      },
+    ])
   }
 
   // ── Reorder ───────────────────────────────────────────────────────────────
@@ -319,34 +348,35 @@ export default function OrderDetailPage() {
   }
 
   // ── Guards ────────────────────────────────────────────────────────────────
-  if (loading) return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
-      <Stack.Screen options={{ title: 'Order Details' }} />
-      <ActivityIndicator size="large" color={COLORS.primary} />
-    </View>
-  )
+  if (loading)
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+        <Stack.Screen options={{ title: 'Order Details' }} />
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    )
   if (!order) return null
 
   // ── Derived state ─────────────────────────────────────────────────────────
-  const isStore    = order.order_type === 'store'
-  const isCustom   = order.order_type === 'custom'
+  const isStore = order.order_type === 'store'
+  const isCustom = order.order_type === 'custom'
   const isPlatform = isStore || isCustom || order.platform_handled === true
-  const isActive   = ACTIVE_STATUSES.includes(order.status)
-  const canCancel  = CANCELLABLE_STATUSES.includes(order.status)
+  const isActive = ACTIVE_STATUSES.includes(order.status)
+  const canCancel = CANCELLABLE_STATUSES.includes(order.status)
   const isDelivered = order.status === 'delivered'
   const isCancelled = order.status === 'cancelled' || order.status === 'rejected'
-  const canReorder  = isDelivered || isCancelled
+  const canReorder = isDelivered || isCancelled
 
   const timeline = isCustom ? CUSTOM_TIMELINE : isStore ? STORE_TIMELINE : RESTAURANT_TIMELINE
 
   // ── Map coords ────────────────────────────────────────────────────────────
   const deliveryCoords = toLatLng(
-    order.delivery_latitude  ?? (order as any).deliverylatitude,
-    order.delivery_longitude ?? (order as any).deliverylongitude,
+    order.delivery_latitude ?? (order as any).deliverylatitude,
+    order.delivery_longitude ?? (order as any).deliverylongitude
   )
   const merchantCoords = toLatLng(merchant?.latitude, merchant?.longitude)
-  const hubLat    = order.hub_origin?.lat ?? (order as any).huborigin?.lat ?? null
-  const hubLng    = order.hub_origin?.lng ?? (order as any).huborigin?.lng ?? null
+  const hubLat = order.hub_origin?.lat ?? (order as any).huborigin?.lat ?? null
+  const hubLng = order.hub_origin?.lng ?? (order as any).huborigin?.lng ?? null
   const hubCoords = toLatLng(hubLat, hubLng)
   const originCoords = isPlatform ? hubCoords : merchantCoords
 
@@ -362,31 +392,37 @@ export default function OrderDetailPage() {
   const driverAssigned = !!order.driver_id && TRACKABLE_STATUSES.includes(order.status)
   const hasLiveLocation = !!driverCoords
 
-  const headerColor = isCancelled ? '#EF4444'
-    : isDelivered ? '#10B981'
-    : isCustom    ? '#065F46'
-    : isStore     ? '#5B21B6'
-    : COLORS.primary
+  const headerColor = isCancelled
+    ? '#EF4444'
+    : isDelivered
+      ? '#10B981'
+      : isCustom
+        ? '#065F46'
+        : isStore
+          ? '#5B21B6'
+          : COLORS.primary
 
   const supportUrl = getSupportWhatsApp(settings, order.order_number)
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
-      <Stack.Screen options={{
-        title:            `Order #${order.order_number}`,
-        headerStyle:      { backgroundColor: headerColor },
-        headerTintColor:  '#fff',
-        headerTitleStyle: { fontWeight: '800' },
-        headerRight: () => (
-          <TouchableOpacity
-            onPress={() => router.push('/(customer)/notifications' as any)}
-            style={{ marginRight: 14 }}
-          >
-            <Text style={{ fontSize: 20 }}>🔔</Text>
-          </TouchableOpacity>
-        ),
-      }} />
+      <Stack.Screen
+        options={{
+          title: `Order #${order.order_number}`,
+          headerStyle: { backgroundColor: headerColor },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '800' },
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => router.push('/(customer)/notifications' as any)}
+              style={{ marginRight: 14 }}
+            >
+              <Text style={{ fontSize: 20 }}>🔔</Text>
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -412,7 +448,6 @@ export default function OrderDetailPage() {
 
         {/* ── Live Map ─────────────────────────────────────────────────── */}
         {!driverAssigned ? (
-          // Not yet assigned
           isActive && (
             <View style={S.mapPlaceholder}>
               <Text style={{ fontSize: 32, marginBottom: 8 }}>🛵</Text>
@@ -425,7 +460,6 @@ export default function OrderDetailPage() {
             </View>
           )
         ) : !hasLiveLocation ? (
-          // Assigned but no location yet
           <View style={[S.mapPlaceholder, { backgroundColor: '#FFF7ED', borderColor: '#FED7AA' }]}>
             <Text style={{ fontSize: 32, marginBottom: 8 }}>📡</Text>
             <Text style={{ fontWeight: '700', color: '#92400E', fontSize: 14 }}>
@@ -442,7 +476,12 @@ export default function OrderDetailPage() {
                 {driver.phone && (
                   <TouchableOpacity
                     onPress={() => Linking.openURL(`tel:${driver.phone}`)}
-                    style={{ backgroundColor: '#F97316', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 5 }}
+                    style={{
+                      backgroundColor: '#F97316',
+                      borderRadius: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                    }}
                   >
                     <Text style={{ color: '#fff', fontWeight: '700', fontSize: 11 }}>📞 Call</Text>
                   </TouchableOpacity>
@@ -451,7 +490,6 @@ export default function OrderDetailPage() {
             )}
           </View>
         ) : (
-          // ✅ Driver + live location → full map
           <View style={S.mapWrap}>
             <MapView
               style={S.map}
@@ -466,9 +504,11 @@ export default function OrderDetailPage() {
               {originCoords && (
                 <Marker
                   coordinate={originCoords}
-                  title={isPlatform
-                    ? (order.hub_origin?.label ?? 'PBExpress Hub')
-                    : (merchant?.business_name ?? 'Restaurant')}
+                  title={
+                    isPlatform
+                      ? (order.hub_origin?.label ?? 'PBExpress Hub')
+                      : (merchant?.business_name ?? 'Restaurant')
+                  }
                   pinColor={isPlatform ? '#7C3AED' : '#FF6B35'}
                 />
               )}
@@ -499,7 +539,8 @@ export default function OrderDetailPage() {
             {deliveryCoords && (
               <View style={S.distancePill}>
                 <Text style={{ color: '#1F2937', fontSize: 11, fontWeight: '700' }}>
-                  📍 {order.delivery_distance_km
+                  📍{' '}
+                  {order.delivery_distance_km
                     ? `${Number(order.delivery_distance_km).toFixed(1)} km away`
                     : 'Tracking live'}
                 </Text>
@@ -509,9 +550,7 @@ export default function OrderDetailPage() {
         )}
 
         {/* ── Order Timeline ───────────────────────────────────────────── */}
-        {!isCancelled && !isCustom && (
-          <OrderTimeline timeline={timeline} status={order.status} />
-        )}
+        {!isCancelled && !isCustom && <OrderTimeline timeline={timeline} status={order.status} />}
 
         {/* ── Cancelled Banner ─────────────────────────────────────────── */}
         {isCancelled && (
@@ -567,16 +606,15 @@ export default function OrderDetailPage() {
           <ReviewSection
             orderId={order.id}
             customerId={user!.id}
-            merchantId={order.merchant_id}
-            driverId={order.driver_id}
+            merchantId={order.merchant_id ?? null}
+            driverId={order.driver_id ?? null}
             orderItems={order.items ?? []}
             isStore={isStore}
-            isCustom={isCustom}
-            onDone={rev =>
-              setOrder(prev =>
-                prev ? { ...prev, rating: rev.overall_rating ?? rev.rating } : prev
-              )
-            }
+            isCustom={order.order_type === 'custom'}
+            merchantName={merchant?.business_name ?? null}
+            onDone={() => {
+              /* optional: refresh order */
+            }}
           />
         )}
 
@@ -584,7 +622,9 @@ export default function OrderDetailPage() {
         <View style={S.actions}>
           {canCancel && (
             <TouchableOpacity style={S.cancelBtn} onPress={() => setShowCancel(true)}>
-              <Text style={{ color: '#DC2626', fontWeight: '800', fontSize: 14 }}>❌ Cancel Order</Text>
+              <Text style={{ color: '#DC2626', fontWeight: '800', fontSize: 14 }}>
+                ❌ Cancel Order
+              </Text>
             </TouchableOpacity>
           )}
           {canReorder && (
@@ -592,10 +632,7 @@ export default function OrderDetailPage() {
               <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>🔁 Reorder</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity
-            style={S.helpBtn}
-            onPress={() => Linking.openURL(supportUrl)}
-          >
+          <TouchableOpacity style={S.helpBtn} onPress={() => Linking.openURL(supportUrl)}>
             <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 14 }}>💬 Need Help?</Text>
           </TouchableOpacity>
         </View>
@@ -624,15 +661,13 @@ export default function OrderDetailPage() {
 // ── OrderMeta sub-component ───────────────────────────────────────────────────
 function OrderMeta({ order }: { order: OrderDetail }) {
   const rows = [
-    { label: '🕐 Placed',        value: fmtDateTime(order.created_at) },
-    { label: '🔄 Last Updated',  value: fmtDateTime(order.updated_at) },
+    { label: '🕐 Placed', value: fmtDateTime(order.created_at) },
+    { label: '🔄 Last Updated', value: fmtDateTime(order.updated_at) },
     { label: '⏱️ Est. Delivery', value: fmtDateTime(order.estimated_delivery_time) },
     ...(order.actual_delivery_time
       ? [{ label: '✅ Delivered At', value: fmtDateTime(order.actual_delivery_time) }]
       : []),
-    ...(order.preparation_time
-      ? [{ label: '🍳 Prep Time',   value: `${order.preparation_time} min` }]
-      : []),
+    ...(order.preparation_time ? [{ label: '🍳 Prep Time', value: `${order.preparation_time} min` }] : []),
   ]
 
   return (
@@ -650,32 +685,120 @@ function OrderMeta({ order }: { order: OrderDetail }) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
-  mapWrap:       { marginHorizontal: 16, marginTop: 10, borderRadius: 16, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  map:           { width: '100%', height: 240 },
-  livePill:      { position: 'absolute', top: 10, left: 10, backgroundColor: '#16A34A', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  liveDot:       { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
-  distancePill:  { position: 'absolute', bottom: 10, right: 10, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-  mapPlaceholder:{ margin: 16, backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB', minHeight: 110 },
+  mapWrap: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  map: { width: '100%', height: 240 },
+  livePill: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: '#16A34A',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
+  distancePill: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  mapPlaceholder: {
+    margin: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    minHeight: 110,
+  },
 
-  cancelBanner:  { marginHorizontal: 16, marginTop: 10, backgroundColor: '#FEF2F2', borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: '#FECACA' },
-  cancelTitle:   { fontSize: 16, fontWeight: '900', color: '#991B1B', marginBottom: 6 },
-  cancelReason:  { color: '#7F1D1D', fontSize: 13, marginBottom: 3 },
-  cancelBy:      { color: '#B91C1C', fontSize: 12 },
+  cancelBanner: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#FECACA',
+  },
+  cancelTitle: { fontSize: 16, fontWeight: '900', color: '#991B1B', marginBottom: 6 },
+  cancelReason: { color: '#7F1D1D', fontSize: 13, marginBottom: 3 },
+  cancelBy: { color: '#B91C1C', fontSize: 12 },
 
-  infoCard:      { marginHorizontal: 16, marginTop: 8, borderRadius: 12, padding: 12, borderWidth: 1 },
+  infoCard: { marginHorizontal: 16, marginTop: 8, borderRadius: 12, padding: 12, borderWidth: 1 },
 
-  actions:       { marginHorizontal: 16, marginTop: 12, gap: 10 },
-  cancelBtn:     { borderWidth: 2, borderColor: '#DC2626', borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: '#FEF2F2' },
-  reorderBtn:    { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
-  helpBtn:       { borderWidth: 1.5, borderColor: '#15803D', borderRadius: 14, paddingVertical: 13, alignItems: 'center', backgroundColor: '#F0FDF4' },
+  actions: { marginHorizontal: 16, marginTop: 12, gap: 10 },
+  cancelBtn: {
+    borderWidth: 2,
+    borderColor: '#DC2626',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+  },
+  reorderBtn: { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  helpBtn: {
+    borderWidth: 1.5,
+    borderColor: '#15803D',
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+  },
 
-  quoteOverlay:  { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+  quoteOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 })
 
 const S2 = StyleSheet.create({
-  section: { backgroundColor: '#fff', marginHorizontal: 16, marginTop: 10, borderRadius: 16, padding: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-  title:   { fontSize: 15, fontWeight: '800', color: '#1F2937', marginBottom: 12 },
-  row:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#F9FAFB' },
-  lbl:     { fontSize: 13, color: '#6B7280', flex: 1 },
-  val:     { fontSize: 13, color: '#1F2937', fontWeight: '600', flex: 1.4, textAlign: 'right' },
+  section: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 10,
+    borderRadius: 16,
+    padding: 16,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  title: { fontSize: 15, fontWeight: '800', color: '#1F2937', marginBottom: 12 },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F9FAFB',
+  },
+  lbl: { fontSize: 13, color: '#6B7280', flex: 1 },
+  val: { fontSize: 13, color: '#1F2937', fontWeight: '600', flex: 1.4, textAlign: 'right' },
 })

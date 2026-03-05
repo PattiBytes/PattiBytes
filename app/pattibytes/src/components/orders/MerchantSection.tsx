@@ -16,23 +16,58 @@ interface Props {
 export default function MerchantSection({
   order, merchant, driver, isStore, isActive, isDelivered,
 }: Props) {
-  const { settings } = useAppSettings()
-  const supportPhone = settings?.support_phone?.replace(/\s/g, '') ?? '918400009045'
-  const supportWhatsApp = `https://wa.me/${supportPhone.replace('+', '')}?text=Hi! Help needed for order %23${order.order_number}`
+  const { settings }   = useAppSettings()
+  const isCustom       = order.order_type === 'custom'
+  const supportPhone   = settings?.support_phone?.replace(/\s/g, '') ?? '918400009045'
+  const orderMsg       = `Hi! Help needed for order %23${order.order_number}`
+  const supportWhatsApp = `https://wa.me/${supportPhone.replace('+', '')}?text=${orderMsg}`
 
   return (
     <View style={S.section}>
-      <Text style={S.title}>{isStore ? '🛍️ Order Source' : '🏪 Restaurant'}</Text>
+      <Text style={S.title}>
+        {isCustom ? '✏️ Custom Order Team'
+          : isStore ? '🛍️ Order Source'
+          : '🏪 Restaurant'}
+      </Text>
 
-      {isStore ? (
+      {/* ── Custom order — PBExpress team card ── */}
+      {isCustom && (
+        <View style={S.customCard}>
+          <View style={S.customIcon}>
+            <Text style={{ fontSize: 24 }}>✏️</Text>
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={{ fontWeight: '800', color: '#065F46', fontSize: 15 }}>
+              PBExpress Custom Team
+            </Text>
+            <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+              {settings?.business_address ?? 'Patti, Punjab 143416'}
+            </Text>
+            <Text style={{ fontSize: 11, color: '#059669', marginTop: 3, fontWeight: '600' }}>
+              📦 Sourcing your items personally
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={S.waBtn}
+            onPress={() => Linking.openURL(supportWhatsApp)}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 11 }}>
+              💬 Chat
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Store card ── */}
+      {isStore && !isCustom && (
         <View style={S.storeCard}>
           <Text style={{ fontSize: 28, marginRight: 14 }}>🏪</Text>
           <View style={{ flex: 1 }}>
             <Text style={S.storeName}>{settings?.app_name ?? 'PBExpress'}</Text>
             <Text style={S.storeSub}>{settings?.business_address ?? 'Patti, Punjab'}</Text>
-            {order.hub_origin?.label && (
+            {(order as any).hub_origin?.label && (
               <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>
-                📍 {order.hub_origin.label}
+                📍 {(order as any).hub_origin.label}
               </Text>
             )}
           </View>
@@ -43,7 +78,10 @@ export default function MerchantSection({
             <Text style={{ color: COLORS.primary, fontWeight: '700' }}>💬 Help</Text>
           </TouchableOpacity>
         </View>
-      ) : merchant ? (
+      )}
+
+      {/* ── Restaurant card ── */}
+      {!isStore && !isCustom && merchant && (
         <>
           <Text style={S.merchantName}>{merchant.business_name}</Text>
           {merchant.address && (
@@ -70,9 +108,9 @@ export default function MerchantSection({
             )}
           </View>
         </>
-      ) : null}
+      )}
 
-      {/* ── Driver card — only after assigned + has live location ── */}
+      {/* ── Driver card ── */}
       {driver && (isActive || isDelivered) && (
         <View style={S.driverCard}>
           <View style={S.driverAvatar}>
@@ -92,7 +130,9 @@ export default function MerchantSection({
               </TouchableOpacity>
               <TouchableOpacity
                 style={[S.callBtn, { backgroundColor: '#15803D' }]}
-                onPress={() => Linking.openURL(`https://wa.me/${driver.phone?.replace(/\D/g, '')}`)}
+                onPress={() => Linking.openURL(
+                  `https://wa.me/${driver.phone?.replace(/\D/g, '')}`
+                )}
               >
                 <Text style={{ color: '#fff', fontWeight: '700' }}>💬</Text>
               </TouchableOpacity>
@@ -101,14 +141,14 @@ export default function MerchantSection({
         </View>
       )}
 
-      {/* ── Support button (always visible) ── */}
+      {/* ── Support row ── */}
       <TouchableOpacity
         style={S.supportRow}
         onPress={() => Linking.openURL(supportWhatsApp)}
       >
         <Text style={{ fontSize: 16 }}>💬</Text>
         <Text style={{ flex: 1, fontSize: 13, color: '#15803D', fontWeight: '700', marginLeft: 8 }}>
-          Need help with this order?
+          {isCustom ? 'Questions about your custom request?' : 'Need help with this order?'}
         </Text>
         <Text style={{ fontSize: 13, color: '#9CA3AF' }}>→</Text>
       </TouchableOpacity>
@@ -119,6 +159,9 @@ export default function MerchantSection({
 const S = StyleSheet.create({
   section:     { backgroundColor: '#fff', marginHorizontal: 16, marginTop: 10, borderRadius: 16, padding: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
   title:       { fontSize: 15, fontWeight: '800', color: '#1F2937', marginBottom: 12 },
+  customCard:  { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#A7F3D0' },
+  customIcon:  { width: 48, height: 48, borderRadius: 24, backgroundColor: '#D1FAE5', alignItems: 'center', justifyContent: 'center' },
+  waBtn:       { backgroundColor: '#065F46', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   storeCard:   { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F3FF', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#DDD6FE' },
   storeName:   { fontWeight: '800', color: '#5B21B6', fontSize: 15 },
   storeSub:    { fontSize: 12, color: '#6B7280', marginTop: 2 },

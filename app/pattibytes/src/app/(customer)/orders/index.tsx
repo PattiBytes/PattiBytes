@@ -7,11 +7,13 @@ import {
 import { Stack, useRouter } from 'expo-router'
 import Constants from 'expo-constants'
 import * as Device from 'expo-device'
-import { supabase } from '../../../lib/supabase'
-import { useAuth } from '../../../contexts/AuthContext'
-import { COLORS } from '../../../lib/constants'
-import { navigateFromNotification } from '../../../services/notifications'
-import ReviewsTab from '../../../components/orders/ReviewsTab'
+import { supabase }                    from '../../../lib/supabase'
+import { useAuth }                     from '../../../contexts/AuthContext'
+import { COLORS }                      from '../../../lib/constants'
+import { navigateFromNotification }    from '../../../services/notifications'
+import ReviewsTab                      from '../../../components/orders/ReviewsTab'
+import OrderCard                       from '../../../components/orders/OrderCard'
+import CustomOrderCard                 from '../../../components/orders/CustomOrderCard'
 import {
   registerForPushNotifications,
   addResponseListener,
@@ -19,7 +21,7 @@ import {
 } from '../../../lib/notificationHandler'
 import {
   ACTIVE_STATUSES, COMPLETED_STATUSES, CANCELLED_STATUSES,
-  TRACKABLE_STATUSES, STATUS_COLORS, STATUS_LABELS,
+  TRACKABLE_STATUSES,
 } from '../../../components/orders/constants'
 import type { OrderRow } from '../../../components/orders/types'
 
@@ -27,17 +29,10 @@ import type { OrderRow } from '../../../components/orders/types'
 type TabKey = 'active' | 'completed' | 'cancelled' | 'reviews'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function isStoreOrder(o: OrderRow)  { return o.order_type === 'store'  || o.merchant_id === null }
 function isCustomOrder(o: OrderRow) { return o.order_type === 'custom' }
+function isStoreOrder(o: OrderRow)  { return o.order_type === 'store' || o.merchant_id === null }
 
-function timeAgo(iso: string) {
-  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
-  if (d < 1) return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-  if (d < 7) return `${d}d ago`
-  return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })
-}
-
-// ── Tabs config (stable reference outside component) ─────────────────────────
+// ── Tabs config (stable outside component) ────────────────────────────────────
 const TABS: { key: TabKey; label: string; emoji: string }[] = [
   { key: 'active',    label: 'Active',    emoji: '🔄' },
   { key: 'completed', label: 'Done',      emoji: '✅' },
@@ -47,8 +42,8 @@ const TABS: { key: TabKey; label: string; emoji: string }[] = [
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function OrdersScreen() {
-  const { user }  = useAuth()
-  const router    = useRouter()
+  const { user } = useAuth()
+  const router   = useRouter()
 
   const [orders,       setOrders]       = useState<OrderRow[]>([])
   const [loading,      setLoading]      = useState(true)
@@ -57,7 +52,7 @@ export default function OrdersScreen() {
   const [unreadNotifs, setUnreadNotifs] = useState(0)
   const notifiedDriverRef = useRef<Set<string>>(new Set())
 
-  // ── Load orders ────────────────────────────────────────────────────────────
+  // ── Load orders ─────────────────────────────────────────────────────────────
   const loadOrders = useCallback(async () => {
     if (!user) return
     try {
@@ -69,7 +64,8 @@ export default function OrdersScreen() {
           items, created_at, merchant_id, driver_id,
           payment_method, payment_status,
           rating, review, promo_code, delivery_distance_km,
-          custom_order_ref, custom_order_status
+          custom_order_ref, custom_order_status,
+          custom_category, quoted_amount, quote_message
         `)
         .eq('customer_id', user.id)
         .order('created_at', { ascending: false })
@@ -80,14 +76,17 @@ export default function OrdersScreen() {
 
       // Batch-load merchant names (restaurant orders only)
       const merchantIds = [...new Set(
-        all.filter(o => !isStoreOrder(o) && !isCustomOrder(o) && o.merchant_id)
+        all
+          .filter(o => !isStoreOrder(o) && !isCustomOrder(o) && o.merchant_id)
           .map(o => o.merchant_id!),
       )]
       let mMap = new Map<string, string>()
       if (merchantIds.length) {
         const { data: merch } = await supabase
-          .from('merchants').select('id,business_name').in('id', merchantIds)
-        mMap = new Map((merch ?? []).map((m: any) => [m.id, m.business_name]))
+          .from('merchants')
+          .select('id,businessname:business_name')
+          .in('id', merchantIds)
+        mMap = new Map((merch ?? []).map((m: any) => [m.id, m.businessname]))
       }
 
       const mapped = all.map(o => ({
@@ -114,8 +113,8 @@ export default function OrdersScreen() {
             await N.scheduleNotificationAsync({
               content: {
                 title: '🛵 Driver Assigned!',
-                body: `Your order #${order.order_number} is on the way!`,
-                data: { order_id: order.id, type: 'driver' },
+                body:  `Your order #${order.order_number} is on the way!`,
+                data:  { order_id: order.id, type: 'driver' },
                 sound: 'default',
               },
               trigger: null,
@@ -134,10 +133,11 @@ export default function OrdersScreen() {
 
   useEffect(() => { loadOrders() }, [loadOrders])
 
-  // ── Real-time orders ───────────────────────────────────────────────────────
+  // ── Real-time orders ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return
-    const sub = supabase.channel('orders-list-rt')
+    const sub = supabase
+      .channel('orders-list-rt')
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'orders',
         filter: `customer_id=eq.${user.id}`,
@@ -146,7 +146,7 @@ export default function OrdersScreen() {
     return () => { sub.unsubscribe() }
   }, [user, loadOrders])
 
-  // ── Push registration ──────────────────────────────────────────────────────
+  // ── Push registration ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return
     registerForPushNotifications(user.id)
@@ -154,29 +154,35 @@ export default function OrdersScreen() {
     return () => sub.remove()
   }, [user])
 
-  // ── Notification badge ─────────────────────────────────────────────────────
+  // ── Notification badge ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return
-    const fetch = async () => {
+    const fetchUnread = async () => {
       const { count } = await supabase
         .from('notifications')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id).eq('is_read', false)
+        .eq('user_id', user.id)
+        .eq('is_read', false)
       setUnreadNotifs(count ?? 0)
     }
-    fetch()
-    const sub = supabase.channel('notif-badge-rt')
+    fetchUnread()
+    const sub = supabase
+      .channel('notif-badge-rt')
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'notifications',
         filter: `user_id=eq.${user.id}`,
-      }, fetch)
+      }, fetchUnread)
       .subscribe()
     return () => { sub.unsubscribe() }
   }, [user])
 
-  const onRefresh = async () => { setRefreshing(true); await loadOrders(); setRefreshing(false) }
+  const onRefresh = async () => {
+    setRefreshing(true)
+    await loadOrders()
+    setRefreshing(false)
+  }
 
-  // ── Derived tab data ───────────────────────────────────────────────────────
+  // ── Derived tab data ────────────────────────────────────────────────────────
   const activeOrders    = orders.filter(o => ACTIVE_STATUSES.includes(o.status))
   const completedOrders = orders.filter(o => COMPLETED_STATUSES.includes(o.status))
   const cancelledOrders = orders.filter(o => CANCELLED_STATUSES.includes(o.status))
@@ -186,110 +192,51 @@ export default function OrdersScreen() {
     active:    activeOrders.length,
     completed: completedOrders.length,
     cancelled: cancelledOrders.length,
-    reviews:   needsReview.length,  // badge = pending reviews only
+    reviews:   needsReview.length,
   }
 
   const filteredOrders =
-    activeTab === 'active'    ? activeOrders
+    activeTab === 'active'     ? activeOrders
     : activeTab === 'completed' ? completedOrders
-    : cancelledOrders  // 'cancelled' — reviews tab uses ReviewsTab component directly
+    : cancelledOrders
 
-  // ── Order card ─────────────────────────────────────────────────────────────
+  // ── Render item ─────────────────────────────────────────────────────────────
+  // Custom orders → CustomOrderCard (rich card with categories, quote banner)
+  // All others    → OrderCard (restaurant / store card)
   const renderItem = ({ item }: { item: OrderRow }) => {
-    const isStore   = isStoreOrder(item)
-    const isCustom  = isCustomOrder(item)
-    const itemCount = (item.items ?? []).reduce((s: number, i: any) => s + (i.quantity ?? 1), 0)
-    const needReview = item.status === 'delivered' && !item.rating
-    const canTrack   = TRACKABLE_STATUSES.includes(item.status) && !!item.driver_id
-
+    if (isCustomOrder(item)) {
+      return (
+        <CustomOrderCard
+          item={item}
+          onPress={() => router.push(`/(customer)/orders/${item.id}` as any)}
+        />
+      )
+    }
     return (
-      <TouchableOpacity
-        style={[
-          S.orderCard,
-          isCustom ? { borderLeftWidth: 3, borderLeftColor: '#065F46' }
-          : isStore ? { borderLeftWidth: 3, borderLeftColor: '#7C3AED' }
-          : undefined,
-        ]}
+      <OrderCard
+        order={item}
         onPress={() => router.push(`/(customer)/orders/${item.id}` as any)}
-        activeOpacity={0.85}
-      >
-        {/* ── Header row ── */}
-        <View style={S.cardHeaderRow}>
-          <View style={{ flex: 1 }}>
-            <View style={S.chipRow}>
-              <Text style={S.orderNum}>#{item.order_number}</Text>
-              {isStore  && <View style={[S.chip, { backgroundColor: '#EDE9FE' }]}><Text style={{ color: '#5B21B6', fontSize: 9, fontWeight: '800' }}>STORE</Text></View>}
-              {isCustom && <View style={[S.chip, { backgroundColor: '#D1FAE5' }]}><Text style={{ color: '#065F46', fontSize: 9, fontWeight: '800' }}>CUSTOM</Text></View>}
-              {canTrack && <View style={[S.chip, { backgroundColor: '#16A34A' }]}><Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>● LIVE</Text></View>}
-              {needReview && (
-                <View style={[S.chip, { backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA' }]}>
-                  <Text style={{ color: '#F97316', fontSize: 9, fontWeight: '800' }}>⭐ RATE</Text>
-                </View>
-              )}
-            </View>
-            <Text style={S.orderTime}>{timeAgo(item.created_at)}</Text>
-          </View>
-          <View style={[S.statusBadge, { backgroundColor: STATUS_COLORS[item.status] ?? '#888' }]}>
-            <Text style={S.statusTxt}>
-              {STATUS_LABELS[item.status] ?? item.status.replace(/_/g, ' ').toUpperCase()}
-            </Text>
-          </View>
-        </View>
-
-        {/* ── Merchant ── */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <Text style={{ fontSize: 14 }}>{isCustom ? '✏️' : isStore ? '🛍️' : '🏪'}</Text>
-          <Text style={S.merchantName} numberOfLines={1}>{item.merchant_name}</Text>
-        </View>
-
-        {/* ── Items preview ── */}
-        <Text style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 6 }} numberOfLines={1}>
-          {(item.items ?? []).slice(0, 3).map((i: any) => i.name).join(' · ')}
-          {(item.items ?? []).length > 3 ? ` +${(item.items ?? []).length - 3} more` : ''}
-        </Text>
-
-        {/* ── Totals ── */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={S.itemCountTxt}>
-            {itemCount} item{itemCount !== 1 ? 's' : ''}
-            {item.delivery_distance_km ? `  ·  📏 ${Number(item.delivery_distance_km).toFixed(1)} km` : ''}
-          </Text>
-          <Text style={S.totalTxt}>₹{Number(item.total_amount).toFixed(2)}</Text>
-        </View>
-        {Number(item.discount) > 0 && (
-          <Text style={S.savedTxt}>🎉 Saved ₹{Number(item.discount).toFixed(2)}</Text>
-        )}
-
-        {/* ── Footer ── */}
-        <View style={S.cardFooter}>
-          <Text style={{ fontSize: 11, color: '#9CA3AF', flex: 1 }} numberOfLines={1}>
-            {item.payment_method?.toUpperCase()} · {item.payment_status?.toUpperCase()}
-            {item.promo_code ? `  🏷️ ${item.promo_code}` : ''}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {canTrack && (
-              <View style={S.trackBadge}>
-                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>🗺️ Track</Text>
-              </View>
-            )}
-            {item.status === 'delivered' && item.rating
-              ? <Text style={{ fontSize: 13 }}>{'⭐'.repeat(item.rating)}</Text>
-              : null
-            }
-            <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 13 }}>View →</Text>
-          </View>
-        </View>
-      </TouchableOpacity>
+        onTrack={
+          TRACKABLE_STATUSES.includes(item.status) && item.driver_id
+            ? () => router.push(`/(customer)/orders/${item.id}` as any)
+            : undefined
+        }
+        onRate={
+          item.status === 'delivered' && !item.rating
+            ? () => router.push(`/(customer)/orders/${item.id}` as any)
+            : undefined
+        }
+      />
     )
   }
 
-  // ── Empty state ────────────────────────────────────────────────────────────
+  // ── Empty state ─────────────────────────────────────────────────────────────
   const EmptyState = () => {
     const cfg: Record<TabKey, { emoji: string; title: string; sub: string; cta: boolean }> = {
-      active:    { emoji: '🛵', title: 'No active orders',    sub: 'Your active orders will appear here',      cta: true  },
-      completed: { emoji: '✅', title: 'No completed orders', sub: 'Delivered orders will appear here',        cta: false },
-      cancelled: { emoji: '❌', title: 'No cancelled orders', sub: 'Cancelled orders will appear here',        cta: false },
-      reviews:   { emoji: '⭐', title: 'All caught up!',      sub: "You've reviewed all your recent orders.", cta: false  },
+      active:    { emoji: '🛵', title: 'No active orders',    sub: 'Your active orders will appear here',     cta: true  },
+      completed: { emoji: '✅', title: 'No completed orders', sub: 'Delivered orders will appear here',       cta: false },
+      cancelled: { emoji: '❌', title: 'No cancelled orders', sub: 'Cancelled orders will appear here',       cta: false },
+      reviews:   { emoji: '⭐', title: 'All caught up!',      sub: "You've reviewed all your recent orders.", cta: false },
     }
     const { emoji, title, sub, cta } = cfg[activeTab]
     return (
@@ -298,7 +245,10 @@ export default function OrdersScreen() {
         <Text style={S.emptyTitle}>{title}</Text>
         <Text style={S.emptySub}>{sub}</Text>
         {cta && (
-          <TouchableOpacity style={S.shopBtn} onPress={() => router.push('/(customer)/dashboard' as any)}>
+          <TouchableOpacity
+            style={S.shopBtn}
+            onPress={() => router.push('/(customer)/dashboard' as any)}
+          >
             <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>Order Now</Text>
           </TouchableOpacity>
         )}
@@ -306,30 +256,32 @@ export default function OrdersScreen() {
     )
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
-      <Stack.Screen options={{
-        title:            'My Orders',
-        headerStyle:      { backgroundColor: COLORS.primary },
-        headerTintColor:  '#fff',
-        headerTitleStyle: { fontWeight: '800' },
-        headerRight: () => (
-          <TouchableOpacity
-            onPress={() => router.push('/(customer)/notifications' as any)}
-            style={{ marginRight: 14 }}
-          >
-            <Text style={{ fontSize: 22 }}>🔔</Text>
-            {unreadNotifs > 0 && (
-              <View style={S.notifBadge}>
-                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>
-                  {unreadNotifs > 9 ? '9+' : unreadNotifs}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        ),
-      }} />
+      <Stack.Screen
+        options={{
+          title:            'My Orders',
+          headerStyle:      { backgroundColor: COLORS.primary },
+          headerTintColor:  '#fff',
+          headerTitleStyle: { fontWeight: '800' },
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => router.push('/(customer)/notifications' as any)}
+              style={{ marginRight: 14 }}
+            >
+              <Text style={{ fontSize: 22 }}>🔔</Text>
+              {unreadNotifs > 0 && (
+                <View style={S.notifBadge}>
+                  <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>
+                    {unreadNotifs > 9 ? '9+' : unreadNotifs}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ),
+        }}
+      />
 
       {/* ── Tab Bar ── */}
       <View style={S.tabRow}>
@@ -359,8 +311,12 @@ export default function OrdersScreen() {
               {badgeCount > 0 && (
                 <View style={[
                   S.tabBadge,
-                  isActive ? { backgroundColor: isReview ? '#F97316' : COLORS.primary } : undefined,
-                  !isActive && isReview ? { backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA' } : undefined,
+                  isActive
+                    ? { backgroundColor: isReview ? '#F97316' : COLORS.primary }
+                    : undefined,
+                  !isActive && isReview
+                    ? { backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA' }
+                    : undefined,
                 ]}>
                   <Text style={{
                     color: isActive ? '#fff' : isReview ? '#F97316' : '#6B7280',
@@ -375,7 +331,7 @@ export default function OrdersScreen() {
         })}
       </View>
 
-      {/* ── Pending reviews banner (reviews tab only) ── */}
+      {/* ── Pending reviews banner ── */}
       {activeTab === 'reviews' && needsReview.length > 0 && (
         <View style={S.reviewBanner}>
           <Text style={{ fontSize: 16 }}>⭐</Text>
@@ -389,14 +345,12 @@ export default function OrdersScreen() {
       {loading ? (
         <ActivityIndicator color={COLORS.primary} style={{ flex: 1, marginTop: 40 }} />
       ) : activeTab === 'reviews' ? (
-        // ✅ Reviews tab gets its own dedicated component
         <ReviewsTab
           userId={user!.id}
           deliveredOrders={completedOrders}
           onRefresh={loadOrders}
         />
       ) : (
-        // ✅ All other tabs use the FlatList
         <FlatList
           data={filteredOrders}
           keyExtractor={i => i.id}
@@ -404,7 +358,11 @@ export default function OrdersScreen() {
           contentContainerStyle={{ padding: 14, gap: 12, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={COLORS.primary}
+            />
           }
           ListEmptyComponent={<EmptyState />}
         />
@@ -425,27 +383,12 @@ const S = StyleSheet.create({
 
   reviewBanner: { backgroundColor: '#FFFBEB', paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#FDE68A' },
 
-  // Cards
-  orderCard:    { backgroundColor: '#fff', borderRadius: 16, padding: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  cardHeaderRow:{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 },
-  chipRow:      { flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap' },
-  orderNum:     { fontSize: 16, fontWeight: '800', color: '#1F2937' },
-  orderTime:    { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
-  chip:         { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  statusBadge:  { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
-  statusTxt:    { color: '#fff', fontSize: 10, fontWeight: '800' },
-  merchantName: { fontSize: 14, color: '#4B5563', fontWeight: '700', flex: 1 },
-  itemCountTxt: { fontSize: 12, color: '#9CA3AF' },
-  totalTxt:     { fontSize: 16, fontWeight: '900', color: COLORS.primary },
-  savedTxt:     { fontSize: 12, color: '#16A34A', fontWeight: '600', marginTop: 3 },
-  cardFooter:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F9FAFB' },
-  trackBadge:   { backgroundColor: '#16A34A', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
-
-  // Empty
+  // Empty state
   emptyWrap:  { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 30 },
   emptyTitle: { fontWeight: '800', fontSize: 18, color: '#1F2937', marginBottom: 6, textAlign: 'center' },
   emptySub:   { fontSize: 13, color: '#9CA3AF', textAlign: 'center', marginBottom: 20 },
   shopBtn:    { backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 28, paddingVertical: 12 },
 
+  // Notification badge
   notifBadge: { position: 'absolute', top: -4, right: -6, backgroundColor: '#EF4444', borderRadius: 8, paddingHorizontal: 4, paddingVertical: 1, minWidth: 16, alignItems: 'center' },
 })

@@ -18,11 +18,13 @@ import { useMenuItemAutosave } from '@/hooks/useMenuItemAutosave';
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 interface MenuItemModalProps {
-  item:       MenuItem | null;
-  merchantId: string;
-  onClose:    () => void;
-  onSuccess:  () => void;
+  item:                MenuItem | null;
+  merchantId:          string;
+  onClose:             () => void;
+  onSuccess:           () => void;
+  availableCategories?: string[];   // ← NEW
 }
+
 
 interface FormState {
   name:                string;
@@ -278,7 +280,11 @@ function ImagePickerSection({ imageUrl, onChange, onAutosave }: ImagePickerProps
 const IC = 'w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition';
 const LC = 'block text-sm font-medium text-gray-700 mb-1.5';
 
-export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: MenuItemModalProps) {
+export default function MenuItemModal({
+  item, merchantId, onClose, onSuccess,
+  availableCategories,
+}: MenuItemModalProps) {
+
   const {
     autoSaving, savedAt, hasUnsaved,
     schedule, flushNow, seedLastSaved, cancel,
@@ -502,40 +508,59 @@ export default function MenuItemModal({ item, merchantId, onClose, onSuccess }: 
               />
             </div>
 
-            {/* Price + Category */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className={LC}>Price (₹) *</label>
-                <input type="number" min={0} step="0.01" required value={form.price}
-                  onChange={e => set('price', Number(e.target.value))}
-                  onBlur={() => schedule({ price: Number(form.price || 0) })}
-                  className={IC}
-                />
-              </div>
-              <div>
-                <label className={LC}>Category *</label>
-                <select required value={form.category} className={IC}
-                  onChange={e => {
-                    set('category', e.target.value);
-                    if (e.target.value !== '__custom__') schedule({ category: e.target.value });
-                  }}>
-                  {['Starter','Main Course','Dessert','Beverage','Snack','Combo'].map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                  <option value="__custom__">Custom…</option>
-                </select>
-              </div>
-              {form.category === '__custom__' && (
-                <div className="sm:col-span-2">
-                  <label className={LC}>Custom category name</label>
-                  <input type="text" value={form.custom_category} placeholder="e.g. Tandoor, Rolls"
-                    onChange={e => set('custom_category', e.target.value)}
-                    onBlur={() => schedule({ category: form.custom_category.trim() || 'Main Course' })}
-                    className={IC}
-                  />
-                </div>
-              )}
-            </div>
+           {/* Price + Category */}
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  <div>
+    <label className={LC}>Price (₹) *</label>
+    <input
+      type="number" min={0} step="0.01" required
+      value={form.price}
+      onChange={e => set('price', Number(e.target.value))}
+      onBlur={() => schedule({ price: Number(form.price || 0) })}
+      className={IC}
+    />
+  </div>
+
+  <div>
+    <label className={LC}>Category *</label>
+    <select
+      required
+      value={form.category}
+      className={IC}
+      onChange={e => {
+        set('category', e.target.value);
+        if (e.target.value !== '__custom__') {
+          schedule({ category: e.target.value });
+        }
+      }}
+    >
+      {(availableCategories && availableCategories.length > 0
+        ? availableCategories
+        : ['Starter', 'Main Course', 'Dessert', 'Beverage', 'Snack', 'Combo']
+      ).map(c => (
+        <option key={c} value={c}>{c}</option>
+      ))}
+      <option value="__custom__">Custom…</option>
+    </select>
+  </div>
+
+  {form.category === '__custom__' && (
+    <div className="sm:col-span-2">
+      <label className={LC}>Custom category name</label>
+      <input
+        type="text"
+        value={form.custom_category}
+        placeholder="e.g. Tandoor, Rolls"
+        onChange={e => set('custom_category', e.target.value)}
+        onBlur={() =>
+          schedule({ category: form.custom_category.trim() || 'Main Course' })
+        }
+        className={IC}
+      />
+    </div>
+  )}
+</div>
+
 
             {/* Prep / Discount / Category ID */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
