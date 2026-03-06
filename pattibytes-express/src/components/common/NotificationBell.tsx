@@ -45,7 +45,7 @@ const ICON_MAP: Record<string, string> = {
 };
 
 export default function NotificationBell() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [notifications, setNotifications]   = useState<NotificationRow[]>([]);
   const [unreadCount, setUnreadCount]       = useState(0);
@@ -66,51 +66,62 @@ export default function NotificationBell() {
     getPushPermission().then(setPushPermission);
   }, [canUseBrowserNotifications]);
 
-  // ── Data loaders ─────────────────────────────────────────────────────────────
- const loadNotifications = useCallback(async (uid: string) => {
-  setLoading(true);
-  try {
-    // ✅ Check session is present before querying
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData?.session) {
-      console.warn('[NotificationBell] No active session — Supabase will return 0 rows (RLS blocks anon)');
+  // ── Data loader ────────────────────────────────────────────────────────────
+const loadedRef = useRef<string | null>(null);
+  const loadNotifications = useCallback(async (uid: string) => {
+     if (loadedRef.current === uid) return;
+  loadedRef.current = uid;
+    setLoading(true);
+    try {
+      // ✅ Verify session before querying — fixes "sessionData not defined" TS error
+      const { data: sessionResult } = await supabase.auth.getSession();
+      const session = sessionResult?.session;
+
+      if (!session) {
+        console.warn('[NotificationBell] No active session — skipping query');
+        return;
+      }
+
+      const { data, error, status } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      console.log('[NotificationBell] load:', {
+        uid,
+        count:      data?.length ?? 0,
+        status,
+        error:      error?.message ?? null,
+        hasSession: true,
+        sessionUid: session.user.id,
+      });
+
+      if (error) { console.error('[NotificationBell] load error:', error); return; }
+      setNotifications((data as NotificationRow[]) ?? []);
+      setUnreadCount((data ?? []).filter((n: NotificationRow) => !n.is_read).length);
+    } finally {
+      setLoading(false);
     }
+  }, []);
 
-    const { data, error, status } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', uid)
-      .order('created_at', { ascending: false })
-      .limit(50);
+  // Reset loadedRef on unmount so remount can reload
+useEffect(() => {
+  return () => { loadedRef.current = null; };
+}, [user?.id]);
 
-    console.log('[NotificationBell] load:', {
-      uid,
-      count:        data?.length ?? 0,
-      status,
-      error:        error?.message ?? null,
-      hasSession:   !!sessionData?.session,    // ✅ NEW — tells you if auth is present
-      sessionUid:   sessionData?.session?.user?.id ?? null,  // ✅ must match uid
-    });
-
-    if (error) { console.error('[NotificationBell] load error:', error); return; }
-    setNotifications((data as NotificationRow[]) ?? []);
-    setUnreadCount((data ?? []).filter((n: NotificationRow) => !n.is_read).length);
-  } finally {
-    setLoading(false);
-  }
-}, []);
-
-
-  // ── Realtime subscription + initial load ─────────────────────────────────────
-  // ✅ Only runs when user.id is a real non-empty string — prevents CLOSED race
+  // ── Realtime subscription ──────────────────────────────────────────────────
+  // ✅ authLoading guard prevents firing before session is ready
   useEffect(() => {
+    if (authLoading) return;
     if (!user?.id) return;
     const uid = user.id;
 
     void loadNotifications(uid);
 
     const channel = supabase
-      .channel(`notif:${uid}`, { config: { presence: { key: uid } } })
+      .channel(`notif:${uid}`)
       .on(
         'postgres_changes',
         {
@@ -161,23 +172,20 @@ export default function NotificationBell() {
       )
       .subscribe((status, err) => {
         console.log(`[NotificationBell] realtime ${status}`, err ?? '');
-        // ✅ If channel drops, reload data to catch any missed inserts
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[NotificationBell] channel error — reloading notifications');
+          console.warn('[NotificationBell] channel error — reloading');
           void loadNotifications(uid);
         }
       });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id, loadNotifications, canUseBrowserNotifications]);
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, authLoading, loadNotifications, canUseBrowserNotifications]);
 
   useEffect(() => {
     if (showDropdown) document.title = 'PattiBytes Express';
   }, [showDropdown]);
 
-  // ── Actions ──────────────────────────────────────────────────────────────────
+  // ── Actions ────────────────────────────────────────────────────────────────
   const markAsRead = async (id: string) => {
     const { error } = await supabase
       .from('notifications')
@@ -242,7 +250,6 @@ export default function NotificationBell() {
       {showDropdown && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
-
           <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 max-h-[80vh] overflow-hidden flex flex-col">
 
             <div className="flex items-center justify-between px-4 py-3 border-b bg-white sticky top-0 z-10">

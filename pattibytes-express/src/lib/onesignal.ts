@@ -22,21 +22,20 @@ export async function initOneSignal(): Promise<boolean> {
   const hostname = window.location.hostname;
   if (!PROD_HOSTS.has(hostname)) return false; // silent on localhost
 
- window.__osInitPromise = (async (): Promise<boolean> => {
-  try {
-    const OneSignal = (await import('react-onesignal')).default;
-    await OneSignal.init({
-      appId,
-      // ✅ Point OneSignal at your merged SW — critical fix
-      serviceWorkerPath:  'sw.js',
-      serviceWorkerParam: { scope: '/' },
-      welcomeNotification: { disable: true, message: '' },
-    });
-    window.__osInitialized = true;
-    window.__osInitPromise  = undefined;
-    console.log('[OneSignal] initialized ✓');
-    return true;
-  } catch (e: any) {
+  window.__osInitPromise = (async (): Promise<boolean> => {
+    try {
+      const OneSignal = (await import('react-onesignal')).default;
+      await OneSignal.init({
+        appId,
+        serviceWorkerPath:  'sw.js',
+        serviceWorkerParam: { scope: '/' },
+        welcomeNotification: { disable: true, message: '' },
+      });
+      window.__osInitialized = true;
+      window.__osInitPromise  = undefined;
+      console.log('[OneSignal] initialized ✓');
+      return true;
+    } catch (e: any) {
       const msg: string = e?.message ?? '';
       window.__osInitPromise = undefined;
       if (msg.includes('already initialized')) {
@@ -57,7 +56,6 @@ export async function initOneSignal(): Promise<boolean> {
   return window.__osInitPromise;
 }
 
-// ── Wait for push token before calling login() ────────────────────────────────
 async function waitForSubscription(OneSignal: any, timeoutMs = 6000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -65,19 +63,22 @@ async function waitForSubscription(OneSignal: any, timeoutMs = 6000): Promise<vo
     if (token) return;
     await new Promise(r => setTimeout(r, 400));
   }
-  // Timeout OK — SDK retries SetAlias internally
 }
 
-export async function loginOneSignal(userId: string, role: string): Promise<void> {
+export async function loginOneSignal(userId: string, role = 'user'): Promise<void> {
   if (typeof window === 'undefined') return;
   const ok = await initOneSignal();
   if (!ok) return;
   try {
     const OneSignal = (await import('react-onesignal')).default;
-    // ✅ Wait for subscription token — prevents identity 404 error
     await waitForSubscription(OneSignal);
     await OneSignal.login(userId);
-    await OneSignal.User.addTags({ role, app: 'pattibytes-express-web', platform: 'web' });
+    await OneSignal.User.addTags({
+      role,
+      app:      'pattibytes-express-web',
+      platform: 'web',
+    });
+    console.log('[OneSignal] login ✓', userId, role);
   } catch (e: any) {
     console.warn('[OneSignal] login failed (SDK will retry):', e?.message);
   }
@@ -90,6 +91,7 @@ export async function logoutOneSignal(): Promise<void> {
   try {
     const OneSignal = (await import('react-onesignal')).default;
     await OneSignal.logout();
+    console.log('[OneSignal] logout ✓');
   } catch { /* silent */ }
 }
 
@@ -105,7 +107,7 @@ export async function requestPushPermission(): Promise<boolean> {
   try {
     const OneSignal = (await import('react-onesignal')).default;
     await OneSignal.Notifications.requestPermission();
-    return OneSignal.Notifications.permission;
+    return OneSignal.Notifications.permission === true;
   } catch { return false; }
 }
 
@@ -116,6 +118,6 @@ export async function isOneSignalSubscribed(): Promise<boolean> {
   try {
     const OneSignal = (await import('react-onesignal')).default;
     const optedIn = await OneSignal.User.PushSubscription.optedIn;
-    return OneSignal.Notifications.permission && (optedIn ?? false);
+    return OneSignal.Notifications.permission === true && (optedIn ?? false);
   } catch { return false; }
 }

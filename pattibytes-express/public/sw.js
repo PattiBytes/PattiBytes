@@ -1,9 +1,16 @@
 /* pattibytes-express service worker v6 — merged with OneSignal */
 
-// ✅ MUST be first line — gives OneSignal push + notificationclick handlers
+// ✅ MUST be first line
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-/* ── Caching layer ─────────────────────────────────────────────────────────── */
+// ✅ FIX: message handler MUST be at top level (not inside install/activate)
+// This resolves: "Event handler of 'message' event must be added on initial evaluation"
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 const CACHE_NAME     = 'pattibytes-express-v6';
 const APP_SHELL_URLS = ['/', '/icon-192.png', '/icon-512.png', '/favicon.ico'];
 
@@ -80,11 +87,10 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // Pass through: external CDN (including OneSignal CDN), supabase, audio, api, auth
   if (
-    !isSameOrigin(url)    ||     // ✅ all external requests pass through (OneSignal CDN etc.)
-    isAudio(url)          ||
-    isApiRequest(url)     ||
+    !isSameOrigin(url) ||
+    isAudio(url)       ||
+    isApiRequest(url)  ||
     isAuthPage(url)
   ) {
     event.respondWith(
@@ -119,4 +125,4 @@ self.addEventListener('fetch', (event) => {
   })());
 });
 
-// ✅ push + notificationclick are handled by OneSignalSDK.sw.js (imported above)
+// push + notificationclick handled by OneSignalSDK.sw.js (imported above)

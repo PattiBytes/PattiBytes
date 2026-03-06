@@ -8,6 +8,7 @@ import React, {
 import type { User as SupabaseUser, AuthChangeEvent } from '@supabase/supabase-js';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { loginOneSignal, logoutOneSignal } from '@/lib/onesignal';
 
 export interface Profile {
   user_metadata?: any;
@@ -38,7 +39,13 @@ export interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
+// ✅ logo_url included — run the SQL migration above if you get a 400 error
 const PROFILE_SELECT =
+  'id,email,full_name,phone,role,approval_status,avatar_url,logo_url,' +
+  'profile_completed,is_active,created_at,updated_at,account_status,is_approved';
+
+// Fallback select without logo_url — used automatically if column missing
+const PROFILE_SELECT_FALLBACK =
   'id,email,full_name,phone,role,approval_status,avatar_url,' +
   'profile_completed,is_active,created_at,updated_at,account_status,is_approved';
 
@@ -54,10 +61,6 @@ function withTimeout<T>(p: Promise<T>, ms = 8000): Promise<T> {
   });
 }
 
-// ── Module-level ensureProfile cache ─────────────────────────────────────────
-// Prevents duplicate SELECT+INSERT on Google One-Tap / rapid re-renders
-const ensureCache = new Map<string, Profile>();
-
 export default function AuthProvider({ children }: { children: ReactNode }) {
   const router   = useRouter();
   const pathname = usePathname();
@@ -66,32 +69,31 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const [authUser, setAuthUser] = useState<SupabaseUser | null>(null);
   const [booting, setBooting]   = useState(true);
 
-  const userRef          = useRef<Profile | null>(null);
-  const pathnameRef      = useRef('/');
-  const reqIdRef         = useRef(0);
-  const lastUidRef       = useRef<string | null>(null);
-  const inflightRef      = useRef<Promise<Profile | null> | null>(null);
-
-  // ✅ KEY FIX: tracks whether initAuth already handled the current session
-  // Prevents INITIAL_SESSION / SIGNED_IN from re-running hydrateFromSession
+  const userRef           = useRef<Profile | null>(null);
+  const pathnameRef       = useRef('/');
+  const reqIdRef          = useRef(0);
+  const lastUidRef        = useRef<string | null>(null);
+  const inflightRef       = useRef<Promise<Profile | null> | null>(null);
   const bootHandledForRef = useRef<string | null>(null);
+  // ✅ useRef instead of module-level — avoids edge runtime leaks
+  const ensureCacheRef    = useRef(new Map<string, Profile>());
+  // ✅ Track whether logo_url column exists — auto-detected on first fetch
+  const hasLogoUrlCol     = useRef<boolean>(true);
 
-  useEffect(() => { userRef.current  = user; },    [user]);
+  useEffect(() => { userRef.current    = user;            }, [user]);
   useEffect(() => { pathnameRef.current = pathname || '/'; }, [pathname]);
 
-  // ── Fetch profile from DB ─────────────────────────────────────────────────
+  // ── Fetch profile from DB ──────────────────────────────────────────────────
   const loadUserProfile = useCallback(async (
     userId: string,
     opts?: { force?: boolean }
   ): Promise<Profile | null> => {
     if (!userId) return null;
 
-    // Return cached profile for same user (unless forced)
     if (!opts?.force && lastUidRef.current === userId && userRef.current) {
       return userRef.current;
     }
 
-    // Deduplicate concurrent fetches for same user
     if (inflightRef.current && lastUidRef.current === userId) {
       return inflightRef.current;
     }
@@ -100,10 +102,23 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
     const promise = (async (): Promise<Profile | null> => {
       try {
-        const { data, error } = await supabase
-          .from('profiles').select(PROFILE_SELECT).eq('id', userId).maybeSingle();
+        // ✅ Auto-fallback if logo_url column not yet migrated
+        const selectStr = hasLogoUrlCol.current ? PROFILE_SELECT : PROFILE_SELECT_FALLBACK;
 
-        if (rid !== reqIdRef.current) return null; // stale — newer request overtook
+        let { data, error } = await supabase
+          .from('profiles').select(selectStr).eq('id', userId).maybeSingle();
+
+        // If logo_url column missing, retry without it
+        if (error?.message?.includes('logo_url')) {
+          console.warn('[AuthContext] logo_url column missing — run: ALTER TABLE profiles ADD COLUMN IF NOT EXISTS logo_url text');
+          hasLogoUrlCol.current = false;
+          const retry = await supabase
+            .from('profiles').select(PROFILE_SELECT_FALLBACK).eq('id', userId).maybeSingle();
+          data  = retry.data;
+          error = retry.error;
+        }
+
+        if (rid !== reqIdRef.current) return null;
 
         if (error) {
           console.error('Profile fetch:', error.message);
@@ -124,42 +139,48 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     return promise;
   }, []);
 
-  // ── Ensure profile row exists (Google One-Tap / OAuth) ───────────────────
+  // ── Ensure profile row exists (Google One-Tap / OAuth) ────────────────────
   const ensureProfile = useCallback(async (u: SupabaseUser): Promise<void> => {
-    // ✅ Skip if already ensured this session (prevents duplicate DB calls)
-    if (ensureCache.has(u.id)) return;
+    if (ensureCacheRef.current.has(u.id)) return;
+
+    const selectStr = hasLogoUrlCol.current ? PROFILE_SELECT : PROFILE_SELECT_FALLBACK;
 
     const { data: existing, error: e1 } = await supabase
-      .from('profiles').select(PROFILE_SELECT).eq('id', u.id).maybeSingle();
+      .from('profiles').select(selectStr).eq('id', u.id).maybeSingle();
 
-    if (e1) { console.error('ensureProfile select:', e1.message); return; }
-
-    if (existing) {
-      ensureCache.set(u.id, existing as unknown as Profile);
+    if (e1?.message?.includes('logo_url')) {
+      hasLogoUrlCol.current = false;
+    } else if (e1) {
+      console.error('ensureProfile select:', e1.message);
       return;
     }
 
-    // Profile missing — create it (Google sign-in first time)
+    if (existing) {
+      ensureCacheRef.current.set(u.id, existing as unknown as Profile);
+      return;
+    }
+
     const payload = {
-      id:               u.id,
-      email:            u.email,
-      full_name:        u.user_metadata?.full_name ?? u.user_metadata?.name ?? u.email?.split('@')[0] ?? 'User',
-      phone:            u.phone ?? u.user_metadata?.phone ?? '',
-      role:             'customer',
-      approval_status:  'approved',
+      id:                u.id,
+      email:             u.email,
+      full_name:         u.user_metadata?.full_name ?? u.user_metadata?.name ?? u.email?.split('@')[0] ?? 'User',
+      phone:             u.phone ?? u.user_metadata?.phone ?? '',
+      role:              'customer',
+      approval_status:   'approved',
       profile_completed: true,
-      is_active:        true,
-      avatar_url:       u.user_metadata?.avatar_url ?? u.user_metadata?.picture ?? '',
+      is_active:         true,
+      avatar_url:        u.user_metadata?.avatar_url ?? u.user_metadata?.picture ?? '',
     };
 
+    const fallbackSelect = hasLogoUrlCol.current ? PROFILE_SELECT : PROFILE_SELECT_FALLBACK;
     const { data: created, error: e2 } = await supabase
-      .from('profiles').insert([payload]).select(PROFILE_SELECT).single();
+      .from('profiles').insert([payload]).select(fallbackSelect).single();
 
     if (e2) { console.error('ensureProfile insert:', e2.message); return; }
-    if (created) ensureCache.set(u.id, created as unknown as Profile);
+    if (created) ensureCacheRef.current.set(u.id, created as unknown as Profile);
   }, []);
 
-  // ── Hydrate state from a session user ────────────────────────────────────
+  // ── Hydrate + link OneSignal ──────────────────────────────────────────────
   const hydrateFromSession = useCallback(async (
     sessionUser: SupabaseUser | null,
     opts?: { force?: boolean }
@@ -168,14 +189,22 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
     if (sessionUser?.id) {
       await ensureProfile(sessionUser);
-      await loadUserProfile(sessionUser.id, opts);
+      const profile = await loadUserProfile(sessionUser.id, opts);
+
+      // ✅ Link browser to OneSignal identity — enables web push
+      if (typeof window !== 'undefined') {
+        loginOneSignal(
+          sessionUser.id,
+          profile?.role ?? 'customer'
+        ).catch(console.error);
+      }
     } else {
       setUser(null);
       lastUidRef.current = null;
     }
   }, [ensureProfile, loadUserProfile]);
 
-  // ── Boot once ─────────────────────────────────────────────────────────────
+  // ── Boot once ──────────────────────────────────────────────────────────────
   useEffect(() => {
     let alive = true;
 
@@ -184,10 +213,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const { data: { session } } = await withTimeout(supabase.auth.getSession(), 8000);
         const u = session?.user ?? null;
-
-        // Mark which user initAuth handled so INITIAL_SESSION can skip
         bootHandledForRef.current = u?.id ?? '__guest__';
-
         await hydrateFromSession(u, { force: true });
       } catch (e: any) {
         console.error('Auth init:', e?.message ?? e);
@@ -204,51 +230,43 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         if (!alive) return;
         const u = session?.user ?? null;
 
-        // ── SIGNED_OUT ───────────────────────────────────────────────────
         if (event === 'SIGNED_OUT') {
           reqIdRef.current++;
-          inflightRef.current = null;
-          lastUidRef.current  = null;
+          inflightRef.current       = null;
+          lastUidRef.current        = null;
           bootHandledForRef.current = null;
-          if (u?.id) ensureCache.delete(u.id);
-
+          if (u?.id) ensureCacheRef.current.delete(u.id);
           setAuthUser(null); setUser(null);
-
+          // ✅ Unlink OneSignal on sign-out
+          if (typeof window !== 'undefined') logoutOneSignal().catch(console.error);
           const p = pathnameRef.current;
           if (!isPublicPath(p)) router.replace(`/login?redirect=${encodeURIComponent(p)}`);
           else router.replace('/');
           return;
         }
 
-        // ── INITIAL_SESSION / SIGNED_IN ──────────────────────────────────
-        // ✅ Skip if initAuth already handled this exact user — prevents double hydration
         if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
           const alreadyHandled = bootHandledForRef.current === (u?.id ?? '__guest__');
           if (alreadyHandled) {
-            // Just sync authUser reference — no DB call
             setAuthUser(prev => prev?.id === u?.id ? prev : u);
             return;
           }
-          // New user (e.g. Google One-Tap mid-session) — hydrate fully
           bootHandledForRef.current = u?.id ?? '__guest__';
           await hydrateFromSession(u, { force: true });
           return;
         }
 
-        // ── TOKEN_REFRESHED — never re-fetch profile ─────────────────────
         if (event === 'TOKEN_REFRESHED') {
           setAuthUser(prev => prev?.id === u?.id ? prev : u);
           return;
         }
 
-        // ── USER_UPDATED — re-fetch profile only ─────────────────────────
         if (event === 'USER_UPDATED') {
           setAuthUser(prev => prev?.id === u?.id ? prev : u);
           if (u?.id) await loadUserProfile(u.id, { force: true });
           return;
         }
 
-        // Fallback — keep authUser in sync, no DB call
         setAuthUser(prev => prev?.id === u?.id ? prev : u);
       }
     );
@@ -266,14 +284,13 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     const uid = authUser?.id;
     reqIdRef.current++;
-    inflightRef.current = null;
-    lastUidRef.current  = null;
+    inflightRef.current       = null;
+    lastUidRef.current        = null;
     bootHandledForRef.current = null;
-    if (uid) ensureCache.delete(uid);
-
+    if (uid) ensureCacheRef.current.delete(uid);
+    if (typeof window !== 'undefined') await logoutOneSignal().catch(console.error);
     const { error } = await supabase.auth.signOut();
     if (error) console.error('Logout:', error.message);
-
     setAuthUser(null); setUser(null);
     router.replace('/');
   }, [authUser?.id, router]);
