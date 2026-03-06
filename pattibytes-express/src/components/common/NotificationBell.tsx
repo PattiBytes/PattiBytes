@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Bell, X, Trash2, CheckCheck, BellRing, BellOff } from 'lucide-react';
@@ -23,34 +23,37 @@ interface NotificationRow {
 }
 
 const ICON_MAP: Record<string, string> = {
-  order:            '🛒',
-  order_update:     '📦',
-  new_order:        '📦',
-  order_confirmed:  '✅',
-  order_ready:      '🍽️',
-  out_for_delivery: '🚚',
-  delivered:        '🎉',
-  delivery:         '🚗',
-  delivery_assigned:'🚚',
-  access_approved:  '✅',
-  access_rejected:  '❌',
-  payment:          '💰',
-  promo:            '🎁',
-  system:           '🔔',
-  order_admin:      '🛡️',
-  quote:            '💬',
-  custom:           '✦',
+  order:             '🛒',
+  order_update:      '📦',
+  new_order:         '📦',
+  order_confirmed:   '✅',
+  order_ready:       '🍽️',
+  out_for_delivery:  '🚚',
+  delivered:         '🎉',
+  delivery:          '🚗',
+  delivery_assigned: '🚚',
+  access_approved:   '✅',
+  access_rejected:   '❌',
+  payment:           '💰',
+  promo:             '🎁',
+  system:            '🔔',
+  order_admin:       '🛡️',
+  quote:             '💬',
+  custom:            '✦',
 };
 
 export default function NotificationBell() {
   const { user } = useAuth();
 
-  const [notifications, setNotifications]     = useState<NotificationRow[]>([]);
-  const [unreadCount, setUnreadCount]         = useState(0);
-  const [showDropdown, setShowDropdown]       = useState(false);
-  const [loading, setLoading]                 = useState(false);
-  const [pushPermission, setPushPermission]   = useState<NotificationPermission>('default');
-  const [requestingPush, setRequestingPush]   = useState(false);
+  const [notifications, setNotifications]   = useState<NotificationRow[]>([]);
+  const [unreadCount, setUnreadCount]       = useState(0);
+  const [showDropdown, setShowDropdown]     = useState(false);
+  const [loading, setLoading]               = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+  const [requestingPush, setRequestingPush] = useState(false);
+
+  // Track notification IDs we've already toasted — prevents duplicate toasts on re-mount
+  const toastedIds = useRef<Set<string>>(new Set());
 
   const canUseBrowserNotifications = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -63,7 +66,7 @@ export default function NotificationBell() {
     getPushPermission().then(setPushPermission);
   }, [canUseBrowserNotifications]);
 
-  // ── Data loaders ────────────────────────────────────────────────────────────
+  // ── Data loaders ─────────────────────────────────────────────────────────────
   const loadNotifications = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
@@ -74,7 +77,6 @@ export default function NotificationBell() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(25);
-
       if (error) { console.error('Notification load:', error); return; }
       setNotifications((data as NotificationRow[]) ?? []);
     } finally {
@@ -109,30 +111,36 @@ export default function NotificationBell() {
           table:  'notifications',
           filter: `user_id=eq.${user.id}`,
         },
-        async (payload) => {
+        (payload) => {
           const n = payload.new as NotificationRow;
 
-          // Optimistic update — no re-fetch needed
-          setNotifications(prev => [n, ...prev].slice(0, 25));
+          // Optimistic update
+          setNotifications(prev => {
+            if (prev.some(x => x.id === n.id)) return prev; // dedup
+            return [n, ...prev].slice(0, 25);
+          });
           setUnreadCount(c => c + 1);
 
-          // In-app toast
-          toast.info(
-  <div>
-    <p className="font-semibold text-sm">{n.title}</p>
-    {(n.body ?? n.message) && (
-      <p className="text-xs text-gray-600 mt-0.5">{n.body ?? n.message}</p>
-    )}
-  </div>,
-  {
-    position:  'top-right',
-    autoClose: 5000,
-    icon: () => <span className="text-xl">{ICON_MAP[n.type] ?? '🔔'}</span>,
-  }
-);
+          // Toast — only once per notification id
+          if (!toastedIds.current.has(n.id)) {
+            toastedIds.current.add(n.id);
+            toast.info(
+              <div>
+                <p className="font-semibold text-sm">{n.title}</p>
+                {(n.body ?? n.message) && (
+                  <p className="text-xs text-gray-600 mt-0.5">{n.body ?? n.message}</p>
+                )}
+              </div>,
+              {
+                position:  'top-right',
+                autoClose: 5000,
+                icon: () => <span className="text-xl">{ICON_MAP[n.type] ?? '🔔'}</span>,
+              }
+            );
+          }
 
           // Native browser popup only when tab is hidden
-          // (OneSignal handles push when tab is fully closed)
+          // (OneSignal handles push when browser is fully closed)
           if (
             canUseBrowserNotifications &&
             Notification.permission === 'granted' &&
@@ -163,11 +171,8 @@ export default function NotificationBell() {
       .from('notifications')
       .update({ is_read: true, read_at: new Date().toISOString() })
       .eq('id', id);
-
     if (error) { console.error('markAsRead:', error); return; }
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, is_read: true } : n)
-    );
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     setUnreadCount(c => Math.max(0, c - 1));
   };
 
@@ -178,7 +183,6 @@ export default function NotificationBell() {
       .update({ is_read: true, read_at: new Date().toISOString() })
       .eq('user_id', user.id)
       .eq('is_read', false);
-
     if (error) { toast.error('Failed to mark all as read'); return; }
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     setUnreadCount(0);
@@ -187,16 +191,23 @@ export default function NotificationBell() {
   const deleteNotification = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const wasUnread = notifications.find(n => n.id === id)?.is_read === false;
-    await supabase.from('notifications').delete().eq('id', id);
+    const { error } = await supabase.from('notifications').delete().eq('id', id);
+    if (error) { toast.error('Failed to delete'); return; }
     setNotifications(prev => prev.filter(n => n.id !== id));
     if (wasUnread) setUnreadCount(c => Math.max(0, c - 1));
   };
 
   const handleEnablePush = async () => {
     setRequestingPush(true);
-    const granted = await requestPushPermission();
-    setPushPermission(granted ? 'granted' : 'denied');
-    setRequestingPush(false);
+    try {
+      const granted = await requestPushPermission();
+      const perm    = granted ? 'granted' : 'denied';
+      setPushPermission(perm);
+      if (granted) toast.success('Push notifications enabled!');
+      else         toast.warn('Push permission denied — enable in browser settings');
+    } finally {
+      setRequestingPush(false);
+    }
   };
 
   if (!user) return null;
@@ -357,7 +368,9 @@ export default function NotificationBell() {
             {/* Footer */}
             {notifications.length > 0 && (
               <div className="px-4 py-2.5 border-t bg-gray-50 text-center">
-                <p className="text-xs text-gray-400">Showing last {notifications.length} notifications</p>
+                <p className="text-xs text-gray-400">
+                  Showing last {notifications.length} notifications
+                </p>
               </div>
             )}
           </div>
