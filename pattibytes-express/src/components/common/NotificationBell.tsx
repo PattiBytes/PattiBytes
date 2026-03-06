@@ -40,6 +40,8 @@ const ICON_MAP: Record<string, string> = {
   order_admin:       '🛡️',
   quote:             '💬',
   custom:            '✦',
+  approval:          '👤',
+  refund:            '↩️',
 };
 
 export default function NotificationBell() {
@@ -52,7 +54,6 @@ export default function NotificationBell() {
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
   const [requestingPush, setRequestingPush] = useState(false);
 
-  // Track notification IDs we've already toasted — prevents duplicate toasts on re-mount
   const toastedIds = useRef<Set<string>>(new Set());
 
   const canUseBrowserNotifications = useMemo(() => {
@@ -60,68 +61,74 @@ export default function NotificationBell() {
     return 'Notification' in window;
   }, []);
 
-  // Load push permission on mount
   useEffect(() => {
     if (!canUseBrowserNotifications) return;
     getPushPermission().then(setPushPermission);
   }, [canUseBrowserNotifications]);
 
   // ── Data loaders ─────────────────────────────────────────────────────────────
-  const loadNotifications = useCallback(async () => {
-    if (!user?.id) return;
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(25);
-      if (error) { console.error('Notification load:', error); return; }
-      setNotifications((data as NotificationRow[]) ?? []);
-    } finally {
-      setLoading(false);
+ const loadNotifications = useCallback(async (uid: string) => {
+  setLoading(true);
+  try {
+    // ✅ Check session is present before querying
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session) {
+      console.warn('[NotificationBell] No active session — Supabase will return 0 rows (RLS blocks anon)');
     }
-  }, [user?.id]);
 
-  const loadUnreadCount = useCallback(async () => {
-    if (!user?.id) return;
-    const { count, error } = await supabase
+    const { data, error, status } = await supabase
       .from('notifications')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('is_read', false);
-    if (!error) setUnreadCount(count ?? 0);
-  }, [user?.id]);
+      .select('*')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false })
+      .limit(50);
 
-  // ── Realtime subscription ────────────────────────────────────────────────────
+    console.log('[NotificationBell] load:', {
+      uid,
+      count:        data?.length ?? 0,
+      status,
+      error:        error?.message ?? null,
+      hasSession:   !!sessionData?.session,    // ✅ NEW — tells you if auth is present
+      sessionUid:   sessionData?.session?.user?.id ?? null,  // ✅ must match uid
+    });
+
+    if (error) { console.error('[NotificationBell] load error:', error); return; }
+    setNotifications((data as NotificationRow[]) ?? []);
+    setUnreadCount((data ?? []).filter((n: NotificationRow) => !n.is_read).length);
+  } finally {
+    setLoading(false);
+  }
+}, []);
+
+
+  // ── Realtime subscription + initial load ─────────────────────────────────────
+  // ✅ Only runs when user.id is a real non-empty string — prevents CLOSED race
   useEffect(() => {
     if (!user?.id) return;
+    const uid = user.id;
 
-    void loadNotifications();
-    void loadUnreadCount();
+    void loadNotifications(uid);
 
     const channel = supabase
-      .channel(`user-notif:${user.id}`)
+      .channel(`notif:${uid}`, { config: { presence: { key: uid } } })
       .on(
         'postgres_changes',
         {
           event:  'INSERT',
           schema: 'public',
           table:  'notifications',
-          filter: `user_id=eq.${user.id}`,
+          filter: `user_id=eq.${uid}`,
         },
         (payload) => {
           const n = payload.new as NotificationRow;
+          console.log('[NotificationBell] realtime INSERT:', n.id, n.type, n.title);
 
-          // Optimistic update
           setNotifications(prev => {
-            if (prev.some(x => x.id === n.id)) return prev; // dedup
-            return [n, ...prev].slice(0, 25);
+            if (prev.some(x => x.id === n.id)) return prev;
+            return [n, ...prev].slice(0, 50);
           });
           setUnreadCount(c => c + 1);
 
-          // Toast — only once per notification id
           if (!toastedIds.current.has(n.id)) {
             toastedIds.current.add(n.id);
             toast.info(
@@ -139,8 +146,6 @@ export default function NotificationBell() {
             );
           }
 
-          // Native browser popup only when tab is hidden
-          // (OneSignal handles push when browser is fully closed)
           if (
             canUseBrowserNotifications &&
             Notification.permission === 'granted' &&
@@ -154,13 +159,20 @@ export default function NotificationBell() {
           }
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        console.log(`[NotificationBell] realtime ${status}`, err ?? '');
+        // ✅ If channel drops, reload data to catch any missed inserts
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[NotificationBell] channel error — reloading notifications');
+          void loadNotifications(uid);
+        }
+      });
 
-    return () => { supabase.removeChannel(channel); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, loadNotifications, canUseBrowserNotifications]);
 
-  // Reset page title when panel opens
   useEffect(() => {
     if (showDropdown) document.title = 'PattiBytes Express';
   }, [showDropdown]);
@@ -201,8 +213,7 @@ export default function NotificationBell() {
     setRequestingPush(true);
     try {
       const granted = await requestPushPermission();
-      const perm    = granted ? 'granted' : 'denied';
-      setPushPermission(perm);
+      setPushPermission(granted ? 'granted' : 'denied');
       if (granted) toast.success('Push notifications enabled!');
       else         toast.warn('Push permission denied — enable in browser settings');
     } finally {
@@ -214,7 +225,6 @@ export default function NotificationBell() {
 
   return (
     <div className="relative">
-      {/* ── Bell button ──────────────────────────────────────────────────── */}
       <button
         onClick={() => setShowDropdown(v => !v)}
         className="relative p-1.5 sm:p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
@@ -231,13 +241,10 @@ export default function NotificationBell() {
 
       {showDropdown && (
         <>
-          {/* Backdrop */}
           <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
 
-          {/* Dropdown panel */}
           <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 max-h-[80vh] overflow-hidden flex flex-col">
 
-            {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b bg-white sticky top-0 z-10">
               <h3 className="font-bold text-gray-900 flex items-center gap-2">
                 Notifications
@@ -249,23 +256,16 @@ export default function NotificationBell() {
               </h3>
               <div className="flex items-center gap-2">
                 {unreadCount > 0 && (
-                  <button
-                    onClick={markAllAsRead}
-                    className="flex items-center gap-1 text-xs text-primary hover:underline font-semibold"
-                  >
+                  <button onClick={markAllAsRead} className="flex items-center gap-1 text-xs text-primary hover:underline font-semibold">
                     <CheckCheck size={13} /> All read
                   </button>
                 )}
-                <button
-                  onClick={() => setShowDropdown(false)}
-                  className="text-gray-400 hover:text-gray-600 p-1 rounded"
-                >
+                <button onClick={() => setShowDropdown(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded">
                   <X size={18} />
                 </button>
               </div>
             </div>
 
-            {/* Push permission banner */}
             {canUseBrowserNotifications && pushPermission === 'default' && (
               <div className="bg-violet-50 border-b border-violet-100 px-3 py-2.5 flex items-center gap-2.5">
                 <BellRing className="w-4 h-4 text-violet-600 shrink-0" />
@@ -273,11 +273,8 @@ export default function NotificationBell() {
                   <p className="text-xs font-bold text-violet-900">Enable push notifications</p>
                   <p className="text-xs text-violet-700">Get updates even when the tab is closed</p>
                 </div>
-                <button
-                  onClick={handleEnablePush}
-                  disabled={requestingPush}
-                  className="shrink-0 bg-violet-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition"
-                >
+                <button onClick={handleEnablePush} disabled={requestingPush}
+                  className="shrink-0 bg-violet-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition">
                   {requestingPush ? 'Enabling…' : 'Enable'}
                 </button>
               </div>
@@ -286,9 +283,7 @@ export default function NotificationBell() {
             {canUseBrowserNotifications && pushPermission === 'denied' && (
               <div className="bg-gray-50 border-b px-3 py-2 flex items-center gap-2">
                 <BellOff className="w-4 h-4 text-gray-400 shrink-0" />
-                <p className="text-xs text-gray-500">
-                  Push blocked — allow in browser Settings → Site Settings
-                </p>
+                <p className="text-xs text-gray-500">Push blocked — allow in browser Settings → Site Settings</p>
               </div>
             )}
 
@@ -299,7 +294,6 @@ export default function NotificationBell() {
               </div>
             )}
 
-            {/* Notification list */}
             <div className="overflow-y-auto flex-1">
               {loading ? (
                 <div className="p-8 text-center text-gray-400">
@@ -315,44 +309,27 @@ export default function NotificationBell() {
               ) : (
                 <div className="divide-y divide-gray-100">
                   {notifications.map(n => (
-                    <div
-                      key={n.id}
+                    <div key={n.id}
                       onClick={() => !n.is_read && markAsRead(n.id)}
-                      className={`px-4 py-3 hover:bg-gray-50 transition cursor-pointer group relative ${
-                        !n.is_read ? 'bg-blue-50/60' : ''
-                      }`}
-                    >
+                      className={`px-4 py-3 hover:bg-gray-50 transition cursor-pointer group relative ${!n.is_read ? 'bg-blue-50/60' : ''}`}>
                       <div className="flex items-start gap-3">
-                        <span className="text-xl shrink-0 mt-0.5">
-                          {ICON_MAP[n.type] ?? '🔔'}
-                        </span>
+                        <span className="text-xl shrink-0 mt-0.5">{ICON_MAP[n.type] ?? '🔔'}</span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <p className="font-semibold text-gray-900 text-sm line-clamp-1">
-                              {n.title}
-                            </p>
-                            {!n.is_read && (
-                              <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-1.5" />
-                            )}
+                            <p className="font-semibold text-gray-900 text-sm line-clamp-1">{n.title}</p>
+                            {!n.is_read && <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-1.5" />}
                           </div>
                           {(n.body ?? n.message) && (
-                            <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
-                              {n.body ?? n.message}
-                            </p>
+                            <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{n.body ?? n.message}</p>
                           )}
                           <div className="flex items-center justify-between mt-1.5">
                             <span className="text-[10px] text-gray-400">
                               {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
                             </span>
                             <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition">
-                              {n.sent_push && (
-                                <span title="Push sent" className="text-[10px] text-violet-400">📤</span>
-                              )}
-                              <button
-                                onClick={e => deleteNotification(n.id, e)}
-                                className="text-red-400 hover:text-red-600 p-0.5 rounded transition"
-                                aria-label="Delete"
-                              >
+                              {n.sent_push && <span title="Push sent" className="text-[10px] text-violet-400">📤</span>}
+                              <button onClick={e => deleteNotification(n.id, e)}
+                                className="text-red-400 hover:text-red-600 p-0.5 rounded transition" aria-label="Delete">
                                 <Trash2 size={12} />
                               </button>
                             </div>
@@ -365,12 +342,9 @@ export default function NotificationBell() {
               )}
             </div>
 
-            {/* Footer */}
             {notifications.length > 0 && (
               <div className="px-4 py-2.5 border-t bg-gray-50 text-center">
-                <p className="text-xs text-gray-400">
-                  Showing last {notifications.length} notifications
-                </p>
+                <p className="text-xs text-gray-400">Showing last {notifications.length} notifications</p>
               </div>
             )}
           </div>

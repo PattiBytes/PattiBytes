@@ -96,47 +96,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     };
   }, [sidebarOpen]);
 
-  useEffect(() => {
-    const loadAppSettings = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('app_settings')
-          .select(
-            'id,app_name,support_email,support_phone,business_address,facebook_url,instagram_url,twitter_url,youtube_url,website_url,delivery_fee,min_order_amount,tax_percentage,created_at,updated_at'
-          )
-          .limit(1)
-          .single();
-
-        if (!error && data) {
-          const row = data as AppSettingsRow;
-          setAppName(row.app_name || 'PattiBytes');
-        }
-      } catch {
-        // keep fallback
-      }
-    };
-
-    loadAppSettings();
-  }, []);
-
-  useEffect(() => {
+ useEffect(() => {
   const loadAppSettings = async () => {
     try {
       const { data, error } = await supabase
         .from('app_settings')
-        .select('app_name, app_logo_url')
+        .select('id, app_name, app_logo_url')   // ✅ merged both selects
         .limit(1)
         .single();
 
       if (!error && data) {
-        if (data.app_name) setAppName(data.app_name || 'PattiBytes');
+        if (data.app_name)     setAppName(data.app_name);
         if (data.app_logo_url) setAppLogo(data.app_logo_url);
       }
     } catch {
       // keep fallback
     }
   };
-
   loadAppSettings();
 }, []);
 
