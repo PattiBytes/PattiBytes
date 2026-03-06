@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient }              from '@supabase/supabase-js';
 
 const ONESIGNAL_URL  = 'https://api.onesignal.com/notifications';
-const EXPO_PUSH_URL  = 'https://exp.host/--/api/v2/push/send';
 const WEB_ROLES      = new Set(['admin', 'superadmin', 'merchant', 'driver']);
 const ADMIN_ROLES    = ['admin', 'superadmin'];
 const ALWAYS_FANOUT  = new Set([
@@ -61,20 +60,6 @@ async function sendOneSignal(
   }
 }
 
-async function sendExpo(
-  tokens: string[], title: string, body: string, data: Record<string, unknown>
-): Promise<boolean> {
-  if (!tokens.length) return false;
-  try {
-    const messages = tokens.map(to => ({ to, title, body, sound: 'default', channelId: 'default', data }));
-    const res = await fetch(EXPO_PUSH_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(messages),
-    });
-    return res.ok;
-  } catch { return false; }
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -140,29 +125,19 @@ export async function POST(req: NextRequest) {
     const notifId  = (inserted as { id: string }).id;
     let   sentPush = false;
 
-    // ── 6. Send push to target ────────────────────────────────────────────────
-    if (WEB_ROLES.has(targetRole)) {
-      sentPush = await sendOneSignal(
-        [targetUserId], title, message,
-        { ...notifData, notification_id: notifId },
-        notifData.url as string
-      );
-    } else {
-      // Mobile customers — Expo
-      const { data: tokens } = await db
-        .from('push_tokens').select('expo_push_token')
-        .eq('user_id', targetUserId).eq('is_active', true);
-      if (tokens?.length) {
-        sentPush = await sendExpo(
-          tokens.map((t: { expo_push_token: string }) => t.expo_push_token),
-          title, message, { ...notifData, notification_id: notifId }
-        );
-      }
-    }
+   // ── 6. Send push to target ────────────────────────────────────────────────
+// Web roles → OneSignal (browser push, works when closed)
+// Mobile customers → webhook `send-push-notification` handles Expo automatically
+if (WEB_ROLES.has(targetRole)) {
+  sentPush = await sendOneSignal(
+    [targetUserId], title, message,
+    { ...notifData, notification_id: notifId },
+    notifData.url as string
+  );
+  // ✅ No Expo here — webhook fires on INSERT and handles it
+}
+// No else branch needed — webhook covers everyone with expo tokens
 
-    if (sentPush) {
-      await db.from('notifications').update({ sent_push: true }).eq('id', notifId);
-    }
 
     // ── 7. Admin fan-out ──────────────────────────────────────────────────────
     const alreadyForwarded = Boolean(data?.forwarded_from);
