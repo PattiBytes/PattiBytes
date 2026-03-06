@@ -15,58 +15,61 @@ function VegDot({ isVeg }: { isVeg?: boolean }) {
 }
 
 function ItemRow({ item, index }: { item: OrderItem; index: number }) {
-  const qty   = Number(item.quantity ?? 1);
-  const price = Number(item.price ?? 0);
-  const disc  = Number(item.discount_percentage ?? item.discountpercentage ?? 0);
+  const qty            = Number(item.quantity ?? 1);
+  const price          = Number(item.price ?? 0);
+  const disc           = Number(item.discount_percentage ?? item.discountpercentage ?? 0);
   const effectivePrice = disc > 0 ? price * (1 - disc / 100) : price;
-  const lineTotal = effectivePrice * qty;
-  const isVeg = item.is_veg ?? item.isveg;
-  const imageUrl = item.image_url ?? item.imageurl;
+  const lineTotal      = effectivePrice * qty;
+  const isVeg          = item.is_veg ?? item.isveg;
+  const imageUrl       = item.image_url ?? item.imageurl;
 
   return (
-    <div className="flex gap-3 py-3 border-b last:border-0">
-      {/* Thumbnail */}
-      <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 shrink-0">
+    <div className="flex flex-col sm:flex-row gap-3 py-3 border-b last:border-0">
+      {/* Thumbnail — shrinks on mobile to give text more space */}
+      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-gray-100 shrink-0 flex-shrink-0">
         {imageUrl && imageUrl.startsWith('http') && !imageUrl.includes('google.com/search') ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imageUrl} alt={item.name} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-400">
-            <Package className="w-5 h-5" />
+            <Package className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         )}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-2 justify-between">
-          <div className="flex items-center gap-2 min-w-0">
+      {/* Content — full width on mobile, flex row on larger screens */}
+      <div className="flex-1 min-w-0 space-y-1">
+        {/* Title row — flex wrap + truncate only after wrapping */}
+        <div className="flex flex-wrap items-start gap-2 justify-between min-h-[1.25rem]">
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
             <VegDot isVeg={isVeg} />
-            <p className="font-bold text-gray-900 truncate">{item.name ?? `Item ${index + 1}`}</p>
+            <p className="font-bold text-sm sm:text-base text-gray-900 truncate">{item.name ?? `Item ${index + 1}`}</p>
             {item.is_free && (
-              <span className="shrink-0 text-[10px] font-black bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200">
+              <span className="shrink-0 text-[10px] font-black bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full border border-green-200">
                 FREE
               </span>
             )}
             {item.is_custom_product && (
-              <span className="shrink-0 text-[10px] font-bold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
+              <span className="shrink-0 text-[10px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full">
                 Custom
               </span>
             )}
           </div>
-          <p className="font-bold text-gray-900 shrink-0">
-            {item.is_free ? (
-              <span className="text-green-600">Free</span>
-            ) : toINR(lineTotal)}
+          <p className="font-bold text-sm sm:text-base text-gray-900 shrink-0 whitespace-nowrap">
+            {item.is_free ? <span className="text-green-600">Free</span> : toINR(lineTotal)}
           </p>
         </div>
 
-        <p className="text-xs text-gray-500 mt-0.5">
+        {/* Price × qty row */}
+        <p className="text-xs text-gray-500">
           {toINR(effectivePrice)} × {qty}
           {disc > 0 && <span className="ml-1.5 text-orange-600 font-semibold">{disc}% off</span>}
           {item.category && <span className="ml-1.5 text-gray-400">· {item.category}</span>}
         </p>
+
+        {/* Notes — always below */}
         {item.note && (
-          <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1 mt-1.5">
+          <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1">
             📝 {item.note}
           </p>
         )}
@@ -74,6 +77,7 @@ function ItemRow({ item, index }: { item: OrderItem; index: number }) {
     </div>
   );
 }
+
 
 interface Props { order: OrderNormalized; }
 
