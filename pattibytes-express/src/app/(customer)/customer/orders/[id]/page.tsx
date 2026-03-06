@@ -587,52 +587,55 @@ const downloadInvoice = async () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareLiveLocation, canShareLocation]);
 
-  const handleCancelOrder = async () => {
-    if (!order) return;
-    if (!cancelReason.trim()) {
-      toast.error('Please provide a cancellation reason');
+ const handleCancelOrder = async () => {
+  if (!order) return;
+  if (!cancelReason.trim()) {
+    toast.error('Please provide a cancellation reason');
+    return;
+  }
+
+  setCancelling(true);
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .update({
+        status:              'cancelled',
+        cancellation_reason: cancelReason,  // ✅ was cancellationreason
+        cancelled_by:        'customer',    // ✅ was cancelledby
+      })
+      .eq('id', order.id)
+      .eq('customer_id', user!.id)          // ✅ was customerid
+      .in('status', ['pending', 'confirmed'])
+      .select('id, status');
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      toast.error("You can't cancel after the order starts preparing.");
       return;
     }
 
-    setCancelling(true);
     try {
-   const { data, error } = await supabase
-  .from("orders")
-  .update({
-    status: "cancelled",
-    cancellationreason: cancelReason,
-    cancelledby: "customer",
-  })
-  .eq("id", order.id)
-  .eq("customerid", user!.id)
-  .in("status", ["pending", "confirmed"])   // <-- this blocks preparing+
-  .select("id,status");                    // <-- so we can detect “0 rows updated”
+      await supabase.from('order_cancellations').insert([{
+        order_id:    order.id,
+        customer_id: user!.id,
+        reason:      cancelReason,
+      }]);
+    } catch {}
 
-if (error) throw error;
+    toast.success('Order cancelled');
+    setShowCancelModal(false);
+    setCancelReason('');
+    await loadOrder();
+    await loadCustomerProfile();
+  } catch (e) {
+    console.error('Cancel error:', e);
+    toast.error('Failed to cancel order');
+  } finally {
+    setCancelling(false);
+  }
+};
 
-if (!data || data.length === 0) {
-  toast.error("You can't cancel after the order starts preparing.");
-  return;
-}
-
-
-      // Optional: record cancellations table (if you created it)
-      try {
-        await supabase.from('order_cancellations').insert([{ order_id: order.id, customer_id: user!.id, reason: cancelReason }]);
-      } catch {}
-
-      toast.success('Order cancelled');
-      setShowCancelModal(false);
-      setCancelReason('');
-      await loadOrder();
-      await loadCustomerProfile();
-    } catch (e) {
-      console.error('Cancel error:', e);
-      toast.error('Failed to cancel order');
-    } finally {
-      setCancelling(false);
-    }
-  };
 
   if (loading) return <PageLoadingSpinner />;
 
