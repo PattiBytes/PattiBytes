@@ -22,18 +22,21 @@ export async function initOneSignal(): Promise<boolean> {
   const hostname = window.location.hostname;
   if (!PROD_HOSTS.has(hostname)) return false; // silent on localhost
 
-  window.__osInitPromise = (async (): Promise<boolean> => {
-    try {
-      const OneSignal = (await import('react-onesignal')).default;
-      await OneSignal.init({
-        appId,
-        welcomeNotification: { disable: true, message: '' },
-      });
-      window.__osInitialized = true;
-      window.__osInitPromise  = undefined;
-      console.log('[OneSignal] initialized ✓');
-      return true;
-    } catch (e: any) {
+ window.__osInitPromise = (async (): Promise<boolean> => {
+  try {
+    const OneSignal = (await import('react-onesignal')).default;
+    await OneSignal.init({
+      appId,
+      // ✅ Point OneSignal at your merged SW — critical fix
+      serviceWorkerPath:  'sw.js',
+      serviceWorkerParam: { scope: '/' },
+      welcomeNotification: { disable: true, message: '' },
+    });
+    window.__osInitialized = true;
+    window.__osInitPromise  = undefined;
+    console.log('[OneSignal] initialized ✓');
+    return true;
+  } catch (e: any) {
       const msg: string = e?.message ?? '';
       window.__osInitPromise = undefined;
       if (msg.includes('already initialized')) {
