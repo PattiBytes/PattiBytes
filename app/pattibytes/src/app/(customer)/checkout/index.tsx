@@ -39,7 +39,7 @@ function formatAddr(a: SavedAddress): string {
     a.postal_code ?? '',
   ].filter(Boolean).join(', ')
 }
-
+const API_BASE = 'https://pbexpress.pattibytes.com'
 async function sendOrderNotification(
   userId: string,
   orderNumber: number | string,
@@ -60,6 +60,38 @@ async function sendOrderNotification(
   })
 }
 
+async function notifyOrderPlaced(
+  userId: string,
+  orderId: string,
+  orderNum: string | null,
+): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const jwt = session?.access_token
+    if (!jwt) return
+
+    await fetch(`${API_BASE}/api/notify`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${jwt}`,
+      },
+      body: JSON.stringify({
+        targetUserId: userId,
+        title:        '🎉 Order Placed!',
+        message:      `Your order #${orderNum ?? orderId.slice(0, 8)} has been placed. We'll confirm it shortly.`,
+        type:         'new_order',
+        data: {
+          order_id:     orderId,
+          order_number: orderNum ?? orderId.slice(0, 8),
+          status:       'pending',
+        },
+      }),
+    })
+  } catch (e) {
+    console.warn('[notifyOrderPlaced]', e)
+  }
+}
 // ─────────────────────────────────────────────────────────────────────────────
 export default function CheckoutPage() {
   const router              = useRouter()
@@ -515,13 +547,20 @@ const handlePlaceOrder = async () => {
     }
 
     // ── Insert order ─────────────────────────────────────────────────────────
-    const { data: order, error } = await supabase
+   const { data: order, error } = await supabase
       .from('orders')
       .insert(orderPayload)
       .select()
       .single()
 
     if (error) throw error
+
+    // ✅ ADD THIS — fire-and-forget, doesn't block navigation
+    notifyOrderPlaced(
+      user.id,
+      order.id,
+      (order as any).order_number ?? null,
+    )
 
     // ── custom_order_requests table — full custom flow record ─────────────────
     if (orderType === 'custom' && order) {

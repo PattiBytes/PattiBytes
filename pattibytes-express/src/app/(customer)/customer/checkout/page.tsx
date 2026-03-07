@@ -11,6 +11,8 @@ import DashboardLayout from '@/components/layouts/DashboardLayout';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import { cartService } from '@/services/cart';
 import { appSettingsService } from '@/services/appSettings';
+import { sendNotification } from '@/utils/notifications';
+
 import { calculateDeliveryFeeByDistance, getRoadDistanceKmViaApi } from '@/services/location';
 
 import {
@@ -631,14 +633,31 @@ if (m2) {
         estimated_delivery_time: estimatedDeliveryTime.toISOString(),
       };
 
-      const { data: order, error: orderError } = await supabase.from('orders').insert(orderData).select().single();
+     const { data: order, error: orderError } = await supabase
+        .from('orders').insert(orderData).select().single();
       if (orderError) throw new Error(orderError.message || 'Failed to create order');
 
       sessionStorage.removeItem('checkout_data');
-cartService.clearCart(); // removes pattibytes_cart and dispatches cartUpdated
-
-
+      cartService.clearCart();
       toast.success('Order placed successfully!');
+
+      // ✅ Notify customer + auto fan-out to admins via /api/notify
+      const orderNum = (order as any).order_number ?? (order as any).id?.slice(0, 8) ?? '';
+      sendNotification(                        // fire-and-forget — don't await
+        user.id,
+        '🎉 Order Placed!',
+        `Your order #${orderNum} has been placed successfully. We'll confirm it shortly.`,
+        'new_order',
+        {
+          order_id:     order.id,
+          order_number: orderNum,
+          status:       'pending',
+        }
+      ).catch(console.error);
+
+      orderIdRef.current = order.id;
+      startLiveWatch();
+      router.push(`/customer/orders/${order.id}`);
 
       orderIdRef.current = order.id; // enable DB updates for live location now
       startLiveWatch();
