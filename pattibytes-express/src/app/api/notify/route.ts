@@ -1,74 +1,120 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient }              from '@supabase/supabase-js';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
 
 const ONESIGNAL_URL  = 'https://api.onesignal.com/notifications';
 const WEB_PUSH_ROLES = new Set(['admin', 'superadmin', 'merchant', 'driver', 'customer']);
-const ADMIN_ROLES    = ['admin', 'superadmin'];
-const ALWAYS_FANOUT  = new Set([
+const ADMIN_ROLES    = ['admin', 'superadmin'] as const;
+
+const ALWAYS_FANOUT = new Set([
   'new_order', 'order', 'order_update', 'approval',
   'review', 'payment', 'custom', 'quote', 'complaint', 'refund',
 ]);
 
-function buildDeepLink(role: string, type: string, data?: Record<string, unknown>): string {
+// Sound mapped per notification type — sent as data so the client can play it
+const TYPE_SOUND_MAP: Record<string, string> = {
+  new_order:    'order',
+  order_update: 'notify',
+  delivered:    'success',
+  approval:     'notify',
+  payment:      'success',
+  default:      'notify',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Deep-link builder
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildDeepLink(
+  role: string,
+  type: string,
+  data?: Record<string, unknown>,
+): string {
   const base    = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://pbexpress.pattibytes.com';
   const orderId = data?.order_id ?? data?.orderId;
+
   if (orderId) {
-    if (ADMIN_ROLES.includes(role)) return `${base}/admin/orders/${orderId}`;
-    if (role === 'merchant')        return `${base}/merchant/orders/${orderId}`;
-    if (role === 'driver')          return `${base}/driver/orders/${orderId}`;
-    return `${base}/orders/${orderId}`;
+    if (ADMIN_ROLES.includes(role as any)) return `${base}/admin/orders/${orderId}`;
+    if (role === 'merchant')               return `${base}/merchant/orders/${orderId}`;
+    if (role === 'driver')                 return `${base}/driver/orders/${orderId}`;
+    return `${base}/customer/orders/${orderId}`;
   }
-  if (type === 'approval')        return `${base}/auth/pending-approval`;
-  if (ADMIN_ROLES.includes(role)) return `${base}/admin/dashboard`;
-  if (role === 'merchant')        return `${base}/merchant/dashboard`;
-  if (role === 'driver')          return `${base}/driver/dashboard`;
-  return `${base}/`;
+  if (type === 'approval')               return `${base}/auth/pending-approval`;
+  if (ADMIN_ROLES.includes(role as any)) return `${base}/admin/dashboard`;
+  if (role === 'merchant')               return `${base}/merchant/dashboard`;
+  if (role === 'driver')                 return `${base}/driver/dashboard`;
+  return base;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OneSignal push
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface OneSignalResult {
+  success:    boolean;
+  recipients?: number;
+  id?:         string;
 }
 
 async function sendOneSignal(
-  userIds: string[], title: string, body: string,
-  data: Record<string, unknown>, url: string,
-): Promise<{ success: boolean; recipients?: number; id?: string }> {
+  userIds:  string[],
+  title:    string,
+  body:     string,
+  data:     Record<string, unknown>,
+  url:      string,
+  soundKey: string = 'default',
+): Promise<OneSignalResult> {
   const appId  = process.env.ONESIGNAL_APP_ID;
   const apiKey = process.env.ONESIGNAL_REST_API_KEY;
+  const site   = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://pbexpress.pattibytes.com';
 
   if (!appId || !apiKey) {
-    console.error('[notify] ❌ ONESIGNAL_APP_ID or ONESIGNAL_REST_API_KEY missing');
+    console.error('[notify] ❌ OneSignal env vars missing');
     return { success: false };
   }
-  if (!userIds.length) return { success: false };
+  if (!userIds.length) {
+    console.warn('[notify] sendOneSignal: no userIds — skipped');
+    return { success: false };
+  }
 
-  console.log('[notify] → OneSignal to:', userIds, '|', title);
+  console.log(`[notify] → OneSignal push | users: ${userIds.length} | title: "${title}"`);
 
   try {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://pbexpress.pattibytes.com';
-    const payload = {
-      app_id:                        appId,
-      target_channel:                'push',
-      headings:                      { en: title },
-      contents:                      { en: body },
-      url,
-      data,
-      include_aliases:               { external_id: userIds },
-      channel_for_external_user_ids: 'push',
-      chrome_web_icon:               `${siteUrl}/icon-192.png`,
-      chrome_web_badge:              `${siteUrl}/icon-192.png`,
-      ttl:                           259200, // 3 days
-    };
-
-    const res    = await fetch(ONESIGNAL_URL, {
+    const res = await fetch(ONESIGNAL_URL, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Key ${apiKey}` },
-      body:    JSON.stringify(payload),
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Key ${apiKey}`,
+      },
+      body: JSON.stringify({
+        app_id:                        appId,
+        target_channel:                'push',
+        headings:                      { en: title },
+        contents:                      { en: body },
+        url,
+        data:                          { ...data, sound: soundKey },
+        // Android / Web sound (filename without extension in /sounds/)
+        android_sound:                 soundKey,
+        chrome_web_icon:               `${site}/icon-192.png`,
+        chrome_web_badge:              `${site}/icon-192.png`,
+        include_aliases:               { external_id: userIds },
+        channel_for_external_user_ids: 'push',
+        ttl:                           259_200, // 3 days
+      }),
     });
+
     const result = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      console.error('[notify] ❌ OneSignal error:', JSON.stringify(result));
+      console.error('[notify] ❌ OneSignal API error:', JSON.stringify(result));
       return { success: false };
     }
-    console.log('[notify] ✅ OneSignal OK — id:', result?.id, 'recipients:', result?.recipients);
+
+    console.log(`[notify] ✅ OneSignal OK — id: ${result?.id} | recipients: ${result?.recipients}`);
     return { success: true, recipients: result?.recipients, id: result?.id };
   } catch (e) {
     console.error('[notify] ❌ OneSignal threw:', e);
@@ -76,23 +122,51 @@ async function sendOneSignal(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DB helper — insert one or many notification rows
+// ─────────────────────────────────────────────────────────────────────────────
+
+function makeRow(
+  userId:    string,
+  title:     string,
+  message:   string,
+  type:      string,
+  data:      Record<string, unknown>,
+) {
+  return {
+    user_id:    userId,
+    title,
+    message,
+    body:       message,
+    type,
+    data,
+    is_read:    false,
+    sent_push:  false,
+    created_at: new Date().toISOString(),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/notify
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
+  // ── Env ──────────────────────────────────────────────────────────────────
   const SUPABASE_URL    = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const SERVICE_ROLE    = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const INTERNAL_SECRET = process.env.NOTIFY_INTERNAL_SECRET ?? '';
 
   if (!SUPABASE_URL || !SERVICE_ROLE) {
-    console.error('[notify] ❌ Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+    console.error('[notify] ❌ Missing Supabase env vars');
     return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
   }
 
-  // ✅ Create service-role client ONCE — used for both JWT validation AND DB ops
-  // This removes the ANON_KEY dependency that caused 401s in production
+  // ── DB client (service role — bypasses RLS, validates JWTs) ──────────────
   const db = createClient(SUPABASE_URL, SERVICE_ROLE, {
     auth: { persistSession: false },
   });
 
-  // ── Auth ───────────────────────────────────────────────────────────────────
+  // ── Auth ──────────────────────────────────────────────────────────────────
   const authHeader     = req.headers.get('authorization') ?? '';
   const internalHeader = req.headers.get('x-internal-secret') ?? '';
   const jwt            = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
@@ -100,25 +174,22 @@ export async function POST(req: NextRequest) {
   let callerId: string | null = null;
 
   if (INTERNAL_SECRET && internalHeader === INTERNAL_SECRET) {
-    // Server-side call (API routes, Server Actions) — trusted
     callerId = 'server-internal';
     console.log('[notify] auth: internal secret ✓');
   } else if (jwt) {
-    // ✅ Validate JWT using service role client — no ANON_KEY needed,
-    //    works correctly in all environments including self-hosted Supabase
     const { data: { user }, error } = await db.auth.getUser(jwt);
     if (error || !user) {
-      console.warn('[notify] JWT validation failed:', error?.message ?? 'no user');
+      console.warn('[notify] ❌ JWT invalid:', error?.message ?? 'no user');
       return NextResponse.json({ error: 'Invalid JWT' }, { status: 401 });
     }
     callerId = user.id;
     console.log('[notify] auth: JWT ✓ user:', callerId);
   } else {
-    console.warn('[notify] No auth header');
+    console.warn('[notify] ❌ No auth header');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // ── Parse body ─────────────────────────────────────────────────────────────
+  // ── Body ──────────────────────────────────────────────────────────────────
   let body: Record<string, unknown>;
   try   { body = await req.json(); }
   catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
@@ -128,50 +199,51 @@ export async function POST(req: NextRequest) {
     title,
     message,
     type,
-    data = {},
-    url: overrideUrl,
+    data:        rawData    = {},
+    url:         overrideUrl,
   } = body as {
-    targetUserId: string; title: string; message: string;
-    type: string; data?: Record<string, unknown>; url?: string;
+    targetUserId: string;
+    title:        string;
+    message:      string;
+    type:         string;
+    data?:        Record<string, unknown>;
+    url?:         string;
   };
 
   if (!targetUserId || !title || !message || !type) {
+    console.warn('[notify] Missing fields — targetUserId, title, message, type required');
     return NextResponse.json(
       { error: 'Missing required fields: targetUserId, title, message, type' },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  // ── Resolve target role ────────────────────────────────────────────────────
+  // ── Resolve target role ───────────────────────────────────────────────────
   const { data: profile } = await db
-    .from('profiles').select('role').eq('id', targetUserId).maybeSingle();
+    .from('profiles')
+    .select('role')
+    .eq('id', targetUserId)
+    .maybeSingle();
+
   const targetRole = String(profile?.role ?? 'customer').toLowerCase();
-  console.log('[notify] target:', targetUserId, '| role:', targetRole, '| type:', type);
+  console.log(`[notify] target: ${targetUserId} | role: ${targetRole} | type: ${type}`);
 
-  // ── Build payload ──────────────────────────────────────────────────────────
+  // ── Build notification payload ────────────────────────────────────────────
+  const soundKey  = TYPE_SOUND_MAP[type] ?? TYPE_SOUND_MAP.default;
   const notifData: Record<string, unknown> = {
-    ...(data as Record<string, unknown>),
+    ...(rawData as Record<string, unknown>),
     type,
-    orderId:  (data as any)?.orderId  ?? (data as any)?.order_id ?? null,
-    order_id: (data as any)?.order_id ?? (data as any)?.orderId  ?? null,
+    sound:    soundKey,                                  // client plays /sounds/{soundKey}.mp3
+    order_id: (rawData as any)?.order_id ?? (rawData as any)?.orderId ?? null,
+    orderId:  (rawData as any)?.orderId  ?? (rawData as any)?.order_id ?? null,
   };
-  const deepLink  = (overrideUrl as string | undefined) ?? buildDeepLink(targetRole, type, notifData);
-  notifData.url   = deepLink;
+  const deepLink = (overrideUrl as string | undefined) ?? buildDeepLink(targetRole, type, notifData);
+  notifData.url  = deepLink;
 
-  // ── Insert DB notification row ─────────────────────────────────────────────
+  // ── Insert target DB row ──────────────────────────────────────────────────
   const { data: inserted, error: insErr } = await db
     .from('notifications')
-    .insert({
-      user_id:    targetUserId,
-      title,
-      message,
-      body:       message,
-      type,
-      data:       notifData,
-      is_read:    false,
-      sent_push:  false,
-      created_at: new Date().toISOString(),
-    })
+    .insert(makeRow(targetUserId, title, message, type, notifData))
     .select('id')
     .single();
 
@@ -181,14 +253,16 @@ export async function POST(req: NextRequest) {
   }
 
   const notifId = (inserted as { id: string }).id;
-  console.log('[notify] ✅ DB row:', notifId);
+  console.log('[notify] ✅ target DB row:', notifId);
 
-  // ── OneSignal push to target ───────────────────────────────────────────────
+  // ── OneSignal push → target ───────────────────────────────────────────────
   let sentPush = false;
   if (WEB_PUSH_ROLES.has(targetRole)) {
     const r = await sendOneSignal(
       [targetUserId], title, message,
-      { ...notifData, notification_id: notifId }, deepLink
+      { ...notifData, notification_id: notifId },
+      deepLink,
+      soundKey,
     );
     sentPush = r.success;
     if (sentPush) {
@@ -196,16 +270,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Admin fan-out ──────────────────────────────────────────────────────────
-  const alreadyForwarded = Boolean((data as any)?.forwarded_from);
-  const targetIsAdmin    = ADMIN_ROLES.includes(targetRole);
+  // ── Admin fan-out ─────────────────────────────────────────────────────────
+  const alreadyForwarded = Boolean((rawData as any)?.forwarded_from);
+  const targetIsAdmin    = ADMIN_ROLES.includes(targetRole as any);
   const shouldFanOut     = !alreadyForwarded && !targetIsAdmin && ALWAYS_FANOUT.has(type);
 
+  let adminFanoutCount = 0;
+
   if (shouldFanOut) {
+    console.log(`[notify] Fan-out → admins/superadmins for type: ${type}`);
+
     const { data: admins } = await db
       .from('profiles')
       .select('id')
-      .in('role', ADMIN_ROLES)
+      .in('role', [...ADMIN_ROLES])
       .eq('is_active', true);
 
     if (admins?.length) {
@@ -214,39 +292,40 @@ export async function POST(req: NextRequest) {
       const adminData  = { ...notifData, forwarded_from: targetUserId };
       const adminUrl   = buildDeepLink('admin', type, notifData);
 
-      const { data: adminRows } = await db.from('notifications').insert(
-        adminIds.map((id: string) => ({
-          user_id:    id,
-          title:      adminTitle,
-          message,
-          body:       message,
-          type,
-          data:       adminData,
-          is_read:    false,
-          sent_push:  false,
-          created_at: new Date().toISOString(),
-        }))
-      ).select('id');
+      // Insert all admin rows in one batch
+      const { data: adminRows } = await db
+        .from('notifications')
+        .insert(adminIds.map((id: string) => makeRow(id, adminTitle, message, type, adminData)))
+        .select('id');
 
-      console.log('[notify] ✅ admin rows:', adminIds.length);
+      adminFanoutCount = adminIds.length;
+      console.log(`[notify] ✅ admin DB rows: ${adminFanoutCount}`);
 
+      // OneSignal push → all admins in one call
       const adminPush = await sendOneSignal(
         adminIds, adminTitle, message,
-        { ...adminData, notification_id: notifId }, adminUrl
+        { ...adminData, notification_id: notifId },
+        adminUrl,
+        soundKey,
       );
 
       if (adminPush.success && adminRows?.length) {
-        await db.from('notifications')
+        await db
+          .from('notifications')
           .update({ sent_push: true })
           .in('id', (adminRows as { id: string }[]).map(r => r.id));
       }
+    } else {
+      console.warn('[notify] ⚠️ No active admins/superadmins found — check is_active in profiles');
     }
   }
 
+  // ── Response ──────────────────────────────────────────────────────────────
   return NextResponse.json({
-    ok:              true,
-    notification_id: notifId,
-    sent_push:       sentPush,
-    role:            targetRole,
+    ok:                true,
+    notification_id:   notifId,
+    sent_push:         sentPush,
+    role:              targetRole,
+    admin_fanout_count: adminFanoutCount,
   });
 }

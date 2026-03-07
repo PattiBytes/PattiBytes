@@ -9,6 +9,10 @@ import { toast } from 'react-toastify';
 import { formatDistanceToNow } from 'date-fns';
 import { getPushPermission, requestPushPermission } from '@/lib/onesignal';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface NotificationRow {
   id: string;
   title: string;
@@ -21,6 +25,10 @@ interface NotificationRow {
   read_at?: string | null;
   sent_push?: boolean;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants (module-level — never recreated)
+// ─────────────────────────────────────────────────────────────────────────────
 
 const ICON_MAP: Record<string, string> = {
   order:             '🛒',
@@ -45,6 +53,18 @@ const ICON_MAP: Record<string, string> = {
   review:            '⭐',
 };
 
+// Keys must match what /api/notify stores in notifData.sound
+// Files must exist under /public/sounds/
+const SOUND_MAP: Record<string, string> = {
+  order:   '/sounds/order.mp3',     // new_order → 'order' key
+  success: '/sounds/success.mp3',   // delivered, payment
+  notify:  '/sounds/notify.mp3',    // everything else
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function NotificationBell() {
   const { user, loading: authLoading } = useAuth();
 
@@ -55,11 +75,62 @@ export default function NotificationBell() {
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
   const [requestingPush, setRequestingPush] = useState(false);
 
-  const toastedIds    = useRef<Set<string>>(new Set());
-  // ✅ Tracks uid of last COMPLETED load — prevents double-fire in StrictMode
-  const loadedUidRef  = useRef<string | null>(null);
-  // ✅ Tracks if load is in progress — prevents concurrent fetches
-  const loadingRef    = useRef(false);
+  // ── Refs ──────────────────────────────────────────────────────────────────
+  const toastedIds   = useRef<Set<string>>(new Set());
+  const loadedUidRef = useRef<string | null>(null);   // last completed load uid
+  const loadingRef   = useRef(false);                  // prevents concurrent fetches
+  const primedRef    = useRef(false);                  // autoplay policy: primed?
+
+  // ✅ One Audio instance per sound key — created once, reused on every play
+  const audioCache = useRef<Record<string, HTMLAudioElement>>({});
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Audio helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Pre-load all sound files once on mount so they play instantly
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    Object.entries(SOUND_MAP).forEach(([key, src]) => {
+      const audio = new Audio(src);
+      audio.volume = 0.6;
+      audio.preload = 'auto';
+      audio.load();
+      audioCache.current[key] = audio;
+    });
+  }, []);
+
+  // Play a sound by its SOUND_MAP key
+  // Falls back to 'notify' if the key is missing
+  const playSound = useCallback((soundKey: string) => {
+    const key   = audioCache.current[soundKey] ? soundKey : 'notify';
+    const audio = audioCache.current[key];
+    if (!audio) return;
+
+    // Reset to start if still playing from a previous notification
+    audio.pause();
+    audio.currentTime = 0;
+    audio.play().catch(err => {
+      // DOMException: play() failed — user hasn't interacted yet
+      // Will be unblocked after first bell click (see primedRef below)
+      console.warn('[NotificationBell] audio blocked:', err.message);
+    });
+  }, []);
+
+  // Prime on first bell click — satisfies browser autoplay policy
+  // A silent play+pause counts as user-gesture interaction
+  const primeAudio = useCallback(() => {
+    if (primedRef.current || typeof window === 'undefined') return;
+    const audio = audioCache.current['notify'];
+    if (!audio) return;
+    audio.play()
+      .then(() => { audio.pause(); audio.currentTime = 0; primedRef.current = true; })
+      .catch(() => {});
+  }, []);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Push permission
+  // ─────────────────────────────────────────────────────────────────────────
 
   const canUseBrowserNotifications = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -71,11 +142,12 @@ export default function NotificationBell() {
     getPushPermission().then(setPushPermission);
   }, [canUseBrowserNotifications]);
 
-  // ── Data loader ────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // Data loader
+  // ─────────────────────────────────────────────────────────────────────────
+
   const loadNotifications = useCallback(async (uid: string, force = false) => {
-    // Skip if already loaded for this uid — unless forced (e.g. channel error)
     if (!force && loadedUidRef.current === uid) return;
-    // Skip if concurrent fetch already running
     if (loadingRef.current) return;
 
     loadingRef.current = true;
@@ -83,14 +155,9 @@ export default function NotificationBell() {
 
     try {
       const { data: sessionResult } = await supabase.auth.getSession();
-      const session = sessionResult?.session;
-
-      if (!session) {
+      if (!sessionResult?.session) {
         console.warn('[NotificationBell] No session — retrying in 2s');
-        setTimeout(() => {
-          loadingRef.current = false;
-          loadNotifications(uid, true);
-        }, 2000);
+        setTimeout(() => { loadingRef.current = false; loadNotifications(uid, true); }, 2000);
         return;
       }
 
@@ -111,26 +178,24 @@ export default function NotificationBell() {
       setNotifications(rows);
       setUnreadCount(rows.filter(n => !n.is_read).length);
       loadedUidRef.current = uid;
-
-      console.log('[NotificationBell] loaded:', rows.length, 'notifications');
+      console.log('[NotificationBell] loaded:', rows.length);
     } finally {
       setLoading(false);
       loadingRef.current = false;
     }
   }, []);
 
-  // Reset on uid change so next mount re-fetches
+  // Reset on uid change
   useEffect(() => {
-    return () => {
-      loadedUidRef.current = null;
-      loadingRef.current   = false;
-    };
+    return () => { loadedUidRef.current = null; loadingRef.current = false; };
   }, [user?.id]);
 
-  // ── Realtime subscription + initial load ──────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // Realtime subscription
+  // ─────────────────────────────────────────────────────────────────────────
+
   useEffect(() => {
-    if (authLoading) return;
-    if (!user?.id) return;
+    if (authLoading || !user?.id) return;
     const uid = user.id;
 
     void loadNotifications(uid);
@@ -139,44 +204,43 @@ export default function NotificationBell() {
       .channel(`notif-bell:${uid}`)
       .on(
         'postgres_changes',
-        {
-          event:  'INSERT',
-          schema: 'public',
-          table:  'notifications',
-          filter: `user_id=eq.${uid}`,
-        },
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` },
         (payload) => {
           const n = payload.new as NotificationRow;
-          console.log('[NotificationBell] realtime INSERT:', n.type, n.title);
+          console.log('[NotificationBell] INSERT:', n.type, n.title);
 
-          // ── Add to local state ─────────────────────────────────────────────
+          // Deduplicate
           setNotifications(prev => {
             if (prev.some(x => x.id === n.id)) return prev;
             return [n, ...prev].slice(0, 50);
           });
           setUnreadCount(c => c + 1);
 
-          // ── In-app toast (tab open) ────────────────────────────────────────
+          // ✅ Sound — /api/notify stores the sound key in n.data.sound
+          // e.g. new_order → 'order', delivered → 'success', rest → 'notify'
+          const soundKey = (n.data as any)?.sound ?? 'notify';
+          playSound(soundKey);
+
+          // Toast
           if (!toastedIds.current.has(n.id)) {
             toastedIds.current.add(n.id);
             toast.info(
-              <div>
-                <p className="font-semibold text-sm">{n.title}</p>
-                {(n.body ?? n.message) && (
-                  <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
-                    {n.body ?? n.message}
-                  </p>
-                )}
+              <div className="flex items-start gap-2">
+                <span className="text-xl shrink-0">{ICON_MAP[n.type] ?? '🔔'}</span>
+                <div className="min-w-0">
+                  <p className="font-bold text-sm leading-tight">{n.title}</p>
+                  {(n.body ?? n.message) && (
+                    <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
+                      {n.body ?? n.message}
+                    </p>
+                  )}
+                </div>
               </div>,
-              {
-                position:  'top-right',
-                autoClose: 6000,
-                icon: () => <span className="text-xl">{ICON_MAP[n.type] ?? '🔔'}</span>,
-              }
+              { position: 'top-right', autoClose: 6000 }
             );
           }
 
-          // ── Foreground browser notification (tab open but not focused) ────
+          // Native browser notification (tab in background)
           if (
             canUseBrowserNotifications &&
             Notification.permission === 'granted' &&
@@ -187,36 +251,37 @@ export default function NotificationBell() {
                 body:  n.body ?? n.message ?? '',
                 icon:  '/icon-192.png',
                 badge: '/icon-192.png',
-                tag:   n.id,  // ✅ prevents duplicate notifications
+                tag:   n.id,
               });
-            } catch { /* SW handles it instead */ }
+            } catch { /* SW handles it */ }
           }
-        }
+        },
       )
       .subscribe((status, err) => {
-        console.log(`[NotificationBell] ${status}`, err ?? '');
+        console.log(`[NotificationBell] channel: ${status}`, err ?? '');
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          // Force reload on reconnect
           loadedUidRef.current = null;
           void loadNotifications(uid, true);
         }
       });
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id, authLoading, loadNotifications, canUseBrowserNotifications]);
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, authLoading, loadNotifications, canUseBrowserNotifications, playSound]);
 
-  // Update page title when dropdown closed with unread
+  // ─────────────────────────────────────────────────────────────────────────
+  // Page title badge
+  // ─────────────────────────────────────────────────────────────────────────
+
   useEffect(() => {
-    if (!showDropdown && unreadCount > 0) {
-      document.title = `(${unreadCount}) PattiBytes Express`;
-    } else {
-      document.title = 'PattiBytes Express';
-    }
+    document.title = !showDropdown && unreadCount > 0
+      ? `(${unreadCount}) PattiBytes Express`
+      : 'PattiBytes Express';
   }, [showDropdown, unreadCount]);
 
-  // ── Actions ────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // Actions
+  // ─────────────────────────────────────────────────────────────────────────
+
   const markAsRead = async (id: string) => {
     const { error } = await supabase
       .from('notifications')
@@ -262,11 +327,18 @@ export default function NotificationBell() {
 
   if (!user) return null;
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
+
   return (
     <div className="relative">
-      {/* Bell button */}
+      {/* Bell button — primes audio on first click */}
       <button
-        onClick={() => setShowDropdown(v => !v)}
+        onClick={() => {
+          primeAudio();                        // ✅ satisfies browser autoplay policy
+          setShowDropdown(v => !v);
+        }}
         className="relative p-1.5 sm:p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
@@ -281,10 +353,8 @@ export default function NotificationBell() {
 
       {showDropdown && (
         <>
-          {/* Backdrop */}
           <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
 
-          {/* Dropdown */}
           <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 max-h-[80vh] overflow-hidden flex flex-col">
 
             {/* Header */}
@@ -315,7 +385,7 @@ export default function NotificationBell() {
               </div>
             </div>
 
-            {/* Push permission banner */}
+            {/* Push permission banners */}
             {canUseBrowserNotifications && pushPermission === 'default' && (
               <div className="bg-violet-50 border-b border-violet-100 px-3 py-2.5 flex items-center gap-2.5">
                 <BellRing className="w-4 h-4 text-violet-600 shrink-0" />
@@ -345,13 +415,11 @@ export default function NotificationBell() {
             {canUseBrowserNotifications && pushPermission === 'granted' && (
               <div className="bg-green-50 border-b px-3 py-2 flex items-center gap-2">
                 <Bell className="w-4 h-4 text-green-600 shrink-0" />
-                <p className="text-xs text-green-700 font-semibold">
-                  Push notifications enabled ✓
-                </p>
+                <p className="text-xs text-green-700 font-semibold">Push notifications enabled ✓</p>
               </div>
             )}
 
-            {/* List */}
+            {/* Notification list */}
             <div className="overflow-y-auto flex-1">
               {loading ? (
                 <div className="p-8 text-center text-gray-400">
