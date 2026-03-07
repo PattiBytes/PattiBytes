@@ -1,13 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+// ✅ Static top-level import — same module instance as AuthContext, no race condition
+import { supabase } from '@/lib/supabase';
+
 /**
- * ✅ CANONICAL sendNotification — import ONLY from here.
- * Delete or replace all imports from:
- *   - @/lib/notificationHelper
- *   - @/services/notifications
- *   - @/services/notificationService
- *   - @/lib/sendDbNotification
- *   - @/lib/notificationService
+ * CANONICAL sendNotification — import ONLY from here across the entire app.
+ * Routes through /api/notify which handles:
+ *   - DB insert (service role — bypasses RLS)
+ *   - OneSignal web push for ALL roles including customer
+ *   - Expo mobile push via DB webhook
+ *   - Admin fan-out
+ *   - Walk-in orders (null userId) silently skipped
  */
 export async function sendNotification(
   userId: string | null,
@@ -29,25 +32,24 @@ export async function sendNotification(
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
-    // ── Auth header ──────────────────────────────────────────────────────────
-    // Server-side: NOTIFY_INTERNAL_SECRET is available as env var
-    // Client-side: use Supabase session JWT
-    const secret = typeof process !== 'undefined' ? process.env?.NOTIFY_INTERNAL_SECRET : undefined;
-
-    if (secret) {
+    if (typeof window === 'undefined') {
+      // ── Server-side: API routes, Server Actions ──────────────────────────
+      const secret = process.env.NOTIFY_INTERNAL_SECRET;
+      if (!secret) {
+        console.error('[notify] NOTIFY_INTERNAL_SECRET not set — cannot send server-side');
+        return false;
+      }
       headers['x-internal-secret'] = secret;
     } else {
-      try {
-        const { supabase } = await import('@/lib/supabase');
-        const { data: s }  = await supabase.auth.getSession();
-        const jwt = s?.session?.access_token;
-        if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
-      } catch { /* no session */ }
-    }
-
-    if (!headers['Authorization'] && !headers['x-internal-secret']) {
-      console.error('[notify] No auth — cannot call /api/notify');
-      return false;
+      // ── Client-side: browser ─────────────────────────────────────────────
+      // ✅ Static import guarantees same Supabase instance as AuthContext
+      const { data: sessionData } = await supabase.auth.getSession();
+      const jwt = sessionData?.session?.access_token;
+      if (!jwt) {
+        console.error('[notify] No session JWT — user not logged in or session expired');
+        return false;
+      }
+      headers['Authorization'] = `Bearer ${jwt}`;
     }
 
     const base = typeof window !== 'undefined'
@@ -57,7 +59,7 @@ export async function sendNotification(
     const res = await fetch(`${base}/api/notify`, {
       method:  'POST',
       headers,
-      body:    JSON.stringify({
+      body: JSON.stringify({
         targetUserId: userId,
         title,
         message,
@@ -73,7 +75,13 @@ export async function sendNotification(
     }
 
     const result = await res.json().catch(() => ({}));
-    console.log('[notify] ✅ sent:', { userId, type, notifId: result?.notification_id, push: result?.sent_push });
+    console.log('[notify] ✅ sent:', {
+      userId,
+      type,
+      notifId: result?.notification_id,
+      push:    result?.sent_push,
+      role:    result?.role,
+    });
     return true;
   } catch (e: any) {
     console.error('[notify] failed:', e?.message);
@@ -81,7 +89,8 @@ export async function sendNotification(
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+/* ── Helpers ──────────────────────────────────────────────────────────────── */
+
 export function getCustomerDisplayName(
   order: { customer_notes?: string | null; customer_id?: string | null },
   customer?: { fullname?: string | null; full_name?: string | null } | null

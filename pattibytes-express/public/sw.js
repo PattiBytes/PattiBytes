@@ -1,40 +1,39 @@
-/* pattibytes-express service worker v6 — merged with OneSignal */
+/* pattibytes-express service worker v7 */
 
-// ✅ MUST be first line
+// ✅ MUST be first — gives OneSignal push + notificationclick handlers
 importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-// ✅ FIX: message handler MUST be at top level (not inside install/activate)
-// This resolves: "Event handler of 'message' event must be added on initial evaluation"
+// ✅ MUST be top-level synchronous — fixes "Event handler of 'message' event
+//    must be added on the initial evaluation of worker script" warning
 self.addEventListener('message', (event) => {
-  if (event.data?.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-const CACHE_NAME     = 'pattibytes-express-v6';
+/* ── Caching ──────────────────────────────────────────────────────────────── */
+const CACHE_NAME     = 'pattibytes-express-v7';
 const APP_SHELL_URLS = ['/', '/icon-192.png', '/icon-512.png', '/favicon.ico'];
 
 const isSameOrigin   = (url) => url.origin === self.location.origin;
 const isSupabaseLike = (url) => {
   const h = url.hostname;
-  return h.endsWith('.supabase.co') || h.endsWith('.workers.dev');
+  return h.endsWith('.supabase.co') || h.endsWith('.pattibytes.com') || h.endsWith('.workers.dev');
 };
-const isApiRequest   = (url) => isSameOrigin(url) && url.pathname.startsWith('/api/');
-const isAuthPage     = (url) => isSameOrigin(url) && (
+const isApiRequest  = (url) => isSameOrigin(url) && url.pathname.startsWith('/api/');
+const isAuthPage    = (url) => isSameOrigin(url) && (
   url.pathname.startsWith('/login')  ||
   url.pathname.startsWith('/signup') ||
   url.pathname.startsWith('/auth/')
 );
-const isNextStatic   = (url) => isSameOrigin(url) && (
+const isNextStatic  = (url) => isSameOrigin(url) && (
   url.pathname.startsWith('/_next/static/') ||
   url.pathname.startsWith('/assets/')
 );
-const isStaticAsset  = (url) => isSameOrigin(url) && (
+const isStaticAsset = (url) => isSameOrigin(url) && (
   url.pathname.startsWith('/icon-') ||
   url.pathname === '/favicon.ico'   ||
   /\.(png|jpe?g|webp|svg|gif|ico)$/.test(url.pathname)
 );
-const isAudio        = (url) =>
+const isAudio       = (url) =>
   url.pathname.startsWith('/sounds/') || url.pathname.endsWith('.mp3');
 
 async function cacheFirst(request) {
@@ -87,10 +86,11 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
+  // Pass through: external (OneSignal CDN), supabase, audio, api, auth pages
   if (
-    !isSameOrigin(url) ||
-    isAudio(url)       ||
-    isApiRequest(url)  ||
+    !isSameOrigin(url)  ||
+    isAudio(url)        ||
+    isApiRequest(url)   ||
     isAuthPage(url)
   ) {
     event.respondWith(
@@ -114,6 +114,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Default: network with cache fallback
   event.respondWith((async () => {
     try { return await fetch(req); }
     catch {
@@ -125,4 +126,4 @@ self.addEventListener('fetch', (event) => {
   })());
 });
 
-// push + notificationclick handled by OneSignalSDK.sw.js (imported above)
+// ✅ push + notificationclick handled by OneSignalSDK.sw.js (imported above)
