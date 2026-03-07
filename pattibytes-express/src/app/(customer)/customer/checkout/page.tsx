@@ -643,17 +643,56 @@ if (m2) {
 
       // ✅ Notify customer + auto fan-out to admins via /api/notify
       const orderNum = (order as any).order_number ?? (order as any).id?.slice(0, 8) ?? '';
-      sendNotification(                        // fire-and-forget — don't await
+      const notifData = {
+        order_id:     order.id,
+        order_number: orderNum,
+        status:       'pending',
+      };
+
+      // 1️⃣ Customer — also auto fan-out to admins/superadmins via /api/notify
+      sendNotification(
         user.id,
         '🎉 Order Placed!',
-        `Your order #${orderNum} has been placed successfully. We'll confirm it shortly.`,
+        `Your order #${orderNum} has been placed. We'll confirm it shortly.`,
         'new_order',
-        {
-          order_id:     order.id,
-          order_number: orderNum,
-          status:       'pending',
-        }
+        notifData,
       ).catch(console.error);
+
+      //  2️⃣ Superadmins — explicit in case fan-out config changes
+supabase
+  .from('profiles')
+  .select('id')
+  .eq('role', 'superadmin')
+  .eq('is_active', true)
+  .then(({ data: superadmins }) => {
+    superadmins?.forEach(({ id }) => {
+      sendNotification(
+        id,
+        `[SUPERADMIN] 🛒 New Order #${orderNum}`,
+        `New order placed by customer. Total: ₹${round2(finalTotal)}`,
+        'new_order',
+        { ...notifData, forwarded_from: user.id },
+      ).catch(console.error);
+    });
+  });
+
+
+      //3️⃣ Merchant — look up merchant user_id then notify
+      supabase
+        .from('merchants')
+        .select('user_id')
+        .eq('id', merchantCheck.id)
+        .maybeSingle()
+        .then(({ data: m }) => {
+          if (!m?.user_id) return;
+          sendNotification(
+            m.user_id,
+            `🛒 New Order #${orderNum}`,
+            `A new order has been placed. Please confirm it.`,
+            'new_order',
+            notifData,
+          ).catch(console.error);
+        });
 
       orderIdRef.current = order.id;
       startLiveWatch();

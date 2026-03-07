@@ -40,58 +40,103 @@ function formatAddr(a: SavedAddress): string {
   ].filter(Boolean).join(', ')
 }
 const API_BASE = 'https://pbexpress.pattibytes.com'
-async function sendOrderNotification(
-  userId: string,
-  orderNumber: number | string,
-  orderId: string,
-  orderType: OrderType,
-) {
-  const typeLabel = orderType === 'custom' ? 'Custom order' : 'Your order'
-  await supabase.from('notifications').insert({
-    user_id:    userId,
-    title:      '🎉 Order Placed Successfully!',
-    message:    `${typeLabel} #${orderNumber} has been placed and is being processed.`,
-    type:       'order',
-    data:       { order_id: orderId, order_number: String(orderNumber), status: 'pending' },
-    body:       `${typeLabel} #${orderNumber} has been placed and is being processed.`,
-    is_read:    false,
-    sent_push:  false,
-    created_at: new Date().toISOString(),
-  })
-}
 
 async function notifyOrderPlaced(
-  userId: string,
-  orderId: string,
-  orderNum: string | null,
+  userId:     string,
+  orderId:    string,
+  orderNum:   string | null,
+  merchantId: string | null,
 ): Promise<void> {
   try {
     const { data: { session } } = await supabase.auth.getSession()
     const jwt = session?.access_token
     if (!jwt) return
 
-    await fetch(`${API_BASE}/api/notify`, {
-      method:  'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${jwt}`,
-      },
+    const num     = orderNum ?? orderId.slice(0, 8)
+    const headers = {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${jwt}`,
+    }
+    const notifData = {
+      order_id:     orderId,
+      order_number: num,
+      status:       'pending',
+    }
+
+    // ── Build all promises ────────────────────────────────────────────────────
+
+    // 1️⃣ Customer → /api/notify auto fan-out also covers admins/superadmins
+    const customerPromise = fetch(`${API_BASE}/api/notify`, {
+      method: 'POST',
+      headers,
       body: JSON.stringify({
         targetUserId: userId,
         title:        '🎉 Order Placed!',
-        message:      `Your order #${orderNum ?? orderId.slice(0, 8)} has been placed. We'll confirm it shortly.`,
+        message:      `Your order #${num} has been placed. We'll confirm it shortly.`,
         type:         'new_order',
-        data: {
-          order_id:     orderId,
-          order_number: orderNum ?? orderId.slice(0, 8),
-          status:       'pending',
-        },
+        data:         notifData,
       }),
     })
+
+    // 2️⃣ Merchant — look up user_id then notify
+    const merchantPromise = (async () => {
+      if (!merchantId) return
+      const { data: m } = await supabase
+        .from('merchants')
+        .select('user_id')
+        .eq('id', merchantId)
+        .maybeSingle()
+      if (!m?.user_id) return
+      await fetch(`${API_BASE}/api/notify`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          targetUserId: m.user_id,
+          title:        `🛒 New Order #${num}`,
+          message:      'A new order has been placed. Please confirm it.',
+          type:         'new_order',
+          data:         notifData,
+        }),
+      })
+    })()
+
+    // 3️⃣ Admins/Superadmins — explicit query, guaranteed regardless of fan-out
+    const adminPromise = (async () => {
+      const { data: admins } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('role', ['admin', 'superadmin'])
+        .eq('is_active', true)
+
+      if (!admins?.length) return
+
+      await Promise.allSettled(
+        admins.map(({ id }) =>
+          fetch(`${API_BASE}/api/notify`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              targetUserId: id,
+              title:        `🛒 New Order #${num}`,
+              message:      `A new ${merchantId ? 'restaurant' : 'custom/store'} order has been placed.`,
+              type:         'new_order',
+              data:         {
+                ...notifData,
+                forwarded_from: userId,   // prevents double fan-out loop in /api/notify
+              },
+            }),
+          })
+        )
+      )
+    })()
+
+    // Fire all three in parallel
+    await Promise.allSettled([customerPromise, merchantPromise, adminPromise])
   } catch (e) {
     console.warn('[notifyOrderPlaced]', e)
   }
 }
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function CheckoutPage() {
   const router              = useRouter()
@@ -556,10 +601,12 @@ const handlePlaceOrder = async () => {
     if (error) throw error
 
     // ✅ ADD THIS — fire-and-forget, doesn't block navigation
-    notifyOrderPlaced(
+ notifyOrderPlaced(
+  
       user.id,
       order.id,
       (order as any).order_number ?? null,
+      orderType === 'restaurant' ? (cart.merchant_id ?? null) : null,  // ← added
     )
 
     // ── custom_order_requests table — full custom flow record ─────────────────
