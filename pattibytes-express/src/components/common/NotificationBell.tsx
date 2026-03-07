@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { Bell, X, Trash2, CheckCheck, BellRing, BellOff } from 'lucide-react';
@@ -42,6 +42,7 @@ const ICON_MAP: Record<string, string> = {
   custom:            '✦',
   approval:          '👤',
   refund:            '↩️',
+  review:            '⭐',
 };
 
 export default function NotificationBell() {
@@ -54,7 +55,11 @@ export default function NotificationBell() {
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
   const [requestingPush, setRequestingPush] = useState(false);
 
-  const toastedIds = useRef<Set<string>>(new Set());
+  const toastedIds    = useRef<Set<string>>(new Set());
+  // ✅ Tracks uid of last COMPLETED load — prevents double-fire in StrictMode
+  const loadedUidRef  = useRef<string | null>(null);
+  // ✅ Tracks if load is in progress — prevents concurrent fetches
+  const loadingRef    = useRef(false);
 
   const canUseBrowserNotifications = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -67,52 +72,62 @@ export default function NotificationBell() {
   }, [canUseBrowserNotifications]);
 
   // ── Data loader ────────────────────────────────────────────────────────────
-const loadedRef = useRef<string | null>(null);
-  const loadNotifications = useCallback(async (uid: string) => {
-     if (loadedRef.current === uid) return;
-  loadedRef.current = uid;
+  const loadNotifications = useCallback(async (uid: string, force = false) => {
+    // Skip if already loaded for this uid — unless forced (e.g. channel error)
+    if (!force && loadedUidRef.current === uid) return;
+    // Skip if concurrent fetch already running
+    if (loadingRef.current) return;
+
+    loadingRef.current = true;
     setLoading(true);
+
     try {
-      // ✅ Verify session before querying — fixes "sessionData not defined" TS error
       const { data: sessionResult } = await supabase.auth.getSession();
       const session = sessionResult?.session;
 
       if (!session) {
-        console.warn('[NotificationBell] No active session — skipping query');
+        console.warn('[NotificationBell] No session — retrying in 2s');
+        setTimeout(() => {
+          loadingRef.current = false;
+          loadNotifications(uid, true);
+        }, 2000);
         return;
       }
 
-      const { data, error, status } = await supabase
+      const { data, error } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', uid)
         .order('created_at', { ascending: false })
         .limit(50);
 
-      console.log('[NotificationBell] load:', {
-        uid,
-        count:      data?.length ?? 0,
-        status,
-        error:      error?.message ?? null,
-        hasSession: true,
-        sessionUid: session.user.id,
-      });
+      if (error) {
+        console.error('[NotificationBell] load error:', error.message);
+        loadingRef.current = false;
+        return;
+      }
 
-      if (error) { console.error('[NotificationBell] load error:', error); return; }
-      setNotifications((data as NotificationRow[]) ?? []);
-      setUnreadCount((data ?? []).filter((n: NotificationRow) => !n.is_read).length);
+      const rows = (data as NotificationRow[]) ?? [];
+      setNotifications(rows);
+      setUnreadCount(rows.filter(n => !n.is_read).length);
+      loadedUidRef.current = uid;
+
+      console.log('[NotificationBell] loaded:', rows.length, 'notifications');
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   }, []);
 
-  // Reset loadedRef on unmount so remount can reload
-useEffect(() => {
-  return () => { loadedRef.current = null; };
-}, [user?.id]);
+  // Reset on uid change so next mount re-fetches
+  useEffect(() => {
+    return () => {
+      loadedUidRef.current = null;
+      loadingRef.current   = false;
+    };
+  }, [user?.id]);
 
-  // ── Realtime subscription ──────────────────────────────────────────────────
-  // ✅ authLoading guard prevents firing before session is ready
+  // ── Realtime subscription + initial load ──────────────────────────────────
   useEffect(() => {
     if (authLoading) return;
     if (!user?.id) return;
@@ -121,7 +136,7 @@ useEffect(() => {
     void loadNotifications(uid);
 
     const channel = supabase
-      .channel(`notif:${uid}`)
+      .channel(`notif-bell:${uid}`)
       .on(
         'postgres_changes',
         {
@@ -132,58 +147,74 @@ useEffect(() => {
         },
         (payload) => {
           const n = payload.new as NotificationRow;
-          console.log('[NotificationBell] realtime INSERT:', n.id, n.type, n.title);
+          console.log('[NotificationBell] realtime INSERT:', n.type, n.title);
 
+          // ── Add to local state ─────────────────────────────────────────────
           setNotifications(prev => {
             if (prev.some(x => x.id === n.id)) return prev;
             return [n, ...prev].slice(0, 50);
           });
           setUnreadCount(c => c + 1);
 
+          // ── In-app toast (tab open) ────────────────────────────────────────
           if (!toastedIds.current.has(n.id)) {
             toastedIds.current.add(n.id);
             toast.info(
               <div>
                 <p className="font-semibold text-sm">{n.title}</p>
                 {(n.body ?? n.message) && (
-                  <p className="text-xs text-gray-600 mt-0.5">{n.body ?? n.message}</p>
+                  <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
+                    {n.body ?? n.message}
+                  </p>
                 )}
               </div>,
               {
                 position:  'top-right',
-                autoClose: 5000,
+                autoClose: 6000,
                 icon: () => <span className="text-xl">{ICON_MAP[n.type] ?? '🔔'}</span>,
               }
             );
           }
 
+          // ── Foreground browser notification (tab open but not focused) ────
           if (
             canUseBrowserNotifications &&
             Notification.permission === 'granted' &&
-            document.visibilityState === 'hidden'
+            document.visibilityState !== 'visible'
           ) {
-            new Notification(n.title, {
-              body:  n.body ?? n.message ?? '',
-              icon:  '/icon-192.png',
-              badge: '/icon-192.png',
-            });
+            try {
+              new Notification(n.title, {
+                body:  n.body ?? n.message ?? '',
+                icon:  '/icon-192.png',
+                badge: '/icon-192.png',
+                tag:   n.id,  // ✅ prevents duplicate notifications
+              });
+            } catch { /* SW handles it instead */ }
           }
         }
       )
       .subscribe((status, err) => {
-        console.log(`[NotificationBell] realtime ${status}`, err ?? '');
+        console.log(`[NotificationBell] ${status}`, err ?? '');
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[NotificationBell] channel error — reloading');
-          void loadNotifications(uid);
+          // Force reload on reconnect
+          loadedUidRef.current = null;
+          void loadNotifications(uid, true);
         }
       });
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user?.id, authLoading, loadNotifications, canUseBrowserNotifications]);
 
+  // Update page title when dropdown closed with unread
   useEffect(() => {
-    if (showDropdown) document.title = 'PattiBytes Express';
-  }, [showDropdown]);
+    if (!showDropdown && unreadCount > 0) {
+      document.title = `(${unreadCount}) PattiBytes Express`;
+    } else {
+      document.title = 'PattiBytes Express';
+    }
+  }, [showDropdown, unreadCount]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
   const markAsRead = async (id: string) => {
@@ -191,7 +222,7 @@ useEffect(() => {
       .from('notifications')
       .update({ is_read: true, read_at: new Date().toISOString() })
       .eq('id', id);
-    if (error) { console.error('markAsRead:', error); return; }
+    if (error) return;
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     setUnreadCount(c => Math.max(0, c - 1));
   };
@@ -222,8 +253,8 @@ useEffect(() => {
     try {
       const granted = await requestPushPermission();
       setPushPermission(granted ? 'granted' : 'denied');
-      if (granted) toast.success('Push notifications enabled!');
-      else         toast.warn('Push permission denied — enable in browser settings');
+      if (granted) toast.success('🔔 Push notifications enabled!');
+      else         toast.warn('Push blocked — enable in browser Settings');
     } finally {
       setRequestingPush(false);
     }
@@ -233,10 +264,11 @@ useEffect(() => {
 
   return (
     <div className="relative">
+      {/* Bell button */}
       <button
         onClick={() => setShowDropdown(v => !v)}
         className="relative p-1.5 sm:p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
-        aria-label="Notifications"
+        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
         <Bell size={20} className="sm:hidden" />
         <Bell size={24} className="hidden sm:block" />
@@ -249,11 +281,15 @@ useEffect(() => {
 
       {showDropdown && (
         <>
+          {/* Backdrop */}
           <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
+
+          {/* Dropdown */}
           <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 max-h-[80vh] overflow-hidden flex flex-col">
 
+            {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b bg-white sticky top-0 z-10">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm">
                 Notifications
                 {unreadCount > 0 && (
                   <span className="bg-red-500 text-white text-xs font-black px-2 py-0.5 rounded-full">
@@ -263,25 +299,35 @@ useEffect(() => {
               </h3>
               <div className="flex items-center gap-2">
                 {unreadCount > 0 && (
-                  <button onClick={markAllAsRead} className="flex items-center gap-1 text-xs text-primary hover:underline font-semibold">
+                  <button
+                    onClick={markAllAsRead}
+                    className="flex items-center gap-1 text-xs text-primary hover:underline font-semibold"
+                  >
                     <CheckCheck size={13} /> All read
                   </button>
                 )}
-                <button onClick={() => setShowDropdown(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded">
+                <button
+                  onClick={() => setShowDropdown(false)}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded"
+                >
                   <X size={18} />
                 </button>
               </div>
             </div>
 
+            {/* Push permission banner */}
             {canUseBrowserNotifications && pushPermission === 'default' && (
               <div className="bg-violet-50 border-b border-violet-100 px-3 py-2.5 flex items-center gap-2.5">
                 <BellRing className="w-4 h-4 text-violet-600 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-violet-900">Enable push notifications</p>
-                  <p className="text-xs text-violet-700">Get updates even when the tab is closed</p>
+                  <p className="text-xs text-violet-700">Get updates even when tab is closed</p>
                 </div>
-                <button onClick={handleEnablePush} disabled={requestingPush}
-                  className="shrink-0 bg-violet-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition">
+                <button
+                  onClick={handleEnablePush}
+                  disabled={requestingPush}
+                  className="shrink-0 bg-violet-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-violet-700 disabled:opacity-50 transition"
+                >
                   {requestingPush ? 'Enabling…' : 'Enable'}
                 </button>
               </div>
@@ -290,22 +336,27 @@ useEffect(() => {
             {canUseBrowserNotifications && pushPermission === 'denied' && (
               <div className="bg-gray-50 border-b px-3 py-2 flex items-center gap-2">
                 <BellOff className="w-4 h-4 text-gray-400 shrink-0" />
-                <p className="text-xs text-gray-500">Push blocked — allow in browser Settings → Site Settings</p>
+                <p className="text-xs text-gray-500">
+                  Push blocked — allow in browser Settings → Site Settings
+                </p>
               </div>
             )}
 
             {canUseBrowserNotifications && pushPermission === 'granted' && (
               <div className="bg-green-50 border-b px-3 py-2 flex items-center gap-2">
                 <Bell className="w-4 h-4 text-green-600 shrink-0" />
-                <p className="text-xs text-green-700 font-semibold">Push notifications enabled ✓</p>
+                <p className="text-xs text-green-700 font-semibold">
+                  Push notifications enabled ✓
+                </p>
               </div>
             )}
 
+            {/* List */}
             <div className="overflow-y-auto flex-1">
               {loading ? (
                 <div className="p-8 text-center text-gray-400">
                   <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                  Loading…
+                  <p className="text-sm">Loading…</p>
                 </div>
               ) : notifications.length === 0 ? (
                 <div className="p-10 text-center">
@@ -316,27 +367,44 @@ useEffect(() => {
               ) : (
                 <div className="divide-y divide-gray-100">
                   {notifications.map(n => (
-                    <div key={n.id}
+                    <div
+                      key={n.id}
                       onClick={() => !n.is_read && markAsRead(n.id)}
-                      className={`px-4 py-3 hover:bg-gray-50 transition cursor-pointer group relative ${!n.is_read ? 'bg-blue-50/60' : ''}`}>
+                      className={`px-4 py-3 hover:bg-gray-50 transition cursor-pointer group relative ${
+                        !n.is_read ? 'bg-blue-50/60' : ''
+                      }`}
+                    >
                       <div className="flex items-start gap-3">
-                        <span className="text-xl shrink-0 mt-0.5">{ICON_MAP[n.type] ?? '🔔'}</span>
+                        <span className="text-xl shrink-0 mt-0.5">
+                          {ICON_MAP[n.type] ?? '🔔'}
+                        </span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
-                            <p className="font-semibold text-gray-900 text-sm line-clamp-1">{n.title}</p>
-                            {!n.is_read && <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-1.5" />}
+                            <p className="font-semibold text-gray-900 text-sm line-clamp-1">
+                              {n.title}
+                            </p>
+                            {!n.is_read && (
+                              <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-1.5" />
+                            )}
                           </div>
                           {(n.body ?? n.message) && (
-                            <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{n.body ?? n.message}</p>
+                            <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
+                              {n.body ?? n.message}
+                            </p>
                           )}
                           <div className="flex items-center justify-between mt-1.5">
                             <span className="text-[10px] text-gray-400">
                               {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
                             </span>
                             <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition">
-                              {n.sent_push && <span title="Push sent" className="text-[10px] text-violet-400">📤</span>}
-                              <button onClick={e => deleteNotification(n.id, e)}
-                                className="text-red-400 hover:text-red-600 p-0.5 rounded transition" aria-label="Delete">
+                              {n.sent_push && (
+                                <span title="Push sent" className="text-[10px] text-violet-400">📤</span>
+                              )}
+                              <button
+                                onClick={e => deleteNotification(n.id, e)}
+                                className="text-red-400 hover:text-red-600 p-0.5 rounded transition"
+                                aria-label="Delete notification"
+                              >
                                 <Trash2 size={12} />
                               </button>
                             </div>
@@ -351,7 +419,9 @@ useEffect(() => {
 
             {notifications.length > 0 && (
               <div className="px-4 py-2.5 border-t bg-gray-50 text-center">
-                <p className="text-xs text-gray-400">Showing last {notifications.length} notifications</p>
+                <p className="text-xs text-gray-400">
+                  Showing last {notifications.length} notifications
+                </p>
               </div>
             )}
           </div>

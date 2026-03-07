@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
-import { sendNotification } from '@/lib/notificationHelper';
+import { sendNotification } from '@/utils/notifications';
 
 import {
   detectStyle, makeCols, normalizeOrder,

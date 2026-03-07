@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
 
+// ✅ Re-export canonical sendNotification — no local duplicate
+export { sendNotification } from '@/utils/notifications';
+
 export interface NotificationRow {
   id: string;
   user_id: string;
@@ -15,69 +18,7 @@ export interface NotificationRow {
   sent_push?: boolean;
 }
 
-// ── Core send — routes through /api/notify (server-side, bypasses RLS) ────────
-export async function sendNotification(
-  userId: string,
-  title: string,
-  message: string,
-  type: string,
-  data: Record<string, any> = {},
-  opts?: { url?: string }
-): Promise<boolean> {
-  if (!userId || !title) return false;
-
-  try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-
-    // Client-side: use JWT from session
-    if (typeof window !== 'undefined') {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const jwt = sessionData?.session?.access_token;
-      if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
-    }
-
-    // Server-side: fall back to internal secret (no browser session available)
-    if (!headers['Authorization']) {
-      const secret = process.env.NOTIFY_INTERNAL_SECRET;
-      if (secret) {
-        headers['x-internal-secret'] = secret;
-      } else {
-        console.warn('[sendNotification] No session and no NOTIFY_INTERNAL_SECRET — skipping');
-        return false;
-      }
-    }
-
-    // Use absolute URL on server-side, relative on client
-    const baseUrl = typeof window !== 'undefined'
-      ? ''
-      : (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://pbexpress.pattibytes.com');
-
-    const res = await fetch(`${baseUrl}/api/notify`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        targetUserId: userId,
-        title,
-        message,
-        type,
-        data: { ...data, url: opts?.url },
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error('[sendNotification] API error:', res.status, err);
-      return false;
-    }
-
-    return true;
-  } catch (e) {
-    console.error('[sendNotification] failed:', e);
-    return false;
-  }
-}
-
-// ── NotificationService class (CRUD) ─────────────────────────────────────────
+// ── NotificationService class (CRUD only — no sending) ───────────────────────
 class NotificationService {
   async getUnreadCount(userId: string): Promise<number> {
     const { count, error } = await supabase
@@ -125,19 +66,31 @@ class NotificationService {
     if (error) throw error;
   }
 
-  subscribeToNotifications(userId: string, onInsert: (row: NotificationRow) => void) {
+  subscribeToNotifications(
+    userId: string,
+    onInsert: (row: NotificationRow) => void
+  ): () => void {
     const channel = supabase
-      .channel(`notif:${userId}`)
+      .channel(`notif-service:${userId}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+        {
+          event:  'INSERT',
+          schema: 'public',
+          table:  'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
         payload => onInsert(payload.new as NotificationRow)
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }
 
-  async sendOrderNotification(orderId: string, status: string) {
+  // ── Order notification helper ─────────────────────────────────────────────
+  async sendOrderNotification(orderId: string, status: string): Promise<void> {
+    // Dynamic import avoids circular dep at module level
+    const { sendNotification } = await import('@/utils/notifications');
+
     const { data: order, error } = await supabase
       .from('orders')
       .select('id, order_number, customer_id, merchant_id')
@@ -162,8 +115,8 @@ class NotificationService {
 
     if (msgs[status]?.customer && order.customer_id) {
       await sendNotification(
-        order.customer_id, title, msgs[status]!.customer!, 'order', notifData,
-        { url: `/orders/${orderId}` }
+        order.customer_id, title, msgs[status]!.customer!, 'order',
+        notifData, { url: `/orders/${orderId}` }
       );
     }
 
@@ -172,8 +125,8 @@ class NotificationService {
         .from('merchants').select('user_id').eq('id', order.merchant_id).maybeSingle();
       if (merchant?.user_id) {
         await sendNotification(
-          merchant.user_id, title, msgs[status]!.merchant!, 'order', notifData,
-          { url: `/merchant/orders/${orderId}` }
+          merchant.user_id, title, msgs[status]!.merchant!, 'order',
+          notifData, { url: `/merchant/orders/${orderId}` }
         );
       }
     }
