@@ -1,16 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-// ✅ Static top-level import — same module instance as AuthContext, no race condition
+// ✅ Static top-level import — same instance as AuthContext, no module race
 import { supabase } from '@/lib/supabase';
 
 /**
  * CANONICAL sendNotification — import ONLY from here across the entire app.
- * Routes through /api/notify which handles:
- *   - DB insert (service role — bypasses RLS)
- *   - OneSignal web push for ALL roles including customer
- *   - Expo mobile push via DB webhook
- *   - Admin fan-out
- *   - Walk-in orders (null userId) silently skipped
  */
 export async function sendNotification(
   userId: string | null,
@@ -21,11 +15,11 @@ export async function sendNotification(
   opts?: { url?: string }
 ): Promise<boolean> {
   if (!userId) {
-    console.log('[notify] Skipping — no userId (walk-in)');
+    console.log('[notify] skip — walk-in (no userId)');
     return true;
   }
   if (!title || !message) {
-    console.warn('[notify] Skipping — missing title or message');
+    console.warn('[notify] skip — missing title/message');
     return false;
   }
 
@@ -33,23 +27,39 @@ export async function sendNotification(
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
     if (typeof window === 'undefined') {
-      // ── Server-side: API routes, Server Actions ──────────────────────────
+      // ── Server-side: API routes / Server Actions ───────────────────────
       const secret = process.env.NOTIFY_INTERNAL_SECRET;
       if (!secret) {
-        console.error('[notify] NOTIFY_INTERNAL_SECRET not set — cannot send server-side');
+        console.error('[notify] NOTIFY_INTERNAL_SECRET not set on server');
         return false;
       }
       headers['x-internal-secret'] = secret;
     } else {
-      // ── Client-side: browser ─────────────────────────────────────────────
-      // ✅ Static import guarantees same Supabase instance as AuthContext
-      const { data: sessionData } = await supabase.auth.getSession();
-      const jwt = sessionData?.session?.access_token;
-      if (!jwt) {
-        console.error('[notify] No session JWT — user not logged in or session expired');
-        return false;
+      // ── Client-side: browser ───────────────────────────────────────────
+      // ✅ getUser() validates the token against Supabase Auth server
+      //    AND triggers a silent refresh if the access_token is expired.
+      //    getSession() alone just reads the cookie and can return stale tokens.
+      const { error: userError } = await supabase.auth.getUser();
+
+      if (userError) {
+        // Token is fully invalid — try an explicit refresh before giving up
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !refreshed.session) {
+          console.error('[notify] Session invalid and refresh failed — user must re-login');
+          return false;
+        }
+        // Use the freshly refreshed token directly
+        headers['Authorization'] = `Bearer ${refreshed.session.access_token}`;
+      } else {
+        // getUser() succeeded — the session is valid, getSession() now has fresh token
+        const { data: { session } } = await supabase.auth.getSession();
+        const jwt = session?.access_token;
+        if (!jwt) {
+          console.error('[notify] No access token after getUser() — unexpected');
+          return false;
+        }
+        headers['Authorization'] = `Bearer ${jwt}`;
       }
-      headers['Authorization'] = `Bearer ${jwt}`;
     }
 
     const base = typeof window !== 'undefined'
@@ -75,16 +85,15 @@ export async function sendNotification(
     }
 
     const result = await res.json().catch(() => ({}));
-    console.log('[notify] ✅ sent:', {
-      userId,
-      type,
-      notifId: result?.notification_id,
-      push:    result?.sent_push,
-      role:    result?.role,
+    console.log('[notify] ✅', {
+      userId, type,
+      id:   result?.notification_id,
+      push: result?.sent_push,
+      role: result?.role,
     });
     return true;
   } catch (e: any) {
-    console.error('[notify] failed:', e?.message);
+    console.error('[notify] threw:', e?.message);
     return false;
   }
 }

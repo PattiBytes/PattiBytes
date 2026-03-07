@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { supabase } from '@/lib/supabase';
 
-// ✅ Re-export canonical sendNotification — no local duplicate
+// ✅ Single canonical re-export — no local duplicate function
 export { sendNotification } from '@/utils/notifications';
 
 export interface NotificationRow {
@@ -18,7 +18,6 @@ export interface NotificationRow {
   sent_push?: boolean;
 }
 
-// ── NotificationService class (CRUD only — no sending) ───────────────────────
 class NotificationService {
   async getUnreadCount(userId: string): Promise<number> {
     const { count, error } = await supabase
@@ -59,10 +58,7 @@ class NotificationService {
   }
 
   async deleteNotification(notificationId: string): Promise<void> {
-    const { error } = await supabase
-      .from('notifications')
-      .delete()
-      .eq('id', notificationId);
+    const { error } = await supabase.from('notifications').delete().eq('id', notificationId);
     if (error) throw error;
   }
 
@@ -74,21 +70,15 @@ class NotificationService {
       .channel(`notif-service:${userId}`)
       .on(
         'postgres_changes',
-        {
-          event:  'INSERT',
-          schema: 'public',
-          table:  'notifications',
-          filter: `user_id=eq.${userId}`,
-        },
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         payload => onInsert(payload.new as NotificationRow)
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }
 
-  // ── Order notification helper ─────────────────────────────────────────────
   async sendOrderNotification(orderId: string, status: string): Promise<void> {
-    // Dynamic import avoids circular dep at module level
+    // ✅ Dynamic import here only — avoids circular dep at module level
     const { sendNotification } = await import('@/utils/notifications');
 
     const { data: order, error } = await supabase
