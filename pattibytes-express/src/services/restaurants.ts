@@ -23,6 +23,16 @@ export interface Restaurant {
   total_reviews?: number;
   created_at: string;
   distance?: number; // km
+  // extra merchant fields used in UI
+  opening_time?: string | null;
+  closing_time?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  is_verified?: boolean;
+  is_featured?: boolean;
+  gst_enabled?: boolean;
+  gst_percentage?: number | null;
 }
 
 export interface MenuItem {
@@ -37,13 +47,17 @@ export interface MenuItem {
   is_veg?: boolean;
   discount_percentage?: number;
   created_at?: string;
+  // ── new fields ──────────────────────────────────────────────
+  preparation_time?: number | null;
+  /** Format: "HH:MM-HH:MM" e.g. "09:00-22:00". null/empty = always available */
+  dish_timing?: string | null;
 }
 
 export interface MenuByCategory {
   [category: string]: MenuItem[];
 }
 
-/** ---------- helpers (no dependency on locationService) ---------- */
+/** ---------- helpers ---------- */
 function toNumber(v: any, fallback = 0): number {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) ? n : fallback;
@@ -56,11 +70,7 @@ function normalizeString(v: any): string {
 function toArrayOfStrings(v: any): string[] {
   if (Array.isArray(v)) return v.map((x) => normalizeString(x)).filter(Boolean);
   if (typeof v === 'string') {
-    // allow comma separated
-    return v
-      .split(',')
-      .map((x) => x.trim())
-      .filter(Boolean);
+    return v.split(',').map((x) => x.trim()).filter(Boolean);
   }
   return [];
 }
@@ -70,7 +80,7 @@ function degreesToRadians(deg: number): number {
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
+  const R    = 6371;
   const dLat = degreesToRadians(lat2 - lat1);
   const dLon = degreesToRadians(lon2 - lon1);
   const a =
@@ -88,60 +98,74 @@ function isValidCoord(n: any): boolean {
 }
 
 function normalizeRestaurantRow(row: any): Restaurant {
-  // support both snake_case and camelCase columns (your repo has mixed usage)
-  const id = normalizeString(row.id);
-  const user_id = normalizeString(row.user_id ?? row.userid ?? row.owner_id ?? row.ownerid);
-
+  const id            = normalizeString(row.id);
+  const user_id       = normalizeString(row.user_id ?? row.userid ?? row.owner_id ?? row.ownerid);
   const business_name = normalizeString(row.business_name ?? row.businessname);
   const business_type = normalizeString(row.business_type ?? row.businesstype ?? 'Restaurant');
-
-  const latitude = toNumber(row.latitude, 0);
-  const longitude = toNumber(row.longitude, 0);
+  const latitude      = toNumber(row.latitude, 0);
+  const longitude     = toNumber(row.longitude, 0);
 
   return {
     id,
     user_id,
     business_name,
     business_type,
-    logo_url: row.logo_url ?? row.logourl ?? undefined,
-    banner_url: row.banner_url ?? row.bannerurl ?? undefined,
-    description: row.description ?? undefined,
-    cuisine_types: toArrayOfStrings(row.cuisine_types ?? row.cuisinetypes ?? row.cuisine_type ?? row.cuisinetype),
-    phone: normalizeString(row.phone),
-    email: row.email ?? undefined,
-    address: row.address ?? undefined,
+    logo_url:           row.logo_url    ?? row.logourl    ?? undefined,
+    banner_url:         row.banner_url  ?? row.bannerurl  ?? undefined,
+    description:        row.description ?? undefined,
+    cuisine_types:      toArrayOfStrings(row.cuisine_types ?? row.cuisinetypes ?? row.cuisine_type ?? row.cuisinetype),
+    phone:              normalizeString(row.phone),
+    email:              row.email   ?? undefined,
+    address:            row.address ?? undefined,
     latitude,
     longitude,
-    min_order_amount: toNumber(row.min_order_amount ?? row.minorderamount, 0),
-    delivery_radius_km: toNumber(row.delivery_radius_km ?? row.deliveryradiuskm ?? row.delivery_radius ?? row.deliveryradius, 5),
+    min_order_amount:    toNumber(row.min_order_amount   ?? row.minorderamount,  0),
+    delivery_radius_km:  toNumber(row.delivery_radius_km ?? row.deliveryradiuskm ?? row.delivery_radius ?? row.deliveryradius, 5),
     estimated_prep_time: toNumber(row.estimated_prep_time ?? row.estimatedpreptime ?? row.avg_delivery_time ?? row.avgdeliverytime, 30),
-    is_active: Boolean(row.is_active ?? row.isactive ?? true),
-    average_rating: row.average_rating ?? row.averagerating ?? row.rating ?? undefined,
-    total_reviews: row.total_reviews ?? row.totalreviews ?? undefined,
-    created_at: normalizeString(row.created_at ?? row.createdat ?? new Date(0).toISOString()),
+    is_active:           Boolean(row.is_active ?? row.isactive ?? true),
+    average_rating:      row.average_rating  ?? row.averagerating  ?? row.rating     ?? undefined,
+    total_reviews:       row.total_reviews   ?? row.totalreviews   ?? undefined,
+    created_at:          normalizeString(row.created_at  ?? row.createdat  ?? new Date(0).toISOString()),
+    // extra fields
+    opening_time:   row.opening_time  ?? row.openingtime  ?? null,
+    closing_time:   row.closing_time  ?? row.closingtime  ?? null,
+    city:           row.city          ?? null,
+    state:          row.state         ?? null,
+    postal_code:    row.postal_code   ?? row.postalcode   ?? null,
+    is_verified:    Boolean(row.is_verified  ?? row.isverified  ?? false),
+    is_featured:    Boolean(row.is_featured  ?? row.isfeatured  ?? false),
+    gst_enabled:    Boolean(row.gst_enabled  ?? row.gstenabled  ?? false),
+    gst_percentage: row.gst_percentage ?? row.gstpercentage ?? null,
   };
 }
 
 function normalizeMenuItemRow(row: any): MenuItem {
   return {
-    id: normalizeString(row.id),
-    merchant_id: normalizeString(row.merchant_id ?? row.merchantid),
-    name: normalizeString(row.name),
-    description: row.description ?? undefined,
-    price: toNumber(row.price, 0),
-    category: normalizeString(row.category ?? 'Uncategorized') || 'Uncategorized',
-    image_url: row.image_url ?? row.imageurl ?? undefined,
-    is_available: row.is_available !== false && row.isavailable !== false,
-    is_veg: row.is_veg ?? row.isveg ?? undefined,
+    id:                  normalizeString(row.id),
+    merchant_id:         normalizeString(row.merchant_id ?? row.merchantid),
+    name:                normalizeString(row.name),
+    description:         row.description  ?? undefined,
+    price:               toNumber(row.price, 0),
+    category:            normalizeString(row.category ?? 'Uncategorized') || 'Uncategorized',
+    image_url:           row.image_url    ?? row.imageurl    ?? undefined,
+    is_available:        row.is_available !== false && row.isavailable !== false,
+    is_veg:              row.is_veg       ?? row.isveg       ?? undefined,
     discount_percentage: row.discount_percentage ?? row.discountpercentage ?? undefined,
-    created_at: row.created_at ?? row.createdat ?? undefined,
+    created_at:          row.created_at   ?? row.createdat   ?? undefined,
+    // ── new fields ────────────────────────────────────────────
+    preparation_time:    row.preparation_time   != null
+                           ? toNumber(row.preparation_time, 0) || null
+                           : row.preparationtime != null
+                           ? toNumber(row.preparationtime, 0) || null
+                           : null,
+    dish_timing:         row.dish_timing ?? row.dishtiming ?? null,
   };
 }
 
 function withDistance<T extends { latitude: number; longitude: number }>(
   items: T[],
   lat: number,
-  lon: number
+  lon: number,
 ): Array<T & { distance: number }> {
   return items.map((r) => ({
     ...r,
@@ -153,7 +177,7 @@ function filterByRadius<T extends { latitude: number; longitude: number }>(
   items: T[],
   lat: number,
   lon: number,
-  radiusKm: number
+  radiusKm: number,
 ): T[] {
   const r = toNumber(radiusKm, 0);
   if (!Number.isFinite(r) || r <= 0) return items;
@@ -162,28 +186,21 @@ function filterByRadius<T extends { latitude: number; longitude: number }>(
 
 /** ---------- service ---------- */
 class RestaurantService {
-  async getNearbyRestaurants(lat: number, lon: number, radiusKm: number = 100): Promise<Restaurant[]> {
+  async getNearbyRestaurants(lat: number, lon: number, radiusKm = 100): Promise<Restaurant[]> {
     try {
       const { data, error } = await supabase.from('merchants').select('*').eq('is_active', true);
+      if (error) { console.error('Supabase error:', error); return []; }
+      if (!data?.length) return [];
 
-      if (error) {
-        console.error('Supabase error:', error);
-        return [];
-      }
-      if (!data || data.length === 0) return [];
-
-      // keep only rows with usable coordinates
       const normalized = data
         .filter((r: any) => isValidCoord(r.latitude) && isValidCoord(r.longitude))
         .map(normalizeRestaurantRow)
         .filter((r) => isValidCoord(r.latitude) && isValidCoord(r.longitude));
 
-      if (normalized.length === 0) return [];
+      if (!normalized.length) return [];
 
       const filtered = filterByRadius(normalized, lat, lon, radiusKm);
-      const sorted = withDistance(filtered, lat, lon).sort((a, b) => a.distance - b.distance);
-
-      return sorted;
+      return withDistance(filtered, lat, lon).sort((a, b) => a.distance - b.distance);
     } catch (e) {
       console.error('Exception in getNearbyRestaurants:', e);
       return [];
@@ -194,10 +211,7 @@ class RestaurantService {
     try {
       const { data, error } = await supabase.from('merchants').select('*').eq('id', id).single();
       if (error) throw error;
-      const restaurant = normalizeRestaurantRow(data);
-
-      // if DB row has missing coords, keep it but do not crash
-      return restaurant;
+      return normalizeRestaurantRow(data);
     } catch (e) {
       console.error('Failed to get restaurant:', e);
       return null;
@@ -206,26 +220,28 @@ class RestaurantService {
 
   async getMenuItems(merchantId: string): Promise<MenuItem[]> {
     try {
-      // Try full select first (keeps compatibility if schema has extra columns)
+      // Full select — picks up preparation_time and dish_timing automatically via *
       let { data, error } = await supabase
         .from('menu_items')
         .select('*')
         .eq('merchant_id', merchantId)
-        .eq('is_available', true)
         .order('category')
         .order('name');
 
       if (error) {
-        // fallback minimal column list (prevents failures if RLS/permissions hide fields)
+        // Fallback with explicit columns including new ones
         const result = await supabase
           .from('menu_items')
-          .select('id, merchant_id, name, description, price, category, image_url, is_available, is_veg, discount_percentage, created_at')
+          .select(
+            'id, merchant_id, name, description, price, category, image_url, ' +
+            'is_available, is_veg, discount_percentage, created_at, ' +
+            'preparation_time, dish_timing'
+          )
           .eq('merchant_id', merchantId)
-          .eq('is_available', true)
           .order('category')
           .order('name');
 
-        data = result.data;
+        data  = result.data;
         error = result.error;
       }
 
@@ -272,9 +288,9 @@ class RestaurantService {
     }
   }
 
-  async search(query: string, lat?: number, lon?: number, radiusKm: number = 100) {
+  async search(query: string, lat?: number, lon?: number, radiusKm = 100) {
     try {
-      const q = normalizeString(query).trim();
+      const q          = normalizeString(query).trim();
       const lowerQuery = q.toLowerCase();
 
       const { data: restaurantRows, error: restaurantError } = await supabase
@@ -292,20 +308,25 @@ class RestaurantService {
         .map(normalizeRestaurantRow);
 
       let restaurants = restaurantsAll.filter((r) => {
-        const nameMatch = r.business_name.toLowerCase().includes(lowerQuery);
+        const nameMatch    = r.business_name.toLowerCase().includes(lowerQuery);
         const cuisineMatch = r.cuisine_types?.some((c) => c.toLowerCase().includes(lowerQuery));
         return nameMatch || cuisineMatch;
       });
 
-      // optional geo-filter
-      if (typeof lat === 'number' && typeof lon === 'number' && Number.isFinite(lat) && Number.isFinite(lon)) {
+      if (
+        typeof lat === 'number' && typeof lon === 'number' &&
+        Number.isFinite(lat) && Number.isFinite(lon)
+      ) {
         restaurants = filterByRadius(restaurants, lat, lon, radiusKm);
         restaurants = withDistance(restaurants, lat, lon).sort((a, b) => a.distance - b.distance);
       }
 
       const { data: menuItems } = await supabase
         .from('menu_items')
-        .select('id, merchant_id, name, description, price, category, image_url, is_available, is_veg, discount_percentage, created_at')
+        .select(
+          'id, merchant_id, name, description, price, category, image_url, ' +
+          'is_available, is_veg, discount_percentage, created_at, preparation_time, dish_timing'
+        )
         .eq('is_available', true)
         .or(`name.ilike.%${q}%,description.ilike.%${q}%,category.ilike.%${q}%`);
 
@@ -319,7 +340,7 @@ class RestaurantService {
     }
   }
 
-  async getRestaurantsByCuisine(cuisine: string, lat: number, lon: number, radiusKm: number = 100): Promise<Restaurant[]> {
+  async getRestaurantsByCuisine(cuisine: string, lat: number, lon: number, radiusKm = 100): Promise<Restaurant[]> {
     try {
       const cuisineValue = normalizeString(cuisine).trim();
       if (!cuisineValue) return [];
