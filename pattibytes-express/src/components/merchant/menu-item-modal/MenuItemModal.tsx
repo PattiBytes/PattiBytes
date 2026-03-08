@@ -7,22 +7,22 @@ import { menuService }         from '@/services/menu';
 import { uploadToCloudinary }  from '@/lib/cloudinary';
 import { useMenuItemAutosave } from '@/hooks/useMenuItemAutosave';
 
-import { DEFAULT_TIMING, FormState, MenuItemModalProps } from './menu-item-modal/types';
+import { DEFAULT_TIMING, FormState, MenuItemModalProps } from './types';
 import {
   clamp,
   dataUrlToFile,
   isDataImageUrl,
   isValidHttpUrl,
   isValidImageSource,
-} from './menu-item-modal/helpers';
-import { ImagePickerSection }  from './menu-item-modal/ImagePickerSection';
-import { ModalHeader }         from './menu-item-modal/ModalHeader';
-import { ModalFooter }         from './menu-item-modal/ModalFooter';
-import { BasicInfoFields }     from './menu-item-modal/fields/BasicInfoFields';
-import { PriceCategoryFields } from './menu-item-modal/fields/PriceCategoryFields';
-import { MetaFields }          from './menu-item-modal/fields/MetaFields';
-import { ToggleFields }        from './menu-item-modal/fields/ToggleFields';
-import { TimingFields }        from './menu-item-modal/fields/TimingFields';
+} from './helpers';
+import { ImagePickerSection }  from './ImagePickerSection';
+import { ModalHeader }         from './ModalHeader';
+import { ModalFooter }         from './ModalFooter';
+import { BasicInfoFields }     from './fields/BasicInfoFields';
+import { PriceCategoryFields } from './fields/PriceCategoryFields';
+import { MetaFields }          from './fields/MetaFields';
+import { ToggleFields }        from './fields/ToggleFields';
+import { TimingFields }        from './fields/TimingFields';
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function MenuItemModal({
@@ -285,11 +285,11 @@ export default function MenuItemModal({
             />
 
             {/* 6 · Availability schedule (dish_timing) ✨ NEW */}
-           <TimingFields
-  timing={form.timing}
-  onChange={timing => set('timing', timing)}
-  onAutosave={timing => schedule({ dish_timing: timing })}
-/>
+            <TimingFields
+              timing={form.timing}
+              onChange={timing => set('timing', timing)}
+              onAutosave={schedule}
+            />
 
             {/* 7 · Footer buttons (sticky) */}
             <ModalFooter

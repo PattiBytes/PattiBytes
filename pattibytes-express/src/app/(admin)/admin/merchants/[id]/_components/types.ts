@@ -38,6 +38,28 @@ export type MerchantRow = {
   updated_at?: string;
 };
 
+// ─── Timing types (shared between modal & card) ───────────────────────────────
+export const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+export interface TimingSlot {
+  days: number[];   // 0=Sun … 6=Sat
+  from: string;     // "HH:MM"
+  to:   string;
+}
+
+export interface DishTiming {
+  enabled: boolean;
+  type:    'always' | 'scheduled';
+  slots:   TimingSlot[];
+}
+
+export const DEFAULT_TIMING: DishTiming = {
+  enabled: false,
+  type:    'always',
+  slots:   [{ days: [1, 2, 3, 4, 5], from: '09:00', to: '22:00' }],
+};
+
+
 export type MenuItemRow = {
   id: string;
   merchant_id: string;
@@ -50,6 +72,7 @@ export type MenuItemRow = {
   is_veg?: boolean | null;
   preparation_time?: number | null;
   discount_percentage?: number | null;
+   dish_timing:         DishTiming | null; 
   category_id?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -70,6 +93,7 @@ export type CategoryInfo = {
   name: string;
   count: number;
 };
+
 
 export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(' ');
@@ -123,12 +147,36 @@ export function isOvernightShift(open: string, close: string): boolean {
   } catch { return false; }
 }
 
+// ─── Draft category helpers (localStorage) ───────────────────────────────────
+const DRAFT_KEY = (merchantId: string) => `draft_cats_${merchantId}`;
+
 export function getDraftCategories(merchantId: string): string[] {
-  if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(localStorage.getItem(`draft_cats_${merchantId}`) || '[]');
+    const raw = localStorage.getItem(DRAFT_KEY(merchantId));
+    return raw ? (JSON.parse(raw) as string[]) : [];
   } catch { return []; }
 }
+
+export function saveDraftCategory(merchantId: string, cat: string): void {
+  try {
+    const existing = getDraftCategories(merchantId);
+    if (!existing.includes(cat)) {
+      localStorage.setItem(DRAFT_KEY(merchantId), JSON.stringify([...existing, cat]));
+    }
+  } catch { /* ignore */ }
+}
+
+export function removeDraftCategory(merchantId: string, cat: string): void {
+  try {
+    const updated = getDraftCategories(merchantId).filter(c => c !== cat);
+    localStorage.setItem(DRAFT_KEY(merchantId), JSON.stringify(updated));
+  } catch { /* ignore */ }
+}
+
+// Shared Tailwind class helpers
+export const IC = 'w-full px-4 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition';
+export const LC = 'block text-sm font-medium text-gray-700 mb-1.5';
+
 
 export function setDraftCategories(merchantId: string, cats: string[]) {
   if (typeof window === 'undefined') return;

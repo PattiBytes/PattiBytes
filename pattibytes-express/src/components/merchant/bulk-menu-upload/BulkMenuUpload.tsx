@@ -8,13 +8,13 @@ import * as XLSX from 'xlsx';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import { menuService }         from '@/services/menu';
 
-import { Row }              from './bulk-menu-upload/types';
-import { firstSheetToObjects, normalizeRow } from './bulk-menu-upload/helpers';
-import { UploadButtons }    from './bulk-menu-upload/UploadButtons';
-import { TemplateButtons }  from './bulk-menu-upload/TemplateButtons';
-import { CsvTextArea }      from './bulk-menu-upload/CsvTextArea';
-import { BulkPreviewList }  from './bulk-menu-upload/BulkPreviewList';
-import { ActionBar }        from './bulk-menu-upload/ActionBar';
+import { Row }              from './types';
+import { firstSheetToObjects, normalizeRow } from './helpers';
+import { UploadButtons }    from './UploadButtons';
+import { TemplateButtons }  from './TemplateButtons';
+import { CsvTextArea }      from './CsvTextArea';
+import { BulkPreviewList }  from './BulkPreviewList';
+import { ActionBar }        from './ActionBar';
 
 interface Props { merchantId: string; onClose: () => void; onSuccess: () => void; }
 

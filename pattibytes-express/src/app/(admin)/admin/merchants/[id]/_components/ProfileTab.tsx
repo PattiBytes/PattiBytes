@@ -25,6 +25,29 @@ interface Props {
   onChange: (patch: Partial<MerchantRow>) => void;
 }
 
+// ── Valid business types (must match DB CHECK constraint exactly) ─────────────
+const BUSINESS_TYPES = [
+  { value: 'restaurant',    label: 'Restaurant'    },
+  { value: 'cafe',          label: 'Cafe'          },
+  { value: 'bakery',        label: 'Bakery'        },
+  { value: 'cloud kitchen', label: 'Cloud Kitchen' },
+  { value: 'food truck',    label: 'Food Truck'    },
+  { value: 'sweet shop',    label: 'Sweet Shop'    },
+  { value: 'dhaba',         label: 'Dhaba'         },
+  { value: 'other',         label: 'Other'         },
+] as const;
+
+type BusinessType = typeof BUSINESS_TYPES[number]['value'];
+
+/** Ensures we never send a value that violates merchants_business_type_check */
+function sanitizeBusinessType(raw: string | null | undefined): BusinessType {
+  const val = (raw ?? '').trim().toLowerCase();
+  const valid = BUSINESS_TYPES.map(b => b.value);
+  return (valid as string[]).includes(val)
+    ? (val as BusinessType)
+    : 'restaurant';
+}
+
 // ── Tiny reusable field wrapper ──────────────────────────────────────────────
 function Field({
   label, hint, span2, children,
@@ -139,16 +162,17 @@ export function ProfileTab({ merchantId, form, loading, onChange }: Props) {
             <Field label="Business Type">
               <select
                 className={IC}
-                value={form.business_type || 'restaurant'}
-                onChange={e => set({ business_type: e.target.value })}
+                // ↓ sanitize so a stale/null value never violates the CHECK constraint
+                value={sanitizeBusinessType(form.business_type)}
+                onChange={e => set({ business_type: e.target.value as BusinessType })}
               >
-                {['restaurant', 'cafe', 'bakery', 'cloud_kitchen', 'food_truck', 'sweet_shop', 'dhaba', 'other'].map(t => (
-                  <option key={t} value={t}>{t.replace('_', ' ')}</option>
+                {BUSINESS_TYPES.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
                 ))}
               </select>
             </Field>
 
-            <Field label="Phone" span2={false}>
+            <Field label="Phone">
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
@@ -224,15 +248,30 @@ export function ProfileTab({ merchantId, form, loading, onChange }: Props) {
             </Field>
 
             <Field label="City">
-              <input className={IC} value={form.city || ''} onChange={e => set({ city: e.target.value })} placeholder="Patti" />
+              <input
+                className={IC}
+                value={form.city || ''}
+                onChange={e => set({ city: e.target.value })}
+                placeholder="Patti"
+              />
             </Field>
 
             <Field label="State">
-              <input className={IC} value={form.state || ''} onChange={e => set({ state: e.target.value })} placeholder="Punjab" />
+              <input
+                className={IC}
+                value={form.state || ''}
+                onChange={e => set({ state: e.target.value })}
+                placeholder="Punjab"
+              />
             </Field>
 
             <Field label="Postal Code">
-              <input className={IC} value={form.postal_code || ''} onChange={e => set({ postal_code: e.target.value })} placeholder="143416" />
+              <input
+                className={IC}
+                value={form.postal_code || ''}
+                onChange={e => set({ postal_code: e.target.value })}
+                placeholder="143416"
+              />
             </Field>
           </div>
         </Section>
@@ -353,7 +392,7 @@ export function ProfileTab({ merchantId, form, loading, onChange }: Props) {
               >
                 <span className={cx(
                   'absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
-                  form.gst_enabled ? 'translate-x-5.5' : 'translate-x-0.5'
+                  form.gst_enabled ? 'translate-x-5' : 'translate-x-0.5'
                 )} />
               </div>
               <span className="text-sm font-semibold text-gray-700">
@@ -386,16 +425,16 @@ export function ProfileTab({ merchantId, form, loading, onChange }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {(
               [
-                { key: 'is_active',   label: 'Active',   sub: 'Accepts orders',     color: 'green'  },
-                { key: 'is_verified', label: 'Verified', sub: 'Shows verified badge', color: 'blue'   },
-                { key: 'is_featured', label: 'Featured', sub: 'Shown in highlights', color: 'amber'  },
+                { key: 'is_active',   label: 'Active',   sub: 'Accepts orders',      color: 'green' },
+                { key: 'is_verified', label: 'Verified', sub: 'Shows verified badge', color: 'blue'  },
+                { key: 'is_featured', label: 'Featured', sub: 'Shown in highlights',  color: 'amber' },
               ] as const
             ).map(({ key, label, sub, color }) => {
               const checked = !!form[key];
               const colorMap = {
-                green: { bg: 'bg-green-50 border-green-300', dot: 'bg-green-500' },
-                blue:  { bg: 'bg-blue-50 border-blue-300',   dot: 'bg-blue-500'  },
-                amber: { bg: 'bg-amber-50 border-amber-300', dot: 'bg-amber-500' },
+                green: { bg: 'bg-green-50 border-green-300',  dot: 'bg-green-500' },
+                blue:  { bg: 'bg-blue-50 border-blue-300',    dot: 'bg-blue-500'  },
+                amber: { bg: 'bg-amber-50 border-amber-300',  dot: 'bg-amber-500' },
               };
               const c = colorMap[color];
               return (
@@ -437,7 +476,6 @@ export function ProfileTab({ merchantId, form, loading, onChange }: Props) {
             onClick={() => setShowLocationModal(false)}
           />
           <div className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            {/* Modal header */}
             <div className="px-5 py-4 border-b flex items-center justify-between sticky top-0 bg-white z-10">
               <div>
                 <h3 className="font-bold text-gray-900">Update Merchant Location</h3>
@@ -454,7 +492,6 @@ export function ProfileTab({ merchantId, form, loading, onChange }: Props) {
             </div>
 
             <div className="p-4 overflow-y-auto flex-1">
-              {/* Mode toggle */}
               <div className="flex bg-gray-100 p-1 rounded-xl gap-1 mb-4">
                 {(['search', 'map'] as const).map(m => (
                   <button
@@ -463,7 +500,9 @@ export function ProfileTab({ merchantId, form, loading, onChange }: Props) {
                     onClick={() => setLocationMode(m)}
                     className={cx(
                       'flex-1 py-2 rounded-lg font-semibold text-sm transition',
-                      locationMode === m ? 'bg-white text-primary shadow' : 'text-gray-500 hover:text-gray-800'
+                      locationMode === m
+                        ? 'bg-white text-primary shadow'
+                        : 'text-gray-500 hover:text-gray-800'
                     )}
                   >
                     {m === 'search' ? '🔍 Search Address' : '🗺️ Pick on Map'}
@@ -473,15 +512,17 @@ export function ProfileTab({ merchantId, form, loading, onChange }: Props) {
 
               {locationMode === 'search' ? (
                 <div>
-                  <p className="text-sm text-gray-500 mb-3">Type the address and select from suggestions.</p>
+                  <p className="text-sm text-gray-500 mb-3">
+                    Type the address and select from suggestions.
+                  </p>
                   <AddressAutocomplete
                     onSelect={(loc: any) => {
                       set({
-                        address: loc.address,
-                        latitude: loc.lat,
-                        longitude: loc.lon,
-                        city: loc.city,
-                        state: loc.state,
+                        address:     loc.address,
+                        latitude:    loc.lat,
+                        longitude:   loc.lon,
+                        city:        loc.city,
+                        state:       loc.state,
                         postal_code: loc.postalcode,
                       });
                       setShowLocationModal(false);
@@ -494,11 +535,11 @@ export function ProfileTab({ merchantId, form, loading, onChange }: Props) {
                   initialLon={form.longitude}
                   onSelect={(loc: any) => {
                     set({
-                      address: loc.address,
-                      latitude: loc.lat,
-                      longitude: loc.lon,
-                      city: loc.city,
-                      state: loc.state,
+                      address:     loc.address,
+                      latitude:    loc.lat,
+                      longitude:   loc.lon,
+                      city:        loc.city,
+                      state:       loc.state,
                       postal_code: loc.postalcode,
                     });
                     setShowLocationModal(false);
