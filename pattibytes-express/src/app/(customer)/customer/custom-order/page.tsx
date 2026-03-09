@@ -336,46 +336,113 @@ export default function CustomOrderPage() {
   ];
 
   // ── Submit ─────────────────────────────────────────────────────────────────
-  const handleSubmit = async () => {
-    if (!user)            { router.push('/login'); return; }
-    const allItems = buildItems();
-    if (!allItems.length) { toast.error('Add at least one item'); return; }
-    if (!selectedAddress) { toast.error('Please select a delivery address'); return; }
-    if (!isLiveReady)     { toast.error('Enable & verify live location first'); return; }
-    if (paymentMethod === 'online') { toast.info('Online payment coming soon!'); return; }
+// ── Submit ─────────────────────────────────────────────────────────────────
+const handleSubmit = async () => {
+  if (!user)            { router.push('/login'); return; }
+  const allItems = buildItems();
+  if (!allItems.length) { toast.error('Add at least one item'); return; }
+  if (!selectedAddress) { toast.error('Please select a delivery address'); return; }
+  if (!isLiveReady)     { toast.error('Enable & verify live location first'); return; }
+  if (paymentMethod === 'online') { toast.info('Online payment coming soon!'); return; }
 
-    setSubmitting(true);
-    try {
-      const ref = makeRef();
-      const a   = selectedAddress as any;
-      const { error } = await supabase.from('custom_order_requests').insert({
+  setSubmitting(true);
+  try {
+    const ref      = makeRef();
+    const a        = selectedAddress as any;
+    const now      = new Date().toISOString();
+    const phone    = normalizePhone(a.recipient_phone || a.recipientphone || '') || null;
+    const addrStr  = formatAddress(selectedAddress);
+    const destLat  = Number(a.latitude)  || null;
+    const destLng  = Number(a.longitude) || null;
+    const category = categories.length ? categories.join(', ') : 'custom';
+
+    // ── Step 1: Insert into `orders` (returns the new row id) ──────────────
+    const { data: orderRow, error: orderError } = await supabase
+      .from('orders')
+      .insert({
+        customer_id:           user.id,
+        merchant_id:           null,          // no restaurant for custom orders
+        driver_id:             null,
+        status:                'pending',
+        order_type:            'custom',
+        subtotal:              shopSubtotal,
+        delivery_fee:          deliveryFee,
+        tax:                   0,
+        discount:              0,
+        total_amount:          estTotal > 0 ? estTotal : null,
+        payment_method:        paymentMethod,
+        payment_status:        'pending',
+        delivery_address:      addrStr,
+        delivery_latitude:     destLat,
+        delivery_longitude:    destLng,
+        delivery_address_id:   a.id   || null,
+        delivery_address_label: a.label || null,
+        recipient_name:        a.recipient_name || a.recipientname || null,
+        delivery_instructions: notes.trim() || null,
+        customer_notes:        notes.trim() || null,
+        customer_phone:        phone,
+        customer_location:     liveLocation
+          ? {
+              lat:        liveLocation.lat,
+              lng:        liveLocation.lng,
+              accuracy:   liveLocation.accuracy ?? null,
+              updated_at: liveLocation.updated_at,
+            }
+          : null,
+        items:                 allItems,
+        delivery_distance_km:  deliveryKm || null,
+        hub_origin:            JSON.stringify(PATTI_HUB),
+        // custom-order specific columns
+        custom_order_ref:      ref,
+        custom_order_status:   'pending',
+        custom_category:       category,
+        custom_image_url:      null,
+        quoted_amount:         null,
+        quote_message:         null,
+        platform_handled:      false,
+        created_at:            now,
+        updated_at:            now,
+      })
+      .select('id')
+      .single();
+
+    if (orderError) throw orderError;
+
+    // ── Step 2: Insert into `custom_order_requests` linked to the order ────
+    const { error: cusError } = await supabase
+      .from('custom_order_requests')
+      .insert({
+        order_id:         orderRow.id,   // cross-link to orders table
         customer_id:      user.id,
         custom_order_ref: ref,
-        category:         categories.length ? categories.join(', ') : 'custom',
+        category:         category,
         description:      notes.trim() || null,
         image_url:        null,
         items:            allItems,
         status:           'pending',
-        delivery_address: formatAddress(selectedAddress),
-        delivery_lat:     Number(a.latitude)  || null,
-        delivery_lng:     Number(a.longitude) || null,
+        delivery_address: addrStr,
+        delivery_lat:     destLat,
+        delivery_lng:     destLng,
         total_amount:     estTotal > 0 ? estTotal : null,
-        delivery_fee:     deliveryFee || null,
+        delivery_fee:     deliveryFee   || null,
         payment_method:   paymentMethod,
-        customer_phone:   normalizePhone(a.recipient_phone || a.recipientphone || '') || null,
-        created_at:       new Date().toISOString(),
-        updated_at:       new Date().toISOString(),
+        customer_phone:   phone,
+        created_at:       now,
+        updated_at:       now,
       });
-      if (error) throw error;
-      setSubmittedRef(ref);
-      setSubmitted(true);
-      toast.success('Custom order submitted! 🎉');
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to submit order');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+
+    if (cusError) throw cusError;
+
+    setSubmittedRef(ref);
+    setSubmitted(true);
+    toast.success('Custom order submitted!');
+  } catch (e: any) {
+    toast.error(e?.message || 'Failed to submit order');
+  } finally {
+    setSubmitting(false);
+  }
+};
+
 
   // ── Reset form ─────────────────────────────────────────────────────────────
   const resetForm = () => {
