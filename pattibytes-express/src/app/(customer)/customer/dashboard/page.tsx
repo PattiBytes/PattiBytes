@@ -56,7 +56,8 @@ import SearchBox from '@/components/customer-dashboard/SearchBox';
 import StatsCards from '@/components/customer-dashboard/StatsCards';
 import CuisineFilters from '@/components/customer-dashboard/CuisineFilters';
 import RestaurantGrid from '@/components/customer-dashboard/RestaurantGrid';
-import CustomOrderSection from '@/components/customer-dashboard/CustomOrderSection';
+import { CustomOrderSection } from '@/components/customer-dashboard/CustomOrderSection';
+
 
 import type { AddressPick } from '@/components/AddressAutocomplete';
 
@@ -66,30 +67,30 @@ import { isPromoActiveNow } from '@/components/customer-dashboard/offers';
 const BOTTOM_NAV_PX = 96;
 
 const ACTIVE_STATUSES = [
-  'pending',
-  'confirmed',
-  'preparing',
-  'ready',
-  'assigned',
-  'pickedup',
-  'on_the_way',
-  'ontheway',
-  'on the way',
-  'out_for_delivery',
-  'outfordelivery',
+  'pending','confirmed','preparing','ready',
+  'assigned','picked_up','on_the_way','ontheway','on the way',
+  'out_for_delivery','outfordelivery',
+  'quoted',   // ← custom orders that received a quote
 ];
+
 
 type ActiveOrder = {
   id: string;
-  ordernumber?: number | null;
+  order_number?: number | null;
   status?: string | null;
   total_amount?: number | null;
   created_at?: string | null;
   merchant_id?: string | null;
-
   merchantName?: string;
   merchantLogoUrl?: string | null;
+  // ↓ NEW — custom order fields
+  order_type?: string | null;
+  custom_order_ref?: string | null;
+  custom_order_status?: string | null;
+  quoted_amount?: number | null;
+  quote_message?: string | null;
 };
+
 
 type CustomLink = {
   id: string;
@@ -269,12 +270,11 @@ export default function CustomerDashboardPage() {
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuSearchReq = useRef(0);
 
-  const [stats, setStats] = useState({
-    totalOrders: 0,
-    activeOrders: 0,
-    completedOrders: 0,
-    totalSpent: 0,
-  });
+const [stats, setStats] = useState({
+  totalOrders: 0, activeOrders: 0, completedOrders: 0,
+  totalSpent: 0, pendingCustomOrders: 0,              // ← NEW
+});
+
 
   const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
   const [loadingActiveOrders, setLoadingActiveOrders] = useState(false);
@@ -632,45 +632,59 @@ export default function CustomerDashboardPage() {
     try {
       const uid = user.id;
 
-      const [totalRes, activeRes, deliveredRes, spentRowsRes, activeListRes] = await Promise.all([
-        supabase.from('orders').select('id', { count: 'exact', head: true }).eq('customer_id', uid),
-        supabase.from('orders').select('id', { count: 'exact', head: true }).eq('customer_id', uid).in('status', ACTIVE_STATUSES),
-        supabase.from('orders').select('id', { count: 'exact', head: true }).eq('customer_id', uid).eq('status', 'delivered'),
+      const [
+  totalRes, activeRes, deliveredRes, spentRowsRes, activeListRes,
+  customPendingRes,                                     // ← NEW
+] = await Promise.all([
+  supabase.from('orders').select('id', { count: 'exact', head: true })
+    .eq('customer_id', uid),
+  supabase.from('orders').select('id', { count: 'exact', head: true })
+    .eq('customer_id', uid).in('status', ACTIVE_STATUSES),
+  supabase.from('orders').select('id', { count: 'exact', head: true })
+    .eq('customer_id', uid).eq('status', 'delivered'),
+  supabase.from('orders').select('total_amount')
+    .eq('customer_id', uid).eq('status', 'delivered')
+    .order('created_at', { ascending: false }).limit(500),
+  supabase.from('orders')
+    .select('id,status,total_amount,merchant_id,created_at,order_number,order_type,custom_order_ref,custom_order_status,quoted_amount,quote_message')
+    .eq('customer_id', uid)
+    .in('status', ACTIVE_STATUSES)
+    .order('created_at', { ascending: false })
+    .limit(5),                                           // ← bumped from 3→5
+  // NEW: custom orders awaiting quote/confirmation
+  supabase.from('orders').select('id', { count: 'exact', head: true })
+    .eq('customer_id', uid)
+    .eq('order_type', 'custom')
+    .in('custom_order_status', ['pending', 'quoted']),   // ← NEW
+]);
 
-        supabase
-          .from('orders')
-          .select('total_amount')
-          .eq('customer_id', uid)
-          .eq('status', 'delivered')
-          .order('created_at', { ascending: false })
-          .limit(500),
-
-        supabase
-          .from('orders')
-          .select('id,status,total_amount,merchant_id,created_at,order_number')
-          .eq('customer_id', uid)
-          .in('status', ACTIVE_STATUSES)
-          .order('created_at', { ascending: false })
-          .limit(3),
-      ]);
 
       const totalSpent = (spentRowsRes.data || []).reduce((acc: number, r: any) => acc + Number(r?.total_amount || 0), 0);
 
-      setStats({
-        totalOrders: totalRes.count || 0,
-        activeOrders: activeRes.count || 0,
-        completedOrders: deliveredRes.count || 0,
-        totalSpent,
-      });
+     setStats({
+  totalOrders:       totalRes.count ?? 0,
+  activeOrders:      activeRes.count ?? 0,
+  completedOrders:   deliveredRes.count ?? 0,
+  totalSpent,
+  pendingCustomOrders: customPendingRes.count ?? 0,  // ← NEW
+});
 
-      const active = (activeListRes.data || []).map((o: any) => ({
-        id: String(o.id),
-        ordernumber: o.order_number ?? null,
-        status: o.status ?? null,
-        total_amount: Number(o.total_amount || 0),
-        created_at: o.created_at ?? null,
-        merchant_id: o.merchant_id ?? null,
-      })) as ActiveOrder[];
+
+     const active = activeListRes.data.map((o: any) => ({
+  id:           String(o.id),
+  order_number: o.order_number ?? null,
+  status:       o.status ?? null,
+  total_amount: Number(o.total_amount || 0),
+  created_at:   o.created_at ?? null,
+  merchant_id:  o.merchant_id ?? null,
+  // ↓ NEW
+  order_type:          o.order_type ?? null,
+  custom_order_ref:    o.custom_order_ref ?? null,
+  custom_order_status: o.custom_order_status ?? null,
+  quoted_amount:       o.quoted_amount ? Number(o.quoted_amount) : null,
+  quote_message:       o.quote_message ?? null,
+} as ActiveOrder));
+
 
       const merchantIds = Array.from(new Set(active.map((x) => x.merchant_id).filter(Boolean))) as string[];
       if (merchantIds.length) {
@@ -692,7 +706,14 @@ export default function CustomerDashboardPage() {
       setActiveOrders(active);
     } catch (e: any) {
       toast.error(e?.message || 'Failed to load order analytics');
-      setStats({ totalOrders: 0, activeOrders: 0, completedOrders: 0, totalSpent: 0 });
+setStats({
+  totalOrders: 0,
+  activeOrders: 0,
+  completedOrders: 0,
+  totalSpent: 0,
+  pendingCustomOrders: 0,   // ← add this
+});
+
       setActiveOrders([]);
     } finally {
       setLoadingActiveOrders(false);
@@ -707,16 +728,31 @@ export default function CustomerDashboardPage() {
 
     loadOrdersAndStats();
 
-    const ch = supabase
-      .channel(`customer-orders-${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `customer_id=eq.${user.id}` }, () => {
-        if (ordersThrottle.current) return;
-        ordersThrottle.current = setTimeout(() => {
-          ordersThrottle.current = null;
-          loadOrdersAndStats();
-        }, 1200);
-      })
-      .subscribe();
+   const ch = supabase
+  .channel(`customer-orders-${user.id}`)
+  .on('postgres_changes', {
+    event: '*', schema: 'public', table: 'orders',
+    filter: `customer_id=eq.${user.id}`,
+  }, () => {
+    if (ordersThrottle.current) return;
+    ordersThrottle.current = setTimeout(() => {
+      ordersThrottle.current = null;
+      loadOrdersAndStats();
+    }, 1200);
+  })
+  // ↓ NEW — also watch custom_orders for quote updates
+  .on('postgres_changes', {
+    event: 'UPDATE', schema: 'public', table: 'custom_orders',
+    filter: `customer_id=eq.${user.id}`,
+  }, () => {
+    if (ordersThrottle.current) return;
+    ordersThrottle.current = setTimeout(() => {
+      ordersThrottle.current = null;
+      loadOrdersAndStats();
+    }, 1200);
+  })
+  .subscribe();
+
 
     return () => {
       supabase.removeChannel(ch);
@@ -1358,20 +1394,33 @@ export default function CustomerDashboardPage() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-black text-gray-900 truncate flex items-center gap-2">
-                            {o.merchantLogoUrl && (
-                              <img
-                                src={o.merchantLogoUrl}
-                                alt=""
-                                className="w-6 h-6 rounded-full border-2 border-primary object-cover"
-                                onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
-                              />
-                            )}
-                            {o.merchantName || 'Restaurant'}
-                          </p>
-                          <p className="text-xs text-gray-700 mt-1 truncate font-semibold">
-                            Order #{o.ordernumber ?? o.id.slice(0, 6)} • {String(o.status || 'pending').toLowerCase()}
-                          </p>
+                       <p className="text-sm font-black text-gray-900 truncate flex items-center gap-2">
+  {/* Custom order icon vs restaurant logo */}
+  {o.order_type === 'custom' ? (
+    <span className="w-6 h-6 rounded-full bg-purple-100 border-2 border-purple-300
+                     flex items-center justify-center flex-shrink-0 text-xs">📦</span>
+  ) : o.merchantLogoUrl ? (
+    <img src={o.merchantLogoUrl} alt=""
+         className="w-6 h-6 rounded-full border-2 border-primary object-cover"
+         onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+  ) : null}
+  {o.order_type === 'custom' ? (o.custom_order_ref ?? 'Custom Order') : (o.merchantName || 'Restaurant')}
+</p>
+
+<p className="text-xs text-gray-700 mt-1 truncate font-semibold">
+  {o.order_type === 'custom'
+    ? `Custom · ${String(o.custom_order_status || 'pending')}`
+    : `Order #${o.order_number ?? o.id.slice(0, 6)} · ${String(o.status || 'pending').toLowerCase()}`}
+</p>
+
+{/* Quoted amount badge for custom orders */}
+{o.order_type === 'custom' && o.custom_order_status === 'quoted' && o.quoted_amount && (
+  <p className="text-xs text-green-600 font-black mt-0.5 flex items-center gap-1">
+    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+    Quote ready: ₹{Number(o.quoted_amount).toLocaleString('en-IN')}
+  </p>
+)}
+
                           <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
                             <Clock className="w-3 h-3" />
                             {tinyTime(created)}
@@ -1394,15 +1443,8 @@ export default function CustomerDashboardPage() {
               </div>
             )}
           </div>
-{/*======== Custom Order Section =======
+{/* Quick Shop + Custom Order CTAs */}
 <CustomOrderSection />
-          <SearchBox
-            query={searchQuery}
-            setQuery={setSearchQueryDebounced}
-            restaurants={filteredRestaurants}
-            menuItems={menuItems}
-            onOpen={onOpenSearchResult}
-          />
 
           {/* Filters */}
      <CuisineFilters selected={selectedFilter} onSelect={setSelectedFilter} />  
@@ -1679,6 +1721,8 @@ export default function CustomerDashboardPage() {
               )}
             </div>
           </div>
+
+          
 
           {/* Footer */}
           <div className="space-y-3 sm:space-y-4">

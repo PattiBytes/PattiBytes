@@ -3,494 +3,422 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import { locationService, type SavedAddress } from '@/services/location';
-import DashboardLayout from '@/components/layouts/DashboardLayout';
-import AddressAutocomplete from '@/components/AddressAutocomplete';
-import { cartService } from '@/services/cart';
-import { appSettingsService } from '@/services/appSettings';
-import { sendNotification } from '@/utils/notifications';
+import { useRouter }     from 'next/navigation';
+import { toast }         from 'react-toastify';
+import { ArrowLeft, ShoppingBag } from 'lucide-react';
 
-import { calculateDeliveryFeeByDistance, getRoadDistanceKmViaApi } from '@/services/location';
+import { supabase }            from '@/lib/supabase';
+import { useAuth }             from '@/contexts/AuthContext';
+import { locationService, type SavedAddress,
+         calculateDeliveryFeeByDistance, getRoadDistanceKmViaApi }
+                               from '@/services/location';
+import { cartService }         from '@/services/cart';
+import { appSettingsService }  from '@/services/appSettings';
+import { sendNotification }    from '@/utils/notifications';
+import DashboardLayout         from '@/components/layouts/DashboardLayout';
+import { PageLoadingSpinner }  from '@/components/common/LoadingSpinner';
 
-import {
-  MapPin,
-  ShoppingBag,
-  CreditCard,
-  Wallet,
-  ArrowLeft,
-  Plus,
-  Trash2,
-  Check,
-  Loader2,
-  AlertCircle,
-  Home,
-  Briefcase,
-  MapPinned,
-  Phone,
-  MessageCircle,
-  Info,
-  Navigation,
-  LocateFixed,
-} from 'lucide-react';
-import { toast } from 'react-toastify';
-import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
-import { deliveryFeeService } from '@/services/deliveryFee';
+import { DeliveryAddressSection } from './_components/DeliveryAddressSection';
+import { AddAddressModal, type NewAddressForm } from './_components/AddAddressModal';
+import { OrderNotesSection }      from './_components/OrderNotesSection';
+import { PaymentMethodSection }   from './_components/PaymentMethodSection';
+import { MerchantContact }        from './_components/MerchantContact';
+import { OrderSummaryPanel }      from './_components/OrderSummaryPanel';
+import { formatFullAddress }      from './_components/DeliveryAddressSection';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+const SHOP_MERCHANT_ID = 'pattibytes-shop';
+const APP_SETTINGS_ID  = 'a6ba88a3-6fe9-4652-8c5d-b25ee1a05e39';
+const HUB_LAT_FALLBACK = 31.2837165;
+const HUB_LON_FALLBACK = 74.847114;
+
+// ─── Types ─────────────────────────────────────────────────────────────────
 type CheckoutStored = {
   cart: {
-    merchant_id: string;
+    merchant_id:    string;
     merchant_name?: string;
-    items: any[];
-    subtotal: number;
+    items:          any[];
+    subtotal:       number;
   };
-  promoCode?: string | null;
-  promoDiscount?: number;
+  deliveryFee?:     number;
+  deliveryDistance?: number;
+  tax?:             number;
+  promoCode?:       string | null;
+  promoDiscount?:   number;
+  finalTotal?:      number;
+  isShopCart?:      boolean;
 };
 
 type MerchantMini = {
-  id: string;
-  business_name: string | null;
-  phone: string | null;
-  address: string | null;
-  latitude: number | null;
-  longitude: number | null;
-
-  gst_enabled?: boolean | null;
-  gst_percentage?: number | null;
+  id:               string;
+  business_name:    string | null;
+  phone:            string | null;
+  address:          string | null;
+  latitude:         number | null;
+  longitude:        number | null;
+  gst_enabled?:     boolean | null;
+  gst_percentage?:  number | null;
+  user_id?:         string | null;
 };
 
 type LiveLocation = {
-  lat: number;
-  lng: number;
-  accuracy?: number;
+  lat:        number;
+  lng:        number;
+  accuracy?:  number;
   updated_at: string;
 };
 
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+type HubGeo = { lat: number; lon: number };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-function normalizePhone(v: string) {
-  return String(v || '').replace(/\D/g, '');
-}
-function isValidIndianMobile(v: string) {
-  return normalizePhone(v).length === 10;
-}
+function normalizePhone(v: string) { return String(v || '').replace(/\D/g, ''); }
+function isValidPhone(v: string)   { return normalizePhone(v).length === 10; }
 
-function formatFullAddress(a: SavedAddress) {
-  const lines: string[] = [];
-  if (a.address) lines.push(a.address);
-
-  const extraBits: string[] = [];
-  if ((a as any).apartment_floor) extraBits.push(`Flat/Floor: ${(a as any).apartment_floor}`);
-  if ((a as any).apartmentfloor) extraBits.push(`Flat/Floor: ${(a as any).apartmentfloor}`);
-  if ((a as any).landmark) extraBits.push(`Landmark: ${(a as any).landmark}`);
-  if (extraBits.length) lines.push(extraBits.join(' • '));
-
-  const cityLine = [a.city, a.state, (a as any).postalcode || (a as any).postal_code].filter(Boolean).join(', ');
-  if (cityLine) lines.push(cityLine);
-
-  return lines.join('\n');
-}
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function getMerchantId(cart: any): string | null {
-  // support both shapes
-  return (
-    cart?.merchant_id ??
-    cart?.merchantid ??
-    cart?.merchantId ??
-    null
-  );
+function blankForm(): NewAddressForm {
+  return {
+    label: 'Home', recipient_name: '', recipient_phone: '',
+    address: '', apartment_floor: '', landmark: '',
+    delivery_instructions: '', latitude: 0, longitude: 0,
+    is_default: false, city: '', state: '', postal_code: '',
+  };
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function CheckoutPage() {
-  const { user } = useAuth();
-  const router = useRouter();
+  const { user }  = useAuth();
+  const router    = useRouter();
 
-  const [cartData, setCartData] = useState<CheckoutStored | null>(null);
-  const [merchant, setMerchant] = useState<MerchantMini | null>(null);
+  const [cartData,        setCartData]        = useState<CheckoutStored | null>(null);
+  const [merchant,        setMerchant]        = useState<MerchantMini | null>(null);
+  const [hubGeo,          setHubGeo]          = useState<HubGeo>({ lat: HUB_LAT_FALLBACK, lon: HUB_LON_FALLBACK });
 
-  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [savedAddresses,  setSavedAddresses]  = useState<SavedAddress[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<SavedAddress | null>(null);
 
   const [showAddressModal, setShowAddressModal] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'online'>('cod');
+  const [newAddressForm,   setNewAddressForm]   = useState<NewAddressForm>(blankForm());
 
-  const [loading, setLoading] = useState(true);
-  const [placing, setPlacing] = useState(false);
+  const [paymentMethod,   setPaymentMethod]   = useState<'cod' | 'online'>('cod');
+  const [customerNotes,   setCustomerNotes]   = useState('');
 
-  const [deliveryFee, setDeliveryFee] = useState(0);
-  const [deliveryDistance, setDeliveryDistance] = useState(0);
-  const [deliveryBreakdown, setDeliveryBreakdown] = useState('');
+  const [loading,  setLoading]  = useState(true);
+  const [placing,  setPlacing]  = useState(false);
 
-  const [customerNotes, setCustomerNotes] = useState('');
+  const [deliveryFee,        setDeliveryFee]        = useState(0);
+  const [deliveryDistance,   setDeliveryDistance]   = useState(0);
+  const [deliveryBreakdown,  setDeliveryBreakdown]  = useState('');
+  const [showDeliveryFeeRow, setShowDeliveryFeeRow] = useState(true);
 
-  // Live location required
+  // Live location
   const [shareLiveLocation, setShareLiveLocation] = useState(false);
-  const [liveLocation, setLiveLocation] = useState<LiveLocation | null>(null);
-  const [locChecking, setLocChecking] = useState(false);
-  const watchIdRef = useRef<number | null>(null);
-  const lastSentAtRef = useRef<number>(0);
-  const orderIdRef = useRef<string | null>(null);
+  const [liveLocation,      setLiveLocation]      = useState<LiveLocation | null>(null);
+  const [locChecking,       setLocChecking]       = useState(false);
+  const watchIdRef   = useRef<number | null>(null);
+  const lastSentRef  = useRef<number>(0);
+  const orderIdRef   = useRef<string | null>(null);
+  const policyRef    = useRef<any>(null);
 
-  // New Address form
-  const [newAddress, setNewAddress] = useState<any>({
-    label: 'Home',
-    recipient_name: '',
-    recipient_phone: '',
-    address: '',
-    apartment_floor: '',
-    landmark: '',
-    delivery_instructions: '',
-    latitude: 0,
-    longitude: 0,
-    is_default: false,
-    city: '',
-    state: '',
-    postal_code: '',
-  });
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const isShopCart = useMemo(
+    () => cartData?.cart?.merchant_id === SHOP_MERCHANT_ID || cartData?.isShopCart === true,
+    [cartData]
+  );
 
   const items = cartData?.cart?.items || [];
 
   const computedSubtotal = useMemo(() => {
     const s = Number(cartData?.cart?.subtotal);
     if (Number.isFinite(s) && s > 0) return round2(s);
-
-    const sum = items.reduce((acc: number, it: any) => {
-      const price = Number(it?.price || 0);
-      const qty = Number(it?.quantity || 0);
-      const disc = Number(it?.discount_percentage || it?.discountpercentage || 0);
-      const effective = disc > 0 ? price * (1 - disc / 100) : price;
-      return acc + effective * qty;
-    }, 0);
-    return round2(sum);
+    return round2(items.reduce((acc: number, it: any) => {
+      const p    = Number(it?.price || 0);
+      const q    = Number(it?.quantity || 0);
+      const disc = Number(it?.discount_percentage || 0);
+      return acc + (disc > 0 ? p * (1 - disc / 100) : p) * q;
+    }, 0));
   }, [cartData?.cart?.subtotal, items]);
 
   const promoDiscount = useMemo(() => round2(Number(cartData?.promoDiscount || 0)), [cartData?.promoDiscount]);
-  const promoCode = cartData?.promoCode ?? null;
+  const promoCode     = cartData?.promoCode ?? null;
+  const taxableBase   = useMemo(() => Math.max(0, computedSubtotal - promoDiscount), [computedSubtotal, promoDiscount]);
 
-  const taxableBase = useMemo(() => Math.max(0, computedSubtotal - promoDiscount), [computedSubtotal, promoDiscount]);
-
-  const gstEnabled = useMemo(() => !!merchant?.gst_enabled, [merchant?.gst_enabled]);
-  const gstPct = useMemo(() => Number(merchant?.gst_percentage ?? 0), [merchant?.gst_percentage]);
+  // Shop cart: no GST
+  const gstEnabled = useMemo(() => !isShopCart && !!merchant?.gst_enabled, [isShopCart, merchant?.gst_enabled]);
+  const gstPct     = useMemo(() => Number(merchant?.gst_percentage ?? 0), [merchant?.gst_percentage]);
 
   const tax = useMemo(() => {
-    if (!gstEnabled) return 0;
-    if (!Number.isFinite(gstPct) || gstPct <= 0) return 0;
+    if (!gstEnabled || !Number.isFinite(gstPct) || gstPct <= 0) return 0;
     return round2(taxableBase * (gstPct / 100));
   }, [gstEnabled, gstPct, taxableBase]);
 
-  const finalTotal = useMemo(() => round2(taxableBase + deliveryFee + tax), [taxableBase, deliveryFee, tax]);
-// near other state:
- 
-const [showDeliveryFeeRow, setShowDeliveryFeeRow] = useState(true);
-const policyRef = useRef<{
-  baseRadiusKm: number;
-  perKmFeeAfterBase: number; enabled: boolean; showToCustomer: boolean; baseFee: number 
-} | null>(null);
+  const finalTotal = useMemo(() =>
+    round2(taxableBase + deliveryFee + tax)
+  , [taxableBase, deliveryFee, tax]);
 
+  const isSelectedAddressComplete = useMemo(() => {
+    if (!selectedAddress) return false;
+    const a = selectedAddress as any;
+    const phoneOk    = isValidPhone(a.recipient_phone || a.recipientphone || '');
+    const landmarkOk = String(a.landmark || '').trim().length >= 2;
+    const latOk      = Number.isFinite(Number(a.latitude))  && Number(a.latitude)  !== 0;
+    const lonOk      = Number.isFinite(Number(a.longitude)) && Number(a.longitude) !== 0;
+    return phoneOk && landmarkOk && latOk && lonOk;
+  }, [selectedAddress]);
+
+  const isLiveReady = useMemo(
+    () => shareLiveLocation && !!liveLocation?.lat && !!liveLocation?.lng,
+    [shareLiveLocation, liveLocation]
+  );
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
+    if (!user) { router.push('/login'); return; }
     loadCheckoutData();
-     
   }, [user]);
 
+  useEffect(() => () => stopSharing(), []);
+
   useEffect(() => {
-    return () => stopSharing();
-     
-  }, []);
+    if (!shareLiveLocation) { stopSharing(); return; }
+    startLiveWatch();
+  }, [shareLiveLocation]);
 
-  const loadCheckoutData = async () => {
+  // ── Data loading ───────────────────────────────────────────────────────────
+const loadCheckoutData = async () => {
   setLoading(true);
-
   try {
-    const stored = sessionStorage.getItem('checkout_data');
+    loadHubGeo();
 
-    let checkout: CheckoutStored | null = null;
+    const stored = sessionStorage.getItem('checkout_data');
+    let checkout: CheckoutStored;
 
     if (!stored) {
       const cart = cartService.getCart();
-
       if (!cart?.items?.length) {
         toast.error('No items in cart');
         router.push('/customer/cart');
         return;
       }
-const policy = await appSettingsService.getDeliveryPolicyNow();
-policyRef.current = policy;
-setShowDeliveryFeeRow(!!policy.showToCustomer);
-
-      const rebuilt: CheckoutStored = {
-        cart: cart as any,
-        promoCode: null,
-        promoDiscount: 0,
-      };
-
-      sessionStorage.setItem('checkout_data', JSON.stringify(rebuilt));
-      checkout = rebuilt;
+      checkout = { cart: cart as any, promoCode: null, promoDiscount: 0 };
+      sessionStorage.setItem('checkout_data', JSON.stringify(checkout));
     } else {
-      checkout = JSON.parse(stored) as CheckoutStored;
+      checkout = JSON.parse(stored);
     }
 
     setCartData(checkout);
 
-    const merchantId = getMerchantId(checkout?.cart);
-    if (!merchantId) throw new Error('Missing merchant id in checkout data');
+    const policy = await appSettingsService.getDeliveryPolicyNow();
+    policyRef.current = policy;
+    setShowDeliveryFeeRow(!!policy.showToCustomer);
 
-    const { data: m, error } = await supabase
-  .from('merchants')
-  .select('id,business_name,phone,address,latitude,longitude,gst_enabled,gst_percentage')
-  .eq('id', merchantId)
-  .maybeSingle();
+    const isShop = checkout.cart.merchant_id === SHOP_MERCHANT_ID || checkout.isShopCart;
 
-if (error) throw error;
-if (!m) throw new Error('Merchant not found / not accessible (RLS?)');
+    // Fetch merchant for restaurant carts, capture it locally (don't rely on state yet)
+    let freshMerchant: MerchantMini | null = null;
+    if (!isShop) {
+      const { data: m, error } = await supabase
+        .from('merchants')
+        .select('id,business_name,phone,address,latitude,longitude,gst_enabled,gst_percentage,user_id')
+        .eq('id', checkout.cart.merchant_id)
+        .maybeSingle();
 
-setMerchant(m as any);
+      if (error) throw error;
+      if (!m) throw new Error('Merchant not found');
 
+      freshMerchant = m as MerchantMini;
+      setMerchant(freshMerchant); // update state for later use
+    }
 
     const addresses = await locationService.getSavedAddresses(user!.id);
     setSavedAddresses(addresses);
 
-    const defaultAddr = (addresses as any[])?.find((a) => a?.isdefault) || addresses?.[0] || null;
+    const defaultAddr = (addresses as any[]).find(a => a?.isdefault || a?.is_default)
+      || addresses[0] || null;
 
     if (defaultAddr) {
-      await handleAddressSelection(defaultAddr, merchantId);
-    } else {
-      setSelectedAddress(null);
+      // ✅ Pass freshMerchant directly — state hasn't settled yet here
+      await handleAddressSelect(defaultAddr, checkout.cart.merchant_id, isShop, freshMerchant);
     }
 
-    await deliveryFeeService.loadConfig();
   } catch (e: any) {
-    console.error('Failed to load checkout data:', e);
-    toast.error(e?.message || 'Failed to load checkout data');
+    console.error('Checkout load error:', e);
+    toast.error(e?.message || 'Failed to load checkout');
   } finally {
     setLoading(false);
   }
 };
 
-function getMerchantId(cart: any): string | null {
-  return cart?.merchant_id ?? cart?.merchantid ?? cart?.merchantId ?? null;
-}
+  const loadHubGeo = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('appsettings')
+        .select('hub_latitude,hub_longitude')
+        .eq('id', APP_SETTINGS_ID)
+        .single();
 
-  const computeDistanceAndFee = async (addr: SavedAddress, merchantId?: string) => {
-    
-  const policy = policyRef.current ?? (await appSettingsService.getDeliveryPolicyNow());
+      if (error || !data) return;
+      const lat = Number((data as any).hub_latitude);
+      const lon = Number((data as any).hub_longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        setHubGeo({ lat, lon });
+      }
+    } catch { /* keep fallback */ }
+  };
+
+  // ── Delivery fee ───────────────────────────────────────────────────────────
+ const computeDeliveryFee = async (
+  addr: SavedAddress,
+  isShop: boolean,
+  merchantOverride?: MerchantMini | null   // ← NEW param
+) => {
+  const policy = policyRef.current ?? await appSettingsService.getDeliveryPolicyNow();
   policyRef.current = policy;
   setShowDeliveryFeeRow(!!policy.showToCustomer);
 
   if (!policy.enabled) {
-    setDeliveryDistance(0);
-    setDeliveryFee(0);
-    setDeliveryBreakdown('Delivery fee disabled');
+    setDeliveryFee(0); setDeliveryDistance(0);
+    setDeliveryBreakdown('Delivery fee disabled'); return;
+  }
+
+  // Use override first (avoids stale state on initial load), then fall back to state
+  const merchantSrc = merchantOverride ?? merchant;
+
+  const originLat = isShop ? hubGeo.lat : Number(merchantSrc?.latitude);
+  const originLon = isShop ? hubGeo.lon : Number(merchantSrc?.longitude);
+  const destLat   = Number((addr as any).latitude);
+  const destLon   = Number((addr as any).longitude);
+
+  if (![originLat, originLon, destLat, destLon].every(Number.isFinite) ||
+      (!isShop && (originLat === 0 || originLon === 0))) {
+    setDeliveryFee(0); setDeliveryDistance(0);
+    setDeliveryBreakdown(isShop ? 'Hub location unavailable' : 'Merchant location missing');
     return;
   }
-  let m = merchant;
 
-if ((!m || m.latitude == null || m.longitude == null) && merchantId) {
- const { data: m2, error: e2 } = await supabase
-  .from('merchants')
-  .select('id,business_name,phone,address,latitude,longitude,gst_enabled,gst_percentage')
-  .eq('id', merchantId)
-  .maybeSingle();
-
-if (e2) throw e2;
-if (m2) {
-  m = m2 as any;
-  setMerchant(m2 as any);
-}
-}
-
-
- const mLat = Number((m as any)?.latitude);
-  const mLon = Number((m as any)?.longitude);
-  const aLat = Number((addr as any)?.latitude);
-  const aLon = Number((addr as any)?.longitude);
-
-  if (![mLat, mLon, aLat, aLon].every(Number.isFinite)) {
-    setDeliveryDistance(0);
-    setDeliveryFee(0);
-    setDeliveryBreakdown('');
-    return;
-  }
+  let distanceKm: number;
+  let label: string;
 
   try {
-    const distanceKm = await getRoadDistanceKmViaApi(mLat, mLon, aLat, aLon);
-    
-    // ✅ Use fetched values instead of hardcoded
-    const quote = calculateDeliveryFeeByDistance(distanceKm, {
-      enabled: policy.enabled,
-      baseFee: policy.baseFee,
-      baseKm: policy.baseRadiusKm,        // ✅ From settings
-      perKmBeyondBase: policy.perKmFeeAfterBase,  // ✅ From settings
-      rounding: 'ceil',
-    });
-
-    setDeliveryDistance(quote.distanceKm);
-    setDeliveryFee(quote.fee);
-    setDeliveryBreakdown(`Road distance: ${quote.breakdown}`);
-    return;
-  } catch (e: any) {
-    console.error('Road distance failed', e);
-    
-    // Fallback to aerial
-    const aerialKm = haversineKm(mLat, mLon, aLat, aLon);
-    const quote = calculateDeliveryFeeByDistance(aerialKm, {
-      enabled: policy.enabled,
-      baseFee: policy.baseFee,
-      baseKm: policy.baseRadiusKm,        // ✅ From settings
-      perKmBeyondBase: policy.perKmFeeAfterBase,  // ✅ From settings
-      rounding: 'ceil',
-    });
-
-    setDeliveryDistance(quote.distanceKm);
-    setDeliveryFee(quote.fee);
-    setDeliveryBreakdown(`Aerial distance: ${quote.breakdown}`);
+    distanceKm = await getRoadDistanceKmViaApi(originLat, originLon, destLat, destLon);
+    label = isShop ? 'From Patti hub' : 'Road distance';
+  } catch {
+    distanceKm = locationService.calculateDistance(originLat, originLon, destLat, destLon);
+    label = isShop ? 'From Patti hub (est.)' : 'Aerial distance (est.)';
   }
+
+  const quote = calculateDeliveryFeeByDistance(distanceKm, {
+    enabled:         policy.enabled,
+    baseFee:         policy.baseFee,
+    baseKm:          policy.baseRadiusKm,
+    perKmBeyondBase: policy.perKmFeeAfterBase,
+    rounding:        'ceil',
+  });
+
+  setDeliveryFee(quote.fee);
+  setDeliveryDistance(quote.distanceKm);
+  setDeliveryBreakdown(`${label}: ${quote.breakdown}`);
 };
 
-  const handleAddressSelection = async (addr: SavedAddress, merchantId?: string) => {
-    setSelectedAddress(addr);
-    await computeDistanceAndFee(addr, merchantId || getMerchantId(cartData?.cart) || undefined);
-  };
+  const handleAddressSelect = async (
+  addr: SavedAddress,
+  _merchantId?: string,
+  isShop?: boolean,
+  merchantOverride?: MerchantMini | null  // ← NEW param
+) => {
+  setSelectedAddress(addr);
+  const shop = isShop ?? isShopCart;
+  await computeDeliveryFee(addr, shop, merchantOverride);
+};
 
-  const handleAddressSelect = (addressData: any) => {
-    setNewAddress((prev: any) => ({
-      ...prev,
-      address: addressData.address,
-      latitude: addressData.lat,
-      longitude: addressData.lon,
-      city: addressData.city || '',
-      state: addressData.state || '',
-      postal_code: addressData.postalcode || '',
-    }));
-  };
-
+  // ── Address management ─────────────────────────────────────────────────────
   const handleSaveAddress = async () => {
     if (!user) return;
+    const f = newAddressForm;
 
-    if (!newAddress.address || !newAddress.latitude || !newAddress.longitude) {
-      toast.error('Please select an address');
-      return;
+    if (!f.address || !f.latitude || !f.longitude) {
+      toast.error('Please select an address from the search'); return;
     }
-    if (!String(newAddress.landmark || '').trim() || String(newAddress.landmark).trim().length < 2) {
-      toast.error('Landmark is compulsory');
-      return;
+    if (!String(f.landmark || '').trim() || f.landmark.trim().length < 2) {
+      toast.error('Landmark is required'); return;
     }
-    if (!isValidIndianMobile(newAddress.recipient_phone)) {
-      toast.error('Recipient mobile number is compulsory (10 digits)');
-      return;
+    if (!isValidPhone(f.recipient_phone)) {
+      toast.error('Recipient phone must be a 10-digit mobile number'); return;
     }
 
     try {
       const saved = await locationService.saveAddress({
-        user_id: user.id,       // or customer_id: user.id
-        label: newAddress.label,
-        address: newAddress.address,
-        latitude: newAddress.latitude,
-        longitude: newAddress.longitude,
-        recipient_name: newAddress.recipient_name || null,
-        recipient_phone: normalizePhone(newAddress.recipient_phone) || null,
-        apartment_floor: newAddress.apartment_floor || null,
-        landmark: String(newAddress.landmark).trim(),
-        delivery_instructions: newAddress.delivery_instructions || null,
-        is_default: !!newAddress.is_default,
-        city: newAddress.city || null,
-        state: newAddress.state || null,
-        postal_code: newAddress.postal_code || null,
+        user_id:               user.id,
+        label:                 f.label,
+        address:               f.address,
+        latitude:              f.latitude,
+        longitude:             f.longitude,
+        recipient_name:        f.recipient_name  || null,
+        recipient_phone:       normalizePhone(f.recipient_phone) || null,
+        apartment_floor:       f.apartment_floor || null,
+        landmark:              f.landmark.trim(),
+        delivery_instructions: f.delivery_instructions || null,
+        is_default:            f.is_default,
+        city:                  f.city  || null,
+        state:                 f.state || null,
+        postal_code:           f.postal_code || null,
       } as any);
 
       if (saved) {
-        const next = [...savedAddresses, saved];
-        setSavedAddresses(next);
-        await handleAddressSelection(saved, cartData?.cart?.merchant_id);
+        setSavedAddresses(prev => [...prev, saved]);
+        await handleAddressSelect(saved);
         setShowAddressModal(false);
-        toast.success('Address saved & selected');
+        setNewAddressForm(blankForm());
+        toast.success('Address saved and selected');
       }
     } catch (e: any) {
-      console.error(e);
       toast.error(e?.message || 'Failed to save address');
     }
   };
 
-  const handleDeleteAddress = async (addressId: string) => {
-    try {
-      const ok = await locationService.deleteAddress(addressId);
-      if (!ok) return toast.error('Failed to delete address');
-
-      const next = savedAddresses.filter((a) => a.id !== addressId);
-      setSavedAddresses(next);
-
-      if (selectedAddress?.id === addressId) {
-        setSelectedAddress(null);
-        setDeliveryFee(0);
-        setDeliveryDistance(0);
-        setDeliveryBreakdown('');
-      }
-
-      toast.success('Address deleted');
-    } catch (e) {
-      console.error(e);
-      toast.error('Failed to delete address');
+  const handleDeleteAddress = async (id: string) => {
+    const ok = await locationService.deleteAddress(id);
+    if (!ok) { toast.error('Failed to delete address'); return; }
+    setSavedAddresses(prev => prev.filter(a => a.id !== id));
+    if (selectedAddress?.id === id) {
+      setSelectedAddress(null);
+      setDeliveryFee(0); setDeliveryDistance(0); setDeliveryBreakdown('');
     }
+    toast.success('Address deleted');
   };
 
+  // ── Live location ──────────────────────────────────────────────────────────
   const stopSharing = () => {
     try {
-      if (watchIdRef.current != null && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
+      if (watchIdRef.current != null) navigator.geolocation?.clearWatch(watchIdRef.current);
     } catch {}
     watchIdRef.current = null;
     orderIdRef.current = null;
   };
 
   const startLiveWatch = () => {
-    if (typeof window === 'undefined') return;
-    if (!navigator.geolocation) {
-      toast.error('Geolocation not supported on this device/browser');
-      return;
-    }
+    if (typeof window === 'undefined' || !navigator.geolocation) return;
     if (watchIdRef.current != null) return;
 
     watchIdRef.current = navigator.geolocation.watchPosition(
-      async (pos) => {
+      async pos => {
         const now = Date.now();
-        if (now - lastSentAtRef.current < 5000) return;
-        lastSentAtRef.current = now;
-
+        if (now - lastSentRef.current < 5000) return;
+        lastSentRef.current = now;
         const payload: LiveLocation = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-          updated_at: new Date().toISOString(),
+          lat: pos.coords.latitude, lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy, updated_at: new Date().toISOString(),
         };
-
         setLiveLocation(payload);
-
-        // update DB only after order exists
         if (orderIdRef.current) {
-          await supabase.from('orders').update({ customer_location: payload }).eq('id', orderIdRef.current);
+          await supabase.from('orders')
+            .update({ customer_location: payload })
+            .eq('id', orderIdRef.current);
         }
       },
-      (err) => {
+      err => {
         console.error(err);
-        toast.error('Unable to get live location (permission/timeout)');
+        toast.error('Unable to get live location');
         stopSharing();
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -498,245 +426,169 @@ if (m2) {
   };
 
   const requestLiveLocationOnce = async () => {
-    if (typeof window === 'undefined') return;
     if (!navigator.geolocation) {
-      toast.error('Geolocation not supported on this device/browser');
-      return;
+      toast.error('Geolocation not supported'); return;
     }
-
     setLocChecking(true);
     try {
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve, reject) =>
         navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const payload: LiveLocation = {
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-              accuracy: pos.coords.accuracy,
-              updated_at: new Date().toISOString(),
-            };
-            setLiveLocation(payload);
+          pos => {
+            setLiveLocation({
+              lat: pos.coords.latitude, lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy, updated_at: new Date().toISOString(),
+            });
             resolve();
           },
-          (err) => reject(err),
+          reject,
           { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-        );
-      });
-      toast.success('Live location enabled');
-    } catch (e) {
-      console.error(e);
-      toast.error('Could not get location. Please allow location permission.');
+        )
+      );
+      toast.success('Live location enabled ✓');
+    } catch {
+      toast.error('Could not get location. Allow location permission.');
     } finally {
       setLocChecking(false);
     }
   };
 
-  useEffect(() => {
-    if (!shareLiveLocation) {
-      stopSharing();
-      return;
-    }
-    startLiveWatch();
-     
-  }, [shareLiveLocation]);
-
-  const isSelectedAddressComplete = useMemo(() => {
-    if (!selectedAddress) return false;
-    const phoneOk = isValidIndianMobile((selectedAddress as any).recipient_phone || (selectedAddress as any).recipientphone || '');
-    const landmarkOk = String((selectedAddress as any).landmark || '').trim().length >= 2;
-    const latOk = Number.isFinite(Number((selectedAddress as any).latitude)) && Number((selectedAddress as any).latitude) !== 0;
-    const lonOk = Number.isFinite(Number((selectedAddress as any).longitude)) && Number((selectedAddress as any).longitude) !== 0;
-    return phoneOk && landmarkOk && latOk && lonOk;
-  }, [selectedAddress]);
-
-  const isLiveLocationReady = useMemo(() => {
-    return shareLiveLocation && !!liveLocation?.lat && !!liveLocation?.lng;
-  }, [shareLiveLocation, liveLocation]);
-
-  const openMaps = (lat: number, lon: number) => {
-    window.open(`https://www.google.com/maps?q=${lat},${lon}`, '_blank', 'noopener,noreferrer');
-  };
-
-  const contactWhatsApp = (phone: string, msg: string) => {
-    const clean = normalizePhone(phone);
-    if (!clean) return toast.error('Phone number not available');
-    window.open(`https://wa.me/${clean}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
-  };
-
+  // ── Place order ────────────────────────────────────────────────────────────
   const handlePlaceOrder = async () => {
     if (!user || !cartData || !selectedAddress) {
-      toast.error('Please select a delivery address');
-      return;
+      toast.error('Please select a delivery address'); return;
     }
-
     if (!isSelectedAddressComplete) {
-      toast.error('Selected address must include landmark and a 10-digit mobile number');
-      return;
+      toast.error('Address must include landmark and a 10-digit mobile number'); return;
     }
-
-    if (!isLiveLocationReady) {
-      toast.error('Live location is compulsory. Enable it to place the order.');
-      return;
+    if (!isLiveReady) {
+      toast.error('Live location is required. Enable it first.'); return;
     }
-
     if (paymentMethod === 'online') {
-      toast.info('Online payment will be available soon');
-      return;
+      toast.info('Online payment coming soon'); return;
     }
 
     setPlacing(true);
     try {
-      const { data: merchantCheck, error: merchantError } = await supabase
-        .from('merchants')
-        .select('id,business_name,latitude,longitude')
-        .eq('id', cartData.cart.merchant_id)
-        .single();
+      // Re-compute delivery fee with latest data
+      await computeDeliveryFee(selectedAddress, isShopCart);
 
-      if (merchantError || !merchantCheck) throw new Error('Restaurant not found. Please clear your cart and try again.');
-
-      await computeDistanceAndFee(selectedAddress, merchantCheck.id);
-
-      const estimatedMinutes = 30 + Math.ceil(Math.max(0, deliveryDistance - 5));
+      const estimatedMinutes     = 30 + Math.ceil(Math.max(0, deliveryDistance - 5));
       const estimatedDeliveryTime = new Date(Date.now() + estimatedMinutes * 60_000);
-
-      const fullDeliveryAddress = formatFullAddress(selectedAddress);
+      const addr                 = selectedAddress as any;
 
       const orderData: any = {
-        customer_id: user.id,
-        merchant_id: merchantCheck.id,
-        items: cartData.cart.items,
+        customer_id:          user.id,
+        // ✅ KEY FIX: merchant_id = null for shop carts (non-UUID safe)
+        merchant_id:          isShopCart ? null : cartData.cart.merchant_id,
+        order_type:           isShopCart ? 'custom' : 'restaurant',
+        // ✅ hub_origin stores the appsettings UUID for custom/shop orders
+        hub_origin:           isShopCart ? APP_SETTINGS_ID : null,
 
-        subtotal: round2(computedSubtotal),
-        discount: round2(promoDiscount),
-        delivery_fee: round2(deliveryFee),
-        tax: round2(tax),
-        total_amount: round2(finalTotal),
+        items:                cartData.cart.items,
+        subtotal:             round2(computedSubtotal),
+        discount:             round2(promoDiscount),
+        delivery_fee:         round2(deliveryFee),
+        tax:                  round2(tax),
+        total_amount:         round2(finalTotal),
 
-        payment_method: paymentMethod,
-        payment_status: 'pending',
+        payment_method:       paymentMethod,
+        payment_status:       'pending',
+        status:               'pending',
 
-        promo_code: promoCode || null,
+        promo_code:           promoCode || null,
 
-        delivery_address: fullDeliveryAddress,
-        delivery_latitude: Number((selectedAddress as any).latitude),
-        delivery_longitude: Number((selectedAddress as any).longitude),
+        delivery_address:     formatFullAddress(selectedAddress),
+        delivery_latitude:    Number(addr.latitude),
+        delivery_longitude:   Number(addr.longitude),
         delivery_distance_km: round2(deliveryDistance),
+        delivery_address_label: addr.label || null,
 
-        customer_phone: normalizePhone((selectedAddress as any).recipient_phone || (selectedAddress as any).recipientphone) || null,
-        special_instructions: (selectedAddress as any).delivery_instructions || (selectedAddress as any).deliveryinstructions || null,
-        customer_notes: customerNotes || null,
+        recipient_name:       addr.recipient_name || addr.recipientname || null,
+        customer_phone:       normalizePhone(addr.recipient_phone || addr.recipientphone) || null,
+        special_instructions: addr.delivery_instructions || addr.deliveryinstructions || null,
+        customer_notes:       customerNotes || null,
+        delivery_instructions: addr.delivery_instructions || addr.deliveryinstructions || null,
 
-        customer_location: liveLocation || null,
-
-        status: 'pending',
-        preparation_time: 30,
+        customer_location:    liveLocation || null,
+        preparation_time:     30,
         estimated_delivery_time: estimatedDeliveryTime.toISOString(),
       };
 
-     const { data: order, error: orderError } = await supabase
+      const { data: order, error: orderError } = await supabase
         .from('orders').insert(orderData).select().single();
+
       if (orderError) throw new Error(orderError.message || 'Failed to create order');
 
+      // Clear cart + session
       sessionStorage.removeItem('checkout_data');
       cartService.clearCart();
-      toast.success('Order placed successfully!');
 
-      // ✅ Notify customer + auto fan-out to admins via /api/notify
-      const orderNum = (order as any).order_number ?? (order as any).id?.slice(0, 8) ?? '';
-      const notifData = {
-        order_id:     order.id,
-        order_number: orderNum,
-        status:       'pending',
-      };
+      const orderNum   = (order as any).order_number ?? (order as any).id?.slice(0, 8) ?? '';
+      const notifMeta  = { order_id: order.id, order_number: orderNum, status: 'pending' };
 
-      // 1️⃣ Customer — also auto fan-out to admins/superadmins via /api/notify
+      // 1. Customer notification
       sendNotification(
         user.id,
         '🎉 Order Placed!',
-        `Your order #${orderNum} has been placed. We'll confirm it shortly.`,
-        'new_order',
-        notifData,
+        `Your order #${orderNum} has been placed successfully.`,
+        'new_order', notifMeta,
       ).catch(console.error);
 
-      //  2️⃣ Superadmins — explicit in case fan-out config changes
-supabase
-  .from('profiles')
-  .select('id')
-  .eq('role', 'superadmin')
-  .eq('is_active', true)
-  .then(({ data: superadmins }) => {
-    superadmins?.forEach(({ id }) => {
-      sendNotification(
-        id,
-        `[SUPERADMIN] 🛒 New Order #${orderNum}`,
-        `New order placed by customer. Total: ₹${round2(finalTotal)}`,
-        'new_order',
-        { ...notifData, forwarded_from: user.id },
-      ).catch(console.error);
-    });
-  });
-
-
-      //3️⃣ Merchant — look up merchant user_id then notify
-      supabase
-        .from('merchants')
-        .select('user_id')
-        .eq('id', merchantCheck.id)
-        .maybeSingle()
-        .then(({ data: m }) => {
-          if (!m?.user_id) return;
-          sendNotification(
-            m.user_id,
-            `🛒 New Order #${orderNum}`,
-            `A new order has been placed. Please confirm it.`,
-            'new_order',
-            notifData,
-          ).catch(console.error);
+      // 2. Superadmins
+      supabase.from('profiles').select('id')
+        .eq('role', 'superadmin').eq('is_active', true)
+        .then(({ data: admins }) => {
+          admins?.forEach(({ id }) =>
+            sendNotification(
+              id,
+              `[ADMIN] 🛒 New ${isShopCart ? 'Shop' : 'Restaurant'} Order #${orderNum}`,
+              `Total: ₹${round2(finalTotal)}`,
+              'new_order', { ...notifMeta, forwarded_from: user.id },
+            ).catch(console.error)
+          );
         });
 
+      // 3. Merchant (only for restaurant carts)
+      if (!isShopCart && merchant?.user_id) {
+        sendNotification(
+          merchant.user_id,
+          `🛒 New Order #${orderNum}`,
+          `New order received. Please confirm.`,
+          'new_order', notifMeta,
+        ).catch(console.error);
+      }
+
+      toast.success('Order placed successfully! 🎉');
+
+      // Start live tracking
       orderIdRef.current = order.id;
       startLiveWatch();
-      router.push(`/customer/orders/${order.id}`);
-
-      orderIdRef.current = order.id; // enable DB updates for live location now
-      startLiveWatch();
 
       router.push(`/customer/orders/${order.id}`);
+
     } catch (e: any) {
-      console.error(e);
+      console.error('Place order error:', e);
       toast.error(e?.message || 'Failed to place order. Please try again.');
     } finally {
       setPlacing(false);
     }
   };
 
-  const getAddressIcon = (label: string) => {
-    switch (String(label || '').toLowerCase()) {
-      case 'home':
-        return <Home className="w-5 h-5" />;
-      case 'work':
-        return <Briefcase className="w-5 h-5" />;
-      default:
-        return <MapPinned className="w-5 h-5" />;
-    }
-  };
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   if (loading) return <PageLoadingSpinner />;
 
   if (!cartData?.cart?.items?.length) {
     return (
       <DashboardLayout>
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="text-center py-16">
-            <ShoppingBag size={64} className="mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-600">No items in checkout</p>
-            <button
-              onClick={() => router.push('/customer/dashboard')}
-              className="mt-4 bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600"
-            >
-              Browse Restaurants
-            </button>
-          </div>
+        <div className="max-w-7xl mx-auto px-4 py-8 text-center py-16">
+          <ShoppingBag size={64} className="mx-auto text-gray-400 mb-4" />
+          <p className="text-gray-600 mb-4">No items in checkout</p>
+          <button
+            onClick={() => router.push('/customer/dashboard')}
+            className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600"
+          >
+            Browse Restaurants
+          </button>
         </div>
       </DashboardLayout>
     );
@@ -747,503 +599,94 @@ supabase
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-32 md:pb-8">
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900
+                     mb-6 transition-colors"
         >
-          <ArrowLeft size={20} />
-          <span>Back to Cart</span>
+          <ArrowLeft size={20} /> Back to Cart
         </button>
 
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Checkout</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-1">Checkout</h1>
         <p className="text-sm text-gray-600 mb-8">
-          {merchant?.business_name ? `From ${merchant.business_name}` : 'Review and place your order'}
+          {isShopCart
+            ? '🏪 PattiBytes Shop — delivered from Patti hub'
+            : merchant?.business_name
+              ? `From ${merchant.business_name}`
+              : 'Review and place your order'}
         </p>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Left */}
+          {/* ── Left ───────────────────────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Address */}
-            <div className="bg-white rounded-xl shadow-md p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <MapPin className="text-primary" size={24} />
-                  Delivery Address
-                </h2>
-                <button
-                  onClick={() => setShowAddressModal(true)}
-                  className="text-primary hover:bg-orange-50 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors font-semibold"
-                >
-                  <Plus size={16} />
-                  Add New
-                </button>
-              </div>
+            <DeliveryAddressSection
+              addresses={savedAddresses}
+              selectedId={selectedAddress?.id ?? null}
+              onSelect={addr => handleAddressSelect(addr)}
+              onDelete={handleDeleteAddress}
+              onAddNew={() => {
+                setNewAddressForm(blankForm());
+                setShowAddressModal(true);
+              }}
+            />
 
-              {savedAddresses.length ? (
-                <div className="space-y-3">
-                  {savedAddresses.map((address: any) => {
-                    const phoneOk = isValidIndianMobile(address?.recipient_phone || address?.recipientphone || '');
-                    const landmarkOk = String(address?.landmark || '').trim().length >= 2;
+            <OrderNotesSection
+              notes={customerNotes}
+              onNotesChange={setCustomerNotes}
+              shareLiveLocation={shareLiveLocation}
+              onToggleLive={setShareLiveLocation}
+              liveLocation={liveLocation}
+              locChecking={locChecking}
+              onVerifyLocation={requestLiveLocationOnce}
+              isShopCart={isShopCart}
+            />
 
-                    const selected = selectedAddress?.id === address.id;
-                    return (
-                      <div
-                        key={address.id}
-                        className={`relative p-4 rounded-lg border-2 transition-all cursor-pointer ${
-                          selected ? 'border-primary bg-orange-50' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={() => handleAddressSelection(address, cartData.cart.merchant_id)}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="text-primary mt-1">{getAddressIcon(address.label)}</div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <p className="font-bold text-gray-900">{address.label}</p>
-                              {(address.is_default || address.isdefault) && (
-                                <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full">Default</span>
-                              )}
-                              {(!phoneOk || !landmarkOk) && (
-                                <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                                  Missing required details
-                                </span>
-                              )}
-                            </div>
+            <PaymentMethodSection
+              selected={paymentMethod}
+              onChange={setPaymentMethod}
+            />
 
-                            <p className="text-sm text-gray-700 whitespace-pre-line">{formatFullAddress(address)}</p>
-
-                            <div className="mt-2 flex items-center gap-3 text-xs text-gray-600 flex-wrap">
-                              {address.recipient_name && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Info className="w-3 h-3" />
-                                  {address.recipient_name}
-                                </span>
-                              )}
-                              {(address.recipient_phone || address.recipientphone) && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Phone className="w-3 h-3" />
-                                  {address.recipient_phone || address.recipientphone}
-                                </span>
-                              )}
-                              {(address.delivery_instructions || address.deliveryinstructions) && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Navigation className="w-3 h-3" />
-                                  {address.delivery_instructions || address.deliveryinstructions}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="mt-3 flex items-center gap-2">
-                              <button
-                                type="button"
-                                className="text-xs font-semibold text-primary hover:underline"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openMaps(Number(address.latitude), Number(address.longitude));
-                                }}
-                              >
-                                Open in Maps
-                              </button>
-
-                              {!address.is_default && !address.isdefault && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteAddress(address.id);
-                                  }}
-                                  className="ml-auto p-1.5 hover:bg-red-50 text-red-600 rounded transition-colors"
-                                  type="button"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {selected && <Check className="text-primary flex-shrink-0" size={20} />}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-12 bg-gray-50 rounded-lg">
-                  <MapPin size={48} className="mx-auto text-gray-400 mb-3" />
-                  <p className="text-gray-600 mb-4">No saved addresses</p>
-                  <button
-                    onClick={() => setShowAddressModal(true)}
-                    className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-orange-600 font-semibold"
-                  >
-                    Add Your First Address
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Notes + Live location */}
-            <div className="bg-white rounded-xl shadow-md p-6 space-y-4">
-              <div>
-                <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
-                  <Info className="text-primary" size={22} />
-                  Order notes
-                </h2>
-                <textarea
-                  value={customerNotes}
-                  onChange={(e) => setCustomerNotes(e.target.value)}
-                  placeholder="Any request for the restaurant? (optional)"
-                  className="w-full min-h-[90px] border-2 border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary text-sm"
-                />
-              </div>
-
-              <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-lg p-3">
-                <input
-                  type="checkbox"
-                  checked={shareLiveLocation}
-                  onChange={(e) => setShareLiveLocation(e.target.checked)}
-                  className="mt-1 w-4 h-4"
-                />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900">Live location required</p>
-                  <p className="text-xs text-gray-600">
-                    You must enable live location to place the order. After order placement, it will keep updating in the order.
-                  </p>
-
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={requestLiveLocationOnce}
-                      disabled={!shareLiveLocation || locChecking}
-                      className="px-3 py-2 rounded-lg bg-white border border-orange-200 hover:bg-orange-100 text-sm font-semibold disabled:opacity-60 inline-flex items-center gap-2"
-                    >
-                      {locChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
-                      Verify location now
-                    </button>
-                  </div>
-
-                  {shareLiveLocation && liveLocation && (
-                    <p className="mt-2 text-xs text-gray-600">
-                      Last update: {new Date(liveLocation.updated_at).toLocaleTimeString()}
-                    </p>
-                  )}
-                  {shareLiveLocation && !liveLocation && (
-                    <p className="mt-2 text-xs text-red-700">
-                      Location not received yet. Tap “Verify location now” and allow permission.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Payment */}
-            <div className="bg-white rounded-xl shadow-md p-6">
-              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <CreditCard className="text-primary" size={24} />
-                Payment Method
-              </h2>
-
-              <div className="space-y-3">
-                <button
-                  onClick={() => setPaymentMethod('cod')}
-                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                    paymentMethod === 'cod' ? 'border-primary bg-orange-50' : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                  type="button"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                        <Wallet className="text-green-600" size={24} />
-                      </div>
-                      <div>
-                        <p className="font-bold text-gray-900">Cash on Delivery</p>
-                        <p className="text-sm text-gray-600">Pay when you receive your order</p>
-                      </div>
-                    </div>
-                    {paymentMethod === 'cod' && <Check className="text-primary" size={24} />}
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => toast.info('Online payment coming soon!')}
-                  disabled
-                  className="w-full text-left p-4 rounded-lg border-2 border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
-                  type="button"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                      <CreditCard className="text-blue-600" size={24} />
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-900">Online Payment</p>
-                      <p className="text-sm text-gray-600">UPI, Cards, Wallets (Coming Soon)</p>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* Contact */}
-            {merchant?.phone && (
-              <div className="bg-white rounded-xl shadow-md p-6">
-                <h2 className="text-xl font-bold mb-3 flex items-center gap-2">
-                  <Phone className="text-primary" size={22} />
-                  Restaurant contact
-                </h2>
-                <div className="flex gap-3 flex-wrap">
-                  <a
-                    className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 font-semibold text-sm inline-flex items-center gap-2"
-                    href={`tel:${merchant.phone}`}
-                  >
-                    <Phone className="w-4 h-4" />
-                    Call
-                  </a>
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-lg bg-green-100 hover:bg-green-200 text-green-800 font-semibold text-sm inline-flex items-center gap-2"
-                    onClick={() =>
-                      contactWhatsApp(merchant!.phone!, `Hi, I am placing an order. Merchant: ${merchant?.business_name || ''}`)
-                    }
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    WhatsApp
-                  </button>
-                </div>
-              </div>
+            {/* Only show merchant contact for restaurant carts */}
+            {!isShopCart && (
+              <MerchantContact
+                phone={merchant?.phone}
+                businessName={merchant?.business_name}
+              />
             )}
           </div>
 
-          {/* Right */}
+          {/* ── Right ──────────────────────────────────────────────────── */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-lg p-6 sticky top-6">
-              <h2 className="text-xl font-bold mb-4">Order Summary</h2>
-
-              <div className="space-y-3 mb-4 pb-4 border-b max-h-52 overflow-y-auto">
-                {items.map((item: any) => (
-                  <div key={item.id} className="flex justify-between text-sm gap-3">
-                    <span className="text-gray-600 flex-1">
-                      {item.name} × {item.quantity}
-                    </span>
-                    <span className="font-semibold">
-                      ₹{(Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-2 mb-4 pb-4 border-b text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Item Total</span>
-                  <span className="font-semibold">₹{computedSubtotal.toFixed(2)}</span>
-                </div>
-
-                {promoDiscount > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Promo Discount {promoCode ? `(${promoCode})` : ''}</span>
-                    <span className="font-semibold">-₹{promoDiscount.toFixed(2)}</span>
-                  </div>
-                )}
-
-             {showDeliveryFeeRow && (
-  <>
-    <div className="flex justify-between">
-      <span className="text-gray-600">Delivery Fee</span>
-      <span className="font-semibold">₹{deliveryFee.toFixed(2)}</span>
-    </div>
-
-    {deliveryBreakdown && (
-      <p className="text-xs text-gray-500">
-        {deliveryDistance > 0 ? `${deliveryDistance.toFixed(2)} km • ` : ''}
-        {deliveryBreakdown}
-      </p>
-    )}
-  </>
-)}
-
-
-                <div className="flex justify-between">
-                  <span className="text-gray-600">
-                    GST {gstEnabled && gstPct > 0 ? `(${gstPct}%)` : '(0%)'}
-                  </span>
-                  <span className="font-semibold">₹{tax.toFixed(2)}</span>
-                </div>
-              </div>
-
-              <div className="flex justify-between mb-6 pt-2">
-                <span className="text-lg font-bold">Total</span>
-                <span className="text-2xl font-bold text-primary">₹{finalTotal.toFixed(2)}</span>
-              </div>
-
-              {!selectedAddress && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-yellow-800">Please select a delivery address to continue</p>
-                  </div>
-                </div>
-              )}
-
-              {selectedAddress && !isSelectedAddressComplete && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-red-800">Selected address must have a landmark and a 10-digit mobile number.</p>
-                  </div>
-                </div>
-              )}
-
-              {selectedAddress && (!shareLiveLocation || !liveLocation) && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-red-800">Live location is required to place the order.</p>
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={handlePlaceOrder}
-                disabled={placing || !selectedAddress || !isSelectedAddressComplete || !isLiveLocationReady}
-                className="w-full bg-primary text-white py-4 rounded-xl hover:bg-orange-600 font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-              >
-                {placing ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Placing Order...
-                  </>
-                ) : (
-                  `Place Order • ₹${finalTotal.toFixed(2)}`
-                )}
-              </button>
-
-              <p className="text-xs text-gray-500 text-center mt-4">By placing this order, you agree to our terms.</p>
-            </div>
+            <OrderSummaryPanel
+              items={items}
+              subtotal={computedSubtotal}
+              promoDiscount={promoDiscount}
+              promoCode={promoCode}
+              deliveryFee={deliveryFee}
+              deliveryDistance={deliveryDistance}
+              deliveryBreakdown={deliveryBreakdown}
+              showDeliveryFee={showDeliveryFeeRow}
+              tax={tax}
+              gstEnabled={gstEnabled}
+              gstPct={gstPct}
+              finalTotal={finalTotal}
+              isShopCart={isShopCart}
+              hasAddress={!!selectedAddress}
+              addressComplete={isSelectedAddressComplete}
+              liveReady={isLiveReady}
+              placing={placing}
+              onPlaceOrder={handlePlaceOrder}
+            />
           </div>
         </div>
-
-        {/* Address modal */}
-        {showAddressModal && (
-          <>
-            <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowAddressModal(false)} />
-            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white rounded-2xl shadow-2xl z-50 p-6 mx-4 max-h-[90vh] overflow-y-auto">
-              <h2 className="text-2xl font-bold mb-6">Add Delivery Address</h2>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Address Label</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['Home', 'Work', 'Other'].map((label) => (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => setNewAddress((p: any) => ({ ...p, label }))}
-                        className={`p-3 rounded-lg border-2 font-medium transition-all ${
-                          newAddress.label === label
-                            ? 'border-primary bg-orange-50 text-primary'
-                            : 'border-gray-200 text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Recipient name (optional)</label>
-                    <input
-                      value={newAddress.recipient_name}
-                      onChange={(e) => setNewAddress((p: any) => ({ ...p, recipient_name: e.target.value }))}
-                      className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                      placeholder="Name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Recipient phone (required)</label>
-                    <input
-                      value={newAddress.recipient_phone}
-                      onChange={(e) => setNewAddress((p: any) => ({ ...p, recipient_phone: e.target.value }))}
-                      className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                      placeholder="10-digit mobile number"
-                      inputMode="numeric"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Flat/Floor (optional)</label>
-                    <input
-                      value={newAddress.apartment_floor}
-                      onChange={(e) => setNewAddress((p: any) => ({ ...p, apartment_floor: e.target.value }))}
-                      className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                      placeholder="E.g., 12B 2nd Floor"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Landmark (required)</label>
-                    <input
-                      value={newAddress.landmark}
-                      onChange={(e) => setNewAddress((p: any) => ({ ...p, landmark: e.target.value }))}
-                      className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                      placeholder="Near..."
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Search & Select Address</label>
-                  <AddressAutocomplete onSelect={handleAddressSelect} />
-                  {newAddress.address && (
-                    <div className="mt-3 bg-green-50 border-2 border-green-200 rounded-lg p-4">
-                      <p className="text-sm font-semibold text-green-900 mb-1">Selected Address</p>
-                      <p className="text-sm text-green-800">{newAddress.address}</p>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Delivery instructions (optional)</label>
-                  <input
-                    value={newAddress.delivery_instructions}
-                    onChange={(e) => setNewAddress((p: any) => ({ ...p, delivery_instructions: e.target.value }))}
-                    className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                    placeholder="Call on arrival, Leave at gate, etc."
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="setDefault"
-                    checked={!!newAddress.is_default}
-                    onChange={(e) => setNewAddress((p: any) => ({ ...p, is_default: e.target.checked }))}
-                    className="w-4 h-4 text-primary border-gray-300 rounded"
-                  />
-                  <label htmlFor="setDefault" className="text-sm text-gray-700">
-                    Set as default address
-                  </label>
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={() => setShowAddressModal(false)}
-                    className="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-xl hover:bg-gray-300 font-semibold"
-                    type="button"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveAddress}
-                    disabled={!newAddress.address}
-                    className="flex-1 bg-primary text-white px-6 py-3 rounded-xl hover:bg-orange-600 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                    type="button"
-                  >
-                    Save & Select
-                  </button>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
       </div>
+
+      {showAddressModal && (
+        <AddAddressModal
+          form={newAddressForm}
+          onChange={patch => setNewAddressForm(prev => ({ ...prev, ...patch }))}
+          onSave={handleSaveAddress}
+          onClose={() => setShowAddressModal(false)}
+        />
+      )}
     </DashboardLayout>
   );
 }

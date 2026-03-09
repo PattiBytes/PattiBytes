@@ -1,345 +1,1008 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+ 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { toast } from 'react-toastify';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter }  from 'next/navigation';
+import { toast }      from 'react-toastify';
 import {
-  ArrowLeft,
-  ShoppingCart,
-  Loader2,
-  Plus,
-  Package,
-  MessageSquare,
-  Send,
+  ArrowLeft, ClipboardList, Send, FileText,
+  ShoppingBag, ListChecks, MessageSquare, Sparkles,
+  MapPin, CreditCard, Wallet, Check, ChevronDown, ChevronUp,
+  LocateFixed, Loader2, Info, Phone, Home, Briefcase,
+  MapPinned, Tag, AlertCircle,
 } from 'lucide-react';
-import DashboardLayout from '@/components/layouts/DashboardLayout';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
 
-type CustomProduct = {
-  id: string;
-  name: string;
-  category: string;
-  price: number;
-  unit: string;
-  imageurl?: string | null;
-  description?: string | null;
-  isactive: boolean;
+import AppShell               from '@/components/common/AppShell';
+import { supabase }           from '@/lib/supabase';
+import { useAuth }            from '@/contexts/AuthContext';
+import {
+  locationService, type SavedAddress,
+  calculateDeliveryFeeByDistance, getRoadDistanceKmViaApi,
+} from '@/services/location';
+import { appSettingsService } from '@/services/appSettings';
+
+import {
+  ShopProductPickerDropdown,
+  type CustomProduct,
+  type SelectedProduct,
+} from './_components/ShopProductPickerDropdown';
+import { ManualItemsForm, type ManualItem } from './_components/ManualItemsForm';
+import { MyCustomOrders }                   from './_components/MyCustomOrders';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const PATTI_HUB = { lat: 31.2837165, lon: 74.847114 };
+
+const ALL_CATEGORIES = [
+  'dairy', 'grocery', 'bakery', 'beverages', 'snacks',
+  'electronics', 'clothing', 'medicines', 'stationery', 'other',
+];
+
+const CATEGORY_EMOJIS: Record<string, string> = {
+  dairy: '🥛', grocery: '🛒', bakery: '🍞', beverages: '🧃',
+  snacks: '🍿', electronics: '🔌', clothing: '👕',
+  medicines: '💊', stationery: '✏️', other: '📦',
 };
 
-function CustomOrderContent() {
-  const router = useRouter();
-  const { user } = useAuth();
-  const searchParams = useSearchParams();
-  const category = searchParams.get('category') || 'custom';
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function makeRef() {
+  return `PBX-CUST-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+}
+const round2 = (n: number) => Math.round(n * 100) / 100;
+function normalizePhone(v: string) { return String(v || '').replace(/\D/g, ''); }
 
-  const [products, setProducts] = useState<CustomProduct[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [orderDescription, setOrderDescription] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [cartCount, setCartCount] = useState(0);
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatAddress(a: SavedAddress): string {
+  const lines: string[] = [];
+  if (a.address) lines.push(a.address);
+  const extra: string[] = [];
+  if ((a as any).apartmentfloor)   extra.push(`Flat/Floor: ${(a as any).apartmentfloor}`);
+  if ((a as any).apartment_floor)  extra.push(`Flat/Floor: ${(a as any).apartment_floor}`);
+  if ((a as any).landmark)         extra.push(`Landmark: ${(a as any).landmark}`);
+  if (extra.length) lines.push(extra.join(' • '));
+  const city = [
+    a.city, a.state,
+    (a as any).postalcode || (a as any).postal_code,
+  ].filter(Boolean).join(', ');
+  if (city) lines.push(city);
+  return lines.join('\n');
+}
+
+function AddrIcon({ label }: { label: string }) {
+  switch (String(label || '').toLowerCase()) {
+    case 'home': return <Home className="w-4 h-4" />;
+    case 'work': return <Briefcase className="w-4 h-4" />;
+    default:     return <MapPinned className="w-4 h-4" />;
+  }
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+type LiveLocation = { lat: number; lng: number; accuracy?: number; updated_at: string };
+type Tab = 'new' | 'history';
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+export default function CustomOrderPage() {
+  const router   = useRouter();
+  const { user } = useAuth();
+
+  const [tab, setTab] = useState<Tab>('new');
+
+  // items
+  const [selectedMap, setSelectedMap] = useState<Map<string, SelectedProduct>>(new Map());
+  const [manualItems, setManualItems] = useState<ManualItem[]>([]);
+
+  // form meta
+  const [categories, setCategories] = useState<string[]>([]);
+  const [notes,      setNotes]      = useState('');
+
+  // address
+  const [savedAddresses,  setSavedAddresses]  = useState<SavedAddress[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<SavedAddress | null>(null);
+  const [showAddrPicker,  setShowAddrPicker]  = useState(false);
+  const [addrLoading,     setAddrLoading]     = useState(false);
+
+  // delivery
+  const [deliveryFee,       setDeliveryFee]       = useState(0);
+  const [deliveryKm,        setDeliveryKm]        = useState(0);
+  const [deliveryBreakdown, setDeliveryBreakdown] = useState('');
+  const [deliveryLoading,   setDeliveryLoading]   = useState(false);
+  const policyRef = useRef<any>(null);
+
+  // payment
+  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'online'>('cod');
+
+  // live location
+  const [shareLive,    setShareLive]    = useState(false);
+  const [liveLocation, setLiveLocation] = useState<LiveLocation | null>(null);
+  const [locChecking,  setLocChecking]  = useState(false);
+  const watchIdRef  = useRef<number | null>(null);
+  const lastSentRef = useRef<number>(0);
+
+  // submit
+  const [submitting,   setSubmitting]   = useState(false);
+  const [submitted,    setSubmitted]    = useState(false);
+  const [submittedRef, setSubmittedRef] = useState('');
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) { router.push('/login'); return; }
+    loadData();
+  }, [user]);
+
+  useEffect(() => () => stopSharing(), []);
 
   useEffect(() => {
-    loadProducts();
-    loadCartCount();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category]);
+    if (!shareLive) { stopSharing(); return; }
+    startWatch();
+  }, [shareLive]);
 
-  const loadProducts = async () => {
-    setLoading(true);
+  const loadData = async () => {
+    if (!user) return;
+    appSettingsService.getDeliveryPolicyNow()
+      .then(p => { policyRef.current = p; })
+      .catch(() => {});
+
+    setAddrLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('customproducts')
-        .select('*')
-        .eq('category', category)
-        .eq('isactive', true)
-        .order('name');
-
-      if (error) throw error;
-      setProducts((data || []) as CustomProduct[]);
-    } catch (e: any) {
-      console.error('Load products error:', e);
-      toast.error(e?.message || 'Failed to load products');
+      const addrs = await locationService.getSavedAddresses(user.id);
+      setSavedAddresses(addrs);
+      const def =
+        addrs.find(a => (a as any).isdefault || (a as any).is_default) ||
+        addrs[0] ||
+        null;
+      if (def) {
+        setSelectedAddress(def);
+        computeFee(def);
+      }
+    } catch {
+      toast.error('Failed to load saved addresses');
     } finally {
-      setLoading(false);
+      setAddrLoading(false);
     }
   };
 
-  const loadCartCount = async () => {
-    try {
-      const cartId = localStorage.getItem('cartId');
-      if (!cartId) {
-        setCartCount(0);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('cartitems')
-        .select('quantity')
-        .eq('cartid', cartId);
-
-      if (error) throw error;
-      const total = (data || []).reduce((sum, item: any) => sum + (item.quantity || 0), 0);
-      setCartCount(total);
-    } catch (e) {
-      console.error('Load cart count error:', e);
-    }
-  };
-
-  const addToCart = async (product: CustomProduct) => {
-    try {
-      let cartId = localStorage.getItem('cartId');
-
-      // Create cart if doesn't exist
-      if (!cartId) {
-        const { data: newCart, error } = await supabase
-          .from('carts')
-          .insert({
-            customerid: user?.id || null,
-            merchantid: null,
-            createdat: new Date().toISOString(),
-          })
-          .select('id')
-          .single();
-
-        if (error) throw error;
-        cartId = newCart.id;
-        localStorage.setItem('cartId', cartId);
-      }
-
-      // Check if item exists
-      const { data: existing } = await supabase
-        .from('cartitems')
-        .select('*')
-        .eq('cartid', cartId)
-        .eq('productid', product.id)
-        .maybeSingle();
-
-      if (existing) {
-        // Update quantity
-        await supabase
-          .from('cartitems')
-          .update({ quantity: existing.quantity + 1 })
-          .eq('id', existing.id);
-      } else {
-        // Insert new item
-        await supabase.from('cartitems').insert({
-          cartid: cartId,
-          productid: product.id,
-          productname: product.name,
-          productprice: product.price,
-          quantity: 1,
-          category: product.category,
-          imageurl: product.imageurl,
-        });
-      }
-
-      toast.success(`${product.name} added to cart`);
-      loadCartCount();
-    } catch (e: any) {
-      console.error('Add to cart error:', e);
-      toast.error(e?.message || 'Failed to add to cart');
-    }
-  };
-
-  const submitCustomRequest = async () => {
-    if (!orderDescription.trim()) {
-      toast.error('Please describe what you need');
+  // ── Delivery fee ───────────────────────────────────────────────────────────
+  const computeFee = useCallback(async (addr: SavedAddress) => {
+    const destLat = Number((addr as any).latitude);
+    const destLon = Number((addr as any).longitude);
+    if (!Number.isFinite(destLat) || destLat === 0) {
+      setDeliveryFee(0);
+      setDeliveryKm(0);
+      setDeliveryBreakdown('Address coordinates missing');
       return;
     }
 
+    const policy = policyRef.current || {
+      enabled: true, baseFee: 35, baseRadiusKm: 3, perKmFeeAfterBase: 15,
+    };
+
+    setDeliveryLoading(true);
+    try {
+      let km: number;
+      let label: string;
+      try {
+        km    = await getRoadDistanceKmViaApi(PATTI_HUB.lat, PATTI_HUB.lon, destLat, destLon);
+        label = 'Road';
+      } catch {
+        km    = haversineKm(PATTI_HUB.lat, PATTI_HUB.lon, destLat, destLon);
+        label = 'Aerial est.';
+      }
+      const q = calculateDeliveryFeeByDistance(km, {
+        enabled:        policy.enabled,
+        baseFee:        policy.baseFee,
+        baseKm:         policy.baseRadiusKm,
+        perKmBeyondBase: policy.perKmFeeAfterBase,
+        rounding:       'ceil',
+      });
+      setDeliveryFee(q.fee);
+      setDeliveryKm(round2(km));
+      setDeliveryBreakdown(`${label}: ${q.breakdown}`);
+    } catch {
+      setDeliveryFee(35);
+      setDeliveryKm(0);
+      setDeliveryBreakdown('Using default fee');
+    } finally {
+      setDeliveryLoading(false);
+    }
+  }, []);
+
+  const selectAddress = (addr: SavedAddress) => {
+    setSelectedAddress(addr);
+    setShowAddrPicker(false);
+    computeFee(addr);
+  };
+
+  // ── Live location ──────────────────────────────────────────────────────────
+  const stopSharing = () => {
+    try {
+      if (watchIdRef.current != null) navigator.geolocation?.clearWatch(watchIdRef.current);
+    } catch { /* noop */ }
+    watchIdRef.current = null;
+  };
+
+  const startWatch = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) return;
+    if (watchIdRef.current != null) return;
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      pos => {
+        const now = Date.now();
+        if (now - lastSentRef.current < 5000) return;
+        lastSentRef.current = now;
+        setLiveLocation({
+          lat: pos.coords.latitude, lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy, updated_at: new Date().toISOString(),
+        });
+      },
+      err => { console.error(err); toast.error('Live location failed'); stopSharing(); },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  const verifyLocation = async () => {
+    if (!navigator.geolocation) { toast.error('Geolocation not supported'); return; }
+    setLocChecking(true);
+    try {
+      await new Promise<void>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            setLiveLocation({
+              lat: pos.coords.latitude, lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy, updated_at: new Date().toISOString(),
+            });
+            resolve();
+          },
+          reject,
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        )
+      );
+      toast.success('Live location enabled ✓');
+    } catch {
+      toast.error('Allow location permission and try again.');
+    } finally {
+      setLocChecking(false);
+    }
+  };
+
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const selectedIds  = useMemo(() => new Set(selectedMap.keys()), [selectedMap]);
+  const shopSubtotal = useMemo(
+    () => [...selectedMap.values()].reduce((a, p) => a + p.price * p.qty, 0),
+    [selectedMap]
+  );
+  const totalItems = useMemo(
+    () => selectedMap.size + manualItems.filter(it => it.name.trim()).length,
+    [selectedMap, manualItems]
+  );
+  const estTotal   = useMemo(() => round2(shopSubtotal + deliveryFee), [shopSubtotal, deliveryFee]);
+  const isLiveReady = useMemo(
+    () => shareLive && !!liveLocation?.lat && !!liveLocation?.lng,
+    [shareLive, liveLocation]
+  );
+  const canSubmit = totalItems > 0 && !!selectedAddress && isLiveReady && !submitting;
+  const hasManual = manualItems.some(it => it.name.trim());
+
+  // ── Category toggle ────────────────────────────────────────────────────────
+  const toggleCat = (c: string) =>
+    setCategories(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
+
+  // ── Product helpers ────────────────────────────────────────────────────────
+  const toggleProduct = (p: CustomProduct) => {
+    setSelectedMap(prev => {
+      const next = new Map(prev);
+      if (next.has(p.id)) next.delete(p.id);
+      else next.set(p.id, { ...p, qty: 1 });
+      return next;
+    });
+  };
+
+  const updateQty = (id: string, qty: number) => {
+    setSelectedMap(prev => {
+      const next = new Map(prev);
+      const p = next.get(id);
+      if (!p) return prev;
+      if (qty < 1) { next.delete(id); return next; }
+      next.set(id, { ...p, qty: Math.min(qty, 99) });
+      return next;
+    });
+  };
+
+  // ── Build items for DB ─────────────────────────────────────────────────────
+  const buildItems = () => [
+    ...[...selectedMap.values()].map(p => ({
+      id: p.id, name: p.name, note: null, price: p.price,
+      is_veg: null, is_free: false, category: p.category,
+      quantity: p.qty, image_url: p.imageurl, unit: p.unit,
+      merchant_id: null, menu_item_id: p.id,
+      is_custom_product: true, discount_percentage: 0,
+    })),
+    ...manualItems.filter(it => it.name.trim()).map(it => ({
+      id: it.id, name: it.name.trim(), note: it.description.trim() || null,
+      price: 0, is_veg: null, is_free: false, category: null,
+      quantity: it.quantity, image_url: null, unit: it.unit,
+      merchant_id: null, menu_item_id: it.id,
+      is_custom_product: false, discount_percentage: 0,
+    })),
+  ];
+
+  // ── Submit ─────────────────────────────────────────────────────────────────
+  const handleSubmit = async () => {
+    if (!user)            { router.push('/login'); return; }
+    const allItems = buildItems();
+    if (!allItems.length) { toast.error('Add at least one item'); return; }
+    if (!selectedAddress) { toast.error('Please select a delivery address'); return; }
+    if (!isLiveReady)     { toast.error('Enable & verify live location first'); return; }
+    if (paymentMethod === 'online') { toast.info('Online payment coming soon!'); return; }
+
     setSubmitting(true);
     try {
-      const { error } = await supabase.from('customorderrequests').insert({
-        customerid: user?.id || null,
-        category,
-        description: orderDescription,
-        status: 'pending',
-        createdat: new Date().toISOString(),
+      const ref = makeRef();
+      const a   = selectedAddress as any;
+      const { error } = await supabase.from('custom_order_requests').insert({
+        customer_id:      user.id,
+        custom_order_ref: ref,
+        category:         categories.length ? categories.join(', ') : 'custom',
+        description:      notes.trim() || null,
+        image_url:        null,
+        items:            allItems,
+        status:           'pending',
+        delivery_address: formatAddress(selectedAddress),
+        delivery_lat:     Number(a.latitude)  || null,
+        delivery_lng:     Number(a.longitude) || null,
+        total_amount:     estTotal > 0 ? estTotal : null,
+        delivery_fee:     deliveryFee || null,
+        payment_method:   paymentMethod,
+        customer_phone:   normalizePhone(a.recipient_phone || a.recipientphone || '') || null,
+        created_at:       new Date().toISOString(),
+        updated_at:       new Date().toISOString(),
       });
-
       if (error) throw error;
-
-      toast.success("Custom order request submitted! We'll contact you soon.");
-      setOrderDescription('');
-
-      setTimeout(() => {
-        router.push('/customer-dashboard');
-      }, 1500);
+      setSubmittedRef(ref);
+      setSubmitted(true);
+      toast.success('Custom order submitted! 🎉');
     } catch (e: any) {
-      console.error('Submit error:', e);
-      toast.error(e?.message || 'Failed to submit request');
+      toast.error(e?.message || 'Failed to submit order');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const goToCart = () => {
-    router.push('/customer/cart');
+  // ── Reset form ─────────────────────────────────────────────────────────────
+  const resetForm = () => {
+    setSelectedMap(new Map());
+    setManualItems([]);
+    setNotes('');
+    setCategories([]);
+    setSubmitted(false);
   };
 
-  const getCategoryTitle = () => {
-    const titles: Record<string, string> = {
-      custom: 'Custom Orders',
-      dairy: 'Dairy Products',
-      grocery: 'Grocery Items',
-      medicines: 'Medicines',
-    };
-    return titles[category] || 'Products';
-  };
-
-  return (
-    <DashboardLayout>
-      <div className="min-h-screen bg-gray-50 pb-24">
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          {/* Header */}
-          <div className="flex items-center justify-between gap-4 mb-6">
-            <button
-              onClick={() => router.back()}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <h1 className="text-2xl font-black text-gray-900 flex-1">{getCategoryTitle()}</h1>
-            <button
-              onClick={goToCart}
-              className="p-3 bg-primary text-white rounded-xl hover:shadow-lg transition-all relative"
-            >
-              <ShoppingCart className="w-6 h-6" />
-              {cartCount > 0 && (
-                <span className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                  {cartCount}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Products Section */}
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+  // ══════════════════════════════════════════════════════════════════════════
+  // SUCCESS SCREEN
+  // ══════════════════════════════════════════════════════════════════════════
+  if (submitted) {
+    return (
+      <AppShell title="Custom Order">
+        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50
+                        flex items-center justify-center px-4 py-10">
+          <div className="w-full max-w-md text-center">
+            <div className="w-24 h-24 mx-auto mb-6 rounded-full
+                            bg-gradient-to-br from-purple-500 to-pink-500
+                            flex items-center justify-center shadow-2xl">
+              <Sparkles className="w-12 h-12 text-white" />
             </div>
-          ) : products.length > 0 ? (
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-6">
-              <h2 className="text-lg font-black text-gray-900 mb-4 flex items-center gap-2">
-                <Package className="w-5 h-5 text-primary" />
-                Available Products
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                {products.map((product) => (
-                  <div
-                    key={product.id}
-                    className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all group"
-                  >
-                    {product.imageurl ? (
-                      <img
-                        src={product.imageurl}
-                        alt={product.name}
-                        className="w-full h-32 object-cover group-hover:scale-110 transition-transform"
-                      />
-                    ) : (
-                      <div className="w-full h-32 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
-                        <Package className="w-10 h-10 text-gray-400" />
-                      </div>
-                    )}
-                    <div className="p-3">
-                      <h3 className="font-bold text-sm text-gray-900 mb-1 line-clamp-2">
-                        {product.name}
-                      </h3>
-                      {product.description && (
-                        <p className="text-xs text-gray-600 mb-2 line-clamp-2">
-                          {product.description}
-                        </p>
-                      )}
-                      <p className="text-sm font-bold text-primary mb-3">
-                        ₹{product.price.toFixed(2)}/{product.unit}
-                      </p>
-                      <button
-                        onClick={() => addToCart(product)}
-                        className="w-full bg-primary text-white py-2 rounded-lg text-sm font-bold hover:shadow-md transition-all flex items-center justify-center gap-1"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add to Cart
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <h1 className="text-3xl font-black text-gray-900 mb-2">Submitted! 🎉</h1>
+            <p className="text-gray-600 font-semibold mb-2">Your reference number:</p>
+            <div className="inline-block bg-white border-2 border-purple-300 rounded-2xl
+                            px-6 py-3 mb-6 shadow-xl">
+              <span className="text-xl font-black text-purple-600 tracking-widest">
+                {submittedRef}
+              </span>
+            </div>
+            <p className="text-sm text-gray-500 font-medium mb-8 leading-6">
+              Our team will review your request and send you a quote.
+              Check <strong>My Requests</strong> for updates.
+            </p>
+            <div className="space-y-3">
               <button
-                onClick={goToCart}
-                className="w-full mt-6 bg-gradient-to-r from-primary to-pink-600 text-white py-4 rounded-xl font-black text-lg hover:shadow-2xl transition-all hover:scale-105 flex items-center justify-center gap-2"
+                onClick={() => { setTab('history'); setSubmitted(false); }}
+                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white
+                           py-4 rounded-2xl font-black shadow-lg hover:shadow-xl
+                           hover:scale-[1.02] transition-all"
               >
-                <ShoppingCart className="w-5 h-5" />
-                View Cart & Checkout ({cartCount} items)
+                View My Requests
+              </button>
+              <button
+                onClick={resetForm}
+                className="w-full bg-white border-2 border-gray-200 text-gray-800
+                           py-4 rounded-2xl font-black hover:bg-gray-50 transition"
+              >
+                Make Another Request
+              </button>
+              <button
+                onClick={() => router.push('/customer/dashboard')}
+                className="w-full text-sm text-gray-400 font-semibold hover:text-gray-600 py-2"
+              >
+                Back to Home
               </button>
             </div>
-          ) : null}
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
-          {/* Custom Request Section */}
-          <div className="bg-white rounded-2xl shadow-lg border-2 border-primary/20 p-6">
-            <h2 className="text-lg font-black text-gray-900 mb-2 flex items-center gap-2">
-              <MessageSquare className="w-5 h-5 text-primary" />
-              Can&apos;t Find What You Need?
-            </h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Describe your custom order requirements and we&apos;ll get back to you with a quote.
-            </p>
+  // ══════════════════════════════════════════════════════════════════════════
+  // MAIN RENDER
+  // ══════════════════════════════════════════════════════════════════════════
+  return (
+    <AppShell title="Custom Order">
+      <div className="bg-gradient-to-br from-purple-50 via-white to-pink-50 min-h-screen">
 
-            <div className="space-y-4">
+        {/* ── Header (NOT fixed — scrolls with page) ─────────────────────── */}
+        <div className="bg-white border-b border-gray-100 shadow-sm">
+          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center
+                         hover:bg-gray-200 transition active:scale-95"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-800" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-base font-black text-gray-900">Custom Order</h1>
+              <p className="text-xs text-gray-500 font-medium">
+                Request anything · not in the shop? We&apos;ll get it
+              </p>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500
+                            flex items-center justify-center shadow">
+              <ClipboardList className="w-5 h-5 text-white" />
+            </div>
+          </div>
+
+          {/* Tab bar */}
+          <div className="max-w-2xl mx-auto px-4 flex gap-1 border-t border-gray-50">
+            {([
+              { key: 'new',     Icon: ShoppingBag, label: 'New Request' },
+              { key: 'history', Icon: ListChecks,  label: 'My Requests' },
+            ] as { key: Tab; Icon: React.ElementType; label: string }[]).map(({ key, Icon, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-black
+                            border-b-2 transition-colors ${
+                  tab === key
+                    ? 'border-purple-500 text-purple-600'
+                    : 'border-transparent text-gray-400 hover:text-gray-700'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* ── END header ─────────────────────────────────────────────────── */}
+
+        {/* ── HISTORY TAB ────────────────────────────────────────────────── */}
+        {tab === 'history' && (
+          <div className="max-w-2xl mx-auto px-4 py-6 pb-16">
+            <MyCustomOrders />
+          </div>
+        )}
+
+        {/* ── NEW REQUEST TAB ─────────────────────────────────────────────── */}
+        {tab === 'new' && (
+          <div
+            className="max-w-2xl mx-auto px-4 py-5 space-y-4"
+            style={{ paddingBottom: '180px' }}
+          >
+            {/* How it works */}
+            <div className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-4
+                            flex items-start gap-3">
+              <Sparkles className="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" />
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  What do you need? *
-                </label>
-                <textarea
-                  value={orderDescription}
-                  onChange={(e) => setOrderDescription(e.target.value)}
-                  rows={5}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none"
-                  placeholder={`Example for ${category}:\n- Fresh milk 5 litres daily delivery\n- Organic vegetables basket\n- Custom birthday cake 2kg chocolate\n- Prescription medicines with photo upload`}
-                />
+                <p className="font-black text-purple-900 text-sm">How it works</p>
+                <p className="text-xs text-purple-700 font-medium mt-0.5 leading-5">
+                  Pick from shop or describe items → We quote →
+                  You confirm → We deliver from Patti hub 🚴
+                </p>
+              </div>
+            </div>
+
+            {/* ── Categories ─────────────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Tag className="w-4 h-4 text-purple-500" />
+                <h2 className="text-sm font-black text-gray-900">Categories</h2>
+                <span className="text-xs text-gray-400 font-medium">(select all that apply)</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {ALL_CATEGORIES.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => toggleCat(c)}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs
+                                font-black capitalize border-2 transition-all active:scale-95 ${
+                      categories.includes(c)
+                        ? 'bg-purple-500 border-purple-500 text-white shadow-sm'
+                        : 'border-gray-200 text-gray-600 hover:border-purple-300 hover:bg-purple-50'
+                    }`}
+                  >
+                    <span>{CATEGORY_EMOJIS[c] ?? '📦'}</span>
+                    {c}
+                    {categories.includes(c) && <Check className="w-3 h-3 ml-0.5" />}
+                  </button>
+                ))}
+              </div>
+              {categories.length > 0 && (
+                <p className="mt-2 text-xs text-purple-600 font-semibold">
+                  Selected: {categories.join(', ')}
+                </p>
+              )}
+            </div>
+
+            {/* ── Shop product picker ─────────────────────────────────────── */}
+            <ShopProductPickerDropdown
+              selectedIds={selectedIds}
+              selectedMap={selectedMap}
+              onToggle={toggleProduct}
+              onUpdateQty={updateQty}
+            />
+
+            {/* ── Manual items ────────────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm p-4">
+              <ManualItemsForm items={manualItems} onChange={setManualItems} />
+            </div>
+
+            {/* ── Notes ──────────────────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm p-4">
+              <label className="text-sm font-black text-gray-800 mb-2 flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-primary" />
+                Additional Notes
+                <span className="text-xs font-medium text-gray-400 ml-1">(optional)</span>
+              </label>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Brand preference, delivery timing, special instructions…"
+                rows={3}
+                maxLength={500}
+                className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm
+                           font-semibold bg-gray-50 resize-none focus:ring-2
+                           focus:ring-primary focus:border-primary transition"
+              />
+              <p className="text-right text-xs text-gray-400 mt-1 font-medium">
+                {notes.length}/500
+              </p>
+            </div>
+
+            {/* ── Delivery address ────────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-black text-gray-900 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  Delivery Address
+                </h2>
+                {savedAddresses.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddrPicker(p => !p)}
+                    className="text-xs font-black text-purple-600 hover:text-purple-800
+                               flex items-center gap-1 transition"
+                  >
+                    Change
+                    {showAddrPicker
+                      ? <ChevronUp className="w-3.5 h-3.5" />
+                      : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                )}
               </div>
 
+              {addrLoading ? (
+                <div className="flex items-center gap-2 py-3">
+                  <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                  <span className="text-sm text-gray-400 font-medium">Loading addresses…</span>
+                </div>
+              ) : selectedAddress ? (
+                <>
+                  {/* Selected card */}
+                  <div className="flex items-start gap-3 p-3 bg-orange-50 border-2
+                                  border-primary rounded-xl">
+                    <div className="text-primary mt-0.5">
+                      <AddrIcon label={(selectedAddress as any).label ?? ''} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                        <p className="text-sm font-black text-gray-900">
+                          {(selectedAddress as any).label}
+                        </p>
+                        {((selectedAddress as any).isdefault || (selectedAddress as any).is_default) && (
+                          <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full">
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-600 font-medium whitespace-pre-line">
+                        {formatAddress(selectedAddress)}
+                      </p>
+                      {((selectedAddress as any).recipient_phone || (selectedAddress as any).recipientphone) && (
+                        <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                          <Phone className="w-3 h-3" />
+                          {(selectedAddress as any).recipient_phone ||
+                           (selectedAddress as any).recipientphone}
+                        </p>
+                      )}
+                    </div>
+                    <Check className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                  </div>
+
+                  {/* Distance + fee chips */}
+                  {deliveryLoading ? (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Calculating delivery fee…
+                    </div>
+                  ) : deliveryKm > 0 ? (
+                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1 text-xs bg-blue-50
+                                       border border-blue-200 text-blue-700 font-semibold
+                                       px-2.5 py-1 rounded-full">
+                        📍 {deliveryKm.toFixed(1)} km from hub
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-xs bg-green-50
+                                       border border-green-200 text-green-700 font-semibold
+                                       px-2.5 py-1 rounded-full">
+                        🚴 ₹{deliveryFee.toFixed(2)} delivery
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {/* Breakdown */}
+                  {deliveryBreakdown ? (
+                    <p className="mt-1 text-xs text-gray-400 font-medium flex items-center gap-1">
+                      <Info className="w-3 h-3 flex-shrink-0" />
+                      {deliveryBreakdown}
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <div className="text-center py-6 bg-gray-50 rounded-xl border-2 border-dashed
+                                border-gray-200">
+                  <MapPin className="w-8 h-8 mx-auto text-gray-300 mb-2" />
+                  <p className="text-sm text-gray-500 font-medium">No saved addresses found</p>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/customer/addresses')}
+                    className="mt-2 text-xs font-black text-primary hover:underline"
+                  >
+                    Add an address →
+                  </button>
+                </div>
+              )}
+
+              {/* Address picker list */}
+              {showAddrPicker && savedAddresses.length > 0 && (
+                <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
+                  <p className="text-xs font-black text-gray-400 uppercase tracking-wide mb-2">
+                    Choose address
+                  </p>
+                  {savedAddresses.map(addr => {
+                    const a = addr as any;
+                    const isSel = selectedAddress?.id === addr.id;
+                    return (
+                      <button
+                        key={addr.id}
+                        type="button"
+                        onClick={() => selectAddress(addr)}
+                        className={`w-full text-left p-3 rounded-xl border-2 transition-all
+                                    flex items-start gap-3 ${
+                          isSel
+                            ? 'border-primary bg-orange-50'
+                            : 'border-gray-200 hover:border-purple-200 hover:bg-purple-50'
+                        }`}
+                      >
+                        <div className={isSel ? 'text-primary' : 'text-gray-400'}>
+                          <AddrIcon label={a.label ?? ''} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-black text-gray-900">{a.label}</p>
+                          <p className="text-xs text-gray-500 font-medium truncate">
+                            {a.address}
+                          </p>
+                        </div>
+                        {isSel && <Check className="w-4 h-4 text-primary flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── Live location ────────────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm p-4">
+              <h2 className="text-sm font-black text-gray-900 mb-3 flex items-center gap-2">
+                <LocateFixed className="w-4 h-4 text-green-500" />
+                Live Location
+                <span className="text-red-500 text-xs font-black ml-1">* required</span>
+              </h2>
+
+              <div className={`rounded-xl border-2 p-3 transition-all ${
+                isLiveReady
+                  ? 'bg-green-50 border-green-300'
+                  : 'bg-orange-50 border-orange-200'
+              }`}>
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={shareLive}
+                    onChange={e => setShareLive(e.target.checked)}
+                    className="mt-1 w-4 h-4 accent-purple-500"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-black text-gray-900">Share live location</p>
+                    <p className="text-xs text-gray-600 font-medium mt-0.5 leading-4">
+                      Required to place the order. Helps the delivery agent find you accurately.
+                    </p>
+
+                    {shareLive && (
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={verifyLocation}
+                          disabled={locChecking}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+                                     bg-white border border-orange-200 hover:bg-orange-50
+                                     text-xs font-black transition disabled:opacity-60"
+                        >
+                          {locChecking
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <LocateFixed className="w-3.5 h-3.5" />}
+                          {locChecking ? 'Getting location…' : 'Verify now'}
+                        </button>
+
+                        {isLiveReady ? (
+                          <span className="text-xs font-black text-green-700 flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" />
+                            Active ·{' '}
+                            {new Date(liveLocation!.updated_at).toLocaleTimeString('en-IN', {
+                              hour: '2-digit', minute: '2-digit', second: '2-digit',
+                            })}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-red-600 font-semibold flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            Not verified yet
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Payment method ───────────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm p-4">
+              <h2 className="text-sm font-black text-gray-900 mb-3 flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-blue-500" />
+                Payment Method
+              </h2>
+              <div className="grid grid-cols-2 gap-3">
+                {/* COD */}
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('cod')}
+                  className={`p-3 rounded-xl border-2 transition-all text-left ${
+                    paymentMethod === 'cod'
+                      ? 'border-green-500 bg-green-50 shadow-sm'
+                      : 'border-gray-200 hover:border-green-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
+                      <Wallet className="w-4 h-4 text-green-600" />
+                    </div>
+                    {paymentMethod === 'cod' && (
+                      <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs font-black text-gray-900">Cash on Delivery</p>
+                  <p className="text-xs text-gray-500 font-medium">Pay on receipt</p>
+                </button>
+
+                {/* Online — disabled */}
+                <button
+                  type="button"
+                  onClick={() => toast.info('Online payment coming soon!')}
+                  className="p-3 rounded-xl border-2 border-gray-200 bg-gray-50
+                             opacity-60 cursor-not-allowed text-left"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center
+                                  justify-center mb-1.5">
+                    <CreditCard className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <p className="text-xs font-black text-gray-900">Online Payment</p>
+                  <p className="text-xs text-blue-500 font-semibold">Coming soon</p>
+                </button>
+              </div>
+            </div>
+
+            {/* ── Order preview + estimate ─────────────────────────────────── */}
+            {totalItems > 0 && (
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2
+                              border-purple-200 rounded-2xl p-4 space-y-3">
+                <h3 className="text-sm font-black text-purple-900 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Order Preview &amp; Estimate
+                </h3>
+
+                <ul className="space-y-1.5">
+                  {[...selectedMap.values()].map(p => (
+                    <li key={p.id}
+                      className="flex items-center gap-2 text-xs text-purple-800 font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0" />
+                      <span className="flex-1">{p.qty} {p.unit ?? 'pc'} — {p.name}</span>
+                      <span className="text-purple-600 font-black">
+                        ₹{(p.price * p.qty).toFixed(2)}
+                      </span>
+                    </li>
+                  ))}
+                  {manualItems.filter(it => it.name.trim()).map(it => (
+                    <li key={it.id}
+                      className="flex items-center gap-2 text-xs text-pink-700 font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-pink-400 flex-shrink-0" />
+                      <span className="flex-1">{it.quantity} {it.unit} — {it.name.trim()}</span>
+                      <span className="text-gray-400 text-xs italic">custom</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="bg-white/70 rounded-xl p-3 space-y-1.5 border border-purple-100">
+                  <div className="flex justify-between text-xs font-semibold text-gray-700">
+                    <span>Shop items</span>
+                    <span>₹{shopSubtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs font-semibold text-gray-700">
+                    <span className="flex items-center gap-1">
+                      Delivery fee
+                      {deliveryLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+                    </span>
+                    <span>{deliveryLoading ? '…' : `₹${deliveryFee.toFixed(2)}`}</span>
+                  </div>
+                  {hasManual && (
+                    <div className="flex justify-between text-xs text-gray-500 font-medium">
+                      <span>Custom items price</span>
+                      <span className="italic">TBD on quote</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm font-black text-gray-900
+                                  pt-1.5 border-t border-purple-100">
+                    <span>Estimated Total</span>
+                    <span className="text-purple-700">
+                      {deliveryLoading ? '…' : `₹${estTotal.toFixed(2)}`}
+                      {hasManual ? '+' : ''}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-purple-500 font-medium">
+                  * Final price confirmed after admin review. Custom items priced separately.
+                </p>
+              </div>
+            )}
+
+            {/* ── Validation banners ───────────────────────────────────────── */}
+            {totalItems > 0 && !selectedAddress && (
+              <div className="flex items-start gap-2 bg-red-50 border-2 border-red-200
+                              rounded-xl p-3">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs font-semibold text-red-700">
+                  Please select a delivery address to continue.
+                </p>
+              </div>
+            )}
+            {totalItems > 0 && !!selectedAddress && !isLiveReady && (
+              <div className="flex items-start gap-2 bg-red-50 border-2 border-red-200
+                              rounded-xl p-3">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs font-semibold text-red-700">
+                  Live location must be enabled and verified before submitting.
+                </p>
+              </div>
+            )}
+
+          </div>
+          // ← THIS WAS THE CRASH — replaced below with JSX comment
+        )}
+        {/* END new request tab */}
+
+        {/* ── Sticky submit bar — new tab only ─────────────────────────────── */}
+        {tab === 'new' && (
+          <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md
+                          border-t border-gray-100 shadow-2xl"
+               style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            <div className="max-w-2xl mx-auto px-4 py-3">
+
+              {totalItems > 0 && (
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <span className="text-xs text-gray-500 font-semibold">
+                    {totalItems} item{totalItems > 1 ? 's' : ''}
+                    {selectedAddress
+                      ? ` · ${deliveryKm > 0 ? `${deliveryKm.toFixed(1)} km` : 'address selected'}`
+                      : ' · no address'}
+                  </span>
+                  <span className="text-sm font-black text-purple-600">
+                    {deliveryLoading
+                      ? 'Calculating…'
+                      : estTotal > 0
+                        ? `Est. ₹${estTotal.toFixed(2)}${hasManual ? '+' : ''}`
+                        : ''}
+                  </span>
+                </div>
+              )}
+
               <button
-                onClick={submitCustomRequest}
-                disabled={submitting || !orderDescription.trim()}
-                className="w-full bg-gradient-to-r from-primary to-pink-600 text-white py-4 rounded-xl font-black text-lg hover:shadow-2xl transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                type="button"
+                onClick={handleSubmit}
+                disabled={!canSubmit}
+                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white
+                           py-4 rounded-2xl font-black shadow-xl hover:shadow-2xl
+                           hover:scale-[1.01] transition-all disabled:opacity-50
+                           disabled:cursor-not-allowed disabled:scale-100
+                           flex items-center justify-center gap-2"
               >
                 {submitting ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Submitting...
+                    Submitting…
                   </>
                 ) : (
                   <>
                     <Send className="w-5 h-5" />
-                    Submit Custom Request
+                    Submit Request
+                    {totalItems > 0 && (
+                      <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-black">
+                        {totalItems} item{totalItems > 1 ? 's' : ''}
+                      </span>
+                    )}
                   </>
                 )}
               </button>
 
-              <p className="text-xs text-gray-500 text-center">
-                💡 Our team will review and contact you within 24 hours
+              {!canSubmit && totalItems > 0 && (
+                <p className="text-center text-xs text-gray-400 font-medium mt-1.5">
+                  {!selectedAddress
+                    ? '⚠️ Select a delivery address'
+                    : !isLiveReady
+                      ? '⚠️ Enable & verify live location'
+                      : ''}
+                </p>
+              )}
+
+              <p className="text-center text-xs text-gray-400 font-medium mt-1.5">
+                We&apos;ll send you a quote before processing payment
               </p>
             </div>
           </div>
-        </div>
-      </div>
-    </DashboardLayout>
-  );
-}
+        )}
 
-export default function CustomOrderPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
-      }
-    >
-      <CustomOrderContent />
-    </Suspense>
+      </div>
+    </AppShell>
   );
 }
