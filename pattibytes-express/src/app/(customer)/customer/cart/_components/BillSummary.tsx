@@ -6,6 +6,13 @@ import {
 } from 'lucide-react';
 import type { PromoCode } from '@/services/promoCodes';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+export type BxgyFreeItem = {
+  name          : string;
+  originalPrice : number;
+  qty           : number;
+};
+
 interface Props {
   subtotal          : number;
   promoDiscount     : number;
@@ -22,8 +29,10 @@ interface Props {
   promoCode         : string;
   appliedPromo      : PromoCode | null;
   applyingPromo     : boolean;
-  promoMessage?     : string;   // ← NEW: message from useCartPromo hook
-  isBxgyPromo?      : boolean;  // ← NEW: true when a BXGY offer is active
+  promoMessage?     : string;
+  isBxgyPromo?      : boolean;
+  bxgyFreeItems?    : BxgyFreeItem[];   // ← NEW: items rendered with ₹0
+
   showPromoList     : boolean;
   availablePromos   : PromoCode[];
 
@@ -39,23 +48,26 @@ export function BillSummary({
   showDeliveryFee, tax, gstEnabled, gstPct, finalTotal,
   totalSavings, validating,
   promoCode, appliedPromo, applyingPromo,
-  promoMessage, isBxgyPromo = false,
+  promoMessage, isBxgyPromo = false, bxgyFreeItems = [],
   showPromoList, availablePromos,
   onPromoCodeChange, onApplyPromo, onRemovePromo,
   onTogglePromoList, onCheckout,
 }: Props) {
-  // ── Derived chip colours based on promo type ───────────────────────────────
-  const chipBg     = isBxgyPromo ? 'bg-purple-50'    : 'bg-green-50';
-  const chipBorder = isBxgyPromo ? 'border-purple-200' : 'border-green-200';
-  const chipText   = isBxgyPromo ? 'text-purple-700' : 'text-green-700';
-  const chipSub    = isBxgyPromo ? 'text-purple-600' : 'text-green-600';
-  const chipHover  = isBxgyPromo ? 'hover:bg-purple-100' : 'hover:bg-green-100';
+
+  // ── Chip colour tokens ─────────────────────────────────────────────────────
+  const chipBg     = isBxgyPromo ? 'bg-purple-50'      : 'bg-green-50';
+  const chipBorder = isBxgyPromo ? 'border-purple-200'  : 'border-green-200';
+  const chipText   = isBxgyPromo ? 'text-purple-700'    : 'text-green-700';
+  const chipSub    = isBxgyPromo ? 'text-purple-600'    : 'text-green-600';
+  const chipHover  = isBxgyPromo ? 'hover:bg-purple-100': 'hover:bg-green-100';
+
+  const hasFreeItems = isBxgyPromo && bxgyFreeItems.length > 0;
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6 sticky top-6 space-y-4">
       <h2 className="text-xl font-bold text-gray-900">Bill Summary</h2>
 
-      {/* ── Promo section ─────────────────────────────────────────── */}
+      {/* ── Promo input / applied chip ─────────────────────────────────────── */}
       <div className="border-b pb-4">
         {!appliedPromo ? (
           <>
@@ -76,7 +88,9 @@ export function BillSummary({
                            font-semibold disabled:opacity-50 disabled:cursor-not-allowed
                            flex items-center gap-2"
               >
-                {applyingPromo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
+                {applyingPromo
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : 'Apply'}
               </button>
             </div>
 
@@ -120,14 +134,12 @@ export function BillSummary({
             )}
           </>
         ) : (
-          /* ── Applied promo chip — green for cart discount, purple for BXGY ── */
           <div className={`${chipBg} border-2 ${chipBorder} rounded-lg p-3`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {isBxgyPromo
                   ? <Sparkles className={`w-5 h-5 ${chipText}`} />
                   : <Check    className={`w-5 h-5 ${chipText}`} />}
-
                 <div>
                   <p className={`font-bold ${chipText}`}>
                     {appliedPromo.code}
@@ -138,12 +150,10 @@ export function BillSummary({
                     )}
                   </p>
                   <p className={`text-xs ${chipSub}`}>
-                    {/* Prefer message from hook; fall back to generic "Saved" label */}
                     {promoMessage ?? `Saved ₹${promoDiscount.toFixed(2)}`}
                   </p>
                 </div>
               </div>
-
               <button
                 onClick={onRemovePromo}
                 className={`p-1 ${chipHover} rounded transition-colors`}
@@ -155,7 +165,46 @@ export function BillSummary({
         )}
       </div>
 
-      {/* ── Price breakdown ───────────────────────────────────────── */}
+      {/* ── BXGY free items breakdown ──────────────────────────────────────── */}
+      {hasFreeItems && (
+        <div className="border-b pb-4">
+          <p className="text-xs font-semibold text-purple-700 mb-2
+                        flex items-center gap-1">
+            <Sparkles className="w-3 h-3" />
+            Free items from offer
+          </p>
+          <div className="space-y-2">
+            {bxgyFreeItems.map((item, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between
+                           bg-purple-50 rounded-lg px-3 py-2"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs bg-purple-600 text-white
+                                   px-1.5 py-0.5 rounded font-bold flex-shrink-0">
+                    FREE
+                  </span>
+                  <span className="text-sm text-gray-800 truncate">
+                    {item.name}
+                    {item.qty > 1 && (
+                      <span className="text-gray-500"> × {item.qty}</span>
+                    )}
+                  </span>
+                </div>
+                <div className="text-right flex-shrink-0 ml-2">
+                  <span className="text-xs text-gray-400 line-through block">
+                    ₹{(item.originalPrice * item.qty).toFixed(2)}
+                  </span>
+                  <span className="text-sm font-bold text-purple-700">₹0.00</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Price breakdown ────────────────────────────────────────────────── */}
       <div className="space-y-3 pb-4 border-b">
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-600">Item Total</span>
@@ -164,7 +213,9 @@ export function BillSummary({
 
         {promoDiscount > 0 && (
           <div className="flex items-center justify-between text-sm">
-            <span className="text-green-600">Promo Discount</span>
+            <span className="text-green-600">
+              {isBxgyPromo ? 'BXGY Discount' : 'Promo Discount'}
+            </span>
             <span className="font-semibold text-green-600">
               -₹{promoDiscount.toFixed(2)}
             </span>
@@ -178,7 +229,9 @@ export function BillSummary({
                 <MapPin className="w-3 h-3 text-gray-600" />
                 <span className="text-gray-600">Delivery Fee</span>
               </div>
-              <span className="font-semibold text-gray-900">₹{deliveryFee.toFixed(2)}</span>
+              <span className="font-semibold text-gray-900">
+                ₹{deliveryFee.toFixed(2)}
+              </span>
             </div>
             {deliveryBreakdown && (
               <p className="text-xs text-gray-500 pl-4">{deliveryBreakdown}</p>
@@ -194,12 +247,14 @@ export function BillSummary({
         </div>
       </div>
 
-      {/* ── Total ────────────────────────────────────────────────── */}
+      {/* ── Total ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between pt-2">
         <span className="text-lg font-bold text-gray-900">Total</span>
         <div className="flex items-center gap-1">
           <IndianRupee className="w-5 h-5 text-primary" />
-          <span className="text-2xl font-bold text-primary">{finalTotal.toFixed(2)}</span>
+          <span className="text-2xl font-bold text-primary">
+            {finalTotal.toFixed(2)}
+          </span>
         </div>
       </div>
 

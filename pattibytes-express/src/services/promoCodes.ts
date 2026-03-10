@@ -90,12 +90,27 @@ export interface CartItemForPromo {
   unit_price   : number;
 }
 
+// ← NEW: a single "get" item that will be rendered as FREE in bill
+export interface BxgyFreeItemId {
+  menu_item_id : string;
+  unitPrice    : number;
+  qty          : number;
+}
+
+export interface BxgyDiscountResult {
+  valid        : boolean;
+  discount     : number;
+  message      : string;
+  freeItemIds  : BxgyFreeItemId[];
+}
+
 export interface PromoApplyResult {
-  valid      : boolean;
-  discount   : number;
-  message    : string;
-  promoCode  : PromoCodeRow | null;
-  isBxgy     : boolean;
+  valid        : boolean;
+  discount     : number;
+  message      : string;
+  promoCode    : PromoCodeRow | null;
+  isBxgy       : boolean;
+  freeItemIds  : BxgyFreeItemId[];   // ← NEW
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -128,7 +143,7 @@ function formatErr(err: any) {
 }
 
 function dayNumberMon1Sun7(d: Date): number {
-  const js = d.getDay(); // Sun=0..Sat=6
+  const js = d.getDay();
   return js === 0 ? 7 : js;
 }
 
@@ -143,7 +158,7 @@ function isNowWithinTimeWindow(now: Date, start: string | null, end: string | nu
   const s   = timeToMinutes(start);
   const e   = timeToMinutes(end);
   if (s <= e) return cur >= s && cur <= e;
-  return cur >= s || cur <= e; // overnight window
+  return cur >= s || cur <= e;
 }
 
 export function toDateInputValue(iso: string | null | undefined): string {
@@ -154,9 +169,9 @@ export function toDateInputValue(iso: string | null | undefined): string {
 
 /**
  * Normalize cart items from ANY shape:
- * - CartContext shape:  { id, merchantid, categoryid, quantity, price, discountpercentage }
- * - API / DB shape:     { menu_item_id, merchant_id, category_id, qty, unit_price }
- * - camelCase shape:    { menuItemId, merchantId, categoryId, qty, unitPrice }
+ * - CartContext:  { id, merchantid, quantity, price, discountpercentage }
+ * - DB/API:       { menu_item_id, merchant_id, qty, unit_price }
+ * - camelCase:    { menuItemId, merchantId, qty, unitPrice }
  */
 export function normalizeCartItemsForPromo(
   input: any[] | undefined | null,
@@ -165,20 +180,12 @@ export function normalizeCartItemsForPromo(
 
   return list
     .map((x) => {
-      // Resolve menu_item_id — CartContext uses `id` as the menu item id
       const menu_item_id = String(
-        x?.menu_item_id  ??
-        x?.menuitemid    ??
-        x?.menuItemId    ??
-        x?.id            ??
-        '',
+        x?.menu_item_id ?? x?.menuitemid ?? x?.menuItemId ?? x?.id ?? '',
       );
 
       const merchant_id = String(
-        x?.merchant_id  ??
-        x?.merchantid   ??
-        x?.merchantId   ??
-        '',
+        x?.merchant_id ?? x?.merchantid ?? x?.merchantId ?? '',
       );
 
       const category_id =
@@ -186,23 +193,16 @@ export function normalizeCartItemsForPromo(
 
       const qty = clampNum(x?.qty ?? x?.quantity ?? 0, 0);
 
-      // unit_price = price after discount (what customer actually pays per unit)
       const rawPrice = clampNum(
-        x?.unit_price   ??
-        x?.unitprice    ??
-        x?.unitPrice    ??
-        x?.price        ??
-        0,
-        0,
+        x?.unit_price ?? x?.unitprice ?? x?.unitPrice ?? x?.price ?? 0, 0,
       );
       const discPct = clampNum(
-        x?.discount_percentage ?? x?.discountpercentage ?? x?.discountPercentage ?? 0,
-        0,
+        x?.discount_percentage ?? x?.discountpercentage ?? x?.discountPercentage ?? 0, 0,
       );
       const unit_price =
         x?.unit_price ?? x?.unitprice ?? x?.unitPrice
-          ? rawPrice                                   // already a net price
-          : rawPrice * (1 - discPct / 100);            // apply discount to base
+          ? rawPrice
+          : rawPrice * (1 - discPct / 100);
 
       return { menu_item_id, merchant_id, category_id, qty, unit_price };
     })
@@ -270,19 +270,12 @@ class PromoCodeService {
   }
 
   // ── BXGY discount core ─────────────────────────────────────────────────────
-  /**
-   * KEY FIX:
-   * - Empty buy targets  → ALL merchant items qualify as "buy" items
-   * - Empty get targets  → ALL merchant items qualify as "get" items
-   * - Item matches buy/get if it's in the menu set OR the category set (OR, not AND)
-   * - No longer returns "not configured" for empty targets — instead treats as open
-   */
   computeBxgyDiscount(params: {
     promo       : PromoCodeRow;
     cartItems   : CartItemForPromo[];
     merchantId  : string;
     bxgyTargets : BxgyTargetRow[];
-  }): { valid: boolean; discount: number; message: string } {
+  }): BxgyDiscountResult {
     const { promo, cartItems, merchantId, bxgyTargets } = params;
 
     const deal      = promo.deal_json || {};
@@ -298,15 +291,12 @@ class PromoCodeService {
     const buyTargets = bxgyTargets.filter((t) => t.side === 'buy');
     const getTargets = bxgyTargets.filter((t) => t.side === 'get');
 
-    // Build lookup sets for buy side
     const buyMenu = new Set(
       buyTargets.filter((t) => t.menu_item_id).map((t) => t.menu_item_id as string),
     );
     const buyCat = new Set(
       buyTargets.filter((t) => t.category_id).map((t) => t.category_id as string),
     );
-
-    // Build lookup sets for get side
     const getMenu = new Set(
       getTargets.filter((t) => t.menu_item_id).map((t) => t.menu_item_id as string),
     );
@@ -314,9 +304,9 @@ class PromoCodeService {
       getTargets.filter((t) => t.category_id).map((t) => t.category_id as string),
     );
 
-    // ✅ FIX: empty targets = ALL items from this merchant qualify
+    // Empty targets = ALL items from this merchant qualify
     const isBuyItem = (it: CartItemForPromo): boolean => {
-      if (buyMenu.size === 0 && buyCat.size === 0) return true; // open — any item
+      if (buyMenu.size === 0 && buyCat.size === 0) return true;
       return (
         (buyMenu.size > 0 && buyMenu.has(it.menu_item_id)) ||
         (buyCat.size  > 0 && !!it.category_id && buyCat.has(it.category_id))
@@ -324,41 +314,45 @@ class PromoCodeService {
     };
 
     const isGetItem = (it: CartItemForPromo): boolean => {
-      if (getMenu.size === 0 && getCat.size === 0) return true; // open — any item
+      if (getMenu.size === 0 && getCat.size === 0) return true;
       return (
         (getMenu.size > 0 && getMenu.has(it.menu_item_id)) ||
         (getCat.size  > 0 && !!it.category_id && getCat.has(it.category_id))
       );
     };
 
-    // Only items from this merchant
     const items = normalizeCartItemsForPromo(cartItems).filter(
       (x) => x.merchant_id === merchantId,
     );
 
     if (items.length === 0) {
-      return { valid: false, discount: 0, message: 'No cart items for this restaurant.' };
+      return {
+        valid      : false,
+        discount   : 0,
+        message    : 'No cart items for this restaurant.',
+        freeItemIds: [],
+      };
     }
 
-    // Total qualifying buy units
     const buyCount = items.reduce(
       (acc, it) => acc + (isBuyItem(it) ? clampNum(it.qty, 0) : 0),
       0,
     );
 
-    // Pool of individual get-eligible units (exploded for cheapest-sort)
+    // Explode get-eligible units, carrying menu_item_id for free-item mapping
     const getPool = items
       .filter(isGetItem)
       .flatMap((it) => {
         const qty = Math.max(0, clampNum(it.qty, 0));
         return Array.from({ length: qty }).map(() => ({
-          unit_price: clampNum(it.unit_price, 0),
+          menu_item_id: it.menu_item_id,
+          unitPrice   : clampNum(it.unit_price, 0),
         }));
       })
-      .filter((x) => x.unit_price > 0);
+      .filter((x) => x.unitPrice > 0);
 
     const possibleSets = Math.min(
-      Math.floor(buyCount  / buyQty),
+      Math.floor(buyCount      / buyQty),
       Math.floor(getPool.length / getQty),
       maxSets,
     );
@@ -366,49 +360,67 @@ class PromoCodeService {
     if (possibleSets <= 0) {
       const needed = buyQty - (buyCount % buyQty || buyQty);
       return {
-        valid   : false,
-        discount: 0,
-        message : buyCount === 0
+        valid      : false,
+        discount   : 0,
+        freeItemIds: [],
+        message    : buyCount === 0
           ? `Add ${buyQty} qualifying item(s) to unlock this offer.`
           : `Add ${needed} more qualifying item(s) to unlock this offer.`,
       };
     }
 
-    // Sort cheapest-first if auto_cheapest (maximises free savings for customer)
+    // Sort cheapest-first so customer gets maximum savings
     let discountedUnits = getPool;
     if (selection === 'auto_cheapest') {
-      discountedUnits = [...getPool].sort((a, b) => a.unit_price - b.unit_price);
+      discountedUnits = [...getPool].sort((a, b) => a.unitPrice - b.unitPrice);
     }
 
     const chosen = discountedUnits.slice(0, possibleSets * getQty);
 
     let discount = 0;
     for (const u of chosen) {
-      if      (discType === 'free')       discount += u.unit_price;
-      else if (discType === 'percentage') discount += (u.unit_price * discValue) / 100;
-      else                                discount += Math.min(u.unit_price, discValue);
+      if      (discType === 'free')       discount += u.unitPrice;
+      else if (discType === 'percentage') discount += (u.unitPrice * discValue) / 100;
+      else                                discount += Math.min(u.unitPrice, discValue);
     }
-
     discount = Math.max(0, Math.round(discount * 100) / 100);
+
+    // Aggregate chosen units by menu_item_id for bill display
+    const freeItemMap = new Map<string, BxgyFreeItemId>();
+    for (const u of chosen) {
+      const existing = freeItemMap.get(u.menu_item_id);
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        freeItemMap.set(u.menu_item_id, {
+          menu_item_id: u.menu_item_id,
+          unitPrice   : u.unitPrice,
+          qty         : 1,
+        });
+      }
+    }
 
     const label =
       discType === 'free'
         ? `${possibleSets > 1 ? `${possibleSets}×` : ''}Get ${getQty} FREE`
-        : `Get ${possibleSets * getQty} items at ${discType === 'percentage' ? `${discValue}%` : `₹${discValue}`} off`;
+        : `Get ${possibleSets * getQty} items at ${
+            discType === 'percentage' ? `${discValue}%` : `₹${discValue}`
+          } off`;
 
     return {
-      valid   : true,
+      valid      : true,
       discount,
-      message : `🎁 ${label} — You save ₹${discount.toFixed(2)}!`,
+      message    : `🎁 ${label} — You save ₹${discount.toFixed(2)}!`,
+      freeItemIds: Array.from(freeItemMap.values()),
     };
   }
 
   // ── Menu item helpers ──────────────────────────────────────────────────────
   async listMenuItems(params: {
-    merchantId         : string;
-    limit?             : number;
-    offset?            : number;
-    includeUnavailable?: boolean;
+    merchantId          : string;
+    limit?              : number;
+    offset?             : number;
+    includeUnavailable? : boolean;
   }): Promise<MenuItemLite[]> {
     const merchantId = String(params.merchantId || '').trim();
     if (!merchantId) return [];
@@ -573,10 +585,10 @@ class PromoCodeService {
   }
 
   async replaceBxgyTargets(params: {
-    promoCodeId     : string;
-    merchantId?     : string | null;
-    buyMenuItemIds  : string[];
-    getMenuItemIds  : string[];
+    promoCodeId    : string;
+    merchantId?    : string | null;
+    buyMenuItemIds : string[];
+    getMenuItemIds : string[];
   }) {
     const { promoCodeId, buyMenuItemIds, getMenuItemIds } = params;
 
@@ -602,7 +614,7 @@ class PromoCodeService {
       rows.push({ promo_code_id: promoCodeId, side: 'get', menu_item_id: id, category_id: null });
     }
 
-    // ✅ Allow empty targets — means "all items" (don't insert, just return)
+    // Empty targets = "all items qualify" — don't insert, just return
     if (rows.length === 0) return;
 
     const { error: insErr } = await supabase
@@ -741,7 +753,6 @@ class PromoCodeService {
       if (!promoCode)
         return { valid: false, discount: 0, message: 'Invalid or inactive promo code' };
 
-      // BXGY codes cannot be entered manually
       if ((promoCode.deal_type ?? 'cart_discount') === 'bxgy') {
         return {
           valid   : false,
@@ -794,7 +805,6 @@ class PromoCodeService {
           return { valid: false, discount: 0, message: 'Promo not valid for this restaurant' };
       }
 
-      // Per-user usage check
       const maxPerUser = promoCode.max_uses_per_user ?? 1;
       if (maxPerUser > 0) {
         const { count, error: cErr } = await supabase
@@ -808,7 +818,6 @@ class PromoCodeService {
           return { valid: false, discount: 0, message: 'You have already used this promo code' };
       }
 
-      // Targets scope — compute eligible subtotal
       let eligibleAmount = amount;
 
       if (promoCode.scope === 'targets') {
@@ -818,9 +827,13 @@ class PromoCodeService {
         if (promoCode.merchant_id && promoCode.merchant_id !== orderMerchantId)
           return { valid: false, discount: 0, message: 'Promo not valid for this restaurant' };
 
-        const targets    = await this.getPromoTargets(promoCode.id);
-        const menuTargets = new Set(targets.filter((t) => t.menu_item_id).map((t) => t.menu_item_id as string));
-        const catTargets  = new Set(targets.filter((t) => t.category_id ).map((t) => t.category_id  as string));
+        const targets     = await this.getPromoTargets(promoCode.id);
+        const menuTargets = new Set(
+          targets.filter((t) => t.menu_item_id).map((t) => t.menu_item_id as string),
+        );
+        const catTargets = new Set(
+          targets.filter((t) => t.category_id).map((t) => t.category_id as string),
+        );
 
         const items = normalizeCartItemsForPromo(p.cartItems);
         if (items.length === 0)
@@ -841,7 +854,6 @@ class PromoCodeService {
         eligibleAmount = eligibleSubtotal;
       }
 
-      // Compute discount
       let discount = 0;
       if (promoCode.discount_type === 'percentage') {
         discount = (eligibleAmount * Number(promoCode.discount_value || 0)) / 100;
@@ -873,8 +885,13 @@ class PromoCodeService {
     userId      : string;
     orderAmount : number;
     cartItems   : CartItemForPromo[];
-  }): Promise<{ promoCode: PromoCodeRow | null; discount: number; message: string }> {
-    const merchantId    = params.merchantId ?? null;
+  }): Promise<{
+    promoCode   : PromoCodeRow | null;
+    discount    : number;
+    message     : string;
+    freeItemIds : BxgyFreeItemId[];
+  }> {
+    const merchantId     = params.merchantId ?? null;
     const normalizedCart = normalizeCartItemsForPromo(params.cartItems);
 
     const promos = await this.getActivePromoCodes({ merchantId });
@@ -882,10 +899,16 @@ class PromoCodeService {
       .filter((p) => !!p.auto_apply)
       .sort((a, b) => clampNum(b.priority, 0) - clampNum(a.priority, 0));
 
-    let best: { promoCode: PromoCodeRow | null; discount: number; message: string } = {
-      promoCode: null,
-      discount : 0,
-      message  : 'No offer applied',
+    let best: {
+      promoCode   : PromoCodeRow | null;
+      discount    : number;
+      message     : string;
+      freeItemIds : BxgyFreeItemId[];
+    } = {
+      promoCode   : null,
+      discount    : 0,
+      message     : 'No offer applied',
+      freeItemIds : [],
     };
 
     for (const p of autos) {
@@ -903,7 +926,12 @@ class PromoCodeService {
         });
 
         if (r.valid && r.discount > best.discount) {
-          best = { promoCode: p, discount: r.discount, message: r.message };
+          best = {
+            promoCode   : p,
+            discount    : r.discount,
+            message     : r.message,
+            freeItemIds : r.freeItemIds,
+          };
         }
         continue;
       }
@@ -918,7 +946,12 @@ class PromoCodeService {
       });
 
       if (v.valid && v.discount > best.discount) {
-        best = { promoCode: v.promoCode || p, discount: v.discount, message: v.message };
+        best = {
+          promoCode   : v.promoCode || p,
+          discount    : v.discount,
+          message     : v.message,
+          freeItemIds : [],    // cart discount has no free items
+        };
       }
     }
 
@@ -935,7 +968,6 @@ class PromoCodeService {
   }): Promise<PromoApplyResult> {
     const normalizedCart = normalizeCartItemsForPromo(params.cartItems);
 
-    // Manual code entered
     if (params.code && params.code.trim()) {
       const result = await this.validatePromoCode({
         code        : params.code,
@@ -945,15 +977,15 @@ class PromoCodeService {
         cartItems   : normalizedCart,
       });
       return {
-        valid    : result.valid,
-        discount : result.discount,
-        message  : result.message,
-        promoCode: result.promoCode ?? null,
-        isBxgy   : false,
+        valid       : result.valid,
+        discount    : result.discount,
+        message     : result.message,
+        promoCode   : result.promoCode ?? null,
+        isBxgy      : false,
+        freeItemIds : [],
       };
     }
 
-    // Auto-apply path
     const best = await this.getBestAutoOffer({
       merchantId  : params.merchantId,
       userId      : params.userId,
@@ -962,11 +994,12 @@ class PromoCodeService {
     });
 
     return {
-      valid    : best.promoCode !== null && best.discount > 0,
-      discount : best.discount,
-      message  : best.message,
-      promoCode: best.promoCode,
-      isBxgy   : best.promoCode?.deal_type === 'bxgy',
+      valid       : best.promoCode !== null && best.discount > 0,
+      discount    : best.discount,
+      message     : best.message,
+      promoCode   : best.promoCode,
+      isBxgy      : best.promoCode?.deal_type === 'bxgy',
+      freeItemIds : best.freeItemIds,
     };
   }
 
@@ -977,7 +1010,6 @@ class PromoCodeService {
     orderId     : string;
     discount    : number;
   }): Promise<void> {
-    // 1. Insert usage row (UNIQUE on order_id prevents duplicates)
     const { error: usageErr } = await supabase
       .from('promo_usage')
       .upsert(
@@ -993,7 +1025,6 @@ class PromoCodeService {
 
     if (usageErr) console.error('[Promo] promo_usage upsert failed:', usageErr);
 
-    // 2. Atomic increment via RPC (created in SQL migration)
     const { error: incErr } = await supabase.rpc('increment_promo_used_count', {
       p_promo_code_id: params.promoCodeId,
     });

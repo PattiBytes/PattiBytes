@@ -514,43 +514,44 @@ export default function CheckoutPage() {
       const addr                  = selectedAddress as any;
 
       const orderData: any = {
-        customer_id  : user.id,
-        merchant_id  : isShopCart ? null : cartData.cart.merchant_id,
-        order_type   : isShopCart ? 'custom' : 'restaurant',
-        hub_origin   : isShopCart ? APP_SETTINGS_ID : null,
+  customer_id  : user.id,
+  merchant_id  : isShopCart ? null : cartData.cart.merchant_id,
+  order_type   : isShopCart ? 'custom' : 'restaurant',
+  hub_origin   : isShopCart ? APP_SETTINGS_ID : null,
 
-        items        : cartData.cart.items,
-        subtotal     : round2(computedSubtotal),
-        discount     : round2(promoDiscount),
-        delivery_fee : round2(deliveryFee),
-        tax          : round2(tax),
-        total_amount : round2(finalTotal),
+  items        : cartData.cart.items,
+  subtotal     : round2(computedSubtotal),
+  discount     : round2(promoDiscount),      // ✅ schema column is `discount`
+  delivery_fee : round2(deliveryFee),
+  tax          : round2(tax),
+  total_amount : round2(finalTotal),
 
-        payment_method: paymentMethod,
-        payment_status: 'pending',
-        status        : 'pending',
+  payment_method: paymentMethod,
+  payment_status: 'pending',
+  status        : 'pending',
 
-        // ✅ Promo fields — from live hook state (not stale sessionStorage)
-        promo_code    : promoCode     || null,
-        promo_code_id : promo.promoCode?.id ?? null,
-        promo_discount: round2(promoDiscount),
+  // ✅ Only schema-valid promo columns: promo_code (text) + promo_id (uuid)
+  promo_code   : promoCode || null,
+  promo_id     : promo.promoCode?.id || null,
+  // ❌ REMOVED: promo_discount — column does not exist in orders schema
 
-        delivery_address      : formatFullAddress(selectedAddress),
-        delivery_latitude     : Number(addr.latitude),
-        delivery_longitude    : Number(addr.longitude),
-        delivery_distance_km  : round2(deliveryDistance),
-        delivery_address_label: addr.label || null,
+  delivery_address      : formatFullAddress(selectedAddress),
+  delivery_latitude     : Number(addr.latitude),
+  delivery_longitude    : Number(addr.longitude),
+  delivery_distance_km  : round2(deliveryDistance),
+  delivery_address_label: addr.label || null,
 
-        recipient_name       : addr.recipient_name || addr.recipientname || null,
-        customer_phone       : normalizePhone(addr.recipient_phone || addr.recipientphone) || null,
-        special_instructions : addr.delivery_instructions || addr.deliveryinstructions || null,
-        customer_notes       : customerNotes || null,
-        delivery_instructions: addr.delivery_instructions || addr.deliveryinstructions || null,
+  recipient_name       : addr.recipient_name || addr.recipientname || null,
+  customer_phone       : normalizePhone(addr.recipient_phone || addr.recipientphone) || null,
+  special_instructions : addr.delivery_instructions || addr.deliveryinstructions || null,
+  customer_notes       : customerNotes || null,
+  delivery_instructions: addr.delivery_instructions || addr.deliveryinstructions || null,
 
-        customer_location       : liveLocation || null,
-        preparation_time        : 30,
-        estimated_delivery_time : estimatedDeliveryTime.toISOString(),
-      };
+  customer_location       : liveLocation || null,
+  preparation_time        : 30,
+  estimated_delivery_time : estimatedDeliveryTime.toISOString(),
+};
+
 
       const { data: order, error: orderError } = await supabase
         .from('orders')
@@ -811,26 +812,30 @@ export default function CheckoutPage() {
 
           {/* ── Right column ──────────────────────────────────────────── */}
           <div className="lg:col-span-1">
-            <OrderSummaryPanel
-              items={items}
-              subtotal={computedSubtotal}
-              promoDiscount={promoDiscount}
-              promoCode={promoCode}
-              deliveryFee={deliveryFee}
-              deliveryDistance={deliveryDistance}
-              deliveryBreakdown={deliveryBreakdown}
-              showDeliveryFee={showDeliveryFeeRow}
-              tax={tax}
-              gstEnabled={gstEnabled}
-              gstPct={gstPct}
-              finalTotal={finalTotal}
-              isShopCart={isShopCart}
-              hasAddress={!!selectedAddress}
-              addressComplete={isSelectedAddressComplete}
-              liveReady={isLiveReady}
-              placing={placing}
-              onPlaceOrder={handlePlaceOrder}
-            />
+           <OrderSummaryPanel
+  items={items}
+  subtotal={computedSubtotal}
+  promoDiscount={promoDiscount}
+  promoCode={promoCode}
+  deliveryFee={deliveryFee}
+  deliveryDistance={deliveryDistance}
+  deliveryBreakdown={deliveryBreakdown}
+  showDeliveryFee={showDeliveryFeeRow}
+  tax={tax}
+  gstEnabled={gstEnabled}
+  gstPct={gstPct}
+  finalTotal={finalTotal}
+  isShopCart={isShopCart}
+  hasAddress={!!selectedAddress}
+  addressComplete={isSelectedAddressComplete}
+  liveReady={isLiveReady}
+  placing={placing}
+  onPlaceOrder={handlePlaceOrder}
+  bxgyFreeItems={promo.freeItems}    
+  promoMessage={promo.message}      
+  isBxgyPromo={promo.isBxgy}        
+/>
+
           </div>
         </div>
       </div>

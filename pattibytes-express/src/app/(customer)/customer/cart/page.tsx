@@ -461,6 +461,7 @@ export default function CartPage() {
                 promoCode={promoInput}
                 appliedPromo={appliedPromo}
                 applyingPromo={promo.loading}
+                 bxgyFreeItems={promo.freeItems}
                 promoMessage={promo.message}
                 isBxgyPromo={promo.isBxgy}
                 showPromoList={showPromoList}
