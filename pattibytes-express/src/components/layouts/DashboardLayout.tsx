@@ -215,6 +215,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: 'Promo Codes', href: '/admin/promo-codes', icon: Tag },
          { name: 'custom-products', href: '/admin/custom-products', icon: Tag },
         { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
+         { name: 'Reviews', href: '/admin/reviews', icon: BarChart3 },
         { name: 'Settings', href: '/admin/settings', icon: Settings },
         customerDashboardItem,
       ];
@@ -234,6 +235,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
         { name: 'Admins', href: '/admin/admins', icon: Users },
            { name: 'custom-products', href: '/admin/custom-products', icon: Tag },
+            { name: 'Reviews', href: '/admin/reviews', icon: BarChart3 },
         { name: 'Settings', href: '/admin/settings', icon: Settings },
         customerDashboardItem,
       ];
