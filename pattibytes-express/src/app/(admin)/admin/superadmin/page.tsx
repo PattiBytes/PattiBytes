@@ -768,6 +768,21 @@ const loadRecentOrders = async () => {
           Revenue, top merchants, drivers
         </div>
       </button>
+
+        <button
+        onClick={() => router.push('/admin/legal')}
+        className="w-full bg-gray-50 hover:bg-gray-100 rounded-xl p-3 text-left border"
+      >
+
+        <div className="flex items-center gap-2">
+          <TrendingUp className="text-primary" size={18} />
+          <span className="font-semibold text-gray-900">Manage Policies</span>
+        </div>
+        <div className="mt-1 text-xs text-gray-600">
+         Manage policies
+        </div>
+      </button>
+
     </div>
   </div>
 </div>
