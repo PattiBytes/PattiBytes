@@ -45,6 +45,7 @@ export type OrderItem = {
   category?: string;
   is_veg?: boolean; isveg?: boolean;
   image_url?: string; imageurl?: string;
+   category_id: string | null;
   merchant_id?: string; merchantid?: string;
   discount_percentage?: number; discountpercentage?: number;
   is_free?: boolean;
@@ -208,6 +209,7 @@ export type EditFields = {
   quotedAmount: string;
   quoteMessage: string;
   platformHandled: boolean;
+  
 };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -412,6 +414,7 @@ export function statusMeta(status: string) {
   return map[key] ?? map.pending;
 }
 
+
 // ─── trust badge ──────────────────────────────────────────────────────────────
 import { AlertTriangle, TrendingDown, Award, Shield } from 'lucide-react';
 
@@ -424,3 +427,4 @@ export function trustMeta(trustScore: number, accountStatus: string) {
     return { icon: Award,         color: 'bg-green-100 text-green-800 border-green-200',  text: 'Trusted'  };
   return   { icon: Shield,        color: 'bg-blue-100 text-blue-800 border-blue-200',     text: 'Verified' };
 }
+
