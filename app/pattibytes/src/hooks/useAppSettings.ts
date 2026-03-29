@@ -37,6 +37,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   announcement:                   null,                     // ✅ now valid
   // Display
   show_menu_images:               true,
+  
 }
 
 

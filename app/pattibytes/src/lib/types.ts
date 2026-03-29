@@ -209,6 +209,10 @@ export interface AppSettings {
   delivery_fee_enabled: boolean;
   delivery_fee_schedule: any;
   delivery_fee_show_to_customer: boolean;
+
+  free_delivery_enabled:    boolean
+  free_delivery_above:      number | null 
+
   base_delivery_radius_km: number;
   per_km_fee_beyond_base: number;
   app_logo_url: string | null;

@@ -1,157 +1,163 @@
 // app/(auth)/signup.tsx
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
-} from 'react-native'
-import { Link, useRouter } from 'expo-router'
-import { supabase } from '../../../lib/supabase'
-import { signInWithGoogle } from '../../../lib/googleAuth'
-import { COLORS } from '../../../lib/constants'
+} from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { Link, useRouter } from 'expo-router';
+import { supabase } from '../../../lib/supabase';
+import { signInWithGoogle } from '../../../lib/googleAuth';
+import { signInWithApple, isAppleSignInAvailable } from '../../../lib/appleAuth';
+import { COLORS } from '../../../lib/constants';
 
-type FieldErrors = Record<string, string>
+type FieldErrors = Record<string, string>;
 
 function passwordStrength(pw: string) {
-  let s = 0
-  if (pw.length >= 8) s++
-  if (/[A-Z]/.test(pw)) s++
-  if (/[0-9]/.test(pw)) s++
-  if (/[^A-Za-z0-9]/.test(pw)) s++
+  let s = 0;
+  if (pw.length >= 8)           s++;
+  if (/[A-Z]/.test(pw))         s++;
+  if (/[0-9]/.test(pw))         s++;
+  if (/[^A-Za-z0-9]/.test(pw)) s++;
   const levels = [
     { label: 'Weak',   color: '#EF4444' },
     { label: 'Weak',   color: '#EF4444' },
     { label: 'Fair',   color: '#F59E0B' },
     { label: 'Good',   color: '#3B82F6' },
     { label: 'Strong', color: '#10B981' },
-  ]
-  return { ...levels[s], score: s }
+  ];
+  return { ...levels[s], score: s };
 }
 
-// module-level timer so it survives re-renders without useRef
-let uTimer: ReturnType<typeof setTimeout>
+let uTimer: ReturnType<typeof setTimeout>;
 
 export default function Signup() {
-  const router = useRouter()
+  const router = useRouter();
 
-  const [fullName, setFullName]   = useState('')
-  const [username, setUsername]   = useState('')
-  const [email, setEmail]         = useState('')
-  const [phone, setPhone]         = useState('')
-  const [password, setPassword]   = useState('')
-  const [confirm, setConfirm]     = useState('')
-  const [showPw, setShowPw]       = useState(false)
-  const [showCf, setShowCf]       = useState(false)
-  const [terms, setTerms]         = useState(false)
-  const [loading, setLoading]     = useState(false)
-  const [gLoading, setGLoading]   = useState(false)
-  const [fieldErrors, setFE]      = useState<FieldErrors>({})
-  const [globalError, setGE]      = useState('')
-  const [unStatus, setUnStatus]   = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
+  const [fullName,  setFullName]  = useState('');
+  const [username,  setUsername]  = useState('');
+  const [email,     setEmail]     = useState('');
+  const [phone,     setPhone]     = useState('');
+  const [password,  setPassword]  = useState('');
+  const [confirm,   setConfirm]   = useState('');
+  const [showPw,    setShowPw]    = useState(false);
+  const [showCf,    setShowCf]    = useState(false);
+  const [terms,     setTerms]     = useState(false);
+  const [loading,   setLoading]   = useState(false);
+  const [gLoading,  setGLoading]  = useState(false);
+  const [aLoading,  setALoading]  = useState(false); // ← Apple
+  const [fieldErrors, setFE]      = useState<FieldErrors>({});
+  const [globalError, setGE]      = useState('');
+  const [unStatus,  setUnStatus]  = useState<'idle'|'checking'|'available'|'taken'>('idle');
+  const [appleAvail, setAppleAvail] = useState(false); // ← Apple available check
 
-  const emailRef   = useRef<TextInput>(null)
-  const phoneRef   = useRef<TextInput>(null)
-  const pwRef      = useRef<TextInput>(null)
-  const confirmRef = useRef<TextInput>(null)
+  const emailRef   = useRef<TextInput>(null);
+  const phoneRef   = useRef<TextInput>(null);
+  const pwRef      = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
 
-  const pwStrength = passwordStrength(password)
+  const pwStrength = passwordStrength(password);
+
+  useEffect(() => {
+    isAppleSignInAvailable().then(setAppleAvail);
+  }, []);
 
   function clearFE(field: string) {
-    setFE(p => { const n = { ...p }; delete n[field]; return n })
-    setGE('')
+    setFE(p => { const n = { ...p }; delete n[field]; return n; });
+    setGE('');
   }
 
   const handleUsernameChange = useCallback((val: string) => {
-    // Only allow lowercase letters, numbers, dots, underscores
-    const cleaned = val.toLowerCase().replace(/[^a-z0-9_.]/g, '')
-    setUsername(cleaned)
-    clearFE('username')
-    setUnStatus('idle')
+    const cleaned = val.toLowerCase().replace(/[^a-z0-9_.]/g, '');
+    setUsername(cleaned);
+    clearFE('username');
+    setUnStatus('idle');
     if (cleaned.length >= 3) {
-      setUnStatus('checking')
-      clearTimeout(uTimer)
+      setUnStatus('checking');
+      clearTimeout(uTimer);
       uTimer = setTimeout(async () => {
         const { data } = await supabase
-          .from('profiles')
-          .select('id')
-          .ilike('username', cleaned)
-          .maybeSingle()
-        setUnStatus(data ? 'taken' : 'available')
-      }, 500)
+          .from('profiles').select('id').ilike('username', cleaned).maybeSingle();
+        setUnStatus(data ? 'taken' : 'available');
+      }, 500);
     }
-  }, [])
+  }, []);
 
   function validate(): boolean {
-    const e: FieldErrors = {}
-    if (!fullName.trim())                          e.fullName = 'Full name is required.'
-    if (username.length > 0 && username.length < 3) e.username = 'Minimum 3 characters.'
-    if (unStatus === 'taken')                       e.username = 'Username already taken.'
-    if (!email.trim() || !email.includes('@'))      e.email    = 'Enter a valid email address.'
-    if (!password)                                   e.password = 'Password is required.'
-    if (password.length < 6)                         e.password = 'Minimum 6 characters.'
-    if (password !== confirm)                        e.confirm  = 'Passwords do not match.'
-    if (!terms)                                      e.terms    = 'Please accept the terms.'
-    setFE(e)
-    return Object.keys(e).length === 0
+    const e: FieldErrors = {};
+    if (!fullName.trim())                             e.fullName = 'Full name is required.';
+    if (username.length > 0 && username.length < 3)  e.username = 'Minimum 3 characters.';
+    if (unStatus === 'taken')                         e.username = 'Username already taken.';
+    if (!email.trim() || !email.includes('@'))        e.email    = 'Enter a valid email address.';
+    if (!password)                                    e.password = 'Password is required.';
+    if (password.length < 6)                          e.password = 'Minimum 6 characters.';
+    if (password !== confirm)                         e.confirm  = 'Passwords do not match.';
+    if (!terms)                                       e.terms    = 'Please accept the terms.';
+    setFE(e);
+    return Object.keys(e).length === 0;
   }
 
   async function handleSignup() {
-    setGE('')
-    if (!validate()) return
-
-    setLoading(true)
+    setGE('');
+    if (!validate()) return;
+    setLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
-        options: {
-          data: {
-            full_name: fullName.trim(),
-            phone: phone.trim() || null,
-          },
-        },
-      })
-      if (error) throw error
-      if (!data.user?.id) throw new Error('Signup failed — no user returned.')
+        options: { data: { full_name: fullName.trim(), phone: phone.trim() || null } },
+      });
+      if (error) throw error;
+      if (!data.user?.id) throw new Error('Signup failed — no user returned.');
 
       await supabase.from('profiles').upsert({
-        id: data.user.id,
-        email: data.user.email,
-        full_name: fullName.trim(),
-        username: username.trim() || null,
-        phone: phone.trim() || null,
-        role: 'customer',
-        approval_status: 'approved',
-        is_active: true,
+        id:               data.user.id,
+        email:            data.user.email,
+        full_name:        fullName.trim(),
+        username:         username.trim() || null,
+        phone:            phone.trim() || null,
+        role:             'customer',
+        approval_status:  'approved',
+        is_active:        true,
         profile_completed: true,
-      })
+      });
 
-      router.replace('/(auth)/verify-email' as any)
+      router.replace('/(auth)/verify-email' as any);
     } catch (err: any) {
-      const msg: string = err?.message ?? ''
-      if (/already registered/i.test(msg)) {
-        setGE('This email is already registered. Please sign in instead.')
-      } else if (/rate limit/i.test(msg)) {
-        setGE('Too many attempts. Please wait a few minutes.')
-      } else {
-        setGE(msg || 'Could not create account. Please try again.')
-      }
-    } finally {
-      setLoading(false)
-    }
+      const msg: string = err?.message ?? '';
+      if (/already registered/i.test(msg))  setGE('This email is already registered. Please sign in instead.');
+      else if (/rate limit/i.test(msg))      setGE('Too many attempts. Please wait a few minutes.');
+      else                                   setGE(msg || 'Could not create account. Please try again.');
+    } finally { setLoading(false); }
   }
 
   async function handleGoogle() {
-    setGLoading(true)
+    setGLoading(true);
     try {
-      await signInWithGoogle()
+      await signInWithGoogle();
     } catch (err: any) {
-      if (err.message !== 'Sign in was cancelled') setGE(err.message || 'Google sign-in failed.')
-    } finally {
-      setGLoading(false)
-    }
+      if (err.message !== 'Sign in was cancelled') setGE(err.message || 'Google sign-in failed.');
+    } finally { setGLoading(false); }
   }
 
-  const busy = loading || gLoading
+  // ── NEW: Apple sign-in handler ─────────────────────────────────────────────
+  async function handleApple() {
+    setGE(''); setALoading(true);
+    try {
+      await signInWithApple();
+      // Navigation handled by RootGuard / AuthContext
+    } catch (err: any) {
+      const msg: string = err?.message ?? '';
+      if (
+        msg === 'Sign in was cancelled' ||
+        msg.includes('ERR_CANCELED') ||
+        msg.includes('1001')
+      ) return;
+      setGE(msg || 'Apple sign-in failed. Please try again.');
+    } finally { setALoading(false); }
+  }
+
+  const busy = loading || gLoading || aLoading;
 
   return (
     <KeyboardAvoidingView
@@ -169,6 +175,27 @@ export default function Signup() {
         {!!globalError && (
           <View style={S.errorBanner}>
             <Text style={S.errorText}>⚠️  {globalError}</Text>
+          </View>
+        )}
+
+        {/* ── Sign in with Apple (iOS only, shown first per Apple HIG) ── */}
+        {appleAvail && (
+          <View style={[S.appleWrap, busy && { opacity: 0.55 }]}
+                pointerEvents={busy ? 'none' : 'auto'}>
+            {aLoading ? (
+              <View style={S.appleBtnFallback}>
+                <ActivityIndicator color="#FFF" />
+                <Text style={S.appleBtnFallbackTxt}>Signing in with Apple...</Text>
+              </View>
+            ) : (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={14}
+                style={S.appleBtn}
+                onPress={handleApple}
+              />
+            )}
           </View>
         )}
 
@@ -196,7 +223,7 @@ export default function Signup() {
         <TextInput
           style={[S.input, !!fieldErrors.fullName && S.inputError]}
           value={fullName}
-          onChangeText={v => { setFullName(v); clearFE('fullName') }}
+          onChangeText={v => { setFullName(v); clearFE('fullName'); }}
           placeholder="John Doe"
           autoCapitalize="words"
           returnKeyType="next"
@@ -236,7 +263,7 @@ export default function Signup() {
           ref={emailRef}
           style={[S.input, !!fieldErrors.email && S.inputError]}
           value={email}
-          onChangeText={v => { setEmail(v); clearFE('email') }}
+          onChangeText={v => { setEmail(v); clearFE('email'); }}
           placeholder="your@email.com"
           autoCapitalize="none"
           keyboardType="email-address"
@@ -268,7 +295,7 @@ export default function Signup() {
             ref={pwRef}
             style={[S.input, { flex: 1, marginBottom: 0 }, !!fieldErrors.password && S.inputError]}
             value={password}
-            onChangeText={v => { setPassword(v); clearFE('password') }}
+            onChangeText={v => { setPassword(v); clearFE('password'); }}
             placeholder="Min 6 characters"
             placeholderTextColor={COLORS.textMuted}
             secureTextEntry={!showPw}
@@ -283,13 +310,10 @@ export default function Signup() {
         </View>
         {password.length > 0 && (
           <View style={S.strengthRow}>
-            {[1, 2, 3, 4].map(i => (
-              <View
-                key={i}
-                style={[S.strengthBar, {
-                  backgroundColor: i <= pwStrength.score ? pwStrength.color : COLORS.border,
-                }]}
-              />
+            {[1,2,3,4].map(i => (
+              <View key={i} style={[S.strengthBar, {
+                backgroundColor: i <= pwStrength.score ? pwStrength.color : COLORS.border,
+              }]} />
             ))}
             <Text style={[S.strengthLabel, { color: pwStrength.color }]}>{pwStrength.label}</Text>
           </View>
@@ -304,7 +328,7 @@ export default function Signup() {
             ref={confirmRef}
             style={[S.input, { flex: 1, marginBottom: 0 }, !!fieldErrors.confirm && S.inputError]}
             value={confirm}
-            onChangeText={v => { setConfirm(v); clearFE('confirm') }}
+            onChangeText={v => { setConfirm(v); clearFE('confirm'); }}
             placeholder="••••••••"
             placeholderTextColor={COLORS.textMuted}
             secureTextEntry={!showCf}
@@ -323,16 +347,22 @@ export default function Signup() {
         {/* Terms */}
         <TouchableOpacity
           style={S.checkRow}
-          onPress={() => { setTerms(v => !v); clearFE('terms') }}
+          onPress={() => { setTerms(v => !v); clearFE('terms'); }}
           disabled={busy}
         >
           <View style={[S.checkbox, terms && S.checked]}>
             {terms && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
           </View>
-          <Text style={S.checkText}>
-            I accept the <Text style={S.link}>Terms & Conditions</Text>
-            {' '}and <Text style={S.link}>Privacy Policy</Text>
-          </Text>
+        <Text style={S.checkText}>
+  I accept the{' '}
+  <Text style={S.link} onPress={() => router.push('/legal/terms' as any)}>
+    Terms & Conditions
+  </Text>
+  {' '}and{' '}
+  <Text style={S.link} onPress={() => router.push('/legal/privacy-policy' as any)}>
+    Privacy Policy
+  </Text>
+</Text>
         </TouchableOpacity>
         {!!fieldErrors.terms && <Text style={[S.fieldErr, { marginBottom: 12 }]}>{fieldErrors.terms}</Text>}
 
@@ -357,19 +387,28 @@ export default function Signup() {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
-  )
+  );
 }
 
 const S = StyleSheet.create({
   scroll: { flexGrow: 1, padding: 20, paddingTop: 60 },
-  title: { fontSize: 28, fontWeight: '800', color: COLORS.text, textAlign: 'center', marginBottom: 6 },
-  sub:   { fontSize: 14, color: COLORS.textLight, textAlign: 'center', marginBottom: 24 },
+  title:  { fontSize: 28, fontWeight: '800', color: COLORS.text, textAlign: 'center', marginBottom: 6 },
+  sub:    { fontSize: 14, color: COLORS.textLight, textAlign: 'center', marginBottom: 24 },
 
   errorBanner: {
     backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA',
     borderRadius: 10, padding: 12, marginBottom: 14,
   },
   errorText: { color: '#DC2626', fontSize: 13, fontWeight: '600' },
+
+  // ── Apple button ──
+  appleWrap: { marginBottom: 12 },
+  appleBtn:  { width: '100%', height: 50 },
+  appleBtnFallback: {
+    height: 50, backgroundColor: '#000', borderRadius: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+  },
+  appleBtnFallbackTxt: { color: '#FFF', fontWeight: '700', fontSize: 15 },
 
   googleBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -405,8 +444,8 @@ const S = StyleSheet.create({
   eyeBtn:     { padding: 10 },
   eyeIcon:    { fontSize: 18 },
 
-  strengthRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, marginBottom: 4 },
-  strengthBar:  { flex: 1, height: 4, borderRadius: 2 },
+  strengthRow:   { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, marginBottom: 4 },
+  strengthBar:   { flex: 1, height: 4, borderRadius: 2 },
   strengthLabel: { fontSize: 11, fontWeight: '700', width: 44 },
 
   checkRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8, gap: 10 },
@@ -423,4 +462,4 @@ const S = StyleSheet.create({
 
   link:   { color: COLORS.primary, fontWeight: '700', fontSize: 14 },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
-})
+});

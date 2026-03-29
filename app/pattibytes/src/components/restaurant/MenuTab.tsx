@@ -1,104 +1,92 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Pressable,
-  Image,
-  LayoutAnimation,
-  Platform,
-  UIManager,
-  ScrollView,
-  ActivityIndicator,
+  View, Text, StyleSheet, TextInput, Pressable,
+  Image, LayoutAnimation, Platform, UIManager,
+  ScrollView, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { COLORS } from '../../lib/constants';
 import TrendingStrip from './TrendingStrip';
 import RecommendedStrip from './RecommendedStrip';
 import Pressable3D from '../../components/ui/Pressable3D';
+import { isDishAvailableNow, formatDishTiming, minutesUntilAvailable } from '../../lib/dishTiming';
 
+// ── Types ────────────────────────────────────────────────────────────────────
 type SortKey = 'recommended' | 'name' | 'price_low' | 'price_high';
 
-function str(v: any, fallback = '') {
-  const s = v == null ? '' : String(v);
-  return s || fallback;
-}
-function num(v: any, fallback = 0) {
-  const n = typeof v === 'number' ? v : Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
-function bool(v: any) {
-  return v === true;
-}
-function isVegOf(x: any) {
-  return bool(x?.is_veg ?? x?.isveg ?? x?.isVeg);
-}
-function isAvailableOf(x: any) {
-  const v = x?.is_available ?? x?.isavailable ?? x?.isAvailable;
-  return v === undefined ? true : v !== false;
-}
-function imageUrlOf(x: any) {
-  return x?.image_url ?? x?.imageurl ?? x?.imageUrl ?? null;
-}
+// ── Small helpers ─────────────────────────────────────────────────────────────
+function str(v: any, fallback = '')  { const s = v == null ? '' : String(v); return s || fallback; }
+function num(v: any, fallback = 0)   { const n = typeof v === 'number' ? v : Number(v); return Number.isFinite(n) ? n : fallback; }
+function bool(v: any)                { return v === true; }
+function isVegOf(x: any)             { return bool(x?.is_veg ?? x?.isveg ?? x?.isVeg); }
+function isAvailableOf(x: any)       { const v = x?.is_available ?? x?.isavailable ?? x?.isAvailable; return v === undefined ? true : v !== false; }
+function imageUrlOf(x: any)          { return x?.image_url ?? x?.imageurl ?? x?.imageUrl ?? null; }
 function isFeaturedOf(x: any) {
-  const direct = x?.is_featured ?? x?.isfeatured ?? x?.featured ?? x?.isFeatured;
-  if (direct !== undefined) return bool(direct);
-  const tags = x?.tags;
-  if (Array.isArray(tags)) return tags.map(String).includes('featured');
-  if (typeof tags === 'string') return tags.toLowerCase().includes('featured');
+  const d = x?.is_featured ?? x?.isfeatured ?? x?.featured ?? x?.isFeatured;
+  if (d !== undefined) return bool(d);
+  const t = x?.tags;
+  if (Array.isArray(t))    return t.map(String).includes('featured');
+  if (typeof t === 'string') return t.toLowerCase().includes('featured');
   return false;
 }
-function merchantNameOf(m: any) {
-  return str(m?.business_name ?? m?.businessname ?? m?.businessName, 'Restaurant');
+function merchantNameOf(m: any) { return str(m?.business_name ?? m?.businessname ?? m?.businessName, 'Restaurant'); }
+function dishTimingOf(x: any)   { return x?.dish_timing ?? x?.dishtiming ?? null; }
+
+// ── Hook: tick every minute so timing badges stay live ────────────────────────
+function useMinuteTick() {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    // Align to the start of the next minute
+    const msUntilNext = (60 - new Date().getSeconds()) * 1000 - new Date().getMilliseconds();
+    const timeout = setTimeout(() => {
+      setTick((t) => t + 1);
+      const interval = setInterval(() => setTick((t) => t + 1), 60_000);
+      return () => clearInterval(interval);
+    }, msUntilNext);
+    return () => clearTimeout(timeout);
+  }, [tick]);
+  return tick;
 }
 
-export default function MenuTab({
-  merchant,
-  menuItems,
-  showImages,
-  trending,
-  trendingLoading,
-  offerByMenuItemId,
-  onOpenTrendingItem,
-  onAddItem,
-  onInc,
-  onDec,
-  getQty,
-
-  recommended,
-  recommendedLoading,
-}: {
+// ── Props ─────────────────────────────────────────────────────────────────────
+interface MenuTabProps {
   merchant: any;
   menuItems: any[];
   showImages: boolean;
-
   trending: any[];
   trendingLoading: boolean;
-
   offerByMenuItemId: Record<string, { label: string; subLabel?: string; promoCode?: string } | null>;
   onOpenTrendingItem: (t: any) => void;
-
   onAddItem: (item: any) => void;
   onInc: (item: any) => void;
   onDec: (item: any) => void;
   getQty: (menuItemId: string) => number;
-
   recommended?: any[];
   recommendedLoading?: boolean;
-}) {
-  const router = useRouter();
+  openNow?: boolean;   // ← NEW
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+export default function MenuTab({
+  merchant, menuItems, showImages,
+  trending, trendingLoading,
+  offerByMenuItemId, onOpenTrendingItem,
+  onAddItem, onInc, onDec, getQty,
+  recommended, recommendedLoading,
+  openNow = true,   // ← default true so existing callers still work
+}: MenuTabProps) {
+  const router   = useRouter();
   const scrollRef = useRef<ScrollView>(null);
+  const tick      = useMinuteTick(); // live timing refresh
 
-  const [showTop, setShowTop] = useState(false);
-
-  const [q, setQ] = useState('');
-  const [vegOnly, setVegOnly] = useState(false);
-  const [featuredOnly, setFeaturedOnly] = useState(false);
-  const [sort, setSort] = useState<SortKey>('recommended');
-
-  const [openCats, setOpenCats] = useState<Record<string, boolean>>({});
+  const [showTop,       setShowTop]       = useState(false);
+  const [q,             setQ]             = useState('');
+  const [vegOnly,       setVegOnly]       = useState(false);
+  const [featuredOnly,  setFeaturedOnly]  = useState(false);
+  const [availNowOnly,  setAvailNowOnly]  = useState(false); // ← NEW: hide out-of-window dishes
+  const [sort,          setSort]          = useState<SortKey>('recommended');
+  const [openCats,      setOpenCats]      = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (Platform.OS === 'android') {
@@ -107,26 +95,24 @@ export default function MenuTab({
   }, []);
 
   const goFullMenu = useCallback(() => {
-    router.push({
-      pathname: '/(customer)/restaurant/[id]/full-menu',
-      params: { id: str(merchant?.id) },
-    } as any);
+    router.push({ pathname: '/(customer)/restaurant/[id]/full-menu', params: { id: str(merchant?.id) } } as any);
   }, [router, merchant]);
 
   const clearAll = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setQ('');
-    setVegOnly(false);
-    setFeaturedOnly(false);
-    setSort('recommended');
+    setQ(''); setVegOnly(false); setFeaturedOnly(false); setAvailNowOnly(false); setSort('recommended');
   };
 
+  // ── Filtering + sorting ───────────────────────────────────────────────────
   const filtered = useMemo(() => {
+    // tick is used to force recalculation every minute for dish timing
+    void tick;
     const query = q.trim().toLowerCase();
     let list = Array.isArray(menuItems) ? menuItems.slice() : [];
 
-    if (vegOnly) list = list.filter((x) => isVegOf(x));
+    if (vegOnly)      list = list.filter((x) => isVegOf(x));
     if (featuredOnly) list = list.filter((x) => isFeaturedOf(x));
+    if (availNowOnly) list = list.filter((x) => isDishAvailableNow(dishTimingOf(x))); // ← NEW
 
     if (query) {
       list = list.filter((x) => {
@@ -139,16 +125,15 @@ export default function MenuTab({
 
     const priceOf = (x: any) => {
       const mrp = num(x?.price, 0);
-      const dp = num(x?.discount_percentage ?? x?.discountpercentage, 0);
+      const dp  = num(x?.discount_percentage ?? x?.discountpercentage, 0);
       return dp > 0 ? mrp * (1 - dp / 100) : mrp;
     };
-
-    if (sort === 'name') list.sort((a, b) => str(a?.name).localeCompare(str(b?.name)));
-    if (sort === 'price_low') list.sort((a, b) => priceOf(a) - priceOf(b));
+    if (sort === 'name')       list.sort((a, b) => str(a?.name).localeCompare(str(b?.name)));
+    if (sort === 'price_low')  list.sort((a, b) => priceOf(a) - priceOf(b));
     if (sort === 'price_high') list.sort((a, b) => priceOf(b) - priceOf(a));
 
     return list;
-  }, [menuItems, q, sort, vegOnly, featuredOnly]);
+  }, [menuItems, q, sort, vegOnly, featuredOnly, availNowOnly, tick]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, any[]>();
@@ -160,48 +145,49 @@ export default function MenuTab({
     return Array.from(map.entries());
   }, [filtered]);
 
-  const toggleCat = (cat: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setOpenCats((prev) => ({ ...prev, [cat]: prev[cat] === undefined ? false : !prev[cat] }));
-  };
+  // ── Category expand/collapse ──────────────────────────────────────────────
+  const toggleCat   = (cat: string) => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setOpenCats((p) => ({ ...p, [cat]: p[cat] === undefined ? false : !p[cat] })); };
+  const expandAll   = () => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); const n: Record<string,boolean> = {}; grouped.forEach(([c]) => (n[c] = true));  setOpenCats(n); };
+  const collapseAll = () => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); const n: Record<string,boolean> = {}; grouped.forEach(([c]) => (n[c] = false)); setOpenCats(n); };
+  const scrollToTop = () => scrollRef.current?.scrollTo({ y: 0, animated: true });
 
-  const expandAll = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    const next: Record<string, boolean> = {};
-    grouped.forEach(([cat]) => (next[cat] = true));
-    setOpenCats(next);
-  };
+  // ── Count unavailable-by-timing items (for filter badge) ─────────────────
+  const timingUnavailableCount = useMemo(() => {
+    void tick;
+    return (menuItems ?? []).filter((x) => {
+      const dt = dishTimingOf(x);
+      return dt && !isDishAvailableNow(dt);
+    }).length;
+  }, [menuItems, tick]);
 
-  const collapseAll = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    const next: Record<string, boolean> = {};
-    grouped.forEach(([cat]) => (next[cat] = false));
-    setOpenCats(next);
-  };
-
-  const scrollToTop = () => {
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
-  };
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, paddingBottom: 24 }}>
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
-        onScroll={(e) => {
-          const y = e.nativeEvent.contentOffset.y ?? 0;
-          setShowTop(y > 420);
-        }}
+        onScroll={(e) => { const y = e.nativeEvent.contentOffset.y ?? 0; setShowTop(y > 420); }}
         scrollEventThrottle={16}
       >
+        {/* ── Restaurant closed banner ── */}
+        {!openNow && (
+          <View style={S.closedBar}>
+            <Text style={S.closedBarIcon}>🔴</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={S.closedBarTitle}>Restaurant is currently closed</Text>
+              <Text style={S.closedBarSub}>You can browse the menu but cannot place orders.</Text>
+            </View>
+          </View>
+        )}
+
         <TrendingStrip items={trending} loading={trendingLoading} showImages={showImages} onOpen={onOpenTrendingItem} />
 
+        {/* ── Controls ── */}
         <View style={S.controls}>
           <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
             <Pressable3D style={S.fullMenuBtn} onPress={goFullMenu}>
               <Text style={S.fullMenuBtnTxt}>📋 View Full Menu</Text>
             </Pressable3D>
-
             <Pressable3D style={S.fullMenuBtnGhost} onPress={clearAll}>
               <Text style={S.fullMenuBtnGhostTxt}>Clear</Text>
             </Pressable3D>
@@ -232,27 +218,35 @@ export default function MenuTab({
               <Text style={[S.chipTxt, featuredOnly && S.chipTxtActive]}>⭐ Featured</Text>
             </Pressable3D>
 
+            {/* ── NEW: Available-now filter ── */}
+            <Pressable3D
+              style={[S.chip, availNowOnly && S.chipActive]}
+              onPress={() => setAvailNowOnly((v) => !v)}
+            >
+              <Text style={[S.chipTxt, availNowOnly && S.chipTxtActive]}>
+                🕐 Now{timingUnavailableCount > 0 && !availNowOnly ? ` (−${timingUnavailableCount})` : ''}
+              </Text>
+            </Pressable3D>
+
             <Pressable3D
               style={S.chip}
-              onPress={() =>
-                setSort((s) => (s === 'recommended' ? 'name' : s === 'name' ? 'price_low' : s === 'price_low' ? 'price_high' : 'recommended'))
-              }
+              onPress={() => setSort((s) => s === 'recommended' ? 'name' : s === 'name' ? 'price_low' : s === 'price_low' ? 'price_high' : 'recommended')}
             >
               <Text style={S.chipTxt}>
-                ↕ Sort: {sort === 'recommended' ? 'Recommended' : sort === 'name' ? 'Name' : sort === 'price_low' ? 'Low→High' : 'High→Low'}
+                ↕ {sort === 'recommended' ? 'Recommended' : sort === 'name' ? 'Name' : sort === 'price_low' ? 'Low→High' : 'High→Low'}
               </Text>
             </Pressable3D>
 
             <Pressable3D style={S.miniBtn} onPress={expandAll}>
               <Text style={S.miniBtnTxt}>Expand</Text>
             </Pressable3D>
-
             <Pressable3D style={S.miniBtn} onPress={collapseAll}>
               <Text style={S.miniBtnTxt}>Collapse</Text>
             </Pressable3D>
           </View>
         </View>
 
+        {/* ── Item list ── */}
         {grouped.length === 0 ? (
           <View style={{ padding: 20, alignItems: 'center' }}>
             <Text style={{ fontSize: 44, marginBottom: 8 }}>🍽️</Text>
@@ -262,110 +256,169 @@ export default function MenuTab({
         ) : (
           grouped.map(([cat, items]) => {
             const isOpen = openCats[cat] ?? true;
+            // Count unavailable items in category for badge
+            const unavailInCat = items.filter((x: any) => !isDishAvailableNow(dishTimingOf(x))).length;
 
             return (
               <View key={cat}>
                 <Pressable3D style={S.catHeader} onPress={() => toggleCat(cat)}>
                   <View style={{ flex: 1 }}>
-                    <Text style={S.catTitle}>{cat}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={S.catTitle}>{cat}</Text>
+                      {unavailInCat > 0 && (
+                        <View style={S.timingCatBadge}>
+                          <Text style={S.timingCatTxt}>⏸ {unavailInCat} unavailable</Text>
+                        </View>
+                      )}
+                    </View>
                     <Text style={S.catCount}>{items.length} items</Text>
                   </View>
                   <Text style={{ fontSize: 18, fontWeight: '900', color: COLORS.text }}>{isOpen ? '▾' : '▸'}</Text>
                 </Pressable3D>
 
-                {isOpen
-                  ? items.map((item: any) => {
-                      const qty = getQty(str(item?.id));
+                {isOpen && items.map((item: any) => {
+                  void tick; // ensure re-render on minute tick
+                  const qty          = getQty(str(item?.id));
+                  const dp           = num(item?.discount_percentage ?? item?.discountpercentage, 0);
+                  const mrp          = num(item?.price, 0);
+                  const price        = dp > 0 ? mrp * (1 - dp / 100) : mrp;
+                  const is_featured  = isFeaturedOf(item);
+                  const available    = isAvailableOf(item);
+                  const img          = imageUrlOf(item);
 
-                      const dp = num(item?.discount_percentage ?? item?.discountpercentage, 0);
-                      const mrp = num(item?.price, 0);
-                      const price = dp > 0 ? mrp * (1 - dp / 100) : mrp;
+                  // ── Dish timing ─────────────────────────────────────────
+                  const timing       = dishTimingOf(item);
+                  const dishAvailNow = isDishAvailableNow(timing);
+                  const timingLabel  = formatDishTiming(timing);
+                  const minsUntil    = !dishAvailNow ? minutesUntilAvailable(timing) : null;
 
-                      const directOffer = offerByMenuItemId?.[str(item?.id)] ?? null;
-                      const catOffer = item?.category_id ? offerByMenuItemId?.[`cat:${str(item?.category_id)}`] ?? null : null;
-                      const merchantOffer = offerByMenuItemId?.['merchant:all'] ?? null;
-                      const offer = directOffer ?? catOffer ?? merchantOffer;
+                  // Item is disabled if: restaurant closed OR dish not in window OR DB unavailable
+                  const itemDisabled = !openNow || !dishAvailNow || !available;
 
-                      const is_featured = isFeaturedOf(item);
-                      const available = isAvailableOf(item);
-                      const img = imageUrlOf(item);
+                  // ── Offer badges ────────────────────────────────────────
+                  const directOffer   = offerByMenuItemId?.[str(item?.id)] ?? null;
+                  const catOffer      = item?.category_id ? offerByMenuItemId?.[`cat:${str(item?.category_id)}`] ?? null : null;
+                  const merchantOffer = offerByMenuItemId?.['merchant:all'] ?? null;
+                  const offer         = directOffer ?? catOffer ?? merchantOffer;
 
-                      return (
-                        <View key={str(item?.id)} style={S.itemRow}>
-                          <View style={{ flex: 1, paddingRight: 12 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
-                              <View style={[S.vegDot, { backgroundColor: isVegOf(item) ? '#16A34A' : '#DC2626' }]} />
-                              <Text style={S.itemName}>{str(item?.name, 'Item')}</Text>
-                            </View>
-
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 2 }}>
-                              {is_featured ? (
-                                <View style={S.featuredPill}>
-                                  <Text style={S.featuredTxt}>⭐ FEATURED</Text>
-                                </View>
-                              ) : null}
-
-                              {!!offer?.label ? (
-                                <View style={S.bestOfferPill}>
-                                  <Text style={S.bestOfferTxt}>{offer.label}</Text>
-                                </View>
-                              ) : null}
-                            </View>
-
-                            {!!item?.description && (
-                              <Text style={S.itemDesc} numberOfLines={2}>
-                                {str(item.description)}
-                              </Text>
-                            )}
-
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                              <Text style={S.itemPrice}>₹{price.toFixed(0)}</Text>
-                              {dp > 0 ? (
-                                <>
-                                  <Text style={S.mrp}>₹{mrp.toFixed(0)}</Text>
-                                  <View style={S.disc}>
-                                    <Text style={S.discTxt}>{dp.toFixed(0)}% OFF</Text>
-                                  </View>
-                                </>
-                              ) : null}
-                            </View>
-
-                            {!available ? <Text style={S.notAvail}>Not available</Text> : null}
-                          </View>
-
-                          <View style={{ alignItems: 'center', gap: 8 }}>
-                            {showImages ? (
-                              <View style={S.imgWrap}>
-                                {img ? (
-                                  <Image source={{ uri: img }} style={StyleSheet.absoluteFillObject} resizeMode="contain" />
-                                ) : (
-                                  <View style={S.imgFallback}>
-                                    <Text style={{ fontSize: 22 }}>🍔</Text>
-                                  </View>
-                                )}
-                              </View>
-                            ) : null}
-
-                            {qty <= 0 ? (
-                              <Pressable3D style={[S.addBtn, !available && { opacity: 0.6 }]} onPress={() => onAddItem(item)} disabled={!available}>
-                                <Text style={S.addBtnTxt}>{available ? 'ADD' : 'N/A'}</Text>
-                              </Pressable3D>
-                            ) : (
-                              <View style={S.qtyRow}>
-                                <Pressable style={S.qtyBtn} onPress={() => onDec(item)}>
-                                  <Text style={S.qtyBtnTxt}>−</Text>
-                                </Pressable>
-                                <Text style={S.qtyCount}>{qty}</Text>
-                                <Pressable style={S.qtyBtn} onPress={() => onInc(item)}>
-                                  <Text style={S.qtyBtnTxt}>+</Text>
-                                </Pressable>
-                              </View>
-                            )}
-                          </View>
+                  return (
+                    <View
+                      key={str(item?.id)}
+                      style={[S.itemRow, itemDisabled && S.itemRowDisabled]}
+                    >
+                      {/* Left: info */}
+                      <View style={{ flex: 1, paddingRight: 12 }}>
+                        {/* Veg dot + name */}
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 4 }}>
+                          <View style={[S.vegDot, { backgroundColor: isVegOf(item) ? '#16A34A' : '#DC2626' }]} />
+                          <Text style={S.itemName}>{str(item?.name, 'Item')}</Text>
                         </View>
-                      );
-                    })
-                  : null}
+
+                        {/* Badges row */}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+                          {is_featured && (
+                            <View style={S.featuredPill}><Text style={S.featuredTxt}>⭐ FEATURED</Text></View>
+                          )}
+                          {!!offer?.label && (
+                            <View style={S.bestOfferPill}><Text style={S.bestOfferTxt}>{offer.label}</Text></View>
+                          )}
+
+                          {/* ── Dish timing badge ── */}
+                          {timingLabel && (
+                            <View style={[S.timingPill, !dishAvailNow && S.timingPillOff]}>
+                              <Text style={[S.timingTxt, !dishAvailNow && S.timingTxtOff]}>
+                                {dishAvailNow ? '🕐' : '⏸'} {timingLabel}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+
+                        {/* Description */}
+                        {!!item?.description && (
+                          <Text style={S.itemDesc} numberOfLines={2}>{str(item.description)}</Text>
+                        )}
+
+                        {/* Price row */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                          <Text style={S.itemPrice}>₹{price.toFixed(0)}</Text>
+                          {dp > 0 && (
+                            <>
+                              <Text style={S.mrp}>₹{mrp.toFixed(0)}</Text>
+                              <View style={S.disc}><Text style={S.discTxt}>{dp.toFixed(0)}% OFF</Text></View>
+                            </>
+                          )}
+                        </View>
+
+                        {/* Availability hints */}
+                        {!available && (
+                          <Text style={S.notAvail}>Unavailable</Text>
+                        )}
+                        {available && !dishAvailNow && timingLabel && (
+                          <Text style={S.notAvailTiming}>
+                            Not available now · Available {timingLabel}
+                            {minsUntil != null && minsUntil > 0
+                              ? ` (${minsUntil < 60 ? `${minsUntil} min` : `${Math.floor(minsUntil / 60)}h ${minsUntil % 60}m`})`
+                              : ''}
+                          </Text>
+                        )}
+                        {available && dishAvailNow && !openNow && (
+                          <Text style={S.notAvailTiming}>Available when restaurant opens</Text>
+                        )}
+                      </View>
+
+                      {/* Right: image + add/qty */}
+                      <View style={{ alignItems: 'center', gap: 8 }}>
+                        {showImages && (
+                          <View style={[S.imgWrap, itemDisabled && { opacity: 0.5 }]}>
+                            {img ? (
+                              <Image source={{ uri: img }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                            ) : (
+                              <View style={S.imgFallback}><Text style={{ fontSize: 22 }}>🍔</Text></View>
+                            )}
+
+                            {/* "Not available now" overlay on image */}
+                            {!dishAvailNow && available && (
+                              <View style={S.imgOverlay}>
+                                <Text style={S.imgOverlayTxt}>⏸</Text>
+                              </View>
+                            )}
+                            {!openNow && (
+                              <View style={S.imgOverlay}>
+                                <Text style={S.imgOverlayTxt}>🔴</Text>
+                              </View>
+                            )}
+                          </View>
+                        )}
+
+                        {qty <= 0 ? (
+                          <Pressable3D
+                            style={[S.addBtn, itemDisabled && S.addBtnDisabled]}
+                            onPress={() => !itemDisabled && onAddItem(item)}
+                            disabled={itemDisabled}
+                          >
+                            <Text style={[S.addBtnTxt, itemDisabled && { color: '#9CA3AF' }]}>
+                              {!available ? 'N/A' : (!dishAvailNow ? '⏸' : (!openNow ? '🔴' : 'ADD'))}
+                            </Text>
+                          </Pressable3D>
+                        ) : (
+                          <View style={S.qtyRow}>
+                            <Pressable style={S.qtyBtn} onPress={() => onDec(item)}>
+                              <Text style={S.qtyBtnTxt}>−</Text>
+                            </Pressable>
+                            <Text style={S.qtyCount}>{qty}</Text>
+                            <Pressable
+                              style={[S.qtyBtn, itemDisabled && { opacity: 0.4 }]}
+                              onPress={() => !itemDisabled && onInc(item)}
+                              disabled={itemDisabled}
+                            >
+                              <Text style={S.qtyBtnTxt}>+</Text>
+                            </Pressable>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             );
           })
@@ -379,18 +432,37 @@ export default function MenuTab({
         />
       </ScrollView>
 
-      {showTop ? (
+      {/* ── Scroll-to-top FAB ── */}
+      {showTop && (
         <View style={S.fabWrap} pointerEvents="box-none">
           <Pressable3D style={S.fab} onPress={scrollToTop}>
             <Text style={S.fabTxt}>↑ Top</Text>
           </Pressable3D>
         </View>
-      ) : null}
+      )}
     </View>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
+  // ── Closed restaurant banner ──
+  closedBar: {
+    margin: 12,
+    borderRadius: 14,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  closedBarIcon:  { fontSize: 22 },
+  closedBarTitle: { fontSize: 13, fontWeight: '900', color: '#991B1B' },
+  closedBarSub:   { fontSize: 11, fontWeight: '600', color: '#B91C1C', marginTop: 2 },
+
+  // ── Controls ──
   controls: {
     padding: 12,
     backgroundColor: '#FFF',
@@ -401,71 +473,77 @@ const S = StyleSheet.create({
     marginHorizontal: 12,
     elevation: 2,
   },
-
-  fullMenuBtn: { flex: 1, backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
-  fullMenuBtnTxt: { color: '#FFF', fontWeight: '900', fontSize: 12 },
-
-  fullMenuBtnGhost: { width: 90, backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#E5E7EB' },
+  fullMenuBtn:       { flex: 1, backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+  fullMenuBtnTxt:    { color: '#FFF', fontWeight: '900', fontSize: 12 },
+  fullMenuBtnGhost:  { width: 90, backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#E5E7EB' },
   fullMenuBtnGhostTxt: { color: COLORS.text, fontWeight: '900', fontSize: 12 },
-
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FAFAFA', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1.5, borderColor: '#EEF2F7' },
+  searchRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FAFAFA', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1.5, borderColor: '#EEF2F7' },
   searchInput: { flex: 1, fontSize: 14, color: COLORS.text, fontWeight: '700' },
-
-  filterRow: { flexDirection: 'row', gap: 10, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' },
-  chip: { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1.5, borderColor: 'transparent' },
-  chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  chipTxt: { fontWeight: '900', color: '#374151', fontSize: 12 },
+  filterRow:  { flexDirection: 'row', gap: 10, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' },
+  chip:        { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1.5, borderColor: 'transparent' },
+  chipActive:  { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  chipTxt:     { fontWeight: '900', color: '#374151', fontSize: 12 },
   chipTxtActive: { color: '#FFF' },
+  miniBtn:     { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 12, borderWidth: 1.5, borderColor: '#E5E7EB', backgroundColor: '#FFF' },
+  miniBtnTxt:  { fontWeight: '900', color: COLORS.text, fontSize: 11 },
 
-  miniBtn: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 12, borderWidth: 1.5, borderColor: '#E5E7EB', backgroundColor: '#FFF' },
-  miniBtnTxt: { fontWeight: '900', color: COLORS.text, fontSize: 11 },
-
+  // ── Category header ──
   catHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.primary,
-    marginTop: 12,
-    marginHorizontal: 12,
-    borderRadius: 14,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#F8F9FA', paddingHorizontal: 16, paddingVertical: 12,
+    borderLeftWidth: 3, borderLeftColor: COLORS.primary,
+    marginTop: 12, marginHorizontal: 12, borderRadius: 14,
   },
   catTitle: { fontSize: 14, fontWeight: '900', color: COLORS.text },
   catCount: { fontSize: 12, color: COLORS.textLight, fontWeight: '800', marginTop: 2 },
+  timingCatBadge: { backgroundColor: '#FEF3C7', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
+  timingCatTxt:   { fontSize: 10, fontWeight: '800', color: '#92400E' },
 
-  itemRow: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', marginHorizontal: 12, borderRadius: 14, marginTop: 10 },
-  vegDot: { width: 10, height: 10, borderRadius: 2, marginTop: 4 },
+  // ── Item row ──
+  itemRow:         { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', marginHorizontal: 12, borderRadius: 14, marginTop: 10 },
+  itemRowDisabled: { opacity: 0.55 },
+  vegDot:   { width: 10, height: 10, borderRadius: 2, marginTop: 4 },
   itemName: { fontSize: 14, fontWeight: '900', color: COLORS.text, flex: 1 },
-  itemDesc: { fontSize: 12, color: '#6B7280', marginTop: 6, lineHeight: 18 },
+  itemDesc: { fontSize: 12, color: '#6B7280', marginTop: 4, lineHeight: 18 },
 
+  // Pill badges
   featuredPill: { alignSelf: 'flex-start', backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FCD34D', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  featuredTxt: { color: '#92400E', fontWeight: '900', fontSize: 11 },
-
+  featuredTxt:  { color: '#92400E', fontWeight: '900', fontSize: 11 },
   bestOfferPill: { alignSelf: 'flex-start', backgroundColor: '#ECFDF5', borderWidth: 1.5, borderColor: '#A7F3D0', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  bestOfferTxt: { color: '#065F46', fontWeight: '900', fontSize: 11 },
+  bestOfferTxt:  { color: '#065F46', fontWeight: '900', fontSize: 11 },
 
+  // ── NEW: Dish timing pill ──
+  timingPill:    { alignSelf: 'flex-start', backgroundColor: '#EFF6FF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  timingPillOff: { backgroundColor: '#F3F4F6' },
+  timingTxt:     { fontSize: 10, fontWeight: '800', color: '#1D4ED8' },
+  timingTxtOff:  { color: '#9CA3AF' },
+
+  // Price
   itemPrice: { fontSize: 15, fontWeight: '900', color: COLORS.primary },
-  mrp: { fontSize: 12, color: '#9CA3AF', textDecorationLine: 'line-through', fontWeight: '800' },
-  disc: { backgroundColor: '#EF4444', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  discTxt: { color: '#FFF', fontSize: 10, fontWeight: '900' },
+  mrp:       { fontSize: 12, color: '#9CA3AF', textDecorationLine: 'line-through', fontWeight: '800' },
+  disc:      { backgroundColor: '#EF4444', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  discTxt:   { color: '#FFF', fontSize: 10, fontWeight: '900' },
 
-  notAvail: { marginTop: 8, color: '#EF4444', fontWeight: '900', fontSize: 12 },
+  notAvail:       { marginTop: 6, color: '#EF4444', fontWeight: '900', fontSize: 11 },
+  notAvailTiming: { marginTop: 6, color: '#B45309', fontWeight: '700', fontSize: 10, lineHeight: 15 },
 
-  imgWrap: { width: 88, height: 88, borderRadius: 12, overflow: 'hidden', backgroundColor: '#F3F4F6' },
+  // Image
+  imgWrap:     { width: 88, height: 88, borderRadius: 12, overflow: 'hidden', backgroundColor: '#F3F4F6' },
   imgFallback: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  imgOverlay:  { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' },
+  imgOverlayTxt: { fontSize: 22 },
 
-  addBtn: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 2, borderColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 9 },
-  addBtnTxt: { color: COLORS.primary, fontWeight: '900', fontSize: 12 },
-
-  qtyRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, borderRadius: 12, overflow: 'hidden' },
-  qtyBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  // Add / qty buttons
+  addBtn:         { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 2, borderColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 9 },
+  addBtnDisabled: { borderColor: '#D1D5DB', backgroundColor: '#F9FAFB' },
+  addBtnTxt:      { color: COLORS.primary, fontWeight: '900', fontSize: 12 },
+  qtyRow:    { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, borderRadius: 12, overflow: 'hidden' },
+  qtyBtn:    { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   qtyBtnTxt: { color: '#FFF', fontSize: 18, fontWeight: '900' },
-  qtyCount: { minWidth: 34, textAlign: 'center', color: '#FFF', fontWeight: '900' },
+  qtyCount:  { minWidth: 34, textAlign: 'center', color: '#FFF', fontWeight: '900' },
 
+  // FAB
   fabWrap: { position: 'absolute', right: 14, bottom: 18 },
-  fab: { backgroundColor: COLORS.primary, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 12 },
-  fabTxt: { color: '#FFF', fontWeight: '900' },
+  fab:     { backgroundColor: COLORS.primary, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 12 },
+  fabTxt:  { color: '#FFF', fontWeight: '900' },
 });

@@ -1,16 +1,19 @@
 // app/(auth)/login.tsx
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView,
   ActivityIndicator, Image, Animated,
-} from 'react-native'
-import { Link } from 'expo-router'
-import { supabase } from '../../../lib/supabase'
-import { signInWithGoogle } from '../../../lib/googleAuth'
-import { COLORS } from '../../../lib/constants'
+  Linking,
+} from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { Link, router } from 'expo-router';
+import { supabase } from '../../../lib/supabase';
+import { signInWithGoogle } from '../../../lib/googleAuth';
+import { signInWithApple, isAppleSignInAvailable } from '../../../lib/appleAuth';
+import { COLORS } from '../../../lib/constants';
 
-type AppSettings = { app_name?: string; app_logo_url?: string }
+type AppSettings = { app_name?: string; app_logo_url?: string };
 
 async function fetchAppSettings(): Promise<AppSettings> {
   try {
@@ -18,44 +21,42 @@ async function fetchAppSettings(): Promise<AppSettings> {
       .from('app_settings')
       .select('app_name,app_logo_url')
       .limit(1)
-      .maybeSingle()
-    return (data as AppSettings) ?? {}
-  } catch { return {} }
+      .maybeSingle();
+    return (data as AppSettings) ?? {};
+  } catch { return {}; }
 }
 
-/**
- * Accepts email or username.
- * If no "@" present, looks up the email from profiles.username (case-insensitive).
- */
 async function resolveEmail(input: string): Promise<string> {
-  const trimmed = input.trim()
-  if (trimmed.includes('@')) return trimmed.toLowerCase()
-
+  const trimmed = input.trim();
+  if (trimmed.includes('@')) return trimmed.toLowerCase();
   const { data, error } = await supabase
     .from('profiles')
     .select('email')
     .ilike('username', trimmed)
-    .maybeSingle()
-
-  if (error || !data?.email) {
-    throw new Error('No account found with that username.')
-  }
-  return data.email as string
+    .maybeSingle();
+  if (error || !data?.email) throw new Error('No account found with that username.');
+  return data.email as string;
 }
 
 export default function Login() {
-  const [identifier, setIdentifier] = useState('') // email or username
-  const [password, setPassword]     = useState('')
-  const [showPw, setShowPw]         = useState(false)
-  const [loading, setLoading]       = useState(false)
-  const [gLoading, setGLoading]     = useState(false)
-  const [error, setError]           = useState('')
-  const [settings, setSettings]     = useState<AppSettings>({})
+  const [identifier, setIdentifier] = useState('');
+  const [password,   setPassword]   = useState('');
+  const [showPw,     setShowPw]     = useState(false);
+  const [loading,    setLoading]    = useState(false);
+  const [gLoading,   setGLoading]   = useState(false);
+  const [aLoading,   setALoading]   = useState(false); // ← Apple
+  const [error,      setError]      = useState('');
+  const [settings,   setSettings]   = useState<AppSettings>({});
+  const [appleAvail, setAppleAvail] = useState(false); // ← Apple available check
 
-  const shakeAnim   = useRef(new Animated.Value(0)).current
-  const passwordRef = useRef<TextInput>(null)
+  const shakeAnim   = useRef(new Animated.Value(0)).current;
+  const passwordRef = useRef<TextInput>(null);
 
-  useEffect(() => { fetchAppSettings().then(setSettings) }, [])
+  useEffect(() => {
+    fetchAppSettings().then(setSettings);
+    // Check Apple availability once on mount (iOS only)
+    isAppleSignInAvailable().then(setAppleAvail);
+  }, []);
 
   function shake() {
     Animated.sequence([
@@ -63,69 +64,64 @@ export default function Login() {
       Animated.timing(shakeAnim, { toValue: -10, duration: 55, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: 8,   duration: 55, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: 0,   duration: 55, useNativeDriver: true }),
-    ]).start()
+    ]).start();
   }
 
   async function handleLogin() {
-    setError('')
-    const id = identifier.trim()
-    const pw = password
-
-    if (!id || !pw) {
-      setError('Please fill in all fields.')
-      shake()
-      return
-    }
-
-    setLoading(true)
+    setError('');
+    const id = identifier.trim();
+    if (!id || !password) { setError('Please fill in all fields.'); shake(); return; }
+    setLoading(true);
     try {
-      const email = await resolveEmail(id)
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password: pw,
-      })
-      if (signInError) throw signInError
-      // Navigation handled by _layout.tsx RootGuard / AuthContext
+      const email = await resolveEmail(id);
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) throw signInError;
     } catch (err: any) {
-      const msg: string = err?.message ?? ''
-      shake()
-      if (/No account found/i.test(msg)) {
-        setError(msg)
-      } else if (/invalid login|invalid credentials/i.test(msg)) {
-        setError('Incorrect email/username or password.')
-      } else if (/email not confirmed/i.test(msg)) {
-        setError('Please verify your email first. Check your inbox.')
-      } else if (/too many/i.test(msg)) {
-        setError('Too many attempts. Please wait a moment.')
-      } else {
-        setError(msg || 'Sign in failed. Please try again.')
-      }
-    } finally {
-      setLoading(false)
-    }
+      const msg: string = err?.message ?? '';
+      shake();
+      if (/No account found/i.test(msg))              setError(msg);
+      else if (/invalid login|invalid credentials/i.test(msg)) setError('Incorrect email/username or password.');
+      else if (/email not confirmed/i.test(msg))      setError('Please verify your email first. Check your inbox.');
+      else if (/too many/i.test(msg))                 setError('Too many attempts. Please wait a moment.');
+      else                                             setError(msg || 'Sign in failed. Please try again.');
+    } finally { setLoading(false); }
   }
 
   async function handleGoogle() {
-    setError('')
-    setGLoading(true)
+    setError(''); setGLoading(true);
     try {
-      await signInWithGoogle()
+      await signInWithGoogle();
     } catch (err: any) {
-      const msg: string = err?.message ?? ''
-      if (msg === 'Sign in was cancelled') return // silent
-      setError(msg || 'Google sign-in failed. Please try again.')
-    } finally {
-      setGLoading(false)
-    }
+      const msg: string = err?.message ?? '';
+      if (msg === 'Sign in was cancelled') return;
+      setError(msg || 'Google sign-in failed. Please try again.');
+    } finally { setGLoading(false); }
   }
 
-  const busy    = loading || gLoading
-  const appName = settings?.app_name || 'PattiBytes Express'
-  const logoUrl = settings?.app_logo_url || null
-  // Dynamic label: show what we think they're typing
+  // ── NEW: Apple sign-in handler ─────────────────────────────────────────────
+  async function handleApple() {
+    setError(''); setALoading(true);
+    try {
+      await signInWithApple();
+      // Navigation is handled by RootGuard / AuthContext
+    } catch (err: any) {
+      const msg: string = err?.message ?? '';
+      // ERR_CANCELED = user dismissed the Apple sheet — silent
+      if (
+        msg === 'Sign in was cancelled' ||
+        msg.includes('ERR_CANCELED') ||
+        msg.includes('1001') // Apple error code for user cancel
+      ) return;
+      setError(msg || 'Apple sign-in failed. Please try again.');
+    } finally { setALoading(false); }
+  }
+
+  const busy     = loading || gLoading || aLoading;
+  const appName  = settings?.app_name || 'PattiBytes Express';
+  const logoUrl  = settings?.app_logo_url || null;
   const inputLabel = identifier.includes('@')
     ? 'Email Address'
-    : identifier.length > 0 ? 'Username' : 'Email or Username'
+    : identifier.length > 0 ? 'Username' : 'Email or Username';
 
   return (
     <KeyboardAvoidingView
@@ -160,24 +156,81 @@ export default function Login() {
             </View>
           )}
 
-          {/* Google */}
-          <TouchableOpacity
-            style={[S.googleBtn, busy && S.disabled]}
-            onPress={handleGoogle}
-            disabled={busy}
-            activeOpacity={0.8}
-          >
-            {gLoading ? (
-              <ActivityIndicator color={COLORS.text} />
-            ) : (
-              <>
-                <View style={S.gIconWrap}>
-                  <Text style={S.gIconText}>G</Text>
-                </View>
-                <Text style={S.googleBtnText}>Continue with Google</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {/* ── Sign in with Apple (iOS only, rendered first per Apple HIG) ── */}
+          {appleAvail && (
+            <>
+              {/* Apple requires using their official native button component */}
+              <View style={[S.appleWrap, busy && { opacity: 0.55 }]}
+                    pointerEvents={busy ? 'none' : 'auto'}>
+                {aLoading ? (
+                  <View style={S.appleBtnFallback}>
+                    <ActivityIndicator color="#FFF" />
+                    <Text style={S.appleBtnFallbackTxt}>Signing in with Apple...</Text>
+                  </View>
+                ) : (
+                  <AppleAuthentication.AppleAuthenticationButton
+                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                    buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                    cornerRadius={14}
+                    style={S.appleBtn}
+                    onPress={handleApple}
+                  />
+                )}
+              </View>
+
+              {/* ── WHY LOGIN IS REQUIRED — satisfies Apple Guideline 5.1.1 ── */}
+<View style={S.whyLoginBox}>
+  <Text style={S.whyLoginIcon}>🔒</Text>
+  <View style={{ flex: 1 }}>
+    <Text style={S.whyLoginTitle}>Account required to order</Text>
+    <Text style={S.whyLoginBody}>
+      We need your account to process payments, track your delivery,
+      save your addresses, and manage your order history securely.
+    </Text>
+  </View>
+</View>
+
+              {/* Google */}
+              <TouchableOpacity
+                style={[S.googleBtn, busy && S.disabled]}
+                onPress={handleGoogle}
+                disabled={busy}
+                activeOpacity={0.8}
+              >
+                {gLoading ? (
+                  <ActivityIndicator color={COLORS.text} />
+                ) : (
+                  <>
+                    <View style={S.gIconWrap}>
+                      <Text style={S.gIconText}>G</Text>
+                    </View>
+                    <Text style={S.googleBtnText}>Continue with Google</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* On Android — show only Google */}
+          {!appleAvail && (
+            <TouchableOpacity
+              style={[S.googleBtn, busy && S.disabled]}
+              onPress={handleGoogle}
+              disabled={busy}
+              activeOpacity={0.8}
+            >
+              {gLoading ? (
+                <ActivityIndicator color={COLORS.text} />
+              ) : (
+                <>
+                  <View style={S.gIconWrap}>
+                    <Text style={S.gIconText}>G</Text>
+                  </View>
+                  <Text style={S.googleBtnText}>Continue with Google</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
 
           {/* Divider */}
           <View style={S.divider}>
@@ -191,7 +244,7 @@ export default function Login() {
           <TextInput
             style={S.input}
             value={identifier}
-            onChangeText={(v) => { setIdentifier(v); setError('') }}
+            onChangeText={(v) => { setIdentifier(v); setError(''); }}
             placeholder="you@example.com  or  yourname"
             placeholderTextColor={COLORS.textMuted}
             autoCapitalize="none"
@@ -209,7 +262,7 @@ export default function Login() {
               ref={passwordRef}
               style={[S.input, S.pwInput]}
               value={password}
-              onChangeText={(v) => { setPassword(v); setError('') }}
+              onChangeText={(v) => { setPassword(v); setError(''); }}
               placeholder="••••••••"
               placeholderTextColor={COLORS.textMuted}
               secureTextEntry={!showPw}
@@ -218,11 +271,7 @@ export default function Login() {
               onSubmitEditing={handleLogin}
               editable={!busy}
             />
-            <TouchableOpacity
-              style={S.eyeBtn}
-              onPress={() => setShowPw(v => !v)}
-              disabled={busy}
-            >
+            <TouchableOpacity style={S.eyeBtn} onPress={() => setShowPw(v => !v)} disabled={busy}>
               <Text style={S.eyeIcon}>{showPw ? '🙈' : '👁️'}</Text>
             </TouchableOpacity>
           </View>
@@ -258,12 +307,37 @@ export default function Login() {
           </View>
         </Animated.View>
 
-        <Text style={S.footer}>
-          By signing in, you agree to our Terms of Service and Privacy Policy.
-        </Text>
+     {/* ── Legal footer — uses root /legal/[slug] ── */}
+<Text style={S.footer}>
+  By signing in, you agree to our{" "}
+  <Text
+    style={{ color: COLORS.primary, fontWeight: "700" }}
+    onPress={() => router.push("/legal/terms-of-service" as any)}
+  >
+    Terms of Service
+  </Text>
+  {" "}and{" "}
+  <Text
+    style={{ color: COLORS.primary, fontWeight: "700" }}
+    onPress={() => router.push("/legal/privacy-policy" as any)}
+  >
+    Privacy Policy
+  </Text>
+  .{"\n"}
+  <Text
+    style={{ color: "#9CA3AF" }}
+    onPress={() =>
+      Linking.openURL("https://www.instagram.com/thrillyverse")
+    }
+  >
+    Developed with ❤️ by Thrillyverse™
+  </Text>
+</Text>
       </ScrollView>
     </KeyboardAvoidingView>
-  )
+
+    
+  );
 }
 
 const S = StyleSheet.create({
@@ -277,8 +351,8 @@ const S = StyleSheet.create({
     marginBottom: 14, borderWidth: 3, borderColor: COLORS.primary,
   },
   logoFallbackText: { fontSize: 44 },
-  appName: { fontSize: 26, fontWeight: '800', color: COLORS.text, letterSpacing: -0.5 },
-  tagline: { fontSize: 13, color: COLORS.textLight, marginTop: 4 },
+  appName:  { fontSize: 26, fontWeight: '800', color: COLORS.text, letterSpacing: -0.5 },
+  tagline:  { fontSize: 13, color: COLORS.textLight, marginTop: 4 },
 
   card: {
     backgroundColor: '#fff', borderRadius: 24, padding: 24,
@@ -293,6 +367,16 @@ const S = StyleSheet.create({
   },
   errorText: { color: '#DC2626', fontSize: 13, fontWeight: '600' },
 
+  // ── Apple button ──
+  appleWrap: { marginBottom: 12 },
+  appleBtn:  { width: '100%', height: 50 },
+  // Fallback shown while aLoading (Apple native button can't show spinner)
+  appleBtnFallback: {
+    height: 50, backgroundColor: '#000', borderRadius: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+  },
+  appleBtnFallbackTxt: { color: '#FFF', fontWeight: '700', fontSize: 15 },
+
   googleBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 14,
@@ -305,11 +389,11 @@ const S = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginRight: 10, borderWidth: 1, borderColor: '#E5E7EB',
   },
-  gIconText: { fontSize: 15, fontWeight: '900', color: COLORS.primary },
+  gIconText:     { fontSize: 15, fontWeight: '900', color: COLORS.primary },
   googleBtnText: { fontSize: 15, fontWeight: '700', color: COLORS.text },
 
-  divider: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  divLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
+  divider:  { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  divLine:  { flex: 1, height: 1, backgroundColor: COLORS.border },
   divLabel: { marginHorizontal: 8, color: COLORS.textMuted, fontSize: 11, fontWeight: '600' },
 
   label: { fontSize: 13, fontWeight: '700', color: COLORS.text, marginBottom: 6 },
@@ -318,9 +402,9 @@ const S = StyleSheet.create({
     padding: 14, fontSize: 15, color: COLORS.text,
     marginBottom: 14, backgroundColor: COLORS.backgroundLight,
   },
-  pwRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  pwRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   pwInput: { flex: 1, marginBottom: 0 },
-  eyeBtn: { padding: 10 },
+  eyeBtn:  { padding: 10 },
   eyeIcon: { fontSize: 18 },
 
   forgotWrap: { alignSelf: 'flex-end', marginBottom: 20 },
@@ -334,12 +418,26 @@ const S = StyleSheet.create({
   signInBtnText: { color: '#fff', fontWeight: '800', fontSize: 16, letterSpacing: 0.3 },
   disabled: { opacity: 0.55 },
 
-  signUpRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 18 },
+  signUpRow:  { flexDirection: 'row', justifyContent: 'center', marginTop: 18 },
   signUpLabel: { color: COLORS.textLight, fontSize: 14 },
-  signUpLink: { color: COLORS.primary, fontWeight: '800', fontSize: 14 },
+  signUpLink:  { color: COLORS.primary, fontWeight: '800', fontSize: 14 },
+whyLoginBox: {
+  flexDirection: 'row',
+  alignItems: 'flex-start',
+  gap: 10,
+  backgroundColor: '#FFF7ED',
+  borderWidth: 1,
+  borderColor: '#FED7AA',
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 18,
+},
+whyLoginIcon:  { fontSize: 20, marginTop: 1 },
+whyLoginTitle: { fontSize: 13, fontWeight: '800', color: '#92400E', marginBottom: 3 },
+whyLoginBody:  { fontSize: 12, color: '#78350F', lineHeight: 18, fontWeight: '600' },
 
   footer: {
     textAlign: 'center', color: COLORS.textMuted,
     fontSize: 11, marginTop: 20, paddingHorizontal: 20, lineHeight: 16,
   },
-})
+});

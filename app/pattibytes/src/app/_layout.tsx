@@ -1,6 +1,6 @@
 // src/app/_layout.tsx
 import React, { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, View , LogBox } from 'react-native'
+import { ActivityIndicator, View, LogBox } from 'react-native'
 
 import { Slot, useRouter, useSegments } from 'expo-router'
 import NetInfo from '@react-native-community/netinfo'
@@ -11,9 +11,9 @@ import { AuthProvider, useAuth } from '../contexts/AuthContext'
 import { CartProvider } from '../contexts/CartContext'
 import { supabase } from '../lib/supabase'
 import { initNotificationHandler } from '../lib/notificationHandler'
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ScrollToTopProvider, BackToTopFab } from '../components/ui/ScrollToTop';
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { ScrollToTopProvider, BackToTopFab } from '../components/ui/ScrollToTop'
 
 Sentry.init({
   dsn: 'https://4ef63860fdb9b613ac4e538d599ee598@o4510964276723712.ingest.de.sentry.io/4510964283605072',
@@ -28,8 +28,7 @@ LogBox.ignoreLogs([
   'Mbgl-HttpRequest',
 ])
 
-// ✅ Init notification handler ONCE at module level (not inside a component)
-// This is safe — getNotif() returns null in Expo Go
+// ✅ Init notification handler ONCE at module level
 initNotificationHandler()
 
 function extractOrderId(data: any): string | null {
@@ -51,7 +50,9 @@ function RootGuard() {
   const [isOffline, setIsOffline] = useState(false)
   const wasOffline = useRef(false)
 
-  const inAuthGroup = segments[0] === '(auth)'
+  const inAuthGroup  = segments[0] === '(auth)'
+  // ✅ Legal pages are public — never block or redirect /legal/[slug]
+  const isLegalPage  = (segments[0] as string) === 'legal'
   const isOfflinePage = (segments as string[]).includes('offline')
   const isExpoGo = Constants.appOwnership === 'expo'
 
@@ -71,7 +72,9 @@ function RootGuard() {
           else {
             const role = profile?.role ?? 'customer'
             router.replace(
-              role === 'driver' ? '/(driver)/dashboard' : '/(customer)/dashboard' as any
+              role === 'driver'
+                ? '/(driver)/dashboard'
+                : '/(customer)/dashboard' as any
             )
           }
         }
@@ -80,9 +83,7 @@ function RootGuard() {
     return () => unsub()
   }, [router, user, profile, isOfflinePage])
 
-  // ── Notification tap/response listeners ONLY — NO registration here ─────
-  // ✅ Registration is handled entirely in AuthContext
-  // ✅ This effect only sets up navigation from notification taps
+  // ── Notification tap/response listeners ────────────────────────────────
   useEffect(() => {
     if (isExpoGo) return
 
@@ -90,7 +91,10 @@ function RootGuard() {
     let mounted = true
 
     const goToOrder = (orderId: string) => {
-      router.push({ pathname: '/(customer)/orders/[id]', params: { id: orderId } } as any)
+      router.push({
+        pathname: '/(customer)/orders/[id]',
+        params: { id: orderId },
+      } as any)
     }
 
     ;(async () => {
@@ -105,10 +109,8 @@ function RootGuard() {
         if (orderId && isOrderUpdate(data)) goToOrder(orderId)
       }
 
-      // Foreground received listener (just for side effects if needed)
       receivedRef.current = notif.addReceivedListener(() => {})
 
-      // Response listener (user tapped notification)
       responseRef.current = notif.addResponseListener((res: any) => {
         const data = res?.notification?.request?.content?.data ?? {}
         const orderId = extractOrderId(data)
@@ -116,7 +118,6 @@ function RootGuard() {
         if (data?.type === 'new_order') router.push('/(driver)/dashboard' as any)
       })
 
-      // Direct tap listener (extra safety for edge cases)
       const sub = Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response?.notification?.request?.content?.data ?? {}
         const orderId = extractOrderId(data)
@@ -133,9 +134,6 @@ function RootGuard() {
     }
   }, [router, isExpoGo])
 
-  // ✅ REMOVED: push registration useEffect — AuthContext handles it
-  // This was causing double registration before
-
   // ── Sentry user context ─────────────────────────────────────────────────
   useEffect(() => {
     if (user?.id) {
@@ -143,12 +141,15 @@ function RootGuard() {
     } else {
       Sentry.setUser(null)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
 
   // ── Role-based routing guard ────────────────────────────────────────────
   useEffect(() => {
     if (loading || isOffline) return
+
+    // ✅ Never redirect away from public legal pages — no auth required
+    if (isLegalPage) return
 
     if (!user) {
       if (!inAuthGroup) router.replace('/(auth)/login' as any)
@@ -163,7 +164,7 @@ function RootGuard() {
       return
     }
 
-    const role = profile.role ?? 'customer'
+    const role     = profile.role ?? 'customer'
     const approval = profile.approval_status ?? 'approved'
 
     if (
@@ -182,14 +183,21 @@ function RootGuard() {
 
     if (inAuthGroup) {
       router.replace(
-        role === 'driver' ? '/(driver)/dashboard' : '/(customer)/dashboard' as any
+        role === 'driver'
+          ? '/(driver)/dashboard'
+          : '/(customer)/dashboard' as any
       )
     }
-  }, [loading, user, profile, inAuthGroup, segments, router, isOffline])
+  }, [loading, user, profile, inAuthGroup, isLegalPage, segments, router, isOffline])
 
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+      <View style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#fff',
+      }}>
         <ActivityIndicator size="large" color="#FF6B35" />
       </View>
     )
@@ -212,6 +220,7 @@ function RootLayout() {
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
-  );
+  )
 }
-export default Sentry.wrap(RootLayout);
+
+export default Sentry.wrap(RootLayout)

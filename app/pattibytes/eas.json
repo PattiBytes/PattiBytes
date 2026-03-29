@@ -11,24 +11,32 @@
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "simulator": false
+      },
       "channel": "development",
       "env": {
-         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "980629232960-h7euvsc1adl2gb94k483n2th03cpi59i.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "980629232960-h7euvsc1adl2gb94k483n2th03cpi59i.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt"
       }
     },
+
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "simulator": false
+      },
       "channel": "preview",
       "env": {
-         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "980629232960-h7euvsc1adl2gb94k483n2th03cpi59i.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "980629232960-h7euvsc1adl2gb94k483n2th03cpi59i.apps.googleusercontent.com",
         "APP_VARIANT": "preview",
         "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt"
       }
     },
+
     "preview-simulator": {
       "extends": "preview",
       "channel": "preview",
@@ -36,14 +44,18 @@
         "simulator": true
       }
     },
+
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
       },
+      "ios": {
+        "simulator": false
+      },
       "channel": "production",
       "env": {
-         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "980629232960-h7euvsc1adl2gb94k483n2th03cpi59i.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "980629232960-h7euvsc1adl2gb94k483n2th03cpi59i.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt"
       }
     }

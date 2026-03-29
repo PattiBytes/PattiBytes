@@ -35,8 +35,11 @@ export function getAddrEmoji(label: string) {
 }
 
 /** 0–100 progress toward free delivery threshold */
-export function freeDeliveryProgress(subtotal: number, threshold?: number | null) {
-  if (!threshold || threshold <= 0) return 0
+export function freeDeliveryProgress(
+  subtotal:  number,
+  threshold: number,
+): number {
+  if (!threshold || threshold <= 0) return 100
   return Math.min(100, Math.round((subtotal / threshold) * 100))
 }
 
