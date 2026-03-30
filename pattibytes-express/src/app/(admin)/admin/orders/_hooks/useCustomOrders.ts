@@ -13,54 +13,65 @@ export function useCustomOrders() {
   const [fetchError,    setFetchError]    = useState<string | null>(null);
   const [quotingId,     setQuotingId]     = useState<string | null>(null);
 
-  const loadCustomOrders = useCallback(async () => {
-    setLoadingCustom(true);
-    setFetchError(null);
-    try {
-      // ✅ select('*') — no foreign-key join to avoid schema-cache errors
-      const { data: rows, error } = await supabase
-        .from(TABLE)
-        .select('*')
-        .order('created_at', { ascending: false });
+ const loadCustomOrders = useCallback(async () => {
+  setLoadingCustom(true);
+  setFetchError(null);
 
-      console.log(`[CustomOrders] table="${TABLE}" rows=${rows?.length ?? 0} error=`, error);
+  // ✅ Abort controller — cancelled on unmount or re-call
+  const controller = new AbortController();
 
-      // ✅ Surface RLS / table-not-found errors visibly
-      if (error) {
-        setFetchError(error.message);
-        throw error;
-      }
+  try {
+    const { data: rows, error } = await supabase
+      .from(TABLE)
+      .select('*')
+      .order('created_at', { ascending: false })
+      .abortSignal(controller.signal);    // ✅ tie query to controller
 
-      const list = rows ?? [];
+    // ✅ If aborted (unmount / StrictMode) — exit silently, no toast
+    if (controller.signal.aborted) return;
 
-      // Enrich with customer names via a separate safe profiles query
-      const uids = [...new Set(list.map((o: any) => o.customer_id).filter(Boolean))] as string[];
-      let profileMap: Record<string, string> = {};
-      if (uids.length) {
-        const { data: profiles, error: pErr } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', uids);
-        if (pErr) console.warn('[CustomOrders] profiles fetch:', pErr.message);
-        profileMap = Object.fromEntries(
-          (profiles ?? []).map((p: any) => [p.id, p.full_name ?? '']),
-        );
-      }
+    console.log(`[CustomOrders] table="${TABLE}" rows=${rows?.length ?? 0} error=`, error);
 
-      setCustomOrders(list.map((o: any) => ({
-        ...o,
-        // Strip local Expo cache URLs — useless in browser
-        image_url   : o.image_url?.startsWith('file://') ? null : (o.image_url ?? null),
-        customerName: profileMap[o.customer_id]
-          ?? (o.customer_phone ? `+91 ${String(o.customer_phone)}` : 'Unknown Customer'),
-      })));
-    } catch (e: any) {
-      console.error('[CustomOrders] ❌', e?.message ?? e);
-      toast.error(`Custom orders: ${e?.message ?? 'Failed to load'}`);
-    } finally {
-      setLoadingCustom(false);
+    if (error) {
+      setFetchError(error.message);
+      throw error;
     }
-  }, []);
+
+    const list = rows ?? [];
+
+    const uids = [...new Set(list.map((o: any) => o.customer_id).filter(Boolean))] as string[];
+    let profileMap: Record<string, string> = {};
+    if (uids.length) {
+      const { data: profiles, error: pErr } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', uids)
+        .abortSignal(controller.signal);   // ✅ tie second query too
+
+      if (controller.signal.aborted) return;
+      if (pErr) console.warn('[CustomOrders] profiles fetch:', pErr.message);
+      profileMap = Object.fromEntries(
+        (profiles ?? []).map((p: any) => [p.id, p.full_name ?? '']),
+      );
+    }
+
+    setCustomOrders(list.map((o: any) => ({
+      ...o,
+      image_url   : o.image_url?.startsWith('file://') ? null : (o.image_url ?? null),
+      customerName: profileMap[o.customer_id]
+        ?? (o.customer_phone ? `+91 ${String(o.customer_phone)}` : 'Unknown Customer'),
+    })));
+  } catch (e: any) {
+    // ✅ AbortError = component unmounted or query was intentionally cancelled
+    //    It is NOT a real failure — never show a toast for it
+    if (e?.name === 'AbortError' || controller.signal.aborted) return;
+
+    console.error('[CustomOrders] ❌', e?.message ?? e);
+    toast.error(`Custom orders: ${e?.message ?? 'Failed to load'}`);
+  } finally {
+    if (!controller.signal.aborted) setLoadingCustom(false);
+  }
+}, []);
 
   const quoteCustomOrder = useCallback(async (
     order       : CustomOrder,

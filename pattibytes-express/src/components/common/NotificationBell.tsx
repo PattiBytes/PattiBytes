@@ -146,49 +146,82 @@ export default function NotificationBell() {
   // Data loader
   // ─────────────────────────────────────────────────────────────────────────
 
-  const loadNotifications = useCallback(async (uid: string, force = false) => {
-    if (!force && loadedUidRef.current === uid) return;
-    if (loadingRef.current) return;
+ const loadNotifications = useCallback(async (uid: string, force = false) => {
+  if (!force && loadedUidRef.current === uid) return;
+  if (loadingRef.current) return;
 
-    loadingRef.current = true;
-    setLoading(true);
+  loadingRef.current = true;
+  setLoading(true);
 
-    try {
-      const { data: sessionResult } = await supabase.auth.getSession();
-      if (!sessionResult?.session) {
-        console.warn('[NotificationBell] No session — retrying in 2s');
-        setTimeout(() => { loadingRef.current = false; loadNotifications(uid, true); }, 2000);
-        return;
-      }
+  // ✅ Mounted guard — prevents setState after unmount
+  let mounted = true;
 
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', uid)
-        .order('created_at', { ascending: false })
-        .limit(50);
+  try {
+    const { data: sessionResult } = await supabase.auth.getSession();
 
-      if (error) {
-        console.error('[NotificationBell] load error:', error.message);
+    if (!mounted) return;
+
+    if (!sessionResult?.session) {
+      console.warn('[NotificationBell] No session — retrying in 2s');
+      setTimeout(() => {
+        if (!mounted) return;
         loadingRef.current = false;
+        loadNotifications(uid, true);
+      }, 2000);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (!mounted) return;
+
+    // ✅ Silently ignore AbortError — caused by unmount / StrictMode cleanup
+    if (error) {
+      if (error.message?.includes('AbortError') || error.code === '20') {
+        console.log('[NotificationBell] query aborted (unmount) — ignored');
         return;
       }
+      console.error('[NotificationBell] load error:', error.message);
+      loadingRef.current = false;
+      return;
+    }
 
-      const rows = (data as NotificationRow[]) ?? [];
-      setNotifications(rows);
-      setUnreadCount(rows.filter(n => !n.is_read).length);
-      loadedUidRef.current = uid;
-      console.log('[NotificationBell] loaded:', rows.length);
-    } finally {
+    const rows = (data as NotificationRow[]) ?? [];
+    setNotifications(rows);
+    setUnreadCount(rows.filter(n => !n.is_read).length);
+    loadedUidRef.current = uid;
+    console.log('[NotificationBell] loaded:', rows.length);
+  } catch (e: any) {
+    // ✅ AbortError from Supabase JS client — not a real error
+    if (e?.name === 'AbortError') {
+      console.log('[NotificationBell] fetch aborted (unmount) — ignored');
+      return;
+    }
+    console.error('[NotificationBell] unexpected error:', e?.message ?? e);
+  } finally {
+    if (mounted) {
       setLoading(false);
       loadingRef.current = false;
     }
-  }, []);
+  }
 
-  // Reset on uid change
-  useEffect(() => {
-    return () => { loadedUidRef.current = null; loadingRef.current = false; };
-  }, [user?.id]);
+  // Return cleanup — called when uid changes or component unmounts
+   
+  return () => { mounted = false; };
+}, []);
+
+  // ✅ Reset refs when user changes — prevents stale loads
+useEffect(() => {
+  return () => {
+    loadedUidRef.current = null;
+    loadingRef.current   = false;
+  };
+}, [user?.id]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Realtime subscription

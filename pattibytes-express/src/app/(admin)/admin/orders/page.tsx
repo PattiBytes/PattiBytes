@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
 import { Clock, MessageSquare, Package } from 'lucide-react';
+// In your admin orders page header
+import BarcodeScanner from './_components/BarcodeScanner';
+
 
 import { useOrders }            from './_hooks/useOrders';
 import { useCustomOrders }      from './_hooks/useCustomOrders';
@@ -172,5 +175,7 @@ export default function AdminOrdersPage() {
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
     </DashboardLayout>
+    
   );
 }
+<BarcodeScanner />

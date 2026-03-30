@@ -63,10 +63,14 @@ export async function proxy(req: NextRequest) {
 
   // Public routes
   const publicRoutes = ['/', '/auth/login', '/auth/signup', '/auth/callback', '/qr', '/auth/forgot-password'];
-  
-  if (publicRoutes.includes(path) || path.startsWith('/auth/')) {
-    return response;
-  }
+
+if (
+  publicRoutes.includes(path) ||
+  path.startsWith('/auth/') ||
+  path.startsWith('/legal/')    // ✅ all /legal/* routes are public — no login needed
+) {
+  return response;
+}
 
   // Require authentication
   if (!session) {
