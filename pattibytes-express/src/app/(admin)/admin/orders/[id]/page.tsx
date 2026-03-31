@@ -19,7 +19,7 @@ import {
   type OrderNormalized, type ProfileMini, type MerchantInfo,
   type DriverRow, type EditFields, type ColMap,
 } from './_components/types';
-import { buildInvoiceHtml }       from './_components/invoiceBuilder';
+import { buildInvoiceHtml, type AppSettings } from './_components/invoiceBuilder';
 import { OrderHeader }            from './_components/OrderHeader';
 import { MetricsBar }             from './_components/MetricsBar';
 import { StatusControl }          from './_components/StatusControl';
@@ -50,6 +50,7 @@ const [customRequest, setCustomRequest] = useState<import('./_components/types')
   const [updating,  setUpdating]  = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [notifying, setNotifying] = useState(false);
+const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
 
   const isAdmin = useMemo(() => {
     const r = String((user as any)?.role || '');
@@ -110,22 +111,27 @@ const loadAll = useCallback(async () => {
     }
 
     // ── parallelise all nullable fetches — safeFetch guards null IDs ──────
-    const [cst, mrc, drv, driverList] = await Promise.all([
-      safeFetch<ProfileMini>('profiles', 'id', o.customerId),
-      // merchant_id is NULL for custom orders — safeFetch returns null silently
-      safeFetch<MerchantInfo>('merchants', 'id', o.merchantId),
-      safeFetch<DriverRow>('profiles', 'id', o.driverId),
-      supabase
-        .from('profiles')
-        .select('id,full_name,phone,is_active')
-        .eq('role', 'driver')
-        .eq('is_active', true),
-    ]);
+    const [cst, mrc, drv, driverList, appSettingsRes] = await Promise.all([
+  safeFetch<ProfileMini>('profiles', 'id', o.customerId),
+  safeFetch<MerchantInfo>('merchants', 'id', o.merchantId),
+  safeFetch<DriverRow>('profiles', 'id', o.driverId),
+  supabase
+    .from('profiles')
+    .select('id,full_name,phone,is_active')
+    .eq('role', 'driver')
+    .eq('is_active', true),
+  supabase
+    .from('app_settings')
+    .select('*')
+    .limit(1)
+    .maybeSingle(),
+]);
 
-    setCustomer(cst);
-    setMerchant(mrc);
-    setDriver(drv);
-    setDrivers((driverList.data as DriverRow[]) ?? []);
+setCustomer(cst);
+setMerchant(mrc);
+setDriver(drv);
+setDrivers((driverList.data as DriverRow[]) ?? []);
+setAppSettings((appSettingsRes.data as AppSettings) ?? null);
   } catch (e: any) {
     toast.error(e?.message || 'Failed to load order');
     router.push('/admin/orders');
@@ -463,17 +469,24 @@ const updateCustomStatus = async (newCustomStatus: string) => {
 
   // ── Invoice helpers ───────────────────────────────────────────────────────
   const getInvoiceHtml = () =>
-    order ? buildInvoiceHtml(order, customer, merchant) : '';
+  order ? buildInvoiceHtml(order, customer, merchant, appSettings) : '';
 
   const printInvoice = () => {
-    const html = getInvoiceHtml();
-    if (!html) return;
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
-    const w    = window.open(url, '_blank');
-    if (!w) { toast.error('Popup blocked — allow popups to print.'); return; }
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  };
+  const html = getInvoiceHtml();
+  if (!html) return;
+  const w = window.open(
+    '',
+    '_blank',
+    'width=1060,height=820,scrollbars=yes,resizable=yes',
+  );
+  if (!w) {
+    toast.error('Popup blocked — please allow popups for this site.');
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+};
 
   const downloadInvoice = () => {
     const html = getInvoiceHtml();
