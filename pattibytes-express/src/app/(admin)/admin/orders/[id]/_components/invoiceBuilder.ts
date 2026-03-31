@@ -2,6 +2,51 @@
 import { toINR, fmtTime } from './types';
 import type { OrderNormalized, ProfileMini, MerchantInfo } from './types';
 
+// ─── App Settings Type ────────────────────────────────────────────────────────
+
+export type AppSettings = {
+  id?: string;
+  app_name?: string;
+  support_email?: string;
+  support_phone?: string;
+  business_address?: string;
+  facebook_url?: string;
+  instagram_url?: string;
+  twitter_url?: string;
+  youtube_url?: string;
+  website_url?: string;
+  delivery_fee?: number | string;
+  min_order_amount?: number | string;
+  tax_percentage?: number | string;
+  created_at?: string;
+  updated_at?: string;
+  custom_links?: unknown;
+  customer_search_radius_km?: number | string;
+  announcement?: unknown;
+  show_menu_images?: boolean;
+  delivery_fee_enabled?: boolean;
+  delivery_fee_schedule?: unknown;
+  delivery_fee_show_to_customer?: boolean;
+  base_delivery_radius_km?: number | string;
+  per_km_fee_beyond_base?: number | string;
+  app_logo_url?: string;
+  base_delivery_fee?: number | string;
+  per_km_rate?: number | string;
+  free_delivery_above?: number | string;
+  hub_latitude?: number | string;
+  hub_longitude?: number | string;
+  admin_preferences?: unknown;
+  free_delivery_enabled?: boolean;
+};
+
+type CustomLink = {
+  id?: string;
+  url?: string;
+  title?: string;
+  enabled?: boolean;
+  logo_url?: string;
+};
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function esc(v: unknown): string {
@@ -26,6 +71,10 @@ function num(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function hasValue(v: unknown): boolean {
+  return !!clean(v);
+}
+
 function firstNonEmpty(...vals: unknown[]): string {
   for (const v of vals) {
     const s = clean(v);
@@ -34,8 +83,15 @@ function firstNonEmpty(...vals: unknown[]): string {
   return '';
 }
 
-function hasValue(v: unknown): boolean {
-  return !!clean(v);
+function parseCustomLinks(raw: unknown): CustomLink[] {
+  if (Array.isArray(raw)) return raw as CustomLink[];
+  if (typeof raw !== 'string' || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function getStatusClass(status: unknown): string {
@@ -60,8 +116,39 @@ export function buildInvoiceHtml(
   order: OrderNormalized,
   customer: ProfileMini | null,
   merchant: MerchantInfo | null,
+  appSettings?: AppSettings | null,
 ): string {
-  const appName = 'PattiBytes Express&#174;';
+  // ── App Settings ──────────────────────────────────────
+  const appName    = firstNonEmpty(appSettings?.app_name, 'PattiBytes Express&#174;');
+  const appLogoUrl = clean(appSettings?.app_logo_url ?? '');
+  const websiteUrl = firstNonEmpty(appSettings?.website_url, 'https://www.pattibytes.com');
+  const supportEmail = clean(appSettings?.support_email ?? '');
+  const supportPhone = clean(appSettings?.support_phone ?? '');
+
+  // App-level GST — only used if explicitly set and > 0
+  const appTaxPct  = num(appSettings?.tax_percentage ?? 0);
+  const hasAppTax  = appTaxPct > 0;
+  const taxLabel   = hasAppTax ? `Tax (GST ${appTaxPct}%)` : '';
+
+  // Social links
+  const fbUrl    = clean(appSettings?.facebook_url  ?? '');
+  const igUrl    = clean(appSettings?.instagram_url ?? '');
+  const ytUrl    = clean(appSettings?.youtube_url   ?? '');
+  const twUrl    = clean(appSettings?.twitter_url   ?? '');
+  const customLinks: CustomLink[] = parseCustomLinks(appSettings?.custom_links ?? [])
+    .filter(l => l.enabled !== false && hasValue(l.url));
+
+  // ── Order fields ──────────────────────────────────────
+  const merchantName = firstNonEmpty(
+    (merchant as any)?.business_name,
+    (merchant as any)?.businessname,
+    appName,
+    'PattiBytes Express',
+  );
+
+  const merchantPhone   = firstNonEmpty((merchant as any)?.phone, (merchant as any)?.contactphone);
+  const merchantAddress = firstNonEmpty((merchant as any)?.address, (merchant as any)?.businessaddress);
+  const merchantGstin   = firstNonEmpty((merchant as any)?.gst_number, (merchant as any)?.gstnumber, (merchant as any)?.gstin);
 
   const customerName =
     firstNonEmpty(
@@ -74,102 +161,94 @@ export function buildInvoiceHtml(
       : '') ||
     'Walk-in Customer';
 
-  const merchantName = firstNonEmpty(
-    (merchant as any)?.business_name,
-    (merchant as any)?.businessname,
-    'PattiBytes Express',
-  );
+  const phone          = firstNonEmpty(order.customerPhone, (customer as any)?.phone, 'N/A');
+  const orderNo        = esc(order.orderNumber ?? 'N/A');
+  const orderStatus    = clean(order.status || 'Pending');
+  const paymentStatus  = clean(order.paymentStatus || 'N/A');
+  const paymentMethod  = clean(order.paymentMethod || 'N/A');
+  const orderType      = clean(order.orderType || 'N/A');
+  const isPickup       = orderType.toLowerCase() === 'pickup';
 
-  const merchantPhone = firstNonEmpty(
-    (merchant as any)?.phone,
-    (merchant as any)?.contactphone,
-  );
+  const items: any[]   = Array.isArray(order.items) ? order.items : [];
+  const totalQty       = items.reduce((s, it) => s + num(it.quantity ?? 1, 1), 0);
 
-  const merchantAddress = firstNonEmpty(
-    (merchant as any)?.address,
-    (merchant as any)?.businessaddress,
-  );
-
-  const merchantGst = firstNonEmpty(
-    (merchant as any)?.gst_number,
-    (merchant as any)?.gstnumber,
-    (merchant as any)?.gstin,
-  );
-
-  const phone = firstNonEmpty(order.customerPhone, (customer as any)?.phone, 'N/A');
-  const orderNo = esc(order.orderNumber ?? 'N/A');
-  const orderStatus = clean(order.status || 'Pending');
-  const paymentStatus = clean(order.paymentStatus || 'N/A');
-  const paymentMethod = clean(order.paymentMethod || 'N/A');
-  const orderType = clean(order.orderType || 'N/A');
-  const isPickup = orderType.toLowerCase() === 'pickup';
-
-  const items: any[] = Array.isArray(order.items) ? order.items : [];
-  const totalQty = items.reduce((s, it) => s + num(it.quantity ?? 1, 1), 0);
-
-  const subtotalCalc = items.reduce((s, it) => {
-    const qty = num(it.quantity ?? 1, 1);
+  const originalTotal  = items.reduce((s, it) =>
+    s + num(it.price ?? 0) * num(it.quantity ?? 1, 1), 0);
+  const subtotalCalc   = items.reduce((s, it) => {
+    const qty   = num(it.quantity ?? 1, 1);
     const price = num(it.price ?? 0);
-    const disc = num(it.discount_percentage ?? it.discountpercentage ?? 0);
-    const eff = disc > 0 ? price * (1 - disc / 100) : price;
+    const disc  = num(it.discount_percentage ?? it.discountpercentage ?? 0);
+    const eff   = disc > 0 ? price * (1 - disc / 100) : price;
     return s + (it.is_free ? 0 : eff * qty);
   }, 0);
+  const totalSavings   = Math.max(0, originalTotal - subtotalCalc) + num(order.discount);
+  const hasSavings     = totalSavings > 0.001;
 
-  const originalTotal = items.reduce((s, it) => {
-    return s + num(it.price ?? 0) * num(it.quantity ?? 1, 1);
-  }, 0);
-
-  const totalSavings = Math.max(0, originalTotal - subtotalCalc) + num(order.discount);
-  const hasSavings = totalSavings > 0.001;
-
-  // Serialized data for JS runtime use
+  // ── JS-safe strings ───────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const jsOrderNo = JSON.stringify(clean(order.orderNumber ?? 'N/A'));
-  const jsCustomerNotes = JSON.stringify(clean(order.customerNotes ?? ''));
-  const jsSpecialInstructions = JSON.stringify(clean(order.specialInstructions ?? ''));
-  const jsOrderStatus = JSON.stringify(orderStatus);
+  const jsOrderNo    = JSON.stringify(clean(order.orderNumber ?? 'N/A'));
+  const jsCustNotes  = JSON.stringify(clean(order.customerNotes ?? ''));
+  const jsSpecial    = JSON.stringify(clean(order.specialInstructions ?? ''));
+  const jsStatus     = JSON.stringify(orderStatus);
 
-  const itemRows = items
-    .map((it: any, i: number) => {
-      const qty = num(it.quantity ?? 1, 1);
-      const price = num(it.price ?? 0);
-      const disc = num(it.discount_percentage ?? it.discountpercentage ?? 0);
-      const eff = disc > 0 ? price * (1 - disc / 100) : price;
-      const line = it.is_free ? 0 : eff * qty;
-      const vegDot = it.is_veg ?? it.isveg;
-      const vegIcon = vegDot !== undefined ? (vegDot ? '&#129001; ' : '&#128308; ') : '';
+  // ── Item rows ─────────────────────────────────────────
+  const itemRows = items.map((it: any, i: number) => {
+    const qty   = num(it.quantity ?? 1, 1);
+    const price = num(it.price ?? 0);
+    const disc  = num(it.discount_percentage ?? it.discountpercentage ?? 0);
+    const eff   = disc > 0 ? price * (1 - disc / 100) : price;
+    const line  = it.is_free ? 0 : eff * qty;
+    const veg   = it.is_veg ?? it.isveg;
+    const icon  = veg !== undefined ? (veg ? '&#129001; ' : '&#128308; ') : '';
 
-      return `
-        <tr>
-          <td class="td c">${i + 1}</td>
-          <td class="td">
-            <span class="iname">${vegIcon}${esc(it.name ?? 'Item')}</span>
-            ${it.is_free ? '<span class="pill pill-green">FREE</span>' : ''}
-            ${disc > 0 ? `<span class="pill pill-amber">${disc}% off</span>` : ''}
-            ${hasValue(it.note) ? `<div class="sub itm-note">&#128203; ${esc(it.note)}</div>` : ''}
-          </td>
-          <td class="td c">${qty}</td>
-          <td class="td r">${it.is_free ? '—' : esc(toINR(eff))}</td>
-          <td class="td r b">${it.is_free ? '<span class="fv">FREE</span>' : esc(toINR(line))}</td>
-        </tr>`;
-    })
-    .join('');
+    return `
+      <tr>
+        <td class="td c">${i + 1}</td>
+        <td class="td">
+          <span class="iname">${icon}${esc(it.name ?? 'Item')}</span>
+          ${it.is_free ? '<span class="pill pill-green">FREE</span>' : ''}
+          ${disc > 0 ? `<span class="pill pill-amber">${disc}% off</span>` : ''}
+          ${hasValue(it.note) ? `<div class="sub itm-note">&#128203; ${esc(it.note)}</div>` : ''}
+        </td>
+        <td class="td c">${qty}</td>
+        <td class="td r">${it.is_free ? '—' : esc(toINR(eff))}</td>
+        <td class="td r b">${it.is_free ? '<span class="fv">FREE</span>' : esc(toINR(line))}</td>
+      </tr>`;
+  }).join('');
 
-  const customBlock = order.customOrderRef
-    ? `
-      <div class="row2" id="blk-custom">
-        <div class="panel">
-          <div class="ph">Custom Order</div>
-          <table class="ktbl">
-            <tr><td>Reference</td><td><b>${esc(order.customOrderRef)}</b></td></tr>
-            ${order.customCategory ? `<tr><td>Category</td><td><b>${esc(order.customCategory)}</b></td></tr>` : ''}
-            <tr><td>Status</td><td><b>${esc(order.customOrderStatus ?? 'N/A')}</b></td></tr>
-            ${order.quotedAmount ? `<tr><td>Quoted</td><td><b>${esc(toINR(order.quotedAmount))}</b></td></tr>` : ''}
-            ${order.quoteMessage ? `<tr><td>Note</td><td><b>${esc(order.quoteMessage)}</b></td></tr>` : ''}
-          </table>
-        </div>
-      </div>`
-    : '';
+  // ── Custom order block ────────────────────────────────
+  const customBlock = order.customOrderRef ? `
+    <div class="row2" id="blk-custom">
+      <div class="panel">
+        <div class="ph">Custom Order</div>
+        <table class="ktbl">
+          <tr><td>Reference</td><td><b>${esc(order.customOrderRef)}</b></td></tr>
+          ${order.customCategory ? `<tr><td>Category</td><td><b>${esc(order.customCategory)}</b></td></tr>` : ''}
+          <tr><td>Status</td><td><b>${esc(order.customOrderStatus ?? 'N/A')}</b></td></tr>
+          ${order.quotedAmount ? `<tr><td>Quoted</td><td><b>${esc(toINR(order.quotedAmount))}</b></td></tr>` : ''}
+          ${order.quoteMessage ? `<tr><td>Note</td><td><b>${esc(order.quoteMessage)}</b></td></tr>` : ''}
+        </table>
+      </div>
+    </div>` : '';
+
+  // ── Social chips (footer) ─────────────────────────────
+  const socialChips = [
+    igUrl  ? `<a class="chip" href="${esc(igUrl)}"  target="_blank" rel="noopener noreferrer">Instagram</a>` : '',
+    fbUrl  ? `<a class="chip" href="${esc(fbUrl)}"  target="_blank" rel="noopener noreferrer">Facebook</a>`  : '',
+    ytUrl  ? `<a class="chip" href="${esc(ytUrl)}"  target="_blank" rel="noopener noreferrer">YouTube</a>`   : '',
+    twUrl  ? `<a class="chip" href="${esc(twUrl)}"  target="_blank" rel="noopener noreferrer">Twitter</a>`   : '',
+    ...customLinks.map(l =>
+      `<a class="chip" href="${esc(l.url!)}" target="_blank" rel="noopener noreferrer">
+        ${l.logo_url ? `<img src="${esc(l.logo_url)}" class="chip-logo" alt="" />` : ''}
+        ${esc(l.title || 'Link')}
+      </a>`
+    ),
+  ].filter(Boolean).join('');
+
+  // ── Logo HTML for hero ────────────────────────────────
+  const logoHtml = appLogoUrl
+    ? `<img src="${esc(appLogoUrl)}" class="app-logo" alt="${esc(appName)} logo" />`
+    : `<div class="app-icon">&#8377;</div>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -198,7 +277,6 @@ export function buildInvoiceHtml(
     #toolbar{
       position:sticky;top:0;z-index:200;
       background:#0f172a;
-      padding:0;
       box-shadow:0 2px 12px rgba(0,0,0,.4);
       font-size:11px;font-weight:700;
     }
@@ -211,26 +289,22 @@ export function buildInvoiceHtml(
     .sep{height:18px;width:1px;background:#334155;flex:none}
     .tbtn{
       padding:5px 11px;border-radius:7px;
-      font-size:11px;font-weight:900;
-      cursor:pointer;border:none;outline:none;
+      font-size:11px;font-weight:900;cursor:pointer;border:none;outline:none;
       transition:opacity .12s,background .12s;flex:none;
     }
     .tbtn:hover{opacity:.85}
     .tbtn.primary{background:#f97316;color:#fff}
     .tbtn.ghost{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
     .tbtn.success{background:#16a34a;color:#fff}
-    .tbtn.danger{background:#dc2626;color:#fff}
     .tbtn.sm{padding:4px 8px;font-size:10.5px}
     .toggle-wrap{
-      display:flex;align-items:center;gap:5px;
-      cursor:pointer;user-select:none;color:#cbd5e1;
-      white-space:nowrap;
+      display:flex;align-items:center;gap:5px;cursor:pointer;
+      user-select:none;color:#cbd5e1;white-space:nowrap;
     }
     .toggle-wrap input[type=checkbox]{
       appearance:none;-webkit-appearance:none;
       width:15px;height:15px;border-radius:4px;
-      border:1.5px solid #475569;background:#1e293b;
-      cursor:pointer;flex:none;
+      border:1.5px solid #475569;background:#1e293b;cursor:pointer;flex:none;
     }
     .toggle-wrap input[type=checkbox]:checked{
       background:#f97316;border-color:#f97316;
@@ -238,35 +312,17 @@ export function buildInvoiceHtml(
       background-repeat:no-repeat;background-position:center;background-size:9px;
     }
     .tb-sel{
-      background:#1e293b;color:#f8fafc;
-      border:1px solid #334155;border-radius:7px;
-      padding:4px 8px;font-size:11px;font-weight:800;cursor:pointer;outline:none;
+      background:#1e293b;color:#f8fafc;border:1px solid #334155;
+      border-radius:7px;padding:4px 8px;font-size:11px;font-weight:800;
+      cursor:pointer;outline:none;
     }
     .spacer{flex:1}
-    .tb-tag{
-      background:#1e293b;color:#94a3b8;
-      font-size:10px;font-weight:800;
-      padding:3px 8px;border-radius:999px;
-      border:1px solid #334155;white-space:nowrap;
-    }
+    .tb-tag{background:#1e293b;color:#94a3b8;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;border:1px solid #334155;white-space:nowrap}
 
-    /* ── Tabs ────────────────────────────────────────────── */
-    .tab-bar{display:flex;gap:4px;padding:6px 14px 0;background:#0f172a}
-    .tab{
-      padding:5px 12px;border-radius:7px 7px 0 0;
-      font-size:11px;font-weight:900;cursor:pointer;
-      color:#94a3b8;border:1px solid transparent;border-bottom:none;
-      transition:all .12s;
-    }
-    .tab.active{background:#1e293b;color:#f8fafc;border-color:#334155}
-    .tab:hover:not(.active){color:#cbd5e1}
-
-    /* ── Floating edit panels ────────────────────────────── */
+    /* ── Overlay panels ──────────────────────────────────── */
     .panel-overlay{
-      display:none;
-      position:fixed;inset:0;z-index:300;
-      background:rgba(0,0,0,.5);
-      align-items:center;justify-content:center;
+      display:none;position:fixed;inset:0;z-index:300;
+      background:rgba(0,0,0,.5);align-items:center;justify-content:center;
     }
     .panel-overlay.open{display:flex}
     .edit-panel{
@@ -281,43 +337,29 @@ export function buildInvoiceHtml(
     .ep-input,.ep-textarea,.ep-select{
       width:100%;border:1.5px solid var(--line);border-radius:8px;
       padding:8px 10px;font-size:12px;font-weight:800;color:var(--ink);
-      font-family:inherit;outline:none;
-      transition:border-color .12s;
+      font-family:inherit;outline:none;transition:border-color .12s;
     }
     .ep-input:focus,.ep-textarea:focus,.ep-select:focus{border-color:var(--brand)}
     .ep-textarea{resize:vertical;min-height:70px;line-height:1.5}
     .ep-row{display:flex;gap:8px;margin-top:14px}
     .ep-hint{font-size:10px;color:var(--muted);margin-top:4px}
 
-    /* ── Merchant Fields (internal) ──────────────────────── */
-    .merch-block{
-      background:#fffbeb;border:1.5px dashed #fde68a;
-      border-radius:12px;padding:10px 12px;margin-top:8px;
-    }
-    .merch-block .ph{color:#92400e}
-    #blk-merchant{display:none}
-
-    /* ── Sheet ───────────────────────────────────────────── */
-    .wrap{max-width:800px;margin:14px auto;padding:0 10px 24px}
-    .sheet{
-      background:var(--card);
-      border:1.5px solid #cbd5e1;border-radius:16px;overflow:hidden;
-      box-shadow:0 4px 20px rgba(0,0,0,.06);
-      transition:all .25s;
-    }
-
-    /* layout modes */
+    /* ── Layout modes ────────────────────────────────────── */
     body.layout-receipt .wrap{max-width:380px}
     body.layout-receipt .info-grid{grid-template-columns:1fr}
     body.layout-receipt .stats{grid-template-columns:repeat(2,1fr)}
     body.layout-receipt .itbl thead th:nth-child(4),
     body.layout-receipt .td.r:nth-child(4){display:none}
     body.layout-a4 .wrap{max-width:680px}
-    body.layout-compact .hero{padding:10px 12px 8px}
-    body.layout-compact .body{padding:8px 10px}
+    body.layout-compact .hero{padding:9px 12px 8px}
+    body.layout-compact .body{padding:7px 10px}
     body.layout-compact .td{padding:5px 8px}
     body.layout-compact .stat{padding:7px 10px}
     body.layout-compact .sv{font-size:12px}
+
+    /* ── Sheet ───────────────────────────────────────────── */
+    .wrap{max-width:800px;margin:14px auto;padding:0 10px 24px}
+    .sheet{background:var(--card);border:1.5px solid #cbd5e1;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.06)}
 
     /* ── Hero ────────────────────────────────────────────── */
     .hero{
@@ -327,10 +369,15 @@ export function buildInvoiceHtml(
     .hero-inner{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
     .hero-left{display:flex;align-items:flex-start;gap:10px;min-width:0}
     .app-icon{
-      width:42px;height:42px;border-radius:11px;flex:none;
+      width:44px;height:44px;border-radius:11px;flex:none;
       background:linear-gradient(135deg,#fb923c,#f97316);
       display:flex;align-items:center;justify-content:center;
       font-size:20px;border:2px solid rgba(255,255,255,.15);
+    }
+    .app-logo{
+      width:44px;height:44px;border-radius:11px;flex:none;
+      object-fit:cover;border:2px solid rgba(255,255,255,.15);
+      background:#fff;
     }
     .app-nm{font-size:14px;font-weight:950;letter-spacing:-.2px}
     .merch-nm{font-size:10.5px;color:#94a3b8;font-weight:700;margin-top:1px}
@@ -339,8 +386,8 @@ export function buildInvoiceHtml(
     .hero-right{text-align:right;flex:none}
     .hero-meta{font-size:10px;font-weight:700;color:#94a3b8;line-height:1.6}
     .copy-label{
-      display:inline-block;margin-top:4px;
-      font-size:9.5px;font-weight:900;padding:2px 8px;border-radius:999px;
+      display:inline-block;margin-top:4px;font-size:9.5px;font-weight:900;
+      padding:2px 8px;border-radius:999px;
       background:rgba(249,115,22,.15);color:#fb923c;border:1px solid rgba(249,115,22,.35);
     }
     .badge-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px;align-items:center}
@@ -359,18 +406,12 @@ export function buildInvoiceHtml(
     .badge-amber{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-b)}
     .badge-amber::before{background:var(--warn)}
     .promo-badge{
-      display:inline-flex;align-items:center;gap:3px;
-      padding:3px 8px;border-radius:999px;
-      background:#fef3c7;color:#92400e;border:1.5px solid #fde68a;
-      font-size:9.5px;font-weight:900;
+      display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:999px;
+      background:#fef3c7;color:#92400e;border:1.5px solid #fde68a;font-size:9.5px;font-weight:900;
     }
-    #status-badge-live{cursor:default}
 
     /* ── Stats ───────────────────────────────────────────── */
-    .stats{
-      display:grid;grid-template-columns:repeat(4,1fr);
-      border-bottom:1.5px solid var(--line);
-    }
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1.5px solid var(--line)}
     .stats.cols3{grid-template-columns:repeat(3,1fr)}
     .stat{padding:9px 12px;border-right:1.5px solid var(--line)}
     .stat:last-child{border-right:none}
@@ -387,14 +428,15 @@ export function buildInvoiceHtml(
     .ktbl td{padding:2px 0;font-size:11px;font-weight:800;color:var(--ink);line-height:1.45;vertical-align:top}
     .ktbl td:first-child{color:var(--muted);width:42%;font-weight:700;padding-right:6px}
     .ktbl b{color:var(--ink);font-weight:900}
+    .row2{margin-top:8px}
 
     /* ── Items ───────────────────────────────────────────── */
     .itbl-wrap{border:1.5px solid var(--line);border-radius:11px;overflow:hidden}
     .itbl{width:100%;border-collapse:collapse}
     .itbl thead th{
-      background:#0f172a;color:#f8fafc;
-      padding:7px 9px;font-size:9.5px;font-weight:900;
-      text-align:left;text-transform:uppercase;letter-spacing:.05em;
+      background:#0f172a;color:#f8fafc;padding:7px 9px;
+      font-size:9.5px;font-weight:900;text-align:left;
+      text-transform:uppercase;letter-spacing:.05em;
     }
     .td{padding:7px 9px;border-top:1px solid #f1f5f9;font-size:11px;font-weight:800;color:var(--ink);vertical-align:top}
     .c{text-align:center;width:30px}
@@ -403,23 +445,15 @@ export function buildInvoiceHtml(
     .iname{font-weight:900}
     .sub{font-size:9.5px;color:var(--muted);margin-top:2px;font-weight:700}
     .itm-note{color:#475467}
-    .pill{
-      display:inline-block;margin-left:4px;
-      padding:1px 5px;border-radius:999px;font-size:9px;font-weight:900;
-    }
+    .pill{display:inline-block;margin-left:4px;padding:1px 5px;border-radius:999px;font-size:9px;font-weight:900}
     .pill-green{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-b)}
     .pill-amber{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-b)}
     .fv{color:var(--ok);font-weight:950}
-    .row2{margin-top:8px}
 
     /* ── Totals ──────────────────────────────────────────── */
     .totals-wrap{display:flex;justify-content:flex-end;margin-top:8px}
     .totals{width:min(100%,285px);border:1.5px solid var(--line);border-radius:11px;overflow:hidden;background:#fff}
-    .trow{
-      display:flex;justify-content:space-between;gap:6px;
-      padding:5px 11px;font-size:11px;font-weight:800;
-      border-top:1px solid #f1f5f9;
-    }
+    .trow{display:flex;justify-content:space-between;gap:6px;padding:5px 11px;font-size:11px;font-weight:800;border-top:1px solid #f1f5f9}
     .trow:first-child{border-top:none}
     .trow .lbl{color:var(--muted);font-weight:700}
     .trow .val{color:var(--ink)}
@@ -427,41 +461,43 @@ export function buildInvoiceHtml(
     .trow.bold{border-top:1.5px solid #cbd5e1}
     .trow.bold .lbl,.trow.bold .val{font-weight:950;font-size:12.5px;color:var(--ink)}
 
-    /* ── Notes in bill ───────────────────────────────────── */
+    /* ── Notes ───────────────────────────────────────────── */
     .notes-wrap{margin-top:8px}
     .nv{font-size:11px;font-weight:800;color:var(--ink);line-height:1.5;white-space:pre-wrap}
-
-    /* ── Merchant block ──────────────────────────────────── */
-    .merch-internal{
-      border-top:1.5px dashed #e2e8f0;
-      margin-top:10px;padding-top:10px;
-    }
-    .merch-internal .ph{color:#92400e}
+    .merch-block{background:#fffbeb;border:1.5px dashed #fde68a;border-radius:11px;padding:9px 11px}
+    .merch-block .ph{color:#92400e}
+    .merch-internal{border-top:1.5px dashed var(--line);margin-top:10px;padding-top:10px}
 
     /* ── Footer ──────────────────────────────────────────── */
     .footer{
       background:#f8fafc;border-top:1.5px solid var(--line);
-      padding:8px 13px;
-      display:flex;justify-content:space-between;align-items:center;
-      gap:8px;flex-wrap:wrap;
+      padding:9px 13px;display:flex;justify-content:space-between;
+      align-items:flex-start;gap:8px;flex-wrap:wrap;
     }
-    .footer-l{font-size:9.5px;font-weight:800;color:var(--muted);line-height:1.55}
-    .footer-r{text-align:right;font-size:9.5px;font-weight:800;color:var(--muted)}
+    .footer-l{font-size:9.5px;font-weight:800;color:var(--muted);line-height:1.6}
+    .footer-r{text-align:right;font-size:9.5px;font-weight:800;color:var(--muted);line-height:1.6}
     .dev{margin-top:2px;font-size:9.5px;font-weight:900;color:var(--ink)}
     .dev a{color:var(--brand);text-decoration:none}
+    .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;justify-content:flex-end}
+    .chip{
+      display:inline-flex;align-items:center;gap:4px;
+      border:1px solid var(--line);border-radius:999px;padding:3px 8px;
+      color:var(--muted);text-decoration:none;background:#fff;
+      font-weight:900;font-size:9.5px;transition:border-color .1s;
+    }
+    .chip:hover{border-color:var(--brand);color:var(--brand)}
+    .chip-logo{width:13px;height:13px;border-radius:50%;object-fit:cover}
 
     /* ── Print ───────────────────────────────────────────── */
     @media print{
       body{background:#fff}
-      #toolbar{display:none!important}
-      .panel-overlay{display:none!important}
+      #toolbar,.panel-overlay{display:none!important}
       .wrap{margin:0;padding:0;max-width:100%}
       .sheet{border-radius:0;border:none;box-shadow:none}
       .hidden{display:none!important}
-      body.layout-receipt .wrap{max-width:100%}
+      .chips a{color:var(--muted)!important}
     }
     .hidden{display:none!important}
-
     @media(max-width:560px){
       .info-grid{grid-template-columns:1fr}
       .stats{grid-template-columns:repeat(2,1fr)}
@@ -472,42 +508,37 @@ export function buildInvoiceHtml(
 </head>
 <body class="layout-default">
 
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!--  TOOLBAR                                                               -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  TOOLBAR                                               -->
+<!-- ══════════════════════════════════════════════════════ -->
 <div id="toolbar">
 
-  <!-- Row 1 — Identity + Copy + Layout -->
+  <!-- Row 1 -->
   <div class="tb-row">
     <div class="tl">&#128203; Invoice Controls</div>
     <div class="sep"></div>
-
-    <label class="toggle-wrap" style="color:#94a3b8;gap:6px">
-      Copy:
+    <label class="toggle-wrap" style="color:#94a3b8;gap:6px">Copy:
       <select class="tb-sel" id="copy-select" onchange="setCopy(this.value)">
         <option value="Customer">Customer Copy</option>
         <option value="Merchant">Merchant Copy</option>
         <option value="Internal">Internal Record</option>
       </select>
     </label>
-
-    <label class="toggle-wrap" style="color:#94a3b8;gap:6px">
-      Layout:
+    <label class="toggle-wrap" style="color:#94a3b8;gap:6px">Layout:
       <select class="tb-sel" id="layout-select" onchange="setLayout(this.value)">
-        <option value="default">Default (A4-ish)</option>
+        <option value="default">Default</option>
         <option value="compact">Compact</option>
         <option value="receipt">Receipt (80mm)</option>
         <option value="a4">Narrow A4</option>
       </select>
     </label>
-
     <div class="spacer"></div>
     <div class="tb-tag" id="gen-stamp"></div>
     <button class="tbtn ghost sm" onclick="resetAll()">&#8635; Reset</button>
     <button class="tbtn primary" onclick="window.print()">&#128424; Print</button>
   </div>
 
-  <!-- Row 2 — Section toggles -->
+  <!-- Row 2 -->
   <div class="tb-row">
     <span style="color:#64748b;font-size:10px;font-weight:900;white-space:nowrap">SHOW/HIDE:</span>
     <div class="sep"></div>
@@ -519,7 +550,6 @@ export function buildInvoiceHtml(
     <label class="toggle-wrap"><input type="checkbox" checked id="tgl-totals"   onchange="toggleBlock('blk-totals',this)"/> Totals</label>
     <label class="toggle-wrap"><input type="checkbox" checked id="tgl-notes"    onchange="toggleBlock('blk-notes',this)"/> Notes</label>
     <label class="toggle-wrap"><input type="checkbox"       id="tgl-merch"    onchange="toggleMerchant(this)"/> Merchant Fields</label>
-
     <div class="spacer"></div>
     <button class="tbtn ghost sm" onclick="openEditNotes()">&#9998; Edit Notes</button>
     <button class="tbtn ghost sm" onclick="openEditStatus()">&#9881; Edit Status</button>
@@ -527,38 +557,32 @@ export function buildInvoiceHtml(
 
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!--  FLOATING PANELS                                                       -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  FLOATING PANELS                                       -->
+<!-- ══════════════════════════════════════════════════════ -->
 
-<!-- Edit Notes Panel -->
+<!-- Edit Notes -->
 <div class="panel-overlay" id="overlay-notes">
   <div class="edit-panel">
-    <div class="ep-title">
-      &#9998; Edit Notes for Print
-      <span class="ep-close" onclick="closeOverlay('overlay-notes')">&#10005;</span>
-    </div>
+    <div class="ep-title">&#9998; Edit Notes for Print <span class="ep-close" onclick="closeOverlay('overlay-notes')">&#10005;</span></div>
     <div class="ep-label">Customer Notes</div>
-    <textarea class="ep-textarea" id="ep-cust-notes" placeholder="Add or edit customer notes…" rows="3"></textarea>
+    <textarea class="ep-textarea" id="ep-cust-notes" rows="3" placeholder="Add or edit customer notes…"></textarea>
     <div class="ep-label">Special Instructions</div>
-    <textarea class="ep-textarea" id="ep-special" placeholder="Add special instructions…" rows="3"></textarea>
-    <div class="ep-label">Merchant Internal Note <span style="font-weight:700;text-transform:none;letter-spacing:0;font-size:10px;color:#94a3b8">(Merchant Copy only)</span></div>
-    <textarea class="ep-textarea" id="ep-internal" placeholder="Internal note (not shown on customer copy)…" rows="2"></textarea>
-    <div class="ep-hint">Changes apply to the print preview. Original order data is not modified.</div>
+    <textarea class="ep-textarea" id="ep-special" rows="3" placeholder="Add special instructions…"></textarea>
+    <div class="ep-label">Internal Note <span style="font-weight:700;text-transform:none;letter-spacing:0;font-size:10px;color:#94a3b8">(Merchant / Internal copy only)</span></div>
+    <textarea class="ep-textarea" id="ep-internal" rows="2" placeholder="Not shown on customer copy…"></textarea>
+    <div class="ep-hint">Changes apply to print preview only. Original data is not modified.</div>
     <div class="ep-row">
-      <button class="tbtn ghost" style="flex:1" onclick="closeOverlay('overlay-notes')">Cancel</button>
+      <button class="tbtn ghost" style="flex:1;background:#f1f5f9;color:#0f172a" onclick="closeOverlay('overlay-notes')">Cancel</button>
       <button class="tbtn success" style="flex:1" onclick="applyNotes()">&#10003; Apply</button>
     </div>
   </div>
 </div>
 
-<!-- Edit Status Panel -->
+<!-- Edit Status -->
 <div class="panel-overlay" id="overlay-status">
   <div class="edit-panel">
-    <div class="ep-title">
-      &#9881; Override Status for Print
-      <span class="ep-close" onclick="closeOverlay('overlay-status')">&#10005;</span>
-    </div>
+    <div class="ep-title">&#9881; Override Status for Print <span class="ep-close" onclick="closeOverlay('overlay-status')">&#10005;</span></div>
     <div class="ep-label">Order Status</div>
     <select class="ep-select" id="ep-order-status">
       <option value="">— Keep original —</option>
@@ -588,17 +612,17 @@ export function buildInvoiceHtml(
       <option value="Online">Online</option>
       <option value="Wallet">Wallet</option>
     </select>
-    <div class="ep-hint">This only affects print output. Database is not modified.</div>
+    <div class="ep-hint">Affects print output only. Database is not modified.</div>
     <div class="ep-row">
-      <button class="tbtn ghost" style="flex:1" onclick="closeOverlay('overlay-status')">Cancel</button>
+      <button class="tbtn ghost" style="flex:1;background:#f1f5f9;color:#0f172a" onclick="closeOverlay('overlay-status')">Cancel</button>
       <button class="tbtn success" style="flex:1" onclick="applyStatus()">&#10003; Apply</button>
     </div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
-<!--  INVOICE SHEET                                                         -->
-<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════ -->
+<!--  INVOICE SHEET                                         -->
+<!-- ══════════════════════════════════════════════════════ -->
 <div class="wrap">
 <div class="sheet">
 
@@ -606,7 +630,7 @@ export function buildInvoiceHtml(
   <div class="hero">
     <div class="hero-inner">
       <div class="hero-left">
-        <div class="app-icon">&#8377;</div>
+        ${logoHtml}
         <div>
           <div class="app-nm">${appName}</div>
           <div class="merch-nm">${esc(merchantName)}</div>
@@ -615,9 +639,9 @@ export function buildInvoiceHtml(
         </div>
       </div>
       <div class="hero-right">
-        <div class="hero-meta" id="hr-created">Created: ${esc(fmtTime(order.createdAt))}</div>
+        <div class="hero-meta">Created: ${esc(fmtTime(order.createdAt))}</div>
         <div class="hero-meta" id="hr-method">Method: ${esc(upper(paymentMethod))}</div>
-        <div class="hero-meta" id="hr-type">Type: ${esc(upper(orderType))}</div>
+        <div class="hero-meta">Type: ${esc(upper(orderType))}</div>
         <div class="copy-label" id="copy-display">Customer Copy</div>
       </div>
     </div>
@@ -646,11 +670,8 @@ export function buildInvoiceHtml(
         <div class="ph">Bill To</div>
         <table class="ktbl">
           <tr><td>Name</td><td><b>${esc(customerName)}</b></td></tr>
-          ${
-            order.recipientName && clean(order.recipientName) !== customerName
-              ? `<tr><td>Recipient</td><td><b>${esc(order.recipientName)}</b></td></tr>`
-              : ''
-          }
+          ${order.recipientName && clean(order.recipientName) !== customerName
+            ? `<tr><td>Recipient</td><td><b>${esc(order.recipientName)}</b></td></tr>` : ''}
           <tr><td>Phone</td><td><b>${esc(phone)}</b></td></tr>
         </table>
       </div>
@@ -666,25 +687,22 @@ export function buildInvoiceHtml(
     </div>
 
     <!-- Delivery -->
-    ${
-      !isPickup
-        ? `<div class="row2" id="blk-delivery">
-            <div class="panel">
-              <div class="ph">Delivery Address</div>
-              <table class="ktbl">
-                ${order.deliveryAddressLabel ? `<tr><td>Label</td><td><b>${esc(order.deliveryAddressLabel)}</b></td></tr>` : ''}
-                ${order.deliveryAddress ? `<tr><td>Address</td><td><b style="white-space:pre-line">${esc(order.deliveryAddress)}</b></td></tr>` : ''}
-                ${order.deliveryInstructions ? `<tr><td>Note</td><td><b>${esc(order.deliveryInstructions)}</b></td></tr>` : ''}
-                ${order.deliveryDistanceKm != null ? `<tr><td>Distance</td><td><b>${num(order.deliveryDistanceKm).toFixed(2)} km</b></td></tr>` : ''}
-              </table>
-            </div>
-          </div>`
-        : ''
-    }
+    ${!isPickup ? `
+      <div class="row2" id="blk-delivery">
+        <div class="panel">
+          <div class="ph">Delivery Address</div>
+          <table class="ktbl">
+            ${order.deliveryAddressLabel ? `<tr><td>Label</td><td><b>${esc(order.deliveryAddressLabel)}</b></td></tr>` : ''}
+            ${order.deliveryAddress ? `<tr><td>Address</td><td><b style="white-space:pre-line">${esc(order.deliveryAddress)}</b></td></tr>` : ''}
+            ${order.deliveryInstructions ? `<tr><td>Note</td><td><b>${esc(order.deliveryInstructions)}</b></td></tr>` : ''}
+            ${order.deliveryDistanceKm != null ? `<tr><td>Distance</td><td><b>${num(order.deliveryDistanceKm).toFixed(2)} km</b></td></tr>` : ''}
+          </table>
+        </div>
+      </div>` : ''}
 
     ${customBlock}
 
-    <!-- Items Table -->
+    <!-- Items -->
     <div class="row2" id="blk-items">
       <div class="itbl-wrap">
         <table class="itbl">
@@ -712,13 +730,13 @@ export function buildInvoiceHtml(
           ${num(order.discount) > 0 ? `<div class="trow green"><span class="lbl">Discount</span><span class="val">&#8722;${esc(toINR(order.discount))}</span></div>` : ''}
           ${order.promoCode ? `<div class="trow green"><span class="lbl">Promo (${esc(order.promoCode)})</span><span class="val">Applied</span></div>` : ''}
           <div class="trow"><span class="lbl">Delivery Fee</span><span class="val">${esc(toINR(order.deliveryFee))}</span></div>
-          <div class="trow"><span class="lbl">Tax (GST)</span><span class="val">${esc(toINR(order.tax))}</span></div>
+          ${hasAppTax ? `<div class="trow"><span class="lbl">${esc(taxLabel)}</span><span class="val">${esc(toINR(order.tax))}</span></div>` : ''}
           <div class="trow bold"><span class="lbl">Grand Total</span><span class="val">${esc(toINR(order.totalAmount))}</span></div>
         </div>
       </div>
     </div>
 
-    <!-- Notes Section (editable before print) -->
+    <!-- Notes -->
     <div class="notes-wrap" id="blk-notes">
       <div id="print-cust-notes-wrap" class="${clean(order.customerNotes) ? '' : 'hidden'}">
         <div class="row2">
@@ -746,7 +764,7 @@ export function buildInvoiceHtml(
       </div>
     </div>
 
-    <!-- Merchant Fields (shown only for Merchant/Internal copy) -->
+    <!-- Merchant Fields -->
     <div class="merch-internal hidden" id="blk-merchant">
       <div class="ph" style="color:#92400e;margin-bottom:8px">&#128274; Merchant Record</div>
       <div class="info-grid">
@@ -754,8 +772,8 @@ export function buildInvoiceHtml(
           <div class="ph">Merchant Info</div>
           <table class="ktbl">
             <tr><td>Business</td><td><b>${esc(merchantName)}</b></td></tr>
-            ${hasValue(merchantPhone) ? `<tr><td>Phone</td><td><b>${esc(merchantPhone)}</b></td></tr>` : ''}
-            ${hasValue(merchantGst) ? `<tr><td>GSTIN</td><td><b>${esc(merchantGst)}</b></td></tr>` : ''}
+            ${hasValue(merchantPhone)   ? `<tr><td>Phone</td><td><b>${esc(merchantPhone)}</b></td></tr>` : ''}
+            ${hasValue(merchantGstin)   ? `<tr><td>GSTIN</td><td><b>${esc(merchantGstin)}</b></td></tr>` : ''}
             ${hasValue(merchantAddress) ? `<tr><td>Address</td><td><b style="white-space:pre-line">${esc(merchantAddress)}</b></td></tr>` : ''}
           </table>
         </div>
@@ -763,25 +781,23 @@ export function buildInvoiceHtml(
           <div class="ph">Financial Summary</div>
           <table class="ktbl">
             <tr><td>Subtotal</td><td><b>${esc(toINR(order.subtotal))}</b></td></tr>
-            <tr><td>Discount</td><td><b>${esc(toINR(order.discount))}</b></td></tr>
+            ${num(order.discount) > 0 ? `<tr><td>Discount</td><td><b>${esc(toINR(order.discount))}</b></td></tr>` : ''}
             <tr><td>Delivery</td><td><b>${esc(toINR(order.deliveryFee))}</b></td></tr>
-            <tr><td>Tax (GST)</td><td><b>${esc(toINR(order.tax))}</b></td></tr>
+            ${hasAppTax ? `<tr><td>${esc(taxLabel)}</td><td><b>${esc(toINR(order.tax))}</b></td></tr>` : ''}
             <tr><td>Grand Total</td><td><b>${esc(toINR(order.totalAmount))}</b></td></tr>
           </table>
         </div>
       </div>
       <div class="row2">
         <div class="panel merch-block">
-          <div class="ph">Order IDs (Internal)</div>
+          <div class="ph">Order IDs</div>
           <table class="ktbl">
             <tr><td>Order ID</td><td><b style="font-size:10px;word-break:break-all">${esc((order as any).id ?? 'N/A')}</b></td></tr>
             <tr><td>Customer ID</td><td><b style="font-size:10px;word-break:break-all">${esc((order as any).customerId ?? (order as any).customer_id ?? 'N/A')}</b></td></tr>
             <tr><td>Merchant ID</td><td><b style="font-size:10px;word-break:break-all">${esc((order as any).merchantId ?? (order as any).merchant_id ?? 'N/A')}</b></td></tr>
-            ${
-              (order as any).driverId ?? (order as any).driver_id
-                ? `<tr><td>Driver ID</td><td><b style="font-size:10px;word-break:break-all">${esc((order as any).driverId ?? (order as any).driver_id)}</b></td></tr>`
-                : ''
-            }
+            ${(order as any).driverId ?? (order as any).driver_id
+              ? `<tr><td>Driver ID</td><td><b style="font-size:10px;word-break:break-all">${esc((order as any).driverId ?? (order as any).driver_id)}</b></td></tr>`
+              : ''}
           </table>
         </div>
       </div>
@@ -792,7 +808,9 @@ export function buildInvoiceHtml(
   <!-- Footer -->
   <div class="footer">
     <div class="footer-l">
-      <div>&#128205; ${esc(merchantName)} &bull; PB Express &bull; pattibytes.com</div>
+      ${hasValue(supportPhone) ? `<div>&#128222; ${esc(supportPhone)}</div>` : ''}
+      ${hasValue(supportEmail) ? `<div>&#9993;&#65039; ${esc(supportEmail)}</div>` : ''}
+      <div>&#127760; <a href="${esc(websiteUrl)}" target="_blank" rel="noopener noreferrer" style="color:inherit">${esc(websiteUrl.replace(/^https?:\/\//, ''))}</a></div>
       <div>Thank you for your business!</div>
     </div>
     <div class="footer-r">
@@ -800,6 +818,7 @@ export function buildInvoiceHtml(
       <div class="dev">Developed with &#10084;&#65039; by
         <a href="https://www.instagram.com/thrillyverse" target="_blank" rel="noopener noreferrer">Thrillyverse</a>
       </div>
+      ${socialChips ? `<div class="chips">${socialChips}</div>` : ''}
     </div>
   </div>
 
@@ -807,11 +826,10 @@ export function buildInvoiceHtml(
 </div><!-- /wrap -->
 
 <script>
-(function() {
-  // ── Constants ──────────────────────────────────────────
-  const ORIG_ORDER_STATUS = ${jsOrderStatus};
-  const ORIG_CUST_NOTES   = ${jsCustomerNotes};
-  const ORIG_SPECIAL      = ${jsSpecialInstructions};
+(function(){
+  const ORIG_ORDER_STATUS = ${jsStatus};
+  const ORIG_CUST_NOTES   = ${jsCustNotes};
+  const ORIG_SPECIAL      = ${jsSpecial};
 
   const STATUS_CLASS = {
     delivered:'badge-green',completed:'badge-green',
@@ -820,186 +838,99 @@ export function buildInvoiceHtml(
     ontheway:'badge-blue',pickedup:'badge-blue',
     assigned:'badge-blue',ready:'badge-blue',
   };
-  const PAY_CLASS = {
-    paid:'badge-green',
-    failed:'badge-red',refunded:'badge-red',
-  };
+  const PAY_CLASS = {paid:'badge-green',failed:'badge-red',refunded:'badge-red'};
   const ALL_BADGE = ['badge-green','badge-red','badge-blue','badge-amber'];
 
-  // ── Init ───────────────────────────────────────────────
-  const now = new Date();
-  const ts = now.toLocaleString('en-IN',{
+  // Timestamp
+  const ts = new Date().toLocaleString('en-IN',{
     day:'2-digit',month:'short',year:'numeric',
-    hour:'2-digit',minute:'2-digit',hour12:true
+    hour:'2-digit',minute:'2-digit',hour12:true,
   });
-  const stampEl = document.getElementById('gen-stamp');
-  const footerTs = document.getElementById('gen-time-footer');
-  if (stampEl)    stampEl.textContent = ts;
-  if (footerTs)   footerTs.textContent = ts;
+  const stampEl   = document.getElementById('gen-stamp');
+  const footerTs  = document.getElementById('gen-time-footer');
+  if (stampEl)   stampEl.textContent  = ts;
+  if (footerTs)  footerTs.textContent = ts;
 
-  // Prefill edit panels
-  const epCust     = document.getElementById('ep-cust-notes');
-  const epSpecial  = document.getElementById('ep-special');
-  if (epCust)    epCust.value    = ORIG_CUST_NOTES;
-  if (epSpecial) epSpecial.value = ORIG_SPECIAL;
+  // Prefill note panels
+  const epC = document.getElementById('ep-cust-notes');
+  const epS = document.getElementById('ep-special');
+  if (epC) epC.value = ORIG_CUST_NOTES;
+  if (epS) epS.value = ORIG_SPECIAL;
 
-  // ── Overlay helpers ────────────────────────────────────
-  window.openEditNotes   = () => openOverlay('overlay-notes');
-  window.openEditStatus  = () => openOverlay('overlay-status');
-
-  function openOverlay(id) {
-    const el = document.getElementById(id);
-    if (el) el.classList.add('open');
-  }
-  window.closeOverlay = function(id) {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('open');
-  };
+  // ── Overlays ───────────────────────────────────────────
+  window.openEditNotes  = () => open('overlay-notes');
+  window.openEditStatus = () => open('overlay-status');
+  function open(id){ const e=document.getElementById(id); if(e) e.classList.add('open'); }
+  window.closeOverlay   = id => { const e=document.getElementById(id); if(e) e.classList.remove('open'); };
 
   // ── Apply Notes ────────────────────────────────────────
-  window.applyNotes = function() {
+  window.applyNotes = function(){
     const cust     = document.getElementById('ep-cust-notes')?.value ?? '';
-    const special  = document.getElementById('ep-special')?.value ?? '';
-    const internal = document.getElementById('ep-internal')?.value ?? '';
-
-    setBlockText('print-cust-notes', 'print-cust-notes-wrap', cust);
-    setBlockText('print-special',    'print-special-wrap',    special);
-    setBlockText('print-internal',   'print-internal-wrap',   internal);
-
+    const special  = document.getElementById('ep-special')?.value    ?? '';
+    const internal = document.getElementById('ep-internal')?.value   ?? '';
+    setBlock('print-cust-notes','print-cust-notes-wrap',cust);
+    setBlock('print-special',   'print-special-wrap',   special);
+    setBlock('print-internal',  'print-internal-wrap',  internal);
     closeOverlay('overlay-notes');
   };
-
-  function setBlockText(textId, wrapId, value) {
-    const el   = document.getElementById(textId);
-    const wrap = document.getElementById(wrapId);
-    if (!el || !wrap) return;
-    el.textContent = value;
-    wrap.classList.toggle('hidden', !value.trim());
+  function setBlock(tid,wid,val){
+    const t=document.getElementById(tid), w=document.getElementById(wid);
+    if(t) t.textContent=val;
+    if(w) w.classList.toggle('hidden',!val.trim());
   }
 
   // ── Apply Status ───────────────────────────────────────
-  window.applyStatus = function() {
-    const ordSel = document.getElementById('ep-order-status');
-    const paySel = document.getElementById('ep-pay-status');
-    const mthSel = document.getElementById('ep-pay-method');
-
-    const ordVal = ordSel?.value?.trim() || '';
-    const payVal = paySel?.value?.trim() || '';
-    const mthVal = mthSel?.value?.trim() || '';
-
-    if (ordVal) {
-      updateBadge('status-badge-live', ordVal.toUpperCase(), STATUS_CLASS[ordVal.toLowerCase()] ?? 'badge-amber');
-      updateInfoCell('info-order-status', ordVal.toUpperCase());
-    }
-    if (payVal) {
-      updateBadge('pay-badge-live', payVal.toUpperCase(), PAY_CLASS[payVal.toLowerCase()] ?? 'badge-amber');
-      updateInfoCell('info-pay-status', payVal.toUpperCase());
-    }
-    if (mthVal) {
-      updateInfoCell('info-pay-method', mthVal.toUpperCase());
-      const hr = document.getElementById('hr-method');
-      if (hr) hr.textContent = 'Method: ' + mthVal.toUpperCase();
-    }
-
+  window.applyStatus = function(){
+    const ov = document.getElementById('ep-order-status')?.value?.trim() ?? '';
+    const pv = document.getElementById('ep-pay-status')?.value?.trim()   ?? '';
+    const mv = document.getElementById('ep-pay-method')?.value?.trim()   ?? '';
+    if(ov){ setBadge('status-badge-live',ov.toUpperCase(), STATUS_CLASS[ov.toLowerCase()]??'badge-amber'); setCell('info-order-status',ov.toUpperCase()); }
+    if(pv){ setBadge('pay-badge-live',   pv.toUpperCase(), PAY_CLASS[pv.toLowerCase()]??'badge-amber');    setCell('info-pay-status',   pv.toUpperCase()); }
+    if(mv){ setCell('info-pay-method',mv.toUpperCase()); const hr=document.getElementById('hr-method'); if(hr) hr.textContent='Method: '+mv.toUpperCase(); }
     closeOverlay('overlay-status');
   };
-
-  function updateBadge(id, text, cls) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    ALL_BADGE.forEach(c => el.classList.remove(c));
-    el.classList.add(cls);
-    el.textContent = text;
+  function setBadge(id,txt,cls){
+    const e=document.getElementById(id); if(!e) return;
+    ALL_BADGE.forEach(c=>e.classList.remove(c)); e.classList.add(cls); e.textContent=txt;
   }
+  function setCell(id,txt){ const e=document.getElementById(id); if(e) e.textContent=txt; }
 
-  function updateInfoCell(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
-  }
-
-  // ── Copy Label ─────────────────────────────────────────
-  window.setCopy = function(val) {
-    const el = document.getElementById('copy-display');
-    if (el) el.textContent = val + ' Copy';
-    const isInternal = val === 'Internal';
-    const isMerchOrInternal = val === 'Merchant' || isInternal;
-
-    // Auto-enable merchant fields for Merchant/Internal
-    const tglMerch = document.getElementById('tgl-merch');
-    const blk = document.getElementById('blk-merchant');
-    if (tglMerch && blk) {
-      tglMerch.checked = isMerchOrInternal;
-      blk.classList.toggle('hidden', !isMerchOrInternal);
-    }
-
-    // Internal note visibility follows internal copy
-    const intWrap = document.getElementById('print-internal-wrap');
-    const epInt   = document.getElementById('ep-internal');
-    if (intWrap) intWrap.classList.toggle('hidden', !isInternal || !(epInt?.value?.trim()));
-  };
-
-  // ── Merchant toggle ────────────────────────────────────
-  window.toggleMerchant = function(cb) {
-    const el = document.getElementById('blk-merchant');
-    if (el) el.classList.toggle('hidden', !cb.checked);
+  // ── Copy ───────────────────────────────────────────────
+  window.setCopy = function(val){
+    const el=document.getElementById('copy-display');
+    if(el) el.textContent=val+' Copy';
+    const isMI = val==='Merchant'||val==='Internal';
+    const tM=document.getElementById('tgl-merch'), bM=document.getElementById('blk-merchant');
+    if(tM&&bM){ tM.checked=isMI; bM.classList.toggle('hidden',!isMI); }
+    const iW=document.getElementById('print-internal-wrap');
+    const eI=document.getElementById('ep-internal');
+    if(iW) iW.classList.toggle('hidden', val!=='Internal'||!(eI?.value?.trim()));
   };
 
   // ── Block toggles ──────────────────────────────────────
-  window.toggleBlock = function(id, cb) {
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle('hidden', !cb.checked);
-  };
+  window.toggleBlock    = (id,cb)=>{ const e=document.getElementById(id); if(e) e.classList.toggle('hidden',!cb.checked); };
+  window.toggleMerchant = cb    => toggleBlock('blk-merchant',cb);
 
   // ── Layout ─────────────────────────────────────────────
-  window.setLayout = function(val) {
-    document.body.className = 'layout-' + val;
-  };
+  window.setLayout = val => { document.body.className='layout-'+val; };
 
   // ── Reset ──────────────────────────────────────────────
-  window.resetAll = function() {
+  window.resetAll = function(){
     ['tgl-stats','tgl-customer','tgl-delivery','tgl-custom','tgl-items','tgl-totals','tgl-notes']
-      .forEach(id => {
-        const cb = document.getElementById(id);
-        if (cb) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
-      });
-
-    // Reset merchant toggle
-    const tglM = document.getElementById('tgl-merch');
-    if (tglM) { tglM.checked = false; tglM.dispatchEvent(new Event('change')); }
-
-    // Reset copy
-    const sel = document.getElementById('copy-select');
-    if (sel) { sel.value = 'Customer'; setCopy('Customer'); }
-
-    // Reset layout
-    const lay = document.getElementById('layout-select');
-    if (lay) { lay.value = 'default'; setLayout('default'); }
-
-    // Reset notes
-    const ec = document.getElementById('ep-cust-notes');
-    const es = document.getElementById('ep-special');
-    const ei = document.getElementById('ep-internal');
-    if (ec) ec.value = ORIG_CUST_NOTES;
-    if (es) es.value = ORIG_SPECIAL;
-    if (ei) ei.value = '';
-
-    setBlockText('print-cust-notes', 'print-cust-notes-wrap', ORIG_CUST_NOTES);
-    setBlockText('print-special',    'print-special-wrap',    ORIG_SPECIAL);
-    setBlockText('print-internal',   'print-internal-wrap',   '');
-
-    // Reset status badges
-    updateBadge('status-badge-live', ORIG_ORDER_STATUS.toUpperCase(),
-      STATUS_CLASS[ORIG_ORDER_STATUS.toLowerCase()] ?? 'badge-amber');
-    updateInfoCell('info-order-status', ORIG_ORDER_STATUS.toUpperCase());
-
-    const ordSel = document.getElementById('ep-order-status');
-    const paySel = document.getElementById('ep-pay-status');
-    const mthSel = document.getElementById('ep-pay-method');
-    if (ordSel) ordSel.value = '';
-    if (paySel) paySel.value = '';
-    if (mthSel) mthSel.value = '';
+      .forEach(id=>{ const cb=document.getElementById(id); if(cb){ cb.checked=true; cb.dispatchEvent(new Event('change')); } });
+    const tM=document.getElementById('tgl-merch');
+    if(tM){ tM.checked=false; tM.dispatchEvent(new Event('change')); }
+    const sel=document.getElementById('copy-select');   if(sel){ sel.value='Customer';  setCopy('Customer'); }
+    const lay=document.getElementById('layout-select'); if(lay){ lay.value='default';   setLayout('default'); }
+    const ec=document.getElementById('ep-cust-notes'),  es=document.getElementById('ep-special'), ei=document.getElementById('ep-internal');
+    if(ec) ec.value=ORIG_CUST_NOTES; if(es) es.value=ORIG_SPECIAL; if(ei) ei.value='';
+    setBlock('print-cust-notes','print-cust-notes-wrap',ORIG_CUST_NOTES);
+    setBlock('print-special',   'print-special-wrap',   ORIG_SPECIAL);
+    setBlock('print-internal',  'print-internal-wrap',  '');
+    setBadge('status-badge-live',ORIG_ORDER_STATUS.toUpperCase(),STATUS_CLASS[ORIG_ORDER_STATUS.toLowerCase()]??'badge-amber');
+    setCell('info-order-status',ORIG_ORDER_STATUS.toUpperCase());
+    ['ep-order-status','ep-pay-status','ep-pay-method'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   };
-
 })();
 </script>
 </body>
