@@ -1,445 +1,1007 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { toINR, fmtTime } from './types';
 import type { OrderNormalized, ProfileMini, MerchantInfo } from './types';
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://pbexpress.pattibytes.com';
+// ─── Utilities ────────────────────────────────────────────────────────────────
 
-const esc = (s: unknown) =>
-  String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function esc(v: unknown): string {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
-// Only render a row if value is meaningful
-const row = (label: string, value: string, attr = '') =>
-  `<div class="tr"><span class="tl">${label}</span><span class="tv" ${attr}>${value}</span></div>`;
+function clean(v: unknown): string {
+  return String(v ?? '').trim();
+}
 
-const STATUS_CSS: Record<string,string> = {
-  delivered:'border-color:#16a34a;color:#15803d', completed:'border-color:#16a34a;color:#15803d',
-  cancelled:'border-color:#dc2626;color:#dc2626',  pending:'border-color:#b45309;color:#b45309',
-  confirmed:'border-color:#1d4ed8;color:#1d4ed8',  preparing:'border-color:#555;color:#555',
-  ready:    'border-color:#7e22ce;color:#7e22ce',  on_the_way:'border-color:#0e7490;color:#0e7490',
-};
+function upper(v: unknown): string {
+  return clean(v).toUpperCase();
+}
+
+function num(v: unknown, fallback = 0): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function firstNonEmpty(...vals: unknown[]): string {
+  for (const v of vals) {
+    const s = clean(v);
+    if (s) return s;
+  }
+  return '';
+}
+
+function hasValue(v: unknown): boolean {
+  return !!clean(v);
+}
+
+function getStatusClass(status: unknown): string {
+  const s = clean(status).toLowerCase();
+  if (s === 'delivered' || s === 'completed') return 'badge-green';
+  if (s === 'cancelled' || s === 'failed') return 'badge-red';
+  if (['preparing', 'confirmed', 'ontheway', 'pickedup', 'assigned', 'ready'].includes(s))
+    return 'badge-blue';
+  return 'badge-amber';
+}
+
+function getPayClass(status: unknown): string {
+  const s = clean(status).toLowerCase();
+  if (s === 'paid') return 'badge-green';
+  if (s === 'failed' || s === 'refunded') return 'badge-red';
+  return 'badge-amber';
+}
+
+// ─── Main Builder ─────────────────────────────────────────────────────────────
 
 export function buildInvoiceHtml(
-  order    : OrderNormalized,
-  customer : ProfileMini | null,
-  merchant : MerchantInfo | null,
+  order: OrderNormalized,
+  customer: ProfileMini | null,
+  merchant: MerchantInfo | null,
 ): string {
+  const appName = 'PattiBytes Express&#174;';
+
   const customerName =
-    customer?.full_name ?? customer?.fullname ??
-    order.recipientName ??
-    (order.customerNotes?.includes('Walk-in:')
-      ? order.customerNotes.replace('Walk-in:','').trim() : null)
-    ?? 'Walk-in Customer';
+    firstNonEmpty(
+      (customer as any)?.full_name,
+      (customer as any)?.fullname,
+      order.recipientName,
+    ) ||
+    (clean(order.customerNotes).toLowerCase().startsWith('walk-in:')
+      ? clean(order.customerNotes).replace(/^walk-in:/i, '').trim()
+      : '') ||
+    'Walk-in Customer';
 
-  const merchantName = merchant?.business_name ?? merchant?.businessname ?? 'PattiBytes Express';
-  const printedAt    = new Date().toLocaleString('en-IN',{
-    day:'2-digit', month:'short', year:'numeric',
-    hour:'2-digit', minute:'2-digit', hour12:true,
-  });
+  const merchantName = firstNonEmpty(
+    (merchant as any)?.business_name,
+    (merchant as any)?.businessname,
+    'PattiBytes Express',
+  );
 
-  const statusKey   = (order.status ?? '').toLowerCase().replace(/\s+/g,'_');
-  const statusStyle = STATUS_CSS[statusKey] ?? 'border-color:#555;color:#555';
-  const scanUrl     = `${BASE_URL}/admin/orders/${encodeURIComponent(order.orderNumber)}`;
+  const merchantPhone = firstNonEmpty(
+    (merchant as any)?.phone,
+    (merchant as any)?.contactphone,
+  );
 
-  // ── Item rows ──────────────────────────────────────────────────────────────
-  let totalQty = 0;
-  const rows = order.items.map((it, i) => {
-    const qty   = Number(it.quantity ?? 1);
-    const price = Number(it.price ?? 0);
-    const disc  = Number(it.discount_percentage ?? it.discountpercentage ?? 0);
-    const eff   = disc > 0 ? price * (1 - disc / 100) : price;
-    const line  = eff * qty;
-    const free  = !!it.is_free;
-    const veg   = it.is_veg ?? it.isveg;
-    const dot   = veg !== undefined
-      ? `<span style="color:${veg?'#16a34a':'#dc2626'};font-size:7px;margin-right:2px">●</span>`
-      : '';
-    totalQty += qty;
-    return `<tr class="ir">
-      <td class="i-sr">${i+1}</td>
-      <td class="i-nm">
-        ${dot}${esc(it.name ?? 'Item')}
-        ${disc>0?`<span class="dtag">${disc}%↓</span>`:''}
-        ${free?`<span class="ftag">FREE</span>`:''}
-        ${it.note?`<div class="inote">↳${esc(it.note)}</div>`:''}
-      </td>
-      <td class="i-q">${qty}</td>
-      <td class="i-r">${free?'—':toINR(eff)}</td>
-      <td class="i-a">${free?'—':`<b>${toINR(line)}</b>`}</td>
-    </tr>`;
-  }).join('');
+  const merchantAddress = firstNonEmpty(
+    (merchant as any)?.address,
+    (merchant as any)?.businessaddress,
+  );
 
-  // ── Savings ────────────────────────────────────────────────────────────────
-  const saved = (order.discount ?? 0) + order.items.reduce((a, it) => {
-    const d = Number(it.discount_percentage ?? it.discountpercentage ?? 0);
-    return a + (d>0 ? Number(it.price??0)*(d/100)*Number(it.quantity??1) : 0);
+  const merchantGst = firstNonEmpty(
+    (merchant as any)?.gst_number,
+    (merchant as any)?.gstnumber,
+    (merchant as any)?.gstin,
+  );
+
+  const phone = firstNonEmpty(order.customerPhone, (customer as any)?.phone, 'N/A');
+  const orderNo = esc(order.orderNumber ?? 'N/A');
+  const orderStatus = clean(order.status || 'Pending');
+  const paymentStatus = clean(order.paymentStatus || 'N/A');
+  const paymentMethod = clean(order.paymentMethod || 'N/A');
+  const orderType = clean(order.orderType || 'N/A');
+  const isPickup = orderType.toLowerCase() === 'pickup';
+
+  const items: any[] = Array.isArray(order.items) ? order.items : [];
+  const totalQty = items.reduce((s, it) => s + num(it.quantity ?? 1, 1), 0);
+
+  const subtotalCalc = items.reduce((s, it) => {
+    const qty = num(it.quantity ?? 1, 1);
+    const price = num(it.price ?? 0);
+    const disc = num(it.discount_percentage ?? it.discountpercentage ?? 0);
+    const eff = disc > 0 ? price * (1 - disc / 100) : price;
+    return s + (it.is_free ? 0 : eff * qty);
   }, 0);
 
-  // ── Custom block (only when exists) ───────────────────────────────────────
-  const customBlock = order.customOrderRef ? `
-    <div class="dsec">
-      <div class="bh">Custom Order</div>
-      ${row('Ref', esc(order.customOrderRef))}
-      ${order.customCategory ? row('Cat', esc(order.customCategory)) : ''}
-      ${order.quotedAmount ? row('Quoted', toINR(order.quotedAmount)) : ''}
-      ${order.quoteMessage ? `<div class="nrow">${esc(order.quoteMessage)}</div>` : ''}
-    </div>` : '';
+  const originalTotal = items.reduce((s, it) => {
+    return s + num(it.price ?? 0) * num(it.quantity ?? 1, 1);
+  }, 0);
+
+  const totalSavings = Math.max(0, originalTotal - subtotalCalc) + num(order.discount);
+  const hasSavings = totalSavings > 0.001;
+
+  // Serialized data for JS runtime use
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const jsOrderNo = JSON.stringify(clean(order.orderNumber ?? 'N/A'));
+  const jsCustomerNotes = JSON.stringify(clean(order.customerNotes ?? ''));
+  const jsSpecialInstructions = JSON.stringify(clean(order.specialInstructions ?? ''));
+  const jsOrderStatus = JSON.stringify(orderStatus);
+
+  const itemRows = items
+    .map((it: any, i: number) => {
+      const qty = num(it.quantity ?? 1, 1);
+      const price = num(it.price ?? 0);
+      const disc = num(it.discount_percentage ?? it.discountpercentage ?? 0);
+      const eff = disc > 0 ? price * (1 - disc / 100) : price;
+      const line = it.is_free ? 0 : eff * qty;
+      const vegDot = it.is_veg ?? it.isveg;
+      const vegIcon = vegDot !== undefined ? (vegDot ? '&#129001; ' : '&#128308; ') : '';
+
+      return `
+        <tr>
+          <td class="td c">${i + 1}</td>
+          <td class="td">
+            <span class="iname">${vegIcon}${esc(it.name ?? 'Item')}</span>
+            ${it.is_free ? '<span class="pill pill-green">FREE</span>' : ''}
+            ${disc > 0 ? `<span class="pill pill-amber">${disc}% off</span>` : ''}
+            ${hasValue(it.note) ? `<div class="sub itm-note">&#128203; ${esc(it.note)}</div>` : ''}
+          </td>
+          <td class="td c">${qty}</td>
+          <td class="td r">${it.is_free ? '—' : esc(toINR(eff))}</td>
+          <td class="td r b">${it.is_free ? '<span class="fv">FREE</span>' : esc(toINR(line))}</td>
+        </tr>`;
+    })
+    .join('');
+
+  const customBlock = order.customOrderRef
+    ? `
+      <div class="row2" id="blk-custom">
+        <div class="panel">
+          <div class="ph">Custom Order</div>
+          <table class="ktbl">
+            <tr><td>Reference</td><td><b>${esc(order.customOrderRef)}</b></td></tr>
+            ${order.customCategory ? `<tr><td>Category</td><td><b>${esc(order.customCategory)}</b></td></tr>` : ''}
+            <tr><td>Status</td><td><b>${esc(order.customOrderStatus ?? 'N/A')}</b></td></tr>
+            ${order.quotedAmount ? `<tr><td>Quoted</td><td><b>${esc(toINR(order.quotedAmount))}</b></td></tr>` : ''}
+            ${order.quoteMessage ? `<tr><td>Note</td><td><b>${esc(order.quoteMessage)}</b></td></tr>` : ''}
+          </table>
+        </div>
+      </div>`
+    : '';
 
   return `<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>#${esc(order.orderNumber)} · PattiBytes Express</title>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/barcodes/JsBarcode.code128.min.js"></script>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{
-  font-family:'Courier New',Courier,monospace;
-  background:#d4d4d4;color:#111;
-  font-size:10px;font-weight:700;
-  -webkit-print-color-adjust:exact;print-color-adjust:exact;
-}
-.page{display:flex;flex-direction:column;align-items:center;padding:14px 10px 32px;min-height:100vh}
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Invoice #${orderNo} — ${esc(merchantName)}</title>
+  <style>
+    :root{
+      --ink:#0f172a;--muted:#64748b;--line:#e2e8f0;
+      --soft:#f8fafc;--card:#ffffff;--bg:#f1f5f9;
+      --brand:#f97316;
+      --ok:#16a34a;--ok-bg:#f0fdf4;--ok-b:#bbf7d0;
+      --warn:#d97706;--warn-bg:#fffbeb;--warn-b:#fde68a;
+      --err:#dc2626;--err-bg:#fef2f2;--err-b:#fecaca;
+      --info:#2563eb;--info-bg:#eff6ff;--info-b:#bfdbfe;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      font-size:11.5px;color:var(--ink);background:var(--bg);
+      -webkit-print-color-adjust:exact;print-color-adjust:exact;
+    }
 
-/* Toolbar */
-.toolbar{display:flex;align-items:center;gap:6px;margin-bottom:10px;width:100%;max-width:300px}
-.tb-info{flex:1;font-size:8.5px;font-weight:700;color:#666;letter-spacing:.4px;text-transform:uppercase}
-.btn{padding:5px 13px;border-radius:3px;border:1.5px solid #111;background:#fff;
-  font-family:inherit;font-size:9.5px;font-weight:900;cursor:pointer;letter-spacing:.3px;transition:opacity .15s}
-.btn:hover{opacity:.7}
-.btn-p{background:#111;color:#fff}
-/* Size toggle */
-.szrow{display:flex;gap:5px;margin-bottom:10px;width:100%;max-width:300px}
-.sz{flex:1;padding:3px 0;font-size:8.5px;font-weight:900;border:1.5px solid #bbb;
-  background:#fff;border-radius:3px;cursor:pointer;font-family:inherit;letter-spacing:.3px;
-  color:#777;text-align:center;transition:all .15s}
-.sz.on{border-color:#111;color:#111;background:#f0f0f0}
+    /* ── Toolbar ─────────────────────────────────────────── */
+    #toolbar{
+      position:sticky;top:0;z-index:200;
+      background:#0f172a;
+      padding:0;
+      box-shadow:0 2px 12px rgba(0,0,0,.4);
+      font-size:11px;font-weight:700;
+    }
+    .tb-row{
+      display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+      padding:7px 14px;border-bottom:1px solid #1e293b;
+    }
+    .tb-row:last-child{border-bottom:none}
+    .tl{font-size:12.5px;font-weight:950;color:#fb923c;white-space:nowrap;flex:none}
+    .sep{height:18px;width:1px;background:#334155;flex:none}
+    .tbtn{
+      padding:5px 11px;border-radius:7px;
+      font-size:11px;font-weight:900;
+      cursor:pointer;border:none;outline:none;
+      transition:opacity .12s,background .12s;flex:none;
+    }
+    .tbtn:hover{opacity:.85}
+    .tbtn.primary{background:#f97316;color:#fff}
+    .tbtn.ghost{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
+    .tbtn.success{background:#16a34a;color:#fff}
+    .tbtn.danger{background:#dc2626;color:#fff}
+    .tbtn.sm{padding:4px 8px;font-size:10.5px}
+    .toggle-wrap{
+      display:flex;align-items:center;gap:5px;
+      cursor:pointer;user-select:none;color:#cbd5e1;
+      white-space:nowrap;
+    }
+    .toggle-wrap input[type=checkbox]{
+      appearance:none;-webkit-appearance:none;
+      width:15px;height:15px;border-radius:4px;
+      border:1.5px solid #475569;background:#1e293b;
+      cursor:pointer;flex:none;
+    }
+    .toggle-wrap input[type=checkbox]:checked{
+      background:#f97316;border-color:#f97316;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.5 5l2.5 2.5 4.5-4.5' stroke='%23fff' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:center;background-size:9px;
+    }
+    .tb-sel{
+      background:#1e293b;color:#f8fafc;
+      border:1px solid #334155;border-radius:7px;
+      padding:4px 8px;font-size:11px;font-weight:800;cursor:pointer;outline:none;
+    }
+    .spacer{flex:1}
+    .tb-tag{
+      background:#1e293b;color:#94a3b8;
+      font-size:10px;font-weight:800;
+      padding:3px 8px;border-radius:999px;
+      border:1px solid #334155;white-space:nowrap;
+    }
 
-/* Receipt */
-.receipt{
-  width:100%;max-width:300px;background:#fff;
-  box-shadow:0 2px 10px rgba(0,0,0,.2),0 0 0 1px rgba(0,0,0,.08);
-  border-radius:3px;overflow:hidden;transition:max-width .2s ease;
-}
-.receipt.wide{max-width:560px}
-.receipt::before,.receipt::after{
-  content:'';display:block;height:7px;background-color:#fff;
-  background-image:radial-gradient(circle,#d4d4d4 3.5px,transparent 3.5px);
-  background-size:8px 8px;background-position:0 -3px;
-}
-.receipt::after{background-position:0 3px}
+    /* ── Tabs ────────────────────────────────────────────── */
+    .tab-bar{display:flex;gap:4px;padding:6px 14px 0;background:#0f172a}
+    .tab{
+      padding:5px 12px;border-radius:7px 7px 0 0;
+      font-size:11px;font-weight:900;cursor:pointer;
+      color:#94a3b8;border:1px solid transparent;border-bottom:none;
+      transition:all .12s;
+    }
+    .tab.active{background:#1e293b;color:#f8fafc;border-color:#334155}
+    .tab:hover:not(.active){color:#cbd5e1}
 
-.inner{padding:0 12px 12px}
+    /* ── Floating edit panels ────────────────────────────── */
+    .panel-overlay{
+      display:none;
+      position:fixed;inset:0;z-index:300;
+      background:rgba(0,0,0,.5);
+      align-items:center;justify-content:center;
+    }
+    .panel-overlay.open{display:flex}
+    .edit-panel{
+      background:#fff;border-radius:16px;padding:20px;
+      width:min(480px,92vw);max-height:80vh;overflow-y:auto;
+      box-shadow:0 20px 60px rgba(0,0,0,.3);
+    }
+    .ep-title{font-size:14px;font-weight:950;margin-bottom:14px;color:var(--ink);display:flex;justify-content:space-between;align-items:center}
+    .ep-close{cursor:pointer;color:var(--muted);font-size:18px;line-height:1}
+    .ep-label{font-size:11px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;margin-top:12px}
+    .ep-label:first-of-type{margin-top:0}
+    .ep-input,.ep-textarea,.ep-select{
+      width:100%;border:1.5px solid var(--line);border-radius:8px;
+      padding:8px 10px;font-size:12px;font-weight:800;color:var(--ink);
+      font-family:inherit;outline:none;
+      transition:border-color .12s;
+    }
+    .ep-input:focus,.ep-textarea:focus,.ep-select:focus{border-color:var(--brand)}
+    .ep-textarea{resize:vertical;min-height:70px;line-height:1.5}
+    .ep-row{display:flex;gap:8px;margin-top:14px}
+    .ep-hint{font-size:10px;color:var(--muted);margin-top:4px}
 
-/* Brand */
-.bhead{text-align:center;padding:12px 12px 9px;border-bottom:1px dashed #bbb}
-.blogo{font-size:15px;font-weight:900;letter-spacing:2px;text-transform:uppercase}
-.bsub{font-size:7.5px;color:#777;margin-top:1px;letter-spacing:.6px;font-weight:700}
-.bcontact{font-size:8px;color:#555;margin-top:4px;line-height:1.8;font-weight:700}
+    /* ── Merchant Fields (internal) ──────────────────────── */
+    .merch-block{
+      background:#fffbeb;border:1.5px dashed #fde68a;
+      border-radius:12px;padding:10px 12px;margin-top:8px;
+    }
+    .merch-block .ph{color:#92400e}
+    #blk-merchant{display:none}
 
-/* Title strip */
-.btitle{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:7px 12px;border-bottom:1px dashed #bbb;gap:8px;
-}
-.btitle-t{font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase}
-.btitle-n{font-size:8.5px;color:#555;font-weight:700;text-align:right;line-height:1.5}
+    /* ── Sheet ───────────────────────────────────────────── */
+    .wrap{max-width:800px;margin:14px auto;padding:0 10px 24px}
+    .sheet{
+      background:var(--card);
+      border:1.5px solid #cbd5e1;border-radius:16px;overflow:hidden;
+      box-shadow:0 4px 20px rgba(0,0,0,.06);
+      transition:all .25s;
+    }
 
-/* Section blocks */
-.mblock{padding:5px 0;border-bottom:1px dashed #ccc}
-.bh{
-  font-size:7.5px;font-weight:900;letter-spacing:1.5px;
-  text-transform:uppercase;color:#aaa;margin:7px 0 3px;
-}
-.tr{display:flex;justify-content:space-between;gap:4px;padding:1px 0;font-size:9.5px}
-.tl{color:#666;flex-shrink:0;font-weight:700}
-.tv{color:#111;font-weight:900;text-align:right;word-break:break-word}
-.sp{
-  display:inline-block;font-size:7.5px;font-weight:900;letter-spacing:.8px;
-  padding:1px 5px;border:1.5px solid #111;border-radius:2px;text-transform:uppercase;
-}
+    /* layout modes */
+    body.layout-receipt .wrap{max-width:380px}
+    body.layout-receipt .info-grid{grid-template-columns:1fr}
+    body.layout-receipt .stats{grid-template-columns:repeat(2,1fr)}
+    body.layout-receipt .itbl thead th:nth-child(4),
+    body.layout-receipt .td.r:nth-child(4){display:none}
+    body.layout-a4 .wrap{max-width:680px}
+    body.layout-compact .hero{padding:10px 12px 8px}
+    body.layout-compact .body{padding:8px 10px}
+    body.layout-compact .td{padding:5px 8px}
+    body.layout-compact .stat{padding:7px 10px}
+    body.layout-compact .sv{font-size:12px}
 
-/* Compact 2-col info grid */
-.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}
-.info-grid .tr{font-size:9px}
+    /* ── Hero ────────────────────────────────────────────── */
+    .hero{
+      background:linear-gradient(135deg,#0f172a 0%,#1e293b 60%,#334155 100%);
+      padding:13px 15px 11px;color:#f8fafc;
+    }
+    .hero-inner{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+    .hero-left{display:flex;align-items:flex-start;gap:10px;min-width:0}
+    .app-icon{
+      width:42px;height:42px;border-radius:11px;flex:none;
+      background:linear-gradient(135deg,#fb923c,#f97316);
+      display:flex;align-items:center;justify-content:center;
+      font-size:20px;border:2px solid rgba(255,255,255,.15);
+    }
+    .app-nm{font-size:14px;font-weight:950;letter-spacing:-.2px}
+    .merch-nm{font-size:10.5px;color:#94a3b8;font-weight:700;margin-top:1px}
+    .inv-label{font-size:9.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#fb923c;margin-top:5px}
+    .inv-no{font-size:16px;font-weight:950;margin-top:1px}
+    .hero-right{text-align:right;flex:none}
+    .hero-meta{font-size:10px;font-weight:700;color:#94a3b8;line-height:1.6}
+    .copy-label{
+      display:inline-block;margin-top:4px;
+      font-size:9.5px;font-weight:900;padding:2px 8px;border-radius:999px;
+      background:rgba(249,115,22,.15);color:#fb923c;border:1px solid rgba(249,115,22,.35);
+    }
+    .badge-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px;align-items:center}
+    .badge{
+      display:inline-flex;align-items:center;gap:3px;
+      padding:3px 8px;border-radius:999px;
+      font-size:9.5px;font-weight:900;border:1.5px solid transparent;
+    }
+    .badge::before{content:'';width:5px;height:5px;border-radius:50%;flex:none}
+    .badge-green{background:var(--ok-bg);color:var(--ok);border-color:var(--ok-b)}
+    .badge-green::before{background:var(--ok)}
+    .badge-red{background:var(--err-bg);color:var(--err);border-color:var(--err-b)}
+    .badge-red::before{background:var(--err)}
+    .badge-blue{background:var(--info-bg);color:var(--info);border-color:var(--info-b)}
+    .badge-blue::before{background:var(--info)}
+    .badge-amber{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-b)}
+    .badge-amber::before{background:var(--warn)}
+    .promo-badge{
+      display:inline-flex;align-items:center;gap:3px;
+      padding:3px 8px;border-radius:999px;
+      background:#fef3c7;color:#92400e;border:1.5px solid #fde68a;
+      font-size:9.5px;font-weight:900;
+    }
+    #status-badge-live{cursor:default}
 
-/* Items */
-.itable{width:100%;border-collapse:collapse;margin-top:4px}
-.itable thead th{
-  font-size:7.5px;font-weight:900;letter-spacing:.8px;text-transform:uppercase;
-  color:#888;padding:3px 2px;border-top:1px solid #ccc;border-bottom:1px solid #ccc;
-}
-.i-sr{width:14px;text-align:left}
-.i-nm{text-align:left;padding-left:2px!important}
-.i-q{width:18px;text-align:center}
-.i-r{width:46px;text-align:right}
-.i-a{width:46px;text-align:right}
-.ir td{padding:3.5px 2px;font-size:9.5px;font-weight:700;border-bottom:1px dotted #eee;vertical-align:top}
-.ir:last-child td{border-bottom:none}
-.ir td:last-child{font-weight:900}
-.inote{font-size:8px;color:#aaa;font-style:italic;margin-top:1px;font-weight:700}
-.dtag,.ftag{
-  display:inline-block;font-size:7px;font-weight:900;
-  padding:0 3px;border-radius:2px;margin-left:3px;vertical-align:middle;
-}
-.dtag{border:1px solid #bbb;color:#666}
-.ftag{border:1px solid #16a34a;color:#15803d}
+    /* ── Stats ───────────────────────────────────────────── */
+    .stats{
+      display:grid;grid-template-columns:repeat(4,1fr);
+      border-bottom:1.5px solid var(--line);
+    }
+    .stats.cols3{grid-template-columns:repeat(3,1fr)}
+    .stat{padding:9px 12px;border-right:1.5px solid var(--line)}
+    .stat:last-child{border-right:none}
+    .sk{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:3px}
+    .sv{font-size:13.5px;font-weight:950;color:var(--ink)}
+    .sv.green{color:var(--ok)}
 
-/* Items footer */
-.ifooter{
-  display:flex;justify-content:space-between;
-  font-size:8px;font-weight:700;color:#aaa;
-  margin-top:2px;padding-top:2px;border-top:1px dotted #eee;
-}
+    /* ── Body ────────────────────────────────────────────── */
+    .body{padding:12px 13px}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+    .panel{border:1.5px solid var(--line);border-radius:11px;padding:9px 11px;background:#fcfcfd}
+    .ph{font-size:9px;font-weight:950;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:6px}
+    .ktbl{width:100%;border-collapse:collapse}
+    .ktbl td{padding:2px 0;font-size:11px;font-weight:800;color:var(--ink);line-height:1.45;vertical-align:top}
+    .ktbl td:first-child{color:var(--muted);width:42%;font-weight:700;padding-right:6px}
+    .ktbl b{color:var(--ink);font-weight:900}
 
-/* Totals */
-.totblk{margin-top:6px;border-top:1px dashed #ccc;padding-top:5px}
-.trow{display:flex;justify-content:space-between;padding:1px 0;font-size:9.5px}
-.trow-l{color:#555;font-weight:700}
-.trow-v{font-weight:900;color:#111}
-.trow-g{font-weight:900;color:#15803d}          /* green: savings/free */
-.trow-d{font-weight:900;color:#dc2626}           /* red: cancelled etc */
-.grand{
-  display:flex;justify-content:space-between;align-items:center;
-  margin-top:5px;padding:5px 0;
-  border-top:2px solid #111;border-bottom:2px solid #111;
-}
-.grand-l{font-size:12px;font-weight:900;letter-spacing:.6px;text-transform:uppercase}
-.grand-v{font-size:14px;font-weight:900}
-.saved-row{
-  font-size:8.5px;text-align:center;padding:3px 0 1px;
-  color:#15803d;font-weight:900;letter-spacing:.2px;
-}
+    /* ── Items ───────────────────────────────────────────── */
+    .itbl-wrap{border:1.5px solid var(--line);border-radius:11px;overflow:hidden}
+    .itbl{width:100%;border-collapse:collapse}
+    .itbl thead th{
+      background:#0f172a;color:#f8fafc;
+      padding:7px 9px;font-size:9.5px;font-weight:900;
+      text-align:left;text-transform:uppercase;letter-spacing:.05em;
+    }
+    .td{padding:7px 9px;border-top:1px solid #f1f5f9;font-size:11px;font-weight:800;color:var(--ink);vertical-align:top}
+    .c{text-align:center;width:30px}
+    .r{text-align:right}
+    .b{font-weight:950}
+    .iname{font-weight:900}
+    .sub{font-size:9.5px;color:var(--muted);margin-top:2px;font-weight:700}
+    .itm-note{color:#475467}
+    .pill{
+      display:inline-block;margin-left:4px;
+      padding:1px 5px;border-radius:999px;font-size:9px;font-weight:900;
+    }
+    .pill-green{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-b)}
+    .pill-amber{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-b)}
+    .fv{color:var(--ok);font-weight:950}
+    .row2{margin-top:8px}
 
-/* Misc */
-.dsec{border-top:1px dashed #ccc;padding-top:5px;margin-top:6px}
-.nrow{font-size:8.5px;color:#666;font-style:italic;margin-top:3px;
-  padding-top:3px;border-top:1px dotted #eee;font-weight:700}
-.sep{border:none;border-top:1px dashed #ccc;margin:7px 0}
+    /* ── Totals ──────────────────────────────────────────── */
+    .totals-wrap{display:flex;justify-content:flex-end;margin-top:8px}
+    .totals{width:min(100%,285px);border:1.5px solid var(--line);border-radius:11px;overflow:hidden;background:#fff}
+    .trow{
+      display:flex;justify-content:space-between;gap:6px;
+      padding:5px 11px;font-size:11px;font-weight:800;
+      border-top:1px solid #f1f5f9;
+    }
+    .trow:first-child{border-top:none}
+    .trow .lbl{color:var(--muted);font-weight:700}
+    .trow .val{color:var(--ink)}
+    .trow.green .val{color:var(--ok)}
+    .trow.bold{border-top:1.5px solid #cbd5e1}
+    .trow.bold .lbl,.trow.bold .val{font-weight:950;font-size:12.5px;color:var(--ink)}
 
-/* ── Barcode — compact ── */
-.bc-wrap{margin-top:10px;text-align:center}
-.bc-num{font-size:7px;color:#bbb;letter-spacing:2.5px;margin-top:2px;font-weight:700}
-.bc-hint{font-size:6.5px;color:#ccc;letter-spacing:.3px;font-weight:700;margin-top:1px}
+    /* ── Notes in bill ───────────────────────────────────── */
+    .notes-wrap{margin-top:8px}
+    .nv{font-size:11px;font-weight:800;color:var(--ink);line-height:1.5;white-space:pre-wrap}
 
-/* Thank you */
-.tblock{text-align:center;padding:9px 0 5px;border-top:1px dashed #ccc;margin-top:3px}
-.tmain{font-size:10px;font-weight:900;letter-spacing:.3px}
-.tsub{font-size:7.5px;color:#999;margin-top:2px;line-height:1.6;font-weight:700}
-.tdev{font-size:7.5px;color:#ccc;margin-top:6px;font-weight:700}
-.tdev a{color:#bbb;text-decoration:none;font-weight:900}
+    /* ── Merchant block ──────────────────────────────────── */
+    .merch-internal{
+      border-top:1.5px dashed #e2e8f0;
+      margin-top:10px;padding-top:10px;
+    }
+    .merch-internal .ph{color:#92400e}
 
-/* ══════════════════════════
-   PRINT — 80mm thermal
-   ══════════════════════════ */
-@media print{
-  body{background:#fff;font-size:9px}
-  .toolbar,.szrow{display:none!important}
-  .page{padding:0;background:#fff;align-items:flex-start}
-  .receipt{
-    box-shadow:none;border-radius:0;
-    max-width:72mm !important;width:72mm;
-  }
-  .receipt::before,.receipt::after{display:none}
-  .bhead{padding:6px 10px 5px}
-  .blogo{font-size:13px}
-  .bcontact,.bsub{font-size:7px}
-  .inner{padding:0 10px 10px}
-  .btitle{padding:5px 10px}
-  .btitle-t{font-size:10px}
-  .btitle-n{font-size:8px}
-  .bh{font-size:7px;margin:5px 0 2px}
-  .tr{font-size:8.5px}
-  .itable thead th{font-size:7px;padding:2px}
-  .ir td{font-size:9px;padding:2.5px 2px}
-  .trow{font-size:9px}
-  .grand-l{font-size:11px}
-  .grand-v{font-size:12px}
-  tr,div{page-break-inside:avoid}
-}
-</style>
+    /* ── Footer ──────────────────────────────────────────── */
+    .footer{
+      background:#f8fafc;border-top:1.5px solid var(--line);
+      padding:8px 13px;
+      display:flex;justify-content:space-between;align-items:center;
+      gap:8px;flex-wrap:wrap;
+    }
+    .footer-l{font-size:9.5px;font-weight:800;color:var(--muted);line-height:1.55}
+    .footer-r{text-align:right;font-size:9.5px;font-weight:800;color:var(--muted)}
+    .dev{margin-top:2px;font-size:9.5px;font-weight:900;color:var(--ink)}
+    .dev a{color:var(--brand);text-decoration:none}
+
+    /* ── Print ───────────────────────────────────────────── */
+    @media print{
+      body{background:#fff}
+      #toolbar{display:none!important}
+      .panel-overlay{display:none!important}
+      .wrap{margin:0;padding:0;max-width:100%}
+      .sheet{border-radius:0;border:none;box-shadow:none}
+      .hidden{display:none!important}
+      body.layout-receipt .wrap{max-width:100%}
+    }
+    .hidden{display:none!important}
+
+    @media(max-width:560px){
+      .info-grid{grid-template-columns:1fr}
+      .stats{grid-template-columns:repeat(2,1fr)}
+      .stats .stat:nth-child(2){border-right:none}
+      .hero-right{display:none}
+    }
+  </style>
 </head>
-<body>
-<div class="page">
+<body class="layout-default">
 
-<!-- Toolbar (screen only) -->
-<div class="toolbar">
-  <span class="tb-info">#${esc(order.orderNumber)}</span>
-  <button class="btn" onclick="window.close()">✕</button>
-  <button class="btn btn-p" onclick="window.print()">⎙ Print</button>
-</div>
-<div class="szrow">
-  <button class="sz on" id="sz-r" onclick="setSize(0)">📄 80mm</button>
-  <button class="sz"    id="sz-w" onclick="setSize(1)">🖨 Wide</button>
-</div>
-<script>
-function setSize(w){
-  document.querySelector('.receipt').classList.toggle('wide',!!w);
-  ['sz-r','sz-w'].forEach(function(id,i){
-    document.getElementById(id).classList.toggle('on',i===w);
-  });
-}
-</script>
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  TOOLBAR                                                               -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div id="toolbar">
 
-<div class="receipt">
+  <!-- Row 1 — Identity + Copy + Layout -->
+  <div class="tb-row">
+    <div class="tl">&#128203; Invoice Controls</div>
+    <div class="sep"></div>
 
-  <!-- Brand -->
-  <div class="bhead">
-    <div class="blogo">PattiBytes Express®</div>
-    <div class="bsub">ਪੱਟੀ ਦੀ ਲੋੜ, ਹਾਢੇ ਕੋਲ ਤੋੜ</div>
-    <div class="bcontact">pbexpress.pattibytes.com · +91 82788 82799<br>Patti, Tarn Taran, Punjab 143416</div>
+    <label class="toggle-wrap" style="color:#94a3b8;gap:6px">
+      Copy:
+      <select class="tb-sel" id="copy-select" onchange="setCopy(this.value)">
+        <option value="Customer">Customer Copy</option>
+        <option value="Merchant">Merchant Copy</option>
+        <option value="Internal">Internal Record</option>
+      </select>
+    </label>
+
+    <label class="toggle-wrap" style="color:#94a3b8;gap:6px">
+      Layout:
+      <select class="tb-sel" id="layout-select" onchange="setLayout(this.value)">
+        <option value="default">Default (A4-ish)</option>
+        <option value="compact">Compact</option>
+        <option value="receipt">Receipt (80mm)</option>
+        <option value="a4">Narrow A4</option>
+      </select>
+    </label>
+
+    <div class="spacer"></div>
+    <div class="tb-tag" id="gen-stamp"></div>
+    <button class="tbtn ghost sm" onclick="resetAll()">&#8635; Reset</button>
+    <button class="tbtn primary" onclick="window.print()">&#128424; Print</button>
   </div>
 
-  <!-- Title + order number side by side -->
-  <div class="btitle">
-    <div class="btitle-t">Tax Invoice</div>
-    <div class="btitle-n">
-      #${esc(order.orderNumber)}<br>
-      ${fmtTime(order.createdAt)}
+  <!-- Row 2 — Section toggles -->
+  <div class="tb-row">
+    <span style="color:#64748b;font-size:10px;font-weight:900;white-space:nowrap">SHOW/HIDE:</span>
+    <div class="sep"></div>
+    <label class="toggle-wrap"><input type="checkbox" checked id="tgl-stats"    onchange="toggleBlock('stats-bar',this)"/> Stats</label>
+    <label class="toggle-wrap"><input type="checkbox" checked id="tgl-customer" onchange="toggleBlock('blk-customer',this)"/> Customer</label>
+    ${!isPickup ? `<label class="toggle-wrap"><input type="checkbox" checked id="tgl-delivery" onchange="toggleBlock('blk-delivery',this)"/> Delivery</label>` : ''}
+    ${order.customOrderRef ? `<label class="toggle-wrap"><input type="checkbox" checked id="tgl-custom" onchange="toggleBlock('blk-custom',this)"/> Custom Order</label>` : ''}
+    <label class="toggle-wrap"><input type="checkbox" checked id="tgl-items"    onchange="toggleBlock('blk-items',this)"/> Items</label>
+    <label class="toggle-wrap"><input type="checkbox" checked id="tgl-totals"   onchange="toggleBlock('blk-totals',this)"/> Totals</label>
+    <label class="toggle-wrap"><input type="checkbox" checked id="tgl-notes"    onchange="toggleBlock('blk-notes',this)"/> Notes</label>
+    <label class="toggle-wrap"><input type="checkbox"       id="tgl-merch"    onchange="toggleMerchant(this)"/> Merchant Fields</label>
+
+    <div class="spacer"></div>
+    <button class="tbtn ghost sm" onclick="openEditNotes()">&#9998; Edit Notes</button>
+    <button class="tbtn ghost sm" onclick="openEditStatus()">&#9881; Edit Status</button>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  FLOATING PANELS                                                       -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
+<!-- Edit Notes Panel -->
+<div class="panel-overlay" id="overlay-notes">
+  <div class="edit-panel">
+    <div class="ep-title">
+      &#9998; Edit Notes for Print
+      <span class="ep-close" onclick="closeOverlay('overlay-notes')">&#10005;</span>
+    </div>
+    <div class="ep-label">Customer Notes</div>
+    <textarea class="ep-textarea" id="ep-cust-notes" placeholder="Add or edit customer notes…" rows="3"></textarea>
+    <div class="ep-label">Special Instructions</div>
+    <textarea class="ep-textarea" id="ep-special" placeholder="Add special instructions…" rows="3"></textarea>
+    <div class="ep-label">Merchant Internal Note <span style="font-weight:700;text-transform:none;letter-spacing:0;font-size:10px;color:#94a3b8">(Merchant Copy only)</span></div>
+    <textarea class="ep-textarea" id="ep-internal" placeholder="Internal note (not shown on customer copy)…" rows="2"></textarea>
+    <div class="ep-hint">Changes apply to the print preview. Original order data is not modified.</div>
+    <div class="ep-row">
+      <button class="tbtn ghost" style="flex:1" onclick="closeOverlay('overlay-notes')">Cancel</button>
+      <button class="tbtn success" style="flex:1" onclick="applyNotes()">&#10003; Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Status Panel -->
+<div class="panel-overlay" id="overlay-status">
+  <div class="edit-panel">
+    <div class="ep-title">
+      &#9881; Override Status for Print
+      <span class="ep-close" onclick="closeOverlay('overlay-status')">&#10005;</span>
+    </div>
+    <div class="ep-label">Order Status</div>
+    <select class="ep-select" id="ep-order-status">
+      <option value="">— Keep original —</option>
+      <option value="Pending">Pending</option>
+      <option value="Confirmed">Confirmed</option>
+      <option value="Preparing">Preparing</option>
+      <option value="Ready">Ready</option>
+      <option value="Assigned">Driver Assigned</option>
+      <option value="Pickedup">Out for Delivery</option>
+      <option value="Delivered">Delivered</option>
+      <option value="Cancelled">Cancelled</option>
+    </select>
+    <div class="ep-label">Payment Status</div>
+    <select class="ep-select" id="ep-pay-status">
+      <option value="">— Keep original —</option>
+      <option value="Paid">Paid</option>
+      <option value="Pending">Pending</option>
+      <option value="Failed">Failed</option>
+      <option value="Refunded">Refunded</option>
+    </select>
+    <div class="ep-label">Payment Method</div>
+    <select class="ep-select" id="ep-pay-method">
+      <option value="">— Keep original —</option>
+      <option value="Cash">Cash</option>
+      <option value="UPI">UPI</option>
+      <option value="Card">Card</option>
+      <option value="Online">Online</option>
+      <option value="Wallet">Wallet</option>
+    </select>
+    <div class="ep-hint">This only affects print output. Database is not modified.</div>
+    <div class="ep-row">
+      <button class="tbtn ghost" style="flex:1" onclick="closeOverlay('overlay-status')">Cancel</button>
+      <button class="tbtn success" style="flex:1" onclick="applyStatus()">&#10003; Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  INVOICE SHEET                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="wrap">
+<div class="sheet">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-inner">
+      <div class="hero-left">
+        <div class="app-icon">&#8377;</div>
+        <div>
+          <div class="app-nm">${appName}</div>
+          <div class="merch-nm">${esc(merchantName)}</div>
+          <div class="inv-label">Tax Invoice</div>
+          <div class="inv-no">Order #${orderNo}</div>
+        </div>
+      </div>
+      <div class="hero-right">
+        <div class="hero-meta" id="hr-created">Created: ${esc(fmtTime(order.createdAt))}</div>
+        <div class="hero-meta" id="hr-method">Method: ${esc(upper(paymentMethod))}</div>
+        <div class="hero-meta" id="hr-type">Type: ${esc(upper(orderType))}</div>
+        <div class="copy-label" id="copy-display">Customer Copy</div>
+      </div>
+    </div>
+    <div class="badge-row">
+      <span class="badge ${getStatusClass(orderStatus)}" id="status-badge-live">${esc(upper(orderStatus))}</span>
+      <span class="badge ${getPayClass(paymentStatus)}" id="pay-badge-live">${esc(upper(paymentStatus))}</span>
+      ${order.orderType ? `<span class="badge badge-blue">${esc(upper(orderType))}</span>` : ''}
+      ${order.promoCode ? `<span class="promo-badge">&#127991; ${esc(order.promoCode)}</span>` : ''}
     </div>
   </div>
 
-  <div class="inner">
+  <!-- Stats -->
+  <div class="stats ${hasSavings ? '' : 'cols3'}" id="stats-bar">
+    <div class="stat"><div class="sk">Items</div><div class="sv">${items.length}</div></div>
+    <div class="stat"><div class="sk">Quantity</div><div class="sv">${totalQty}</div></div>
+    ${hasSavings ? `<div class="stat"><div class="sk">Savings</div><div class="sv green">${esc(toINR(totalSavings))}</div></div>` : ''}
+    <div class="stat"><div class="sk">Total</div><div class="sv">${esc(toINR(order.totalAmount))}</div></div>
+  </div>
 
-    <!-- ── Order + Payment in compact grid ── -->
-    <div class="mblock">
-      <div class="bh">Order</div>
-      <div class="info-grid">
-        ${row('Merchant', esc(merchantName))}
-        ${row('Type',     esc(order.orderType?.toUpperCase() ?? 'N/A'))}
-        ${row('Status',   `<span class="sp" style="${statusStyle}">${esc((order.status??'N/A').toUpperCase())}</span>`)}
-        ${row('Payment',  esc((order.paymentMethod??'N/A').toUpperCase()))}
-        ${row('Pay',      esc((order.paymentStatus??'N/A').toUpperCase()))}
-        ${order.promoCode ? row('Promo', `🏷${esc(order.promoCode)}`) : ''}
+  <!-- Body -->
+  <div class="body">
+
+    <!-- Customer + Invoice Info -->
+    <div class="info-grid" id="blk-customer">
+      <div class="panel">
+        <div class="ph">Bill To</div>
+        <table class="ktbl">
+          <tr><td>Name</td><td><b>${esc(customerName)}</b></td></tr>
+          ${
+            order.recipientName && clean(order.recipientName) !== customerName
+              ? `<tr><td>Recipient</td><td><b>${esc(order.recipientName)}</b></td></tr>`
+              : ''
+          }
+          <tr><td>Phone</td><td><b>${esc(phone)}</b></td></tr>
+        </table>
       </div>
-      <div class="tr" style="margin-top:2px;font-size:8.5px">
-        <span class="tl">Printed</span>
-        <span class="tv">${esc(printedAt)}</span>
+      <div class="panel">
+        <div class="ph">Invoice Details</div>
+        <table class="ktbl">
+          <tr><td>Invoice #</td><td><b>#${orderNo}</b></td></tr>
+          <tr><td>Order Status</td><td><b id="info-order-status">${esc(upper(orderStatus))}</b></td></tr>
+          <tr><td>Payment</td><td><b id="info-pay-method">${esc(upper(paymentMethod))}</b></td></tr>
+          <tr><td>Pay Status</td><td><b id="info-pay-status">${esc(upper(paymentStatus))}</b></td></tr>
+        </table>
       </div>
     </div>
 
-    <!-- ── Customer (only non-empty fields) ── -->
-    <div class="mblock">
-      <div class="bh">Customer</div>
-      ${row('Name',  esc(customerName))}
-      ${order.recipientName && order.recipientName !== customerName
-        ? row('Recipient', esc(order.recipientName)) : ''}
-      ${(order.customerPhone ?? customer?.phone)
-        ? row('Phone', esc(order.customerPhone ?? customer?.phone ?? '')) : ''}
-    </div>
-
-    <!-- ── Delivery (condensed) ── -->
-    <div class="mblock">
-      <div class="bh">Delivery</div>
-      ${order.deliveryAddressLabel
-        ? `<div style="font-size:9px;font-weight:900;color:#333;margin-bottom:2px">${esc(order.deliveryAddressLabel)}</div>` : ''}
-      <div style="font-size:9px;font-weight:700;color:#444;white-space:pre-line;line-height:1.45">
-        ${esc(order.deliveryAddress ?? 'N/A')}
-      </div>
-      ${order.deliveryDistanceKm != null
-        ? `<div style="font-size:8px;font-weight:700;color:#aaa;margin-top:2px">📏 ${Number(order.deliveryDistanceKm).toFixed(1)} km</div>` : ''}
-      ${order.deliveryInstructions
-        ? `<div style="font-size:8px;font-weight:700;color:#aaa;font-style:italic;margin-top:1px">↳ ${esc(order.deliveryInstructions)}</div>` : ''}
-    </div>
+    <!-- Delivery -->
+    ${
+      !isPickup
+        ? `<div class="row2" id="blk-delivery">
+            <div class="panel">
+              <div class="ph">Delivery Address</div>
+              <table class="ktbl">
+                ${order.deliveryAddressLabel ? `<tr><td>Label</td><td><b>${esc(order.deliveryAddressLabel)}</b></td></tr>` : ''}
+                ${order.deliveryAddress ? `<tr><td>Address</td><td><b style="white-space:pre-line">${esc(order.deliveryAddress)}</b></td></tr>` : ''}
+                ${order.deliveryInstructions ? `<tr><td>Note</td><td><b>${esc(order.deliveryInstructions)}</b></td></tr>` : ''}
+                ${order.deliveryDistanceKm != null ? `<tr><td>Distance</td><td><b>${num(order.deliveryDistanceKm).toFixed(2)} km</b></td></tr>` : ''}
+              </table>
+            </div>
+          </div>`
+        : ''
+    }
 
     ${customBlock}
 
-    <!-- ── Items ── -->
-    <div class="bh" style="margin-top:7px">Items</div>
-    <table class="itable">
-      <thead><tr>
-        <th class="i-sr">#</th>
-        <th class="i-nm">Item</th>
-        <th class="i-q">Qty</th>
-        <th class="i-r">Rate</th>
-        <th class="i-a">Amt</th>
-      </tr></thead>
-      <tbody>
-        ${rows || `<tr><td colspan="5" style="text-align:center;padding:8px;color:#ccc;font-size:9px">No items</td></tr>`}
-      </tbody>
-    </table>
-    <div class="ifooter">
-      <span>${order.items.length} line(s)</span>
-      <span>${totalQty} unit(s)</span>
-    </div>
-
-    <!-- ── Totals ── -->
-    <div class="totblk">
-      <div class="trow">
-        <span class="trow-l">Subtotal</span>
-        <span class="trow-v">${toINR(order.subtotal)}</span>
-      </div>
-      ${order.discount > 0 ? `
-      <div class="trow">
-        <span class="trow-l">Discount</span>
-        <span class="trow-g">− ${toINR(order.discount)}</span>
-      </div>` : ''}
-      ${order.promoCode ? `
-      <div class="trow">
-        <span class="trow-l">Promo (${esc(order.promoCode)})</span>
-        <span class="trow-g">Applied</span>
-      </div>` : ''}
-      <div class="trow">
-        <span class="trow-l">Delivery</span>
-        <span class="${order.deliveryFee===0?'trow-g':'trow-v'}">${order.deliveryFee===0?'FREE':toINR(order.deliveryFee)}</span>
-      </div>
-      ${order.tax > 0 ? `
-      <div class="trow">
-        <span class="trow-l">GST/Tax</span>
-        <span class="trow-v">${toINR(order.tax)}</span>
-      </div>` : ''}
-      <div class="grand">
-        <span class="grand-l">Total</span>
-        <span class="grand-v">${toINR(order.totalAmount)}</span>
-      </div>
-      ${saved > 0 ? `<div class="saved-row">✦ You saved ${toINR(saved)}</div>` : ''}
-    </div>
-
-    <!-- ── Notes (collapsed unless present) ── -->
-    ${order.customerNotes ? `
-    <div class="dsec">
-      <div class="bh">Note</div>
-      <div style="font-size:9px;color:#555;font-style:italic;line-height:1.5;font-weight:700">${esc(order.customerNotes)}</div>
-    </div>` : ''}
-    ${order.specialInstructions ? `
-    <div class="dsec">
-      <div class="bh">⚠ Special</div>
-      <div style="font-size:9px;color:#555;font-style:italic;line-height:1.5;font-weight:700">${esc(order.specialInstructions)}</div>
-    </div>` : ''}
-
-    <!-- ── Compact scannable barcode ── -->
-    <div class="bc-wrap">
-      <svg id="inv-bc"></svg>
-      <div class="bc-num">${esc(order.orderNumber)}</div>
-      <div class="bc-hint">scan to open order</div>
-    </div>
-    <script>
-    (function(){
-      var el=document.getElementById('inv-bc');
-      if(!el||typeof JsBarcode==='undefined')return;
-      JsBarcode(el,'${scanUrl}',{
-        format:'CODE128',
-        width:1.1,       /* narrower bars */
-        height:28,       /* shorter height */
-        displayValue:false,
-        margin:2,
-        background:'#ffffff',
-        lineColor:'#111111',
-      });
-    })();
-    </script>
-
-    <!-- Thank you -->
-    <div class="tblock">
-      <div class="tmain">Thank you!</div>
-      <div class="tsub">Computer-generated · No signature required</div>
-      <hr class="sep"/>
-      <div class="tdev">
-        Made with ❤️ by
-        <a href="https://www.instagram.com/thrillyverse" target="_blank" rel="noreferrer">Thrillyverse</a>
+    <!-- Items Table -->
+    <div class="row2" id="blk-items">
+      <div class="itbl-wrap">
+        <table class="itbl">
+          <thead>
+            <tr>
+              <th class="c">#</th>
+              <th>Item</th>
+              <th class="c">Qty</th>
+              <th style="text-align:right">Rate</th>
+              <th style="text-align:right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemRows || `<tr><td class="td c" colspan="5">No items</td></tr>`}
+          </tbody>
+        </table>
       </div>
     </div>
 
+    <!-- Totals -->
+    <div id="blk-totals">
+      <div class="totals-wrap">
+        <div class="totals">
+          <div class="trow"><span class="lbl">Subtotal</span><span class="val">${esc(toINR(order.subtotal))}</span></div>
+          ${num(order.discount) > 0 ? `<div class="trow green"><span class="lbl">Discount</span><span class="val">&#8722;${esc(toINR(order.discount))}</span></div>` : ''}
+          ${order.promoCode ? `<div class="trow green"><span class="lbl">Promo (${esc(order.promoCode)})</span><span class="val">Applied</span></div>` : ''}
+          <div class="trow"><span class="lbl">Delivery Fee</span><span class="val">${esc(toINR(order.deliveryFee))}</span></div>
+          <div class="trow"><span class="lbl">Tax (GST)</span><span class="val">${esc(toINR(order.tax))}</span></div>
+          <div class="trow bold"><span class="lbl">Grand Total</span><span class="val">${esc(toINR(order.totalAmount))}</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes Section (editable before print) -->
+    <div class="notes-wrap" id="blk-notes">
+      <div id="print-cust-notes-wrap" class="${clean(order.customerNotes) ? '' : 'hidden'}">
+        <div class="row2">
+          <div class="panel">
+            <div class="ph">Customer Notes</div>
+            <div class="nv" id="print-cust-notes">${esc(clean(order.customerNotes))}</div>
+          </div>
+        </div>
+      </div>
+      <div id="print-special-wrap" class="${clean(order.specialInstructions) ? '' : 'hidden'}">
+        <div class="row2">
+          <div class="panel">
+            <div class="ph">Special Instructions</div>
+            <div class="nv" id="print-special">${esc(clean(order.specialInstructions))}</div>
+          </div>
+        </div>
+      </div>
+      <div id="print-internal-wrap" class="hidden">
+        <div class="row2">
+          <div class="panel merch-block">
+            <div class="ph">&#128274; Internal Note</div>
+            <div class="nv" id="print-internal"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Merchant Fields (shown only for Merchant/Internal copy) -->
+    <div class="merch-internal hidden" id="blk-merchant">
+      <div class="ph" style="color:#92400e;margin-bottom:8px">&#128274; Merchant Record</div>
+      <div class="info-grid">
+        <div class="panel merch-block">
+          <div class="ph">Merchant Info</div>
+          <table class="ktbl">
+            <tr><td>Business</td><td><b>${esc(merchantName)}</b></td></tr>
+            ${hasValue(merchantPhone) ? `<tr><td>Phone</td><td><b>${esc(merchantPhone)}</b></td></tr>` : ''}
+            ${hasValue(merchantGst) ? `<tr><td>GSTIN</td><td><b>${esc(merchantGst)}</b></td></tr>` : ''}
+            ${hasValue(merchantAddress) ? `<tr><td>Address</td><td><b style="white-space:pre-line">${esc(merchantAddress)}</b></td></tr>` : ''}
+          </table>
+        </div>
+        <div class="panel merch-block">
+          <div class="ph">Financial Summary</div>
+          <table class="ktbl">
+            <tr><td>Subtotal</td><td><b>${esc(toINR(order.subtotal))}</b></td></tr>
+            <tr><td>Discount</td><td><b>${esc(toINR(order.discount))}</b></td></tr>
+            <tr><td>Delivery</td><td><b>${esc(toINR(order.deliveryFee))}</b></td></tr>
+            <tr><td>Tax (GST)</td><td><b>${esc(toINR(order.tax))}</b></td></tr>
+            <tr><td>Grand Total</td><td><b>${esc(toINR(order.totalAmount))}</b></td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="panel merch-block">
+          <div class="ph">Order IDs (Internal)</div>
+          <table class="ktbl">
+            <tr><td>Order ID</td><td><b style="font-size:10px;word-break:break-all">${esc((order as any).id ?? 'N/A')}</b></td></tr>
+            <tr><td>Customer ID</td><td><b style="font-size:10px;word-break:break-all">${esc((order as any).customerId ?? (order as any).customer_id ?? 'N/A')}</b></td></tr>
+            <tr><td>Merchant ID</td><td><b style="font-size:10px;word-break:break-all">${esc((order as any).merchantId ?? (order as any).merchant_id ?? 'N/A')}</b></td></tr>
+            ${
+              (order as any).driverId ?? (order as any).driver_id
+                ? `<tr><td>Driver ID</td><td><b style="font-size:10px;word-break:break-all">${esc((order as any).driverId ?? (order as any).driver_id)}</b></td></tr>`
+                : ''
+            }
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /body -->
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-l">
+      <div>&#128205; ${esc(merchantName)} &bull; PB Express &bull; pattibytes.com</div>
+      <div>Thank you for your business!</div>
+    </div>
+    <div class="footer-r">
+      <div>Generated: <span id="gen-time-footer"></span></div>
+      <div class="dev">Developed with &#10084;&#65039; by
+        <a href="https://www.instagram.com/thrillyverse" target="_blank" rel="noopener noreferrer">Thrillyverse</a>
+      </div>
+    </div>
   </div>
-</div><!-- /receipt -->
-</div><!-- /page -->
-</body></html>`;
+
+</div><!-- /sheet -->
+</div><!-- /wrap -->
+
+<script>
+(function() {
+  // ── Constants ──────────────────────────────────────────
+  const ORIG_ORDER_STATUS = ${jsOrderStatus};
+  const ORIG_CUST_NOTES   = ${jsCustomerNotes};
+  const ORIG_SPECIAL      = ${jsSpecialInstructions};
+
+  const STATUS_CLASS = {
+    delivered:'badge-green',completed:'badge-green',
+    cancelled:'badge-red',failed:'badge-red',
+    preparing:'badge-blue',confirmed:'badge-blue',
+    ontheway:'badge-blue',pickedup:'badge-blue',
+    assigned:'badge-blue',ready:'badge-blue',
+  };
+  const PAY_CLASS = {
+    paid:'badge-green',
+    failed:'badge-red',refunded:'badge-red',
+  };
+  const ALL_BADGE = ['badge-green','badge-red','badge-blue','badge-amber'];
+
+  // ── Init ───────────────────────────────────────────────
+  const now = new Date();
+  const ts = now.toLocaleString('en-IN',{
+    day:'2-digit',month:'short',year:'numeric',
+    hour:'2-digit',minute:'2-digit',hour12:true
+  });
+  const stampEl = document.getElementById('gen-stamp');
+  const footerTs = document.getElementById('gen-time-footer');
+  if (stampEl)    stampEl.textContent = ts;
+  if (footerTs)   footerTs.textContent = ts;
+
+  // Prefill edit panels
+  const epCust     = document.getElementById('ep-cust-notes');
+  const epSpecial  = document.getElementById('ep-special');
+  if (epCust)    epCust.value    = ORIG_CUST_NOTES;
+  if (epSpecial) epSpecial.value = ORIG_SPECIAL;
+
+  // ── Overlay helpers ────────────────────────────────────
+  window.openEditNotes   = () => openOverlay('overlay-notes');
+  window.openEditStatus  = () => openOverlay('overlay-status');
+
+  function openOverlay(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('open');
+  }
+  window.closeOverlay = function(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('open');
+  };
+
+  // ── Apply Notes ────────────────────────────────────────
+  window.applyNotes = function() {
+    const cust     = document.getElementById('ep-cust-notes')?.value ?? '';
+    const special  = document.getElementById('ep-special')?.value ?? '';
+    const internal = document.getElementById('ep-internal')?.value ?? '';
+
+    setBlockText('print-cust-notes', 'print-cust-notes-wrap', cust);
+    setBlockText('print-special',    'print-special-wrap',    special);
+    setBlockText('print-internal',   'print-internal-wrap',   internal);
+
+    closeOverlay('overlay-notes');
+  };
+
+  function setBlockText(textId, wrapId, value) {
+    const el   = document.getElementById(textId);
+    const wrap = document.getElementById(wrapId);
+    if (!el || !wrap) return;
+    el.textContent = value;
+    wrap.classList.toggle('hidden', !value.trim());
+  }
+
+  // ── Apply Status ───────────────────────────────────────
+  window.applyStatus = function() {
+    const ordSel = document.getElementById('ep-order-status');
+    const paySel = document.getElementById('ep-pay-status');
+    const mthSel = document.getElementById('ep-pay-method');
+
+    const ordVal = ordSel?.value?.trim() || '';
+    const payVal = paySel?.value?.trim() || '';
+    const mthVal = mthSel?.value?.trim() || '';
+
+    if (ordVal) {
+      updateBadge('status-badge-live', ordVal.toUpperCase(), STATUS_CLASS[ordVal.toLowerCase()] ?? 'badge-amber');
+      updateInfoCell('info-order-status', ordVal.toUpperCase());
+    }
+    if (payVal) {
+      updateBadge('pay-badge-live', payVal.toUpperCase(), PAY_CLASS[payVal.toLowerCase()] ?? 'badge-amber');
+      updateInfoCell('info-pay-status', payVal.toUpperCase());
+    }
+    if (mthVal) {
+      updateInfoCell('info-pay-method', mthVal.toUpperCase());
+      const hr = document.getElementById('hr-method');
+      if (hr) hr.textContent = 'Method: ' + mthVal.toUpperCase();
+    }
+
+    closeOverlay('overlay-status');
+  };
+
+  function updateBadge(id, text, cls) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    ALL_BADGE.forEach(c => el.classList.remove(c));
+    el.classList.add(cls);
+    el.textContent = text;
+  }
+
+  function updateInfoCell(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  // ── Copy Label ─────────────────────────────────────────
+  window.setCopy = function(val) {
+    const el = document.getElementById('copy-display');
+    if (el) el.textContent = val + ' Copy';
+    const isInternal = val === 'Internal';
+    const isMerchOrInternal = val === 'Merchant' || isInternal;
+
+    // Auto-enable merchant fields for Merchant/Internal
+    const tglMerch = document.getElementById('tgl-merch');
+    const blk = document.getElementById('blk-merchant');
+    if (tglMerch && blk) {
+      tglMerch.checked = isMerchOrInternal;
+      blk.classList.toggle('hidden', !isMerchOrInternal);
+    }
+
+    // Internal note visibility follows internal copy
+    const intWrap = document.getElementById('print-internal-wrap');
+    const epInt   = document.getElementById('ep-internal');
+    if (intWrap) intWrap.classList.toggle('hidden', !isInternal || !(epInt?.value?.trim()));
+  };
+
+  // ── Merchant toggle ────────────────────────────────────
+  window.toggleMerchant = function(cb) {
+    const el = document.getElementById('blk-merchant');
+    if (el) el.classList.toggle('hidden', !cb.checked);
+  };
+
+  // ── Block toggles ──────────────────────────────────────
+  window.toggleBlock = function(id, cb) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', !cb.checked);
+  };
+
+  // ── Layout ─────────────────────────────────────────────
+  window.setLayout = function(val) {
+    document.body.className = 'layout-' + val;
+  };
+
+  // ── Reset ──────────────────────────────────────────────
+  window.resetAll = function() {
+    ['tgl-stats','tgl-customer','tgl-delivery','tgl-custom','tgl-items','tgl-totals','tgl-notes']
+      .forEach(id => {
+        const cb = document.getElementById(id);
+        if (cb) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
+      });
+
+    // Reset merchant toggle
+    const tglM = document.getElementById('tgl-merch');
+    if (tglM) { tglM.checked = false; tglM.dispatchEvent(new Event('change')); }
+
+    // Reset copy
+    const sel = document.getElementById('copy-select');
+    if (sel) { sel.value = 'Customer'; setCopy('Customer'); }
+
+    // Reset layout
+    const lay = document.getElementById('layout-select');
+    if (lay) { lay.value = 'default'; setLayout('default'); }
+
+    // Reset notes
+    const ec = document.getElementById('ep-cust-notes');
+    const es = document.getElementById('ep-special');
+    const ei = document.getElementById('ep-internal');
+    if (ec) ec.value = ORIG_CUST_NOTES;
+    if (es) es.value = ORIG_SPECIAL;
+    if (ei) ei.value = '';
+
+    setBlockText('print-cust-notes', 'print-cust-notes-wrap', ORIG_CUST_NOTES);
+    setBlockText('print-special',    'print-special-wrap',    ORIG_SPECIAL);
+    setBlockText('print-internal',   'print-internal-wrap',   '');
+
+    // Reset status badges
+    updateBadge('status-badge-live', ORIG_ORDER_STATUS.toUpperCase(),
+      STATUS_CLASS[ORIG_ORDER_STATUS.toLowerCase()] ?? 'badge-amber');
+    updateInfoCell('info-order-status', ORIG_ORDER_STATUS.toUpperCase());
+
+    const ordSel = document.getElementById('ep-order-status');
+    const paySel = document.getElementById('ep-pay-status');
+    const mthSel = document.getElementById('ep-pay-method');
+    if (ordSel) ordSel.value = '';
+    if (paySel) paySel.value = '';
+    if (mthSel) mthSel.value = '';
+  };
+
+})();
+</script>
+</body>
+</html>`;
 }
