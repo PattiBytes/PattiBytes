@@ -1,11 +1,11 @@
  
+import { AppSettingsRow } from '@/services/appSettings';
 import { toINR, fmtTime } from './types';
 import type { OrderNormalized, ProfileMini, MerchantInfo } from './types';
 
 export function buildInvoiceHtml(
-  order: OrderNormalized,
-  customer: ProfileMini | null,
-  merchant: MerchantInfo | null,
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+order: OrderNormalized, customer: ProfileMini | null, merchant: MerchantInfo | null, appSettings: AppSettingsRow,
 ): string {
   const customerName =
     customer?.full_name ?? customer?.fullname ??

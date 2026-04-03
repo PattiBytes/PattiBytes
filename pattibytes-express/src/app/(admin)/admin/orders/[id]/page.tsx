@@ -19,7 +19,8 @@ import {
   type OrderNormalized, type ProfileMini, type MerchantInfo,
   type DriverRow, type EditFields, type ColMap,
 } from './_components/types';
-import { buildInvoiceHtml, type AppSettings } from './_components/invoiceBuilder';
+import { buildInvoiceHtml } from './_components/invoiceBuilder';
+import type { AppSettingsRow as AppSettings } from '@/services/appSettings';
 import { OrderHeader }            from './_components/OrderHeader';
 import { MetricsBar }             from './_components/MetricsBar';
 import { StatusControl }          from './_components/StatusControl';
