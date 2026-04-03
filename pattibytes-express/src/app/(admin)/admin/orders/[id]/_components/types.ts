@@ -22,6 +22,7 @@ export type DriverRow = {
 };
 
 export type MerchantInfo = {
+  name(business_name: string, businessname: string, name: any, appName: string, arg4: string): unknown;
   id: string;
   business_name?: string | null; businessname?: string | null;
   phone?: string | null; email?: string | null; address?: any;
