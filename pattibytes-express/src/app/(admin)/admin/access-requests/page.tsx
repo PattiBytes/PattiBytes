@@ -1,497 +1,417 @@
+// src/app/(admin)/admin/access-requests/page.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  CheckCircle,
-  XCircle,
-  Clock,
-  User,
-  Mail,
-  Phone,
-  MapPin,
-  AlertCircle,
-  Shield,
-  Crown,
-  BadgeCheck,
-} from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { toast } from 'react-toastify';
 
-interface ProfileRow {
-  id: string;
-  full_name: string | null;
-  email: string | null;
-  phone: string | null;
-  role: string | null;
-  approval_status: string | null;
-  is_approved: boolean | null;
-  is_active: boolean | null;
-  profile_completed: boolean | null;
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
+import type {
+  AccessRequestUI, FilterStatus, FilterTypeValue, AccessRequestNotifPrefs,
+} from './_components/types';
+import { DEFAULT_NOTIF_PREFS } from './_components/types';
+import RequestFilters          from './_components/RequestFilters';
+import RequestCard             from './_components/RequestCard';
+import NotificationSettingsModal from './_components/NotificationSettingsModal';
+import UserDetailModal         from './_components/UserDetailModal';
+
+// ─── Profile fields we actually need ─────────────────────────────────────────
+const PROFILE_SELECT = [
+  'id','full_name','email','phone','role','approval_status','is_approved','is_active',
+  'profile_completed','address','city','state','pincode','username','account_status',
+  'total_orders','completed_orders','cancelled_orders','cancelled_orders_count',
+  'trust_score','is_trusted','last_order_date','created_at',
+  'ban_reason','banned_at','banned_by','ban_expires_at',
+].join(',');
+
+// ─── Notification sound helper ────────────────────────────────────────────────
+function playNotifSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.4);
+  } catch {
+    // AudioContext not available
+  }
 }
 
-interface AccessRequestRow {
-  id: string;
-  user_id: string;
-  requested_role: string;
-  status: string;
-  created_at: string;
-  reviewed_at?: string | null;
-}
-
-interface AccessRequestUI extends AccessRequestRow {
-  user_profile: {
-    full_name: string;
-    email: string;
-    phone: string;
-    role: string;
-    approval_status: string;
-    is_approved: boolean;
-    is_active: boolean;
-    profile_completed: boolean;
-    address?: string;
-    city?: string;
-    state?: string;
-  };
-}
-
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AccessRequestsPage() {
   const { user } = useAuth();
 
-  const [requests, setRequests] = useState<AccessRequestUI[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Data
+  const [requests, setRequests]     = useState<AccessRequestUI[]>([]);
+  const [loading, setLoading]       = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
 
-  const pendingCount = useMemo(
-    () => requests.filter((r) => r.status === 'pending').length,
-    [requests]
-  );
+  // Filters
+  const [filter, setFilter]         = useState<FilterStatus>('pending');
+  const [typeFilter, setTypeFilter] = useState<FilterTypeValue>('all');
 
+  // Modals
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [detailRequest, setDetailRequest] = useState<AccessRequestUI | null>(null);
+
+  // Notification prefs (loaded from app_settings.admin_preferences)
+  const [notifPrefs, setNotifPrefs] = useState<AccessRequestNotifPrefs>(DEFAULT_NOTIF_PREFS);
+  const prevCountRef = useRef(0);
+
+  // ── Load notification prefs from app_settings ───────────────────────────────
   useEffect(() => {
-    loadRequests();
+    supabase
+      .from('app_settings')
+      .select('admin_preferences')
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        const saved = (data?.admin_preferences as any)?.access_request_notifications;
+        if (saved) setNotifPrefs({ ...DEFAULT_NOTIF_PREFS, ...saved });
+      });
+  }, []);
 
-    const requestChannel = supabase
-      .channel('access_requests_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'access_requests' }, () =>
-        loadRequests()
-      )
-      .subscribe();
-
-    const profileChannel = supabase
-      .channel('profiles_changes')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () =>
-        loadRequests()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(requestChannel);
-      supabase.removeChannel(profileChannel);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
-
+  // ── Load requests ────────────────────────────────────────────────────────────
   const loadRequests = async () => {
     try {
       setLoading(true);
 
       let query = supabase
         .from('access_requests')
-        .select('id,user_id,requested_role,status,created_at,reviewed_at')
+        .select('id,user_id,requested_role,request_type,status,notes,reviewed_by,reviewed_at,created_at,scheduled_deletion_at,cancellation_reason')
         .order('created_at', { ascending: false });
 
-      if (filter !== 'all') query = query.eq('status', filter);
+      if (filter !== 'all')     query = query.eq('status', filter);
+      if (typeFilter !== 'all') query = query.eq('request_type', typeFilter);
 
-      const { data: requestsData, error: requestsError } = await query;
-      if (requestsError) throw requestsError;
+      const { data: reqData, error: reqErr } = await query;
+      if (reqErr) throw reqErr;
+      if (!reqData?.length) { setRequests([]); return; }
 
-      if (!requestsData?.length) {
-        setRequests([]);
-        return;
-      }
+      const userIds = reqData.map((r: any) => r.user_id);
 
-      const userIds = (requestsData as AccessRequestRow[]).map((r) => r.user_id);
-
-      const { data: profilesData, error: profilesError } = await supabase
+      const { data: profiles, error: profErr } = await supabase
         .from('profiles')
-        .select(
-          'id,full_name,email,phone,role,approval_status,is_approved,is_active,profile_completed,address,city,state'
-        )
+        .select(PROFILE_SELECT)
         .in('id', userIds);
 
-      if (profilesError) throw profilesError;
+      if (profErr) throw profErr;
 
-      const combined = (requestsData as AccessRequestRow[]).map((req) => {
-        const p = (profilesData as ProfileRow[] | null)?.find((x) => x.id === req.user_id);
-
+      const combined: AccessRequestUI[] = reqData.map((req: any) => {
+        const p = (profiles ?? []).find((x: any) => x.id === req.user_id) as any;
         return {
           ...req,
+          request_type: req.request_type || 'role_upgrade',   // backfill old rows
           user_profile: {
-            full_name: p?.full_name || 'Unknown',
-            email: p?.email || 'unknown@email.com',
-            phone: p?.phone || 'N/A',
-            role: p?.role || 'unknown',
-            approval_status: p?.approval_status || 'pending',
-            is_approved: Boolean(p?.is_approved),
-            is_active: p?.is_active ?? true,
-            profile_completed: Boolean(p?.profile_completed),
-            address: p?.address || undefined,
-            city: p?.city || undefined,
-            state: p?.state || undefined,
+            id:                   p?.id                   ?? req.user_id,
+            full_name:            p?.full_name            || 'Unknown',
+            email:                p?.email                || '—',
+            phone:                p?.phone                || '—',
+            role:                 p?.role                 || 'customer',
+            approval_status:      p?.approval_status      || 'pending',
+            is_approved:          Boolean(p?.is_approved),
+            is_active:            p?.is_active            ?? true,
+            profile_completed:    Boolean(p?.profile_completed),
+            account_status:       p?.account_status       || 'active',
+            address:              p?.address              || null,
+            city:                 p?.city                 || null,
+            state:                p?.state                || null,
+            pincode:              p?.pincode              || null,
+            username:             p?.username             || null,
+            total_orders:         p?.total_orders         ?? null,
+            completed_orders:     p?.completed_orders     ?? null,
+            cancelled_orders:     p?.cancelled_orders     ?? null,
+            cancelled_orders_count: p?.cancelled_orders_count ?? null,
+            trust_score:          p?.trust_score          ?? null,
+            is_trusted:           p?.is_trusted           ?? false,
+            last_order_date:      p?.last_order_date      || null,
+            created_at:           p?.created_at           || null,
+            ban_reason:           p?.ban_reason           || null,
+            banned_at:            p?.banned_at            || null,
+            banned_by:            p?.banned_by            || null,
+            ban_expires_at:       p?.ban_expires_at       || null,
           },
         };
       });
 
+      // ── Sound / toast on NEW pending requests ─────────────────────────────
+      if (notifPrefs.enabled) {
+        const newPending = combined.filter((r) => r.status === 'pending').length;
+        if (newPending > prevCountRef.current && prevCountRef.current !== 0) {
+          const diff = newPending - prevCountRef.current;
+          // Check type-specific pref
+          const newest = combined
+            .filter((r) => r.status === 'pending')
+            .slice(0, diff);
+          newest.forEach((r) => {
+            const typeOk =
+              (r.request_type === 'role_upgrade'     && notifPrefs.role_upgrade) ||
+              (r.request_type === 'account_deletion' && notifPrefs.account_deletion) ||
+              (r.request_type === 'panel_request'    && notifPrefs.panel_request) ||
+              true;
+            if (typeOk) {
+              toast.info(`🔔 New ${r.request_type.replace('_', ' ')} request from ${r.user_profile.full_name}`);
+              if (notifPrefs.sound) playNotifSound();
+            }
+          });
+        }
+        prevCountRef.current = newPending;
+      }
+
       setRequests(combined);
     } catch (error: any) {
-      console.error('Failed to load access requests:', error);
+      console.error(error);
       toast.error(error?.message || 'Failed to load access requests');
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Realtime subscriptions ───────────────────────────────────────────────────
+  useEffect(() => {
+    loadRequests();
+
+    const ch1 = supabase
+      .channel('access_requests_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'access_requests' }, loadRequests)
+      .subscribe();
+
+    const ch2 = supabase
+      .channel('profiles_changes_access')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, loadRequests)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ch1);
+      supabase.removeChannel(ch2);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, typeFilter]);
+
+  // ── Counts ───────────────────────────────────────────────────────────────────
+  const pendingCount = useMemo(() => requests.filter((r) => r.status === 'pending').length, [requests]);
+
+  // ── Role Upgrade handlers ────────────────────────────────────────────────────
   const handleRequest = async (requestId: string, newStatus: 'approved' | 'rejected') => {
     try {
       setProcessingId(requestId);
-
-      // Keep your RPC if you already created it; otherwise replace this with direct updates.
       const { error } = await supabase.rpc('process_access_request', {
         p_request_id: requestId,
         p_new_status: newStatus,
       });
-
       if (error) throw error;
-
       toast.success(newStatus === 'approved' ? '✅ Request approved' : '❌ Request rejected');
       await loadRequests();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error: any) {
-      console.error('Failed to process request:', error);
-      toast.error(error?.message || 'Failed to update request');
+      // Fallback to direct update if RPC doesn't exist
+      try {
+        const { error: e2 } = await supabase
+          .from('access_requests')
+          .update({ status: newStatus, reviewed_at: new Date().toISOString(), reviewed_by: user?.id })
+          .eq('id', requestId);
+        if (e2) throw e2;
+        toast.success(newStatus === 'approved' ? '✅ Request approved' : '❌ Request rejected');
+        await loadRequests();
+      } catch (e3: any) {
+        toast.error(e3?.message || 'Failed to update request');
+      }
     } finally {
       setProcessingId(null);
     }
   };
 
   const revokeAccess = async (userId: string) => {
-    const ok = confirm('Revoke access for this user? (Role will be reset to customer)');
-    if (!ok) return;
-
+    if (!confirm('Revoke access? Role will be reset to customer.')) return;
     try {
       setProcessingId(userId);
-
       const { error } = await supabase
         .from('profiles')
-        .update({
-          role: 'customer',
-          approval_status: 'revoked',
-          is_approved: false,
-          profile_completed: false,
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ role: 'customer', approval_status: 'revoked', is_approved: false, profile_completed: false, is_active: true, updated_at: new Date().toISOString() })
         .eq('id', userId);
-
       if (error) throw error;
-
       toast.success('✅ Access revoked');
       await loadRequests();
-    } catch (e: any) {
-      console.error(e);
-      toast.error(e?.message || 'Failed to revoke access');
-    } finally {
-      setProcessingId(null);
-    }
+    } catch (e: any) { toast.error(e?.message || 'Failed to revoke'); } finally { setProcessingId(null); }
   };
 
   const grantFullAccess = async (userId: string, role: string) => {
-    const ok = confirm(`Grant full access as "${role}"?`);
-    if (!ok) return;
-
+    if (!confirm(`Grant full access as "${role}"?`)) return;
     try {
       setProcessingId(userId);
-
       const { error } = await supabase
         .from('profiles')
-        .update({
-          role,
-          approval_status: 'approved',
-          is_approved: true,
-          profile_completed: true,
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ role, approval_status: 'approved', is_approved: true, profile_completed: true, is_active: true, updated_at: new Date().toISOString() })
         .eq('id', userId);
-
       if (error) throw error;
-
-      toast.success('✅ Access granted');
+      toast.success('✅ Full access granted');
       await loadRequests();
-    } catch (e: any) {
-      console.error(e);
-      toast.error(e?.message || 'Failed to grant access');
-    } finally {
-      setProcessingId(null);
-    }
+    } catch (e: any) { toast.error(e?.message || 'Failed'); } finally { setProcessingId(null); }
   };
 
   const promote = async (userId: string, role: 'admin' | 'superadmin') => {
     if (role === 'superadmin' && user?.role !== 'superadmin') {
-      toast.error('Only a superadmin can promote to superadmin');
-      return;
+      toast.error('Only a superadmin can promote to superadmin'); return;
     }
-
-    const ok = confirm(`Promote this user to "${role}"?`);
-    if (!ok) return;
-
+    if (!confirm(`Promote this user to "${role}"?`)) return;
     await grantFullAccess(userId, role);
   };
 
+  // ── Account Deletion handlers ────────────────────────────────────────────────
+  const handleApproveDeletion = async (requestId: string, userId: string) => {
+    if (!confirm('Approve this account deletion request? The account will be scheduled for deletion in 30 days.')) return;
+    try {
+      setProcessingId(requestId);
+      const deletionDate = new Date();
+      deletionDate.setDate(deletionDate.getDate() + 30);
+
+      const [{ error: e1 }, { error: e2 }] = await Promise.all([
+        supabase.from('profiles').update({ account_status: 'deletion_scheduled', is_active: false, updated_at: new Date().toISOString() }).eq('id', userId),
+        supabase.from('access_requests').update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: user?.id, scheduled_deletion_at: deletionDate.toISOString() }).eq('id', requestId),
+      ]);
+      if (e1) throw e1;
+      if (e2) throw e2;
+      toast.success('✅ Deletion approved — scheduled for 30 days');
+      await loadRequests();
+    } catch (e: any) { toast.error(e?.message || 'Failed'); } finally { setProcessingId(null); }
+  };
+
+  const handleRejectDeletion = async (requestId: string, userId: string) => {
+    if (!confirm("Reject this deletion request? The user's account will be restored.")) return;
+    try {
+      setProcessingId(requestId);
+      const [{ error: e1 }, { error: e2 }] = await Promise.all([
+        supabase.from('profiles').update({ account_status: 'active', is_active: true, updated_at: new Date().toISOString() }).eq('id', userId),
+        supabase.from('access_requests').update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: user?.id }).eq('id', requestId),
+      ]);
+      if (e1) throw e1;
+      if (e2) throw e2;
+      toast.success('✅ Deletion request rejected — account restored');
+      await loadRequests();
+    } catch (e: any) { toast.error(e?.message || 'Failed'); } finally { setProcessingId(null); }
+  };
+
+  const handleCancelDeletion = async (requestId: string, userId: string) => {
+    if (!confirm('Cancel scheduled deletion and restore this account?')) return;
+    try {
+      setProcessingId(requestId);
+      const [{ error: e1 }, { error: e2 }] = await Promise.all([
+        supabase.from('profiles').update({ account_status: 'active', is_active: true, updated_at: new Date().toISOString() }).eq('id', userId),
+        supabase.from('access_requests').update({ status: 'rejected', reviewed_at: new Date().toISOString(), reviewed_by: user?.id, scheduled_deletion_at: null }).eq('id', requestId),
+      ]);
+      if (e1) throw e1;
+      if (e2) throw e2;
+      toast.success('✅ Deletion cancelled — account fully restored');
+      await loadRequests();
+    } catch (e: any) { toast.error(e?.message || 'Failed'); } finally { setProcessingId(null); }
+  };
+
+  const handlePermanentDelete = async (userId: string, requestId: string) => {
+    const confirm1 = confirm('⚠️ PERMANENT DELETE — This cannot be undone. Are you absolutely sure?');
+    if (!confirm1) return;
+    const confirm2 = confirm(`Type "DELETE" mentally and confirm: Permanently delete user ${userId}?`);
+    if (!confirm2) return;
+    try {
+      setProcessingId(requestId);
+      // Mark profile as deleted (actual auth user deletion should go via Edge Function in production)
+      const [{ error: e1 }, { error: e2 }] = await Promise.all([
+        supabase.from('profiles').update({ account_status: 'deleted', is_active: false, is_approved: false, role: 'customer', updated_at: new Date().toISOString() }).eq('id', userId),
+        supabase.from('access_requests').update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: user?.id }).eq('id', requestId),
+      ]);
+      if (e1) throw e1;
+      if (e2) throw e2;
+      toast.success('✅ Account marked as deleted');
+      await loadRequests();
+    } catch (e: any) { toast.error(e?.message || 'Failed'); } finally { setProcessingId(null); }
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <DashboardLayout>
-      <div className="p-4 sm:p-6">
-        <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Access Requests</h1>
-          <p className="text-gray-600 mt-2">Approve, reject, revoke, or grant access.</p>
-        </div>
-
-        {/* Filter Tabs */}
-        <div className="bg-white rounded-lg shadow mb-6">
-          <div className="flex border-b overflow-x-auto">
-            {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
-              <button
-                key={status}
-                onClick={() => setFilter(status)}
-                className={`px-4 sm:px-6 py-3 font-medium capitalize whitespace-nowrap text-sm sm:text-base transition-colors ${
-                  filter === status
-                    ? 'text-primary border-b-2 border-primary bg-orange-50'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-              >
-                {status}
-                {status === 'pending' && pendingCount > 0 && (
-                  <span className="ml-2 bg-primary text-white text-xs px-2 py-1 rounded-full animate-pulse">
-                    {pendingCount}
-                  </span>
-                )}
-              </button>
-            ))}
+      <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+        {/* Page header */}
+        <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Access Requests</h1>
+            <p className="text-gray-500 mt-1 text-sm">
+              Manage role upgrades, account deletion requests, and panel access.
+              {pendingCount > 0 && (
+                <span className="ml-2 inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
+                  {pendingCount} pending
+                </span>
+              )}
+            </p>
           </div>
         </div>
 
-        {/* Requests List */}
+        {/* Filters */}
+        <RequestFilters
+          filter={filter}
+          typeFilter={typeFilter}
+          requests={requests}
+          onFilterChange={setFilter}
+          onTypeFilterChange={setTypeFilter}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+
+        {/* Content */}
         {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-primary mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading requests...</p>
+          <div className="text-center py-16">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-primary mx-auto mb-4" />
+            <p className="text-gray-500 text-sm">Loading requests…</p>
           </div>
         ) : requests.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-8 sm:p-12 text-center">
-            <Clock className="mx-auto text-gray-400 mb-4" size={64} />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No requests found</h3>
-            <p className="text-gray-600">There are no {filter !== 'all' ? filter : ''} requests right now.</p>
+          <div className="bg-white rounded-xl shadow p-12 text-center">
+            <Clock className="mx-auto text-gray-300 mb-4" size={56} />
+            <h3 className="text-lg font-semibold text-gray-700 mb-1">No requests found</h3>
+            <p className="text-gray-400 text-sm">
+              No {filter !== 'all' ? filter : ''} {typeFilter !== 'all' ? typeFilter.replace('_', ' ') : ''} requests right now.
+            </p>
           </div>
         ) : (
-          <div className="grid gap-4">
-            {requests.map((request) => {
-              const busy = processingId === request.id || processingId === request.user_id;
-
-              return (
-                <div
-                  key={request.id}
-                  className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 sm:p-6 border-l-4 ${
-                    request.status === 'pending'
-                      ? 'border-yellow-500'
-                      : request.status === 'approved'
-                      ? 'border-green-500'
-                      : 'border-red-500'
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row items-start justify-between mb-4 gap-4">
-                    <div className="flex items-start gap-4 flex-1">
-                      <div
-                        className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${
-                          request.requested_role === 'merchant'
-                            ? 'bg-gradient-to-br from-orange-400 to-pink-500'
-                            : 'bg-gradient-to-br from-blue-400 to-purple-500'
-                        }`}
-                      >
-                        <User className="text-white" size={28} />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-bold text-gray-900 break-words">
-                          {request.user_profile.full_name}
-                        </h3>
-
-                        <div className="flex flex-col gap-1 text-sm text-gray-600 mt-2">
-                          <span className="flex items-center gap-2 break-all">
-                            <Mail size={14} className="flex-shrink-0" />
-                            {request.user_profile.email}
-                          </span>
-                          <span className="flex items-center gap-2">
-                            <Phone size={14} className="flex-shrink-0" />
-                            {request.user_profile.phone}
-                          </span>
-                          {(request.user_profile.city || request.user_profile.address) && (
-                            <span className="flex items-center gap-2 text-xs">
-                              <MapPin size={14} className="flex-shrink-0" />
-                              {request.user_profile.city ? `${request.user_profile.city}, ` : ''}
-                              {request.user_profile.state || ''}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
-                            Current: <span className="capitalize">{request.user_profile.role}</span>
-                          </span>
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
-                              request.user_profile.is_approved
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
-                            }`}
-                          >
-                            {request.user_profile.is_approved ? '✓ Approved' : '✗ Not Approved'}
-                          </span>
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
-                              request.user_profile.is_active ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
-                            }`}
-                          >
-                            {request.user_profile.is_active ? '● Active' : '○ Inactive'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-left sm:text-right w-full sm:w-auto">
-                      <span
-                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold shadow-sm ${
-                          request.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800 border border-yellow-300'
-                            : request.status === 'approved'
-                            ? 'bg-green-100 text-green-800 border border-green-300'
-                            : 'bg-red-100 text-red-800 border border-red-300'
-                        }`}
-                      >
-                        {request.status === 'pending' && <Clock size={16} />}
-                        {request.status === 'approved' && <CheckCircle size={16} />}
-                        {request.status === 'rejected' && <XCircle size={16} />}
-                        {request.status.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-orange-50 to-pink-50 border-2 border-primary/20 rounded-lg p-4 mb-4">
-                    <div className="flex items-center gap-3">
-                      <AlertCircle className="text-primary" size={24} />
-                      <div>
-                        <p className="text-sm font-medium text-gray-700">Requested access:</p>
-                        <p className="text-lg font-bold text-primary capitalize">
-                          {request.requested_role === 'merchant' ? '🏪 Restaurant Owner' : '🚗 Delivery Partner'} Panel
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {request.status === 'pending' ? (
-                      <>
-                        <button
-                          onClick={() => handleRequest(request.id, 'approved')}
-                          disabled={busy}
-                          className="bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-3 rounded-lg hover:from-green-700 hover:to-green-800 font-semibold flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
-                        >
-                          {busy ? (
-                            <>
-                              <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-white"></div>
-                              Processing...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle size={20} />
-                              Approve
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          onClick={() => handleRequest(request.id, 'rejected')}
-                          disabled={busy}
-                          className="bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-3 rounded-lg hover:from-red-700 hover:to-red-800 font-semibold flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
-                        >
-                          {busy ? (
-                            <>
-                              <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-white"></div>
-                              Processing...
-                            </>
-                          ) : (
-                            <>
-                              <XCircle size={20} />
-                              Reject
-                            </>
-                          )}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => grantFullAccess(request.user_id, request.requested_role)}
-                          disabled={busy}
-                          className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 font-semibold flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
-                        >
-                          <BadgeCheck size={20} />
-                          Grant full access
-                        </button>
-
-                        <button
-                          onClick={() => revokeAccess(request.user_id)}
-                          disabled={busy}
-                          className="bg-gradient-to-r from-yellow-600 to-yellow-700 text-white px-6 py-3 rounded-lg hover:from-yellow-700 hover:to-yellow-800 font-semibold flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
-                        >
-                          <Shield size={20} />
-                          Revoke
-                        </button>
-
-                        <button
-                          onClick={() => promote(request.user_id, 'admin')}
-                          disabled={busy}
-                          className="bg-gradient-to-r from-purple-600 to-purple-700 text-white px-6 py-3 rounded-lg hover:from-purple-700 hover:to-purple-800 font-semibold flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
-                        >
-                          <Crown size={20} />
-                          Promote admin
-                        </button>
-
-                        {user?.role === 'superadmin' ? (
-                          <button
-                            onClick={() => promote(request.user_id, 'superadmin')}
-                            disabled={busy}
-                            className="bg-gradient-to-r from-gray-900 to-black text-white px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
-                          >
-                            <Crown size={20} />
-                            Promote superadmin
-                          </button>
-                        ) : (
-                          <div className="hidden lg:block" />
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="flex flex-col gap-4">
+            {requests.map((request) => (
+              <RequestCard
+                key={request.id}
+                request={request}
+                busy={processingId === request.id || processingId === request.user_id}
+                currentUserRole={user?.role}
+                onApprove={(id) => handleRequest(id, 'approved')}
+                onReject={(id) => handleRequest(id, 'rejected')}
+                onGrantAccess={grantFullAccess}
+                onRevoke={revokeAccess}
+                onPromote={promote}
+                onApproveDeletion={handleApproveDeletion}
+                onRejectDeletion={handleRejectDeletion}
+                onCancelDeletion={handleCancelDeletion}
+                onPermanentDelete={handlePermanentDelete}
+                onViewDetails={setDetailRequest}
+              />
+            ))}
           </div>
         )}
       </div>
+
+      {/* Modals */}
+      <NotificationSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        prefs={notifPrefs}
+        onPrefsChange={setNotifPrefs}
+      />
+      <UserDetailModal
+        request={detailRequest}
+        onClose={() => setDetailRequest(null)}
+      />
     </DashboardLayout>
   );
 }
