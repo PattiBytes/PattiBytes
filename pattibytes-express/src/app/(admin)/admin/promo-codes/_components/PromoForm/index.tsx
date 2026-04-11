@@ -65,6 +65,22 @@ export function PromoFormModal({
   const [notifyUsers, setNotifyUsers] = useState(true);
   const picker = useMenuPicker();
 
+  // ← ADD THIS BLOCK ↓
+useEffect(() => {
+  if (initBuyItems.length > 0) picker.setBuyItems(initBuyItems);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [initBuyItems]);
+
+useEffect(() => {
+  if (initGetItems.length > 0) picker.setGetItems(initGetItems);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [initGetItems]);
+
+useEffect(() => {
+  if (initTargets.length > 0) picker.setTargets(initTargets);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [initTargets]);
+
   // ── Seed form on open / edit ──────────────────────────────────────────────
   useEffect(() => {
     if (!editTarget) {

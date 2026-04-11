@@ -23,7 +23,6 @@ import type {
   DealType, PromoScope,
 } from './_types';
 
-/* ─── helpers ───────────────────────────────────────────────────────────── */
 function num(v: any, fb = 0): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : fb;
@@ -42,8 +41,6 @@ function buildPayload(
   currentUser: string,
 ): Partial<PromoCodeRow> {
   const isBxgy = form.deal_type === 'bxgy';
-
-  // ✅ Code is always resolved before buildPayload is called — but guard anyway
   const code = String(form.code ?? '').trim().toUpperCase() || (() => {
     const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
     return `AUTO-${rand}`;
@@ -65,7 +62,7 @@ function buildPayload(
   } : null;
 
   return {
-    code,                                                          // ✅ always a string
+    code,
     description        : form.description || null,
     scope              : form.scope as PromoScope,
     merchant_id        : merchantId,
@@ -91,7 +88,6 @@ function buildPayload(
   };
 }
 
-/* ─── Main page ─────────────────────────────────────────────────────────── */
 export default function ManagePromoCodesPage() {
   const { user } = useAuth();
   const role     = (user as any)?.role ?? 'admin';
@@ -106,59 +102,65 @@ export default function ManagePromoCodesPage() {
     notifyForPromo, assignSecretUsers,
   } = usePromoCodes();
 
-  // ── Merchant ID for merchant-role users ──────────────────────────────────
   const [myMerchantId, setMyMerchantId] = useState('');
+  const [initialized,  setInitialized]  = useState(false);
+
+  // ── Resolve merchantId for merchant users ─────────────────────────────────
   useEffect(() => {
-    if (isAdmin || !user?.id) return;
+    if (isAdmin) {
+      // Admin: load immediately without waiting for merchantId
+      void loadPromos(undefined);
+      void loadOptions();
+      setInitialized(true);
+      return;
+    }
+    if (!user?.id) return;
     supabase.from('merchants').select('id').eq('user_id', user.id).maybeSingle()
-      .then(({ data }) => { if (data?.id) setMyMerchantId(data.id); });
+      .then(({ data }) => {
+        const mid = data?.id ?? '';
+        setMyMerchantId(mid);
+        if (mid) {
+          void loadPromos(mid);
+          void loadOptions();
+        }
+        setInitialized(true);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, user?.id]);
 
-  // ── Modal states ─────────────────────────────────────────────────────────
+  // ── Modal states ──────────────────────────────────────────────────────────
   const [showForm,     setShowForm]     = useState(false);
   const [editTarget,   setEditTarget]   = useState<PromoCodeRow | null>(null);
   const [notifyTarget, setNotifyTarget] = useState<PromoCodeRow | null>(null);
   const [secretTarget, setSecretTarget] = useState<PromoCodeRow | null>(null);
 
-  // Pre-loaded items for edit modal
   const [initTargets,  setInitTargets]  = useState<MenuItemLite[]>([]);
   const [initBuyItems, setInitBuyItems] = useState<MenuItemLite[]>([]);
   const [initGetItems, setInitGetItems] = useState<MenuItemLite[]>([]);
 
-  // ── List filters ─────────────────────────────────────────────────────────
-  const [query,          setQuery]          = useState('');
-  const [showInactive,   setShowInactive]   = useState(true);
-  const [typeFilter,     setTypeFilter]     = useState('all');
-  const [merchantFilter, setMerchFilter]    = useState('');
-  const [showFilters,    setShowFilters]    = useState(false);
-  const [sortBy,         setSortBy]         = useState<'newest' | 'oldest' | 'priority'>('newest');
-  const [page,           setPage]           = useState(0);
+  // ── Filters ───────────────────────────────────────────────────────────────
+  const [query,          setQuery]       = useState('');
+  const [showInactive,   setShowInactive]= useState(true);
+  const [typeFilter,     setTypeFilter]  = useState('all');
+  const [merchantFilter, setMerchFilter] = useState('');
+  const [showFilters,    setShowFilters] = useState(false);
+  const [sortBy,         setSortBy]      = useState<'newest' | 'oldest' | 'priority'>('newest');
+  const [page,           setPage]        = useState(0);
   const PAGE_SIZE = 15;
 
-  // ── Initial load ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    const mid = !isAdmin ? myMerchantId : undefined;
-    if (!isAdmin && !myMerchantId) return;
-    void loadPromos(mid);
-    void loadOptions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myMerchantId]);
-
   // ── Filtered + sorted list ────────────────────────────────────────────────
+  const now = useMemo(() => new Date(), []);
+
   const filtered = useMemo(() => {
     let list = [...promos];
-
     if (!showInactive) list = list.filter(p => p.is_active);
-
     if (typeFilter !== 'all') {
-      if (typeFilter === 'bxgy')         list = list.filter(p => p.deal_type === 'bxgy');
-      else if (typeFilter === 'cart_discount') list = list.filter(p => (p.deal_type ?? 'cart_discount') !== 'bxgy');
-      else if (typeFilter === 'secret')  list = list.filter(p => p.is_secret);
-      else if (typeFilter === 'auto')    list = list.filter(p => p.auto_apply);
+      if (typeFilter === 'bxgy')              list = list.filter(p => p.deal_type === 'bxgy');
+      else if (typeFilter === 'cart_discount')list = list.filter(p => (p.deal_type ?? 'cart_discount') !== 'bxgy');
+      else if (typeFilter === 'secret')       list = list.filter(p => p.is_secret);
+      else if (typeFilter === 'auto')         list = list.filter(p => p.auto_apply);
     }
-
     if (merchantFilter) list = list.filter(p => p.merchant_id === merchantFilter || p.scope === 'global');
-
     if (query.trim()) {
       const q = query.toLowerCase();
       list = list.filter(p =>
@@ -166,39 +168,38 @@ export default function ManagePromoCodesPage() {
         (p.description ?? '').toLowerCase().includes(q),
       );
     }
-
     list.sort((a, b) => {
       if (sortBy === 'priority') return (num(b.priority) - num(a.priority)) || 0;
       if (sortBy === 'oldest')
         return new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime();
       return new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime();
     });
-
     return list;
   }, [promos, showInactive, typeFilter, merchantFilter, query, sortBy]);
 
   const paginated  = useMemo(() => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [filtered, page]);
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
 
-  // Reset page on filter change
   useEffect(() => { setPage(0); }, [query, typeFilter, merchantFilter, showInactive, sortBy]);
 
-  // ── Open edit modal with pre-loaded items ─────────────────────────────────
+  // ── Open edit modal ───────────────────────────────────────────────────────
+  // FIX: use an edit-request ID to prevent stale-closure race on rapid open/close
   const openEdit = useCallback(async (promo: PromoCodeRow) => {
     setInitTargets([]); setInitBuyItems([]); setInitGetItems([]);
     setEditTarget(promo);
     setShowForm(true);
-
+    const promoId = promo.id;
     try {
       if (promo.deal_type === 'bxgy') {
-        const targets: BxgyTargetRow[] = await getBxgyTargets(promo.id);
+        const targets: BxgyTargetRow[] = await getBxgyTargets(promoId);
+        // Guard: only apply if this is still the same promo being edited
         const buyIds = targets.filter(t => t.side === 'buy').map(t => t.menu_item_id).filter(Boolean) as string[];
         const getIds = targets.filter(t => t.side === 'get').map(t => t.menu_item_id).filter(Boolean) as string[];
         const [buy, get] = await Promise.all([getMenuItemsByIds(buyIds), getMenuItemsByIds(getIds)]);
         setInitBuyItems(buy);
         setInitGetItems(get);
       } else if (promo.scope === 'targets') {
-        const targets: PromoTargetRow[] = await getPromoTargets(promo.id);
+        const targets: PromoTargetRow[] = await getPromoTargets(promoId);
         const ids = targets.map(t => t.menu_item_id).filter(Boolean) as string[];
         setInitTargets(await getMenuItemsByIds(ids));
       }
@@ -207,7 +208,7 @@ export default function ManagePromoCodesPage() {
     }
   }, [getBxgyTargets, getPromoTargets, getMenuItemsByIds]);
 
-  // ── Submit handler (create + update) ─────────────────────────────────────
+  // ── Submit handler ────────────────────────────────────────────────────────
   const handleFormSubmit = useCallback(async (
     form    : PromoFormState,
     targets : MenuItemLite[],
@@ -216,25 +217,20 @@ export default function ManagePromoCodesPage() {
     notify  : boolean,
   ) => {
     if (!user?.id) return;
-
     const merchantId = isAdmin
       ? (form.scope === 'global' ? null : form.merchant_id || null)
       : (myMerchantId || null);
 
     const payload = buildPayload(form, merchantId, user.id);
-
     try {
       let saved: PromoCodeRow | null = null;
-
       if (editTarget) {
         saved = await updatePromo(editTarget.id, payload);
       } else {
         saved = await createPromo(payload);
       }
+      if (!saved) return;
 
-      if (!saved) return; // error already toasted inside hook
-
-      // Persist BXGY / target rows
       if (form.deal_type === 'bxgy') {
         await replaceBxgyTargets(
           saved.id,
@@ -245,7 +241,6 @@ export default function ManagePromoCodesPage() {
         await replacePromoTargets(saved.id, merchantId, targets.map(x => x.id));
       }
 
-      // Push notification
       if (notify) {
         await notifyForPromo(saved, editTarget ? 'activate' : 'create').catch(() => null);
       }
@@ -262,7 +257,6 @@ export default function ManagePromoCodesPage() {
     replacePromoTargets, notifyForPromo, loadPromos,
   ]);
 
-  // ── Copy code to clipboard ────────────────────────────────────────────────
   const copyCode = useCallback(async (code: string) => {
     try {
       await navigator.clipboard.writeText(code);
@@ -272,7 +266,6 @@ export default function ManagePromoCodesPage() {
     }
   }, []);
 
-  // ── Secret assign save ────────────────────────────────────────────────────
   const handleSecretSave = useCallback(async (
     userIds: string[], notify: boolean, msg: string,
   ) => {
@@ -285,18 +278,20 @@ export default function ManagePromoCodesPage() {
     }
   }, [secretTarget, assignSecretUsers]);
 
-  // ── Merchant name helper ──────────────────────────────────────────────────
   const merchantName = useCallback((id: string | null) => {
     if (!id) return 'Global';
     return merchants.find(m => m.id === id)?.business_name ?? id.slice(0, 8);
   }, [merchants]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // FIX: Active stat excludes expired promos
+  const activeCount = useMemo(
+    () => promos.filter(p => p.is_active && (!p.valid_until || new Date(p.valid_until) > now)).length,
+    [promos, now],
+  );
+
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto px-3 sm:px-5 py-4 min-h-screen">
-
-        {/* ── Page header ── */}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -304,7 +299,7 @@ export default function ManagePromoCodesPage() {
               Promo Codes & Offers
             </h1>
             <p className="text-xs text-gray-400 mt-0.5">
-              {promos.length} total · {promos.filter(p => p.is_active).length} active
+              {promos.length} total · {activeCount} active (non-expired)
             </p>
           </div>
 
@@ -318,7 +313,6 @@ export default function ManagePromoCodesPage() {
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             </button>
 
-            {/* Sort toggle */}
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as typeof sortBy)}
@@ -347,10 +341,8 @@ export default function ManagePromoCodesPage() {
           </div>
         </div>
 
-        {/* ── Stats ── */}
         <PromoStats promos={promos} />
 
-        {/* ── Filters ── */}
         {showFilters && (
           <div className="animate-fade-in">
             <PromoFilters
@@ -363,14 +355,12 @@ export default function ManagePromoCodesPage() {
           </div>
         )}
 
-        {/* ── Result count ── */}
         <p className="text-xs text-gray-400 mb-3">
           Showing {paginated.length} of {filtered.length} offers
           {typeFilter !== 'all' && ` · ${typeFilter}`}
           {merchantFilter && ` · ${merchantName(merchantFilter)}`}
         </p>
 
-        {/* ── Promo list ── */}
         {loading ? (
           <div className="space-y-2">
             {[1, 2, 3, 4].map(i => (
@@ -409,7 +399,6 @@ export default function ManagePromoCodesPage() {
           </div>
         )}
 
-        {/* ── Pagination ── */}
         {totalPages > 1 && (
           <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
             <button
@@ -419,7 +408,6 @@ export default function ManagePromoCodesPage() {
             >
               ← Prev
             </button>
-
             {Array.from({ length: totalPages }, (_, i) => i).map(i => (
               <button
                 key={i}
@@ -433,7 +421,6 @@ export default function ManagePromoCodesPage() {
                 {i + 1}
               </button>
             ))}
-
             <button
               onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
@@ -445,7 +432,6 @@ export default function ManagePromoCodesPage() {
         )}
       </div>
 
-      {/* ── Promo Form Modal ── */}
       {showForm && (
         <PromoFormModal
           editTarget   ={editTarget}
@@ -455,6 +441,8 @@ export default function ManagePromoCodesPage() {
           isAdmin      ={isAdmin}
           defaultMerId ={myMerchantId}
           initTargets  ={initTargets}
+           key={editTarget?.id ?? 'new-offer'} 
+           
           initBuyItems ={initBuyItems}
           initGetItems ={initGetItems}
           onSubmit     ={handleFormSubmit}
@@ -462,20 +450,22 @@ export default function ManagePromoCodesPage() {
         />
       )}
 
-      {/* ── Notify Modal ── */}
       {notifyTarget && (
         <NotifyPromoModal
           promo    ={notifyTarget}
           merchants={merchants}
-          onSend   ={msg => {
-            notifyForPromo(notifyTarget, 'activate', msg).catch(() => null);
-            toast.success('Notification queued!');
+          onSend   ={async msg => {
+            try {
+              await notifyForPromo(notifyTarget, 'activate', msg);
+              toast.success('Notification sent!');
+            } catch {
+              toast.error('Failed to send notification');
+            }
           }}
           onClose  ={() => setNotifyTarget(null)}
         />
       )}
 
-      {/* ── Secret Manager Modal ── */}
       {secretTarget && (
         <SecretManagerModal
           promo     ={secretTarget}

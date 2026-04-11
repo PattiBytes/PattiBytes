@@ -3,10 +3,12 @@ import { BadgePercent, Gift, Lock, Zap } from 'lucide-react';
 import type { PromoCodeRow } from '../_types';
 
 export function PromoStats({ promos }: { promos: PromoCodeRow[] }) {
-  const active  = promos.filter(p => p.is_active).length;
+  const now    = new Date();
+  // FIX: active count excludes expired promos
+  const active  = promos.filter(p => p.is_active && (!p.valid_until || new Date(p.valid_until) > now)).length;
   const bxgy    = promos.filter(p => p.deal_type === 'bxgy').length;
   const secret  = promos.filter(p => p.is_secret).length;
-  const autoApp = promos.filter(p => p.auto_apply).length;
+  const autoApp = promos.filter(p => p.auto_apply && p.is_active).length;
 
   const cards = [
     { label: 'Total',       value: promos.length, Icon: BadgePercent, cls: 'bg-blue-50   text-blue-700'   },
