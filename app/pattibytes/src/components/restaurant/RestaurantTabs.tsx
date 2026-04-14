@@ -34,7 +34,17 @@ export default function RestaurantTabs({
 }
 
 const S = StyleSheet.create({
-  tabs: { flexDirection: 'row', backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  tabs: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+  },
   tab: { flex: 1, paddingVertical: 13, alignItems: 'center' },
   tabActive: { borderBottomWidth: 3, borderBottomColor: COLORS.primary },
   tabTxt: { fontSize: 12, fontWeight: '700', color: COLORS.textLight },

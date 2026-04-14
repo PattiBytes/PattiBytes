@@ -1,3 +1,4 @@
+// src/components/profile/ProfileHero.tsx
 import React from "react";
 import {
   View,
@@ -8,19 +9,37 @@ import {
 } from "react-native";
 import { S } from "./profileStyles";
 import { Pill } from "./Pill";
-import { safeNum, safeBool , moneyINR } from "./helpers";
+import { safeNum, safeBool, moneyINR } from "./helpers";
 import type { ProfileRow, Stats } from "./types";
-
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { COLORS } from "../../lib/constants";
 
 interface Props {
-  profile: ProfileRow | null;
-  displayName: string;
-  email: string;
-  stats: Stats;
-  uploading: boolean;
+  profile:      ProfileRow | null;
+  displayName:  string;
+  email:        string;
+  stats:        Stats;
+  uploading:    boolean;
   onPickAvatar: () => void;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const isPrivateRelay = (e: string) => e.includes('@privaterelay.appleid.com');
+
+/** Best display name from whatever data we have — never returns '' */
+function resolveDisplayName(displayName: string, email: string): string {
+  // Use || not ?? so empty strings are treated as falsy
+  return (
+    displayName.trim()                                              ||
+    (isPrivateRelay(email) ? 'Apple User' : email.split('@')[0])  ||
+    'User'
+  );
+}
+
+/** Single capital letter for avatar placeholder — safe against empty strings */
+function avatarInitial(name: string, email: string): string {
+  const n = name.trim() || email.trim();
+  return (n.charAt(0) || 'U').toUpperCase();
 }
 
 export function ProfileHero({
@@ -31,11 +50,19 @@ export function ProfileHero({
   uploading,
   onPickAvatar,
 }: Props) {
-  const role = String(profile?.role ?? "customer").toUpperCase();
-  const approval = String(profile?.approval_status ?? "approved").toLowerCase();
-  const account = String(profile?.account_status ?? "active").toLowerCase();
-  const trusted = safeBool(profile?.is_trusted, false);
+  const role       = String(profile?.role           ?? "customer").toUpperCase();
+  const approval   = String(profile?.approval_status ?? "approved").toLowerCase();
+  const account    = String(profile?.account_status  ?? "active").toLowerCase();
+  const trusted    = safeBool(profile?.is_trusted, false);
   const trustScore = safeNum(profile?.trust_score, 0);
+
+  // ✅ FIX: || catches empty strings; ?? does not
+  const resolvedName = resolveDisplayName(displayName, email);
+
+  // Mask private relay emails in the UI
+  const displayEmail = isPrivateRelay(email)
+    ? '(Apple private email)'
+    : email;
 
   return (
     <>
@@ -50,10 +77,8 @@ export function ProfileHero({
             <Image source={{ uri: profile.avatar_url }} style={S.avatar} />
           ) : (
             <View style={S.avatarPlaceholder}>
-              <Text
-                style={{ fontSize: 38, color: "#fff", fontWeight: "900" }}
-              >
-                {displayName.charAt(0).toUpperCase()}
+              <Text style={{ fontSize: 38, color: "#fff", fontWeight: "900" }}>
+                {avatarInitial(resolvedName, email)}
               </Text>
             </View>
           )}
@@ -66,11 +91,14 @@ export function ProfileHero({
           </View>
         </TouchableOpacity>
 
-        <Text style={S.heroName}>{displayName}</Text>
-        {profile?.username ? (
+        <Text style={S.heroName}>{resolvedName}</Text>
+
+        {/* Only show @username if it exists */}
+        {!!profile?.username?.trim() && (
           <Text style={S.heroUsername}>@{profile.username}</Text>
-        ) : null}
-        <Text style={S.heroEmail}>{email}</Text>
+        )}
+
+        <Text style={S.heroEmail}>{displayEmail}</Text>
 
         <View style={S.pillRow}>
           <Pill text={`👤 ${role}`} />
@@ -92,9 +120,7 @@ export function ProfileHero({
             <View
               style={[
                 S.trustBarFill,
-                {
-                  width: `${Math.min(100, Math.max(0, trustScore))}%` as any,
-                },
+                { width: `${Math.min(100, Math.max(0, trustScore))}%` as any },
               ]}
             />
           </View>
@@ -105,10 +131,10 @@ export function ProfileHero({
       {/* Stats strip */}
       <View style={S.statsRow}>
         {[
-          { label: "Orders", value: String(stats.total), emoji: "📦" },
-          { label: "Done", value: String(stats.completed), emoji: "✅" },
-          { label: "Cancelled", value: String(stats.cancelled), emoji: "❌" },
-          { label: "Spent", value: moneyINR(stats.totalSpent), emoji: "💰" },
+          { label: "Orders",    value: String(stats.total),         emoji: "📦" },
+          { label: "Done",      value: String(stats.completed),     emoji: "✅" },
+          { label: "Cancelled", value: String(stats.cancelled),     emoji: "❌" },
+          { label: "Spent",     value: moneyINR(stats.totalSpent),  emoji: "💰" },
         ].map((x, i) => (
           <View key={x.label} style={[S.statCard, i < 3 && S.statDivider]}>
             <Text style={{ fontSize: 20, marginBottom: 4 }}>{x.emoji}</Text>

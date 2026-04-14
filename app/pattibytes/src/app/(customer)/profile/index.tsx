@@ -79,7 +79,10 @@ export default function ProfileSettingsPage() {
 
   // Profile edit
   const [editingProfile, setEditingProfile] = useState(false);
-  const [form, setForm] = useState({ full_name: "", phone: "", username: "" });
+const [form, setForm] = useState({
+  full_name: '', phone: '', username: '',
+  city: '', state: '', pincode: '', address: '',
+});
   const [savingProfile, setSavingProfile] = useState(false);
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
   const usernameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -109,10 +112,10 @@ export default function ProfileSettingsPage() {
     try {
       const [pRes, ordersRes, addrRes, legalRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
-        supabase
-          .from("orders")
-          .select("status,totalamount")
-          .eq("customerid", user.id),
+      supabase
+  .from("orders")
+  .select("status,total_amount")  // ✅ snake_case
+  .eq("customer_id", user.id),    // ✅ snake_case
         supabase
           .from("saved_addresses")
           .select("*")
@@ -130,10 +133,19 @@ export default function ProfileSettingsPage() {
       setProfile(p);
       setPrefs(parsePrefs(p?.notification_prefs));
       setForm({
-        full_name: String(p?.full_name ?? "").trim(),
-        phone: String(p?.phone ?? "").trim(),
-        username: String(p?.username ?? "").trim(),
-      });
+  full_name: String(p?.full_name ?? '').trim(),
+  phone:     String(p?.phone     ?? '').trim(),
+  username:  String(p?.username  ?? '').trim(),
+  city:      String(p?.city      ?? '').trim(),
+  state:     String(p?.state     ?? '').trim(),
+  pincode:   String(p?.pincode   ?? '').trim(),
+  address:   String(p?.address   ?? '').trim(),
+});
+supabase
+  .from('profiles')
+  .update({ last_seen_at: new Date().toISOString() })
+  .eq('id', user.id)
+  .then(() => {});
 
       if (!ordersRes.error) {
         const orders = (ordersRes.data ?? []) as any[];
@@ -143,9 +155,9 @@ export default function ProfileSettingsPage() {
         const cancelled = orders.filter(
           (o) => String(o?.status).toLowerCase() === "cancelled"
         ).length;
-        const totalSpent = orders
-          .filter((o) => String(o?.status).toLowerCase() === "delivered")
-          .reduce((s, o) => s + safeNum(o?.totalamount, 0), 0);
+       const totalSpent = orders
+  .filter((o) => String(o?.status).toLowerCase() === "delivered")
+  .reduce((s, o) => s + safeNum(o?.total_amount, 0), 0);  // ✅
         setStats({ total: orders.length, completed, cancelled, totalSpent });
       }
       if (!addrRes.error)
@@ -199,29 +211,60 @@ export default function ProfileSettingsPage() {
   );
 
   // ── Save profile ───────────────────────────────────────────
-  const saveProfile = async () => {
-    if (!user?.id) return;
-    if (usernameStatus === "taken") { Alert.alert("Username taken", "Choose another."); return; }
-    if (usernameStatus === "invalid") { Alert.alert("Invalid username", "3–20 chars: a-z, 0-9, _ only."); return; }
-    if (usernameStatus === "checking") { Alert.alert("Please wait", "Checking username..."); return; }
-    setSavingProfile(true);
-    try {
-      const { error } = await supabase.from("profiles").update({
-        full_name: form.full_name.trim() || null,
-        phone: form.phone.replace(/\D/g, "").slice(0, 10) || null,
-        username: form.username.trim().toLowerCase() || null,
-        updated_at: new Date().toISOString(),
-      }).eq("id", user.id);
-      if (error) throw error;
-      setEditingProfile(false);
-      await loadAll();
-      Alert.alert("Saved ✅", "Profile updated.");
-    } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Failed to save");
-    } finally {
-      setSavingProfile(false);
+ const saveProfile = async () => {
+  if (!user?.id) return;
+  if (usernameStatus === 'taken')    { Alert.alert('Username taken',   'Choose another.'); return; }
+  if (usernameStatus === 'invalid')  { Alert.alert('Invalid username', '3–20 chars a-z, 0-9, _ only.'); return; }
+  if (usernameStatus === 'checking') { Alert.alert('Please wait',      'Checking username availability…'); return; }
+
+  setSavingProfile(true);
+  try {
+    const currentUsername = (profile?.username ?? '').toLowerCase();
+    const newUsername     = form.username.trim().toLowerCase();
+    const usernameChanged = newUsername !== currentUsername;
+
+    const payload: Record<string, any> = {
+      full_name:  form.full_name.trim() || null,
+      phone:      form.phone.replace(/\D/g, '').slice(0, 10) || null,
+      city:       form.city.trim()    || null,
+      state:      form.state.trim()   || null,
+      pincode:    form.pincode.trim() || null,
+      address:    form.address.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Only include username in payload when it actually changed
+    // — prevents spurious profiles_username_key constraint violations
+    if (usernameChanged) {
+      payload.username = newUsername || null;
     }
-  };
+
+    const { error } = await supabase
+      .from('profiles')
+      .update(payload)
+      .eq('id', user.id);
+
+    if (error) {
+      if (
+        error.code === '23505' ||
+        String(error.message).includes('profiles_username_key')
+      ) {
+        setUsernameStatus('taken');
+        Alert.alert('Username taken', 'That username is already in use. Please choose another.');
+        return;
+      }
+      throw error;
+    }
+
+    setEditingProfile(false);
+    await loadAll();
+    Alert.alert('Saved ✅', 'Profile updated successfully.');
+  } catch (e: any) {
+    Alert.alert('Error', e?.message ?? 'Failed to save profile');
+  } finally {
+    setSavingProfile(false);
+  }
+};
 
   // ── Avatar ─────────────────────────────────────────────────
   const pickAvatar = async () => {

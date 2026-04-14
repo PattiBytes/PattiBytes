@@ -1,14 +1,18 @@
  
+ 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity,
   ActivityIndicator, Alert,
 } from 'react-native'
-import { Stack, useRouter } from 'expo-router'
+import { Stack, useRouter , useFocusEffect } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { useCart } from '../../../contexts/CartContext'
 import { COLORS } from '../../../lib/constants'
+import { appCache, TTL } from '../../../lib/appCache'
+import { ScreenLoader } from '../../../components/ui/ScreenLoader';
+import { AppStatusBar } from '../../../components/ui/AppStatusBar'
 import { getSavedAddresses, type SavedAddress } from '../../../services/location'
 import {
   promoCodeService,
@@ -33,6 +37,9 @@ import CheckoutBar            from '../../../components/cart/CheckoutBar'
 import AddressPickerModal     from '../../../components/cart/AddressPickerModal'
 import ClearCartModal         from '../../../components/cart/ClearCartModal'
 import { useAppSettings }     from '../../../hooks/useAppSettings'
+
+import AuthRequiredSheet from '../../../components/auth/AuthRequiredSheet'
+import { useRequireAuthAction } from '../../../hooks/useRequireAuthAction'
 
 // ── Types & utils ─────────────────────────────────────────────────────────────
 import {
@@ -87,7 +94,7 @@ export default function CartPage() {
   const [merchantGeo,    setMerchantGeo]   = useState<MerchantGeo | null>(null)
   const [loading,        setLoading]       = useState(true)
   const [showClearModal, setShowClearModal] = useState(false)
-
+const { showAuthSheet, setShowAuthSheet, requireAuth } = useRequireAuthAction()
   // ── Sync showDeliveryFee from settings ────────────────────────────────────
   useEffect(() => {
     if (!settingsLoading) {
@@ -121,42 +128,45 @@ export default function CartPage() {
 
   // ── Load addresses + merchant geo + promos ────────────────────────────────
   // Does NOT fetch app_settings (hook handles that)
-  const loadPageData = useCallback(async () => {
+   const loadPageData = useCallback(async () => {
     if (!user) return
     setLoading(true)
     try {
-      // 1. Addresses
-      const addrList = await getSavedAddresses(user.id)
-      const list     = addrList ?? []
-      setAddresses(list)
-      const def = list.find(a => a.is_default) ?? list[0] ?? null
-      setSelectedAddr(def)
-
-      // 2. Merchant geo + GST (restaurant orders only)
       if (cart?.merchant_id && orderType === 'restaurant') {
-        const { data: merch } = await supabase
-          .from('merchants')
-          .select('latitude,longitude,gst_enabled,gst_percentage,min_order_amount,estimated_prep_time,phone')
-          .eq('id', cart.merchant_id)
-          .maybeSingle()
 
-        if (merch) {
-          setMerchantGeo(merch as MerchantGeo)
-          setGstEnabled(!!(merch as any).gst_enabled)
-          setGstPct(Number((merch as any).gst_percentage ?? 0))
+        // ── Check cache first ────────────────────────────────────────────────
+        const cacheKey    = `merchant_geo_${cart.merchant_id}`
+        const cachedMerch = appCache.get<MerchantGeo>(cacheKey)
+
+        // ── Run merchant geo + promos in parallel ────────────────────────────
+        const [merchResult, promos] = await Promise.all([
+          cachedMerch
+            ? Promise.resolve(cachedMerch)
+            : supabase
+                .from('merchants')
+                .select('latitude,longitude,gst_enabled,gst_percentage,min_order_amount,estimated_prep_time,phone')
+                .eq('id', cart.merchant_id)
+                .maybeSingle()
+                .then(({ data }) => data as MerchantGeo | null),
+          promoCodeService.getActivePromos(cart.merchant_id),
+        ])
+
+        if (merchResult) {
+          if (!cachedMerch) {
+            appCache.set(cacheKey, merchResult, TTL.MERCHANT_GEO)
+          }
+          setMerchantGeo(merchResult)
+          setGstEnabled(!!(merchResult as any).gst_enabled)
+          setGstPct(Number((merchResult as any).gst_percentage ?? 0))
         }
 
-        // 3. Available promos
-        const promos = await promoCodeService.getActivePromos(cart.merchant_id)
         setAvailablePromos(promos ?? [])
 
-        // Auto-apply first matching auto-apply promo
         const auto = (promos ?? []).find(p => p.auto_apply)
-        if (auto && !appliedPromo) {
-          void applyPromoSilent(auto)
-        }
+        if (auto && !appliedPromo) void applyPromoSilent(auto)
+
       } else if (cart?.merchant_id) {
-        // Store/custom — still load promos (no merchant filter)
+        // Store / Custom — promos only (no merchant geo needed)
         const promos = await promoCodeService.getActivePromos(null)
         setAvailablePromos(promos ?? [])
       }
@@ -169,6 +179,38 @@ export default function CartPage() {
   }, [user, cart?.merchant_id, orderType])
 
   useEffect(() => { loadPageData() }, [loadPageData])
+
+  const loadAddresses = useCallback(async () => {
+  if (!user?.id) return
+  try {
+    const addrList = await getSavedAddresses(user.id)
+    const list = addrList ?? []
+    setAddresses(list)
+
+    setSelectedAddr(prev => {
+      if (!prev) {
+        // Nothing selected yet — pick default or first
+        return list.find(a => a.is_default) ?? list[0] ?? null
+      }
+      // Refresh selected address data (coords/label may have changed)
+      const refreshed = list.find(a => a.id === prev.id)
+      if (refreshed) return refreshed
+      // Previously selected was deleted — fall back to default
+      return list.find(a => a.is_default) ?? list[0] ?? null
+    })
+  } catch (e: any) {
+    console.warn('[CartPage] loadAddresses', e.message)
+  }
+}, [user?.id])   // ← only depends on user id, NOT selectedAddr (avoids loop)
+
+// ─── Reload addresses every time the screen comes into focus ──────────────────
+// This fires when: user returns from /addresses after adding a new one,
+// when modal is dismissed, and on initial mount
+useFocusEffect(
+  useCallback(() => {
+    loadAddresses()
+  }, [loadAddresses])
+)
 
   // ── Recalculate delivery fee ──────────────────────────────────────────────
   // Runs whenever: address / merchant geo / settings / subtotal / order type change
@@ -435,6 +477,7 @@ export default function CartPage() {
       )
       return
     }
+    requireAuth(() => {
     router.push({
       pathname: '/(customer)/checkout' as any,
       params: {
@@ -452,19 +495,29 @@ export default function CartPage() {
         item_notes:         JSON.stringify(itemNotes),
       },
     })
-  }
+  })
+}
 
   // ── Empty / loading states ─────────────────────────────────────────────────
-  if (loading || settingsLoading) return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
-      <Stack.Screen options={{ title: 'Cart' }} />
-      <ActivityIndicator size="large" color={COLORS.primary} />
+  if (loading || settingsLoading) {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
+      <Stack.Screen options={{ title: 'Cart', statusBarStyle: 'light' }} />
+      <AppStatusBar backgroundColor={COLORS.primary} style="light" />
+      <ScreenLoader variant="cart" />
     </View>
-  )
+  );
+}
 
   if (!cart?.items?.length) return (
     <View style={{ flex: 1, backgroundColor: '#F8F9FA', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <Stack.Screen options={{ title: 'Cart' }} />
+    <Stack.Screen
+  options={{
+    title: 'Cart',
+    statusBarStyle: 'light',       
+  }}
+/>
+      <AppStatusBar backgroundColor={COLORS.primary} style="light" />
       <Text style={{ fontSize: 72, marginBottom: 16 }}>🛒</Text>
       <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827', marginBottom: 8 }}>
         Your cart is empty
@@ -484,22 +537,21 @@ export default function CartPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
-      <Stack.Screen options={{
-        title: orderType === 'restaurant' ? 'Cart'
-          : orderType === 'store'      ? 'Store Cart'
-          :                              'Custom Order Cart',
-        headerStyle:      { backgroundColor: COLORS.primary },
-        headerTintColor:  '#fff',
-        headerTitleStyle: { fontWeight: '800' },
-        headerRight: () => (
-          <TouchableOpacity onPress={() => setShowClearModal(true)} style={{ marginRight: 14 }}>
-            <Text style={{ color: 'rgba(255,255,255,0.85)', fontWeight: '700', fontSize: 13 }}>
-              Clear 🗑️
-            </Text>
-          </TouchableOpacity>
-        ),
-      }} />
-
+    <Stack.Screen
+  options={{
+    title: orderType === 'restaurant' ? 'Cart' : orderType === 'store' ? 'Store Cart' : 'Custom Order Cart',
+    headerStyle: { backgroundColor: COLORS.primary },
+    headerTintColor: '#fff',
+    headerTitleStyle: { fontWeight: '800' },
+    statusBarStyle: 'light',       
+    headerRight: () => (
+      <TouchableOpacity onPress={() => setShowClearModal(true)} style={{ marginRight: 14 }}>
+        <Text style={{ color: 'rgba(255,255,255,0.85)', fontWeight: '700', fontSize: 13 }}>Clear</Text>
+      </TouchableOpacity>
+    ),
+  }}
+/>
+<AppStatusBar backgroundColor={COLORS.primary} style="light" />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 160 }}
@@ -642,6 +694,13 @@ export default function CartPage() {
         onCancel={() => setShowClearModal(false)}
         onConfirm={() => { clearCart(); setShowClearModal(false) }}
       />
+     
+      <AuthRequiredSheet
+  visible={showAuthSheet}
+  onClose={() => setShowAuthSheet(false)}
+  title="Sign in to place your order"
+  message="Browsing is free — but an account is needed for addresses, payments, and order tracking."
+/>
     </View>
   )
 }

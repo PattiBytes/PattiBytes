@@ -1,8 +1,10 @@
 import React, { useMemo } from 'react';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { View, Text, StyleSheet, Pressable, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Alert, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../lib/constants';
 import Pressable3D from '../../components/ui/Pressable3D';
+
 export default function BottomCartBar({
   visible,
   itemCount,
@@ -17,12 +19,22 @@ export default function BottomCartBar({
   onClear: () => void;
 }) {
   const safeTotal = useMemo(() => (Number.isFinite(total) ? total : 0), [total]);
+  const insets = useSafeAreaInsets();
 
   if (!visible) return null;
 
   return (
     <View style={S.wrap} pointerEvents="box-none">
-      <View style={S.bar}>
+      <View
+        style={[
+          S.bar,
+          {
+            // ✅ Dynamically respect home indicator (iOS) and gesture nav bar (Android).
+            // Falls back to a sensible minimum (12px) on devices with no bottom inset.
+            marginBottom: Math.max(insets.bottom, 12),
+          },
+        ]}
+      >
         <View style={{ flex: 1 }}>
           <Text style={S.line1}>
             {itemCount} item{itemCount === 1 ? '' : 's'} selected
@@ -61,7 +73,7 @@ const S = StyleSheet.create({
   },
   bar: {
     marginHorizontal: 12,
-    marginBottom: Platform.OS === 'ios' ? 18 : 14,
+    // ✅ marginBottom is now set dynamically above via insets — removed hardcoded Platform check
     backgroundColor: '#111827',
     borderRadius: 16,
     padding: 14,
@@ -69,6 +81,11 @@ const S = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     elevation: 18,
+    // Shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
   },
   line1: { color: '#E5E7EB', fontWeight: '800', fontSize: 12 },
   line2: { color: '#FFF', fontWeight: '900', fontSize: 18, marginTop: 2 },

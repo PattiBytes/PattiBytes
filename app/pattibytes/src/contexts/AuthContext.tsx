@@ -14,7 +14,6 @@ import {
 } from '../lib/notificationHandler'
 
 type AuthCtx = {
-  [x: string]: any
   user:           User | null
   profile:        Profile | null
   loading:        boolean
@@ -96,8 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     ;(async () => {
       try {
-        const { data } = await supabase.auth.getSession()
-        const u = data.session?.user ?? null
+        const { data: { user: u } } = await supabase.auth.getUser()
         if (!mounted.current) return
         if (u) await handleSignedIn(u)
         else { setUser(null); setProfile(null) }

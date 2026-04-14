@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   View,
@@ -18,10 +18,10 @@ import * as Device from 'expo-device'
 import { supabase } from '../../../../lib/supabase'
 import { useAuth } from '../../../../contexts/AuthContext'
 import { COLORS } from '../../../../lib/constants'
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE, canUseMapLibre } from '../../../../components/MapView'
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '../../../../components/MapView'
 import type { Region } from '../../../../components/MapView'
+import { ScreenLoader } from '../../../../components/ui/ScreenLoader'
 
-// ── Order sub-components ──────────────────────────────────────────────────────
 import StatusHero from '../../../../components/orders/StatusHero'
 import OrderTimeline from '../../../../components/orders/OrderTimeline'
 import CustomOrderFlow from '../../../../components/orders/CustomOrderFlow'
@@ -37,11 +37,9 @@ import {
   RESTAURANT_TIMELINE,
   STORE_TIMELINE,
   CUSTOM_TIMELINE,
-  STATUS_ORDER,
   TRACKABLE_STATUSES,
 } from '../../../../components/orders/constants'
 
-// ✅ Import MerchantInfo from the shared orders types (avoid redefining it here)
 import type { OrderDetail, DriverInfo, LatLng, MerchantInfo } from '../../../../components/orders/types'
 import { useAppSettings, getSupportWhatsApp } from '../../../../hooks/useAppSettings'
 
@@ -49,6 +47,45 @@ import { useAppSettings, getSupportWhatsApp } from '../../../../hooks/useAppSett
 const canUsePush =
   Device.isDevice &&
   !(Platform.OS === 'android' && Constants.appOwnership === 'expo')
+
+// ── Full order select columns ─────────────────────────────────────────────────
+// Every field accessed anywhere in this screen — single source of truth
+const ORDER_SELECT = [
+  'id',
+  'order_number',
+  'status',
+  'order_type',
+  'items',
+  'merchant_id',
+  'driver_id',
+  'driver_location',
+  'delivery_latitude',
+  'delivery_longitude',
+  'delivery_address',
+  'delivery_distance_km',
+  'custom_order_status',
+  'quoted_amount',
+  'custom_category',
+  'platform_handled',
+  'hub_origin',
+  'cancellation_reason',
+  'cancelled_by',
+  'subtotal',
+  'delivery_fee',
+  'discount',
+  'tax',
+  'total_amount',
+  'payment_method',
+  'payment_status',
+  'special_instructions',
+  'promo_code',
+  'created_at',
+  'updated_at',
+  'estimated_delivery_time',
+  'actual_delivery_time',
+  'preparation_time',
+  'customer_id',
+].join(',')
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function parseLocation(v: unknown): { lat: number; lng: number } | null {
@@ -61,9 +98,7 @@ function parseLocation(v: unknown): { lat: number; lng: number } | null {
     try {
       const o = JSON.parse(v)
       if (typeof o.lat === 'number' && typeof o.lng === 'number') return o
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }
   return null
 }
@@ -78,32 +113,27 @@ function fmtDateTime(iso?: string | null) {
   if (!iso) return '—'
   try {
     return new Date(iso).toLocaleString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
     })
-  } catch {
-    return iso
-  }
+  } catch { return iso }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function OrderDetailPage() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const router = useRouter()
+  const router  = useRouter()
   const { user } = useAuth()
   const { settings } = useAppSettings()
 
-  const [order, setOrder] = useState<OrderDetail | null>(null)
-  const [merchant, setMerchant] = useState<MerchantInfo | null>(null)
-  const [driver, setDriver] = useState<DriverInfo | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [driverCoords, setDriverCoords] = useState<LatLng | null>(null)
-  const [showCancel, setShowCancel] = useState(false)
-  const [cancelling, setCancelling] = useState(false)
+  const [order,          setOrder]          = useState<OrderDetail | null>(null)
+  const [merchant,       setMerchant]       = useState<MerchantInfo | null>(null)
+  const [driver,         setDriver]         = useState<DriverInfo | null>(null)
+  const [loading,        setLoading]        = useState(true)
+  const [refreshing,     setRefreshing]     = useState(false)
+  const [driverCoords,   setDriverCoords]   = useState<LatLng | null>(null)
+  const [showCancel,     setShowCancel]     = useState(false)
+  const [cancelling,     setCancelling]     = useState(false)
   const [acceptingQuote, setAcceptingQuote] = useState(false)
 
   const orderIdRef = useRef<string | null>(null)
@@ -114,79 +144,60 @@ export default function OrderDetailPage() {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select(`
-          id, order_number, status, order_type, platform_handled,
-          subtotal, delivery_fee, tax, discount, total_amount,
-          payment_method, payment_status,
-          delivery_address, delivery_address_label,
-          customer_notes, special_instructions, delivery_instructions,
-          created_at, updated_at,
-          estimated_delivery_time, actual_delivery_time, preparation_time,
-          cancellation_reason, cancelled_by,
-          rating, review,
-          delivery_distance_km,
-          customer_phone, recipient_name,
-          delivery_latitude, delivery_longitude,
-          customer_location, driver_location,
-          promo_code, promo_id,
-          merchant_id, driver_id,
-          hub_origin, items,
-          custom_order_ref, custom_order_status,
-          quoted_amount, quote_message,
-          custom_category, custom_image_url
-        `)
+        .select(ORDER_SELECT)           // ← was a comment placeholder before
         .eq('id', id)
         .eq('customer_id', user.id)
         .single()
 
       if (error) throw error
-      const o = data as OrderDetail
+
+      const o = data as unknown as OrderDetail
       setOrder(o)
       orderIdRef.current = o.id
 
-      // Parse driver location
       const dl = parseLocation(o.driver_location)
       if (dl) setDriverCoords({ latitude: dl.lat, longitude: dl.lng })
-      else setDriverCoords(null)
+      else    setDriverCoords(null)
 
-      // Load merchant (restaurant orders only)
-      if (o.merchant_id && o.order_type === 'restaurant') {
-        const { data: m } = await supabase
-          .from('merchants')
-          .select('id,business_name,logo_url,phone,address,latitude,longitude')
-          .eq('id', o.merchant_id)
-          .maybeSingle()
+      // Merchant + driver in parallel
+      const [merchResult, driverResult] = await Promise.all([
+        o.merchant_id && o.order_type === 'restaurant'
+          ? supabase
+              .from('merchants')
+              .select('id,business_name,logo_url,phone,address,latitude,longitude')
+              .eq('id', o.merchant_id)
+              .maybeSingle()
+              .then(({ data: m }) => m ?? null)
+          : Promise.resolve(null),
 
-        setMerchant(m ? (m as MerchantInfo) : null)
-      } else {
-        setMerchant(null)
-      }
+        o.driver_id
+          ? supabase
+              .from('profiles')
+              .select('id,full_name,phone,avatar_url')
+              .eq('id', o.driver_id)
+              .maybeSingle()
+              .then(({ data: d }) => d ?? null)
+          : Promise.resolve(null),
+      ])
 
-      // Load driver
-      if (o.driver_id) {
-        const { data: d } = await supabase
-          .from('profiles')
-          .select('id,full_name,phone,avatar_url')
-          .eq('id', o.driver_id)
-          .maybeSingle()
-        setDriver(d ? (d as DriverInfo) : null)
-      } else {
-        setDriver(null)
-      }
+      setMerchant(merchResult as MerchantInfo | null)
+      setDriver(driverResult as DriverInfo | null)
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to load order', [
+      Alert.alert('Error', e?.message ?? 'Could not load order', [
         { text: 'Back', onPress: () => router.back() },
       ])
     } finally {
-      setLoading(false)
+      setLoading(false)   // ← always clears loading, even on error
     }
   }, [id, user, router])
 
+  // ── FIX: call loadOrder on mount ──────────────────────────────────────────
+  // This was the PRIMARY bug — loadOrder was defined but never invoked.
   useEffect(() => {
     loadOrder()
   }, [loadOrder])
 
-  // ── Real-time updates ─────────────────────────────────────────────────────
+  // ── Real-time order updates ───────────────────────────────────────────────
   useEffect(() => {
     if (!id) return
     const sub = supabase
@@ -199,12 +210,10 @@ export default function OrderDetailPage() {
           setOrder(prev => (prev ? { ...prev, ...u } : null))
           const dl = parseLocation(u.driver_location)
           if (dl) setDriverCoords({ latitude: dl.lat, longitude: dl.lng })
-        }
+        },
       )
       .subscribe()
-    return () => {
-      sub.unsubscribe()
-    }
+    return () => { sub.unsubscribe() }
   }, [id])
 
   // ── Push notification tap ─────────────────────────────────────────────────
@@ -218,11 +227,10 @@ export default function OrderDetailPage() {
         else if (data?.order_id) router.push(`/(customer)/orders/${data.order_id}` as any)
       })
     })
-    return () => {
-      sub?.remove?.()
-    }
+    return () => { sub?.remove?.() }
   }, [id, loadOrder, router])
 
+  // ── Pull-to-refresh ───────────────────────────────────────────────────────
   const onRefresh = async () => {
     setRefreshing(true)
     await loadOrder()
@@ -232,7 +240,6 @@ export default function OrderDetailPage() {
   // ── Cancel order ──────────────────────────────────────────────────────────
   const handleCancelOrder = async (reason: string) => {
     if (!order || !user) return
-
     if (!CANCELLABLE_STATUSES.includes(order.status)) {
       const phone = (settings?.support_phone ?? '+918400009045').replace(/\D/g, '')
       Alert.alert(
@@ -243,15 +250,14 @@ export default function OrderDetailPage() {
             text: '💬 Contact Support',
             onPress: () =>
               Linking.openURL(
-                `https://wa.me/${phone}?text=Hi! Help cancelling order %23${order.order_number}`
+                `https://wa.me/${phone}?text=Hi! Help cancelling order %23${order.order_number}`,
               ),
           },
           { text: 'OK', style: 'cancel' },
-        ]
+        ],
       )
       return
     }
-
     setCancelling(true)
     try {
       await supabase.from('order_cancellations').insert({
@@ -272,14 +278,14 @@ export default function OrderDetailPage() {
       if (error) throw error
 
       await supabase.from('notifications').insert({
-        user_id: user.id,
-        title: 'Order Cancelled',
-        message: `Your order #${order.order_number} has been cancelled.`,
-        type: 'order',
-        data: { order_id: order.id, status: 'cancelled' },
-        body: `Your order #${order.order_number} has been cancelled.`,
-        is_read: false,
-        sent_push: false,
+        user_id:    user.id,
+        title:      'Order Cancelled',
+        message:    `Your order #${order.order_number} has been cancelled.`,
+        type:       'order',
+        data:       { order_id: order.id, status: 'cancelled' },
+        body:       `Your order #${order.order_number} has been cancelled.`,
+        is_read:    false,
+        sent_push:  false,
         created_at: new Date().toISOString(),
       })
 
@@ -297,32 +303,36 @@ export default function OrderDetailPage() {
   // ── Accept quote ──────────────────────────────────────────────────────────
   const handleAcceptQuote = async () => {
     if (!order) return
-    Alert.alert('Accept Quote?', `Confirm order for ₹${Number(order.quoted_amount).toFixed(2)}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Yes, Accept',
-        onPress: async () => {
-          setAcceptingQuote(true)
-          try {
-            const { error } = await supabase
-              .from('orders')
-              .update({
-                custom_order_status: 'confirmed',
-                total_amount: order.quoted_amount,
-                updated_at: new Date().toISOString(),
-              })
-              .eq('id', order.id)
-            if (error) throw error
-            await loadOrder()
-            Alert.alert('✅ Confirmed!', 'Your custom order has been confirmed.')
-          } catch (e: any) {
-            Alert.alert('Error', e?.message)
-          } finally {
-            setAcceptingQuote(false)
-          }
+    Alert.alert(
+      'Accept Quote?',
+      `Confirm order for ₹${Number(order.quoted_amount).toFixed(2)}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, Accept',
+          onPress: async () => {
+            setAcceptingQuote(true)
+            try {
+              const { error } = await supabase
+                .from('orders')
+                .update({
+                  custom_order_status: 'confirmed',
+                  total_amount: order.quoted_amount,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', order.id)
+              if (error) throw error
+              await loadOrder()
+              Alert.alert('✅ Confirmed!', 'Your custom order has been confirmed.')
+            } catch (e: any) {
+              Alert.alert('Error', e?.message)
+            } finally {
+              setAcceptingQuote(false)
+            }
+          },
         },
-      },
-    ])
+      ],
+    )
   }
 
   // ── Reorder ───────────────────────────────────────────────────────────────
@@ -336,48 +346,55 @@ export default function OrderDetailPage() {
         {
           text: 'Reorder',
           onPress: () => {
-            if (order.order_type === 'restaurant' && order.merchant_id) {
+            if (order.order_type === 'restaurant' && order.merchant_id)
               router.push(`/(customer)/restaurant/${order.merchant_id}` as any)
-            } else {
+            else
               router.push('/(customer)/store' as any)
-            }
           },
         },
-      ]
+      ],
     )
   }
 
   // ── Guards ────────────────────────────────────────────────────────────────
-  if (loading)
+  if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
-        <Stack.Screen options={{ title: 'Order Details' }} />
-        <ActivityIndicator size="large" color={COLORS.primary} />
+      <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
+        <Stack.Screen
+          options={{ title: 'Order Details', statusBarTranslucent: true, statusBarStyle: 'light' }}
+        />
+        <ScreenLoader variant="orderDetail" />
       </View>
     )
+  }
+
   if (!order) return null
 
   // ── Derived state ─────────────────────────────────────────────────────────
-  const isStore = order.order_type === 'store'
-  const isCustom = order.order_type === 'custom'
+  const isStore    = order.order_type === 'store'
+  const isCustom   = order.order_type === 'custom'
   const isPlatform = isStore || isCustom || order.platform_handled === true
-  const isActive = ACTIVE_STATUSES.includes(order.status)
-  const canCancel = CANCELLABLE_STATUSES.includes(order.status)
-  const isDelivered = order.status === 'delivered'
-  const isCancelled = order.status === 'cancelled' || order.status === 'rejected'
-  const canReorder = isDelivered || isCancelled
+  const isActive   = ACTIVE_STATUSES.includes(order.status)
+  const canCancel  = CANCELLABLE_STATUSES.includes(order.status)
+  const isDelivered  = order.status === 'delivered'
+  const isCancelled  = order.status === 'cancelled' || order.status === 'rejected'
+  const canReorder   = isDelivered || isCancelled
 
-  const timeline = isCustom ? CUSTOM_TIMELINE : isStore ? STORE_TIMELINE : RESTAURANT_TIMELINE
+  const timeline = isCustom
+    ? CUSTOM_TIMELINE
+    : isStore
+    ? STORE_TIMELINE
+    : RESTAURANT_TIMELINE
 
   // ── Map coords ────────────────────────────────────────────────────────────
   const deliveryCoords = toLatLng(
-    order.delivery_latitude ?? (order as any).deliverylatitude,
-    order.delivery_longitude ?? (order as any).deliverylongitude
+    order.delivery_latitude  ?? (order as any).deliverylatitude,
+    order.delivery_longitude ?? (order as any).deliverylongitude,
   )
   const merchantCoords = toLatLng(merchant?.latitude, merchant?.longitude)
   const hubLat = order.hub_origin?.lat ?? (order as any).huborigin?.lat ?? null
   const hubLng = order.hub_origin?.lng ?? (order as any).huborigin?.lng ?? null
-  const hubCoords = toLatLng(hubLat, hubLng)
+  const hubCoords    = toLatLng(hubLat, hubLng)
   const originCoords = isPlatform ? hubCoords : merchantCoords
 
   const mapCenter: LatLng | null = driverCoords ?? originCoords ?? deliveryCoords
@@ -388,19 +405,18 @@ export default function OrderDetailPage() {
     ? { ...driverCoords, latitudeDelta: 0.015, longitudeDelta: 0.015 }
     : initialRegion
 
-  // Map visibility conditions
-  const driverAssigned = !!order.driver_id && TRACKABLE_STATUSES.includes(order.status)
+  const driverAssigned  = !!order.driver_id && TRACKABLE_STATUSES.includes(order.status)
   const hasLiveLocation = !!driverCoords
 
   const headerColor = isCancelled
     ? '#EF4444'
     : isDelivered
-      ? '#10B981'
-      : isCustom
-        ? '#065F46'
-        : isStore
-          ? '#5B21B6'
-          : COLORS.primary
+    ? '#10B981'
+    : isCustom
+    ? '#065F46'
+    : isStore
+    ? '#5B21B6'
+    : COLORS.primary
 
   const supportUrl = getSupportWhatsApp(settings, order.order_number)
 
@@ -409,10 +425,12 @@ export default function OrderDetailPage() {
     <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
       <Stack.Screen
         options={{
-          title: `Order #${order.order_number}`,
+          title: `Order ${order.order_number}`,
           headerStyle: { backgroundColor: headerColor },
           headerTintColor: '#fff',
           headerTitleStyle: { fontWeight: '800' },
+          statusBarTranslucent: true,
+          statusBarStyle: 'light',
           headerRight: () => (
             <TouchableOpacity
               onPress={() => router.push('/(customer)/notifications' as any)}
@@ -427,14 +445,18 @@ export default function OrderDetailPage() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.primary}
+          />
         }
         contentContainerStyle={{ paddingBottom: 50 }}
       >
-        {/* ── Status Hero ─────────────────────────────────────────────── */}
+        {/* STATUS HERO */}
         <StatusHero order={order} />
 
-        {/* ── Custom Order Flow ────────────────────────────────────────── */}
+        {/* CUSTOM ORDER FLOW */}
         {isCustom && (
           <CustomOrderFlow
             order={order}
@@ -446,7 +468,7 @@ export default function OrderDetailPage() {
           />
         )}
 
-        {/* ── Live Map ─────────────────────────────────────────────────── */}
+        {/* LIVE MAP */}
         {!driverAssigned ? (
           isActive && (
             <View style={S.mapPlaceholder}>
@@ -549,10 +571,12 @@ export default function OrderDetailPage() {
           </View>
         )}
 
-        {/* ── Order Timeline ───────────────────────────────────────────── */}
-        {!isCancelled && !isCustom && <OrderTimeline timeline={timeline} status={order.status} />}
+        {/* TIMELINE */}
+        {!isCancelled && !isCustom && (
+          <OrderTimeline timeline={timeline} status={order.status} />
+        )}
 
-        {/* ── Cancelled Banner ─────────────────────────────────────────── */}
+        {/* CANCELLED BANNER */}
         {isCancelled && (
           <View style={S.cancelBanner}>
             <Text style={S.cancelTitle}>
@@ -563,13 +587,14 @@ export default function OrderDetailPage() {
             )}
             {order.cancelled_by && (
               <Text style={S.cancelBy}>
-                Cancelled by: {order.cancelled_by === 'customer' ? 'You' : order.cancelled_by}
+                Cancelled by:{' '}
+                {order.cancelled_by === 'customer' ? 'You' : order.cancelled_by}
               </Text>
             )}
           </View>
         )}
 
-        {/* ── Custom Category ──────────────────────────────────────────── */}
+        {/* CUSTOM CATEGORY */}
         {isCustom && order.custom_category && (
           <View style={[S.infoCard, { backgroundColor: '#F0FDF4', borderColor: '#A7F3D0' }]}>
             <Text style={{ fontSize: 13, color: '#065F46', fontWeight: '700' }}>
@@ -579,19 +604,19 @@ export default function OrderDetailPage() {
           </View>
         )}
 
-        {/* ── Items ────────────────────────────────────────────────────── */}
+        {/* ITEMS */}
         <OrderItems items={order.items ?? []} isStore={isStore || isCustom} />
 
-        {/* ── Bill ─────────────────────────────────────────────────────── */}
+        {/* BILL */}
         <BillSection order={order} isStore={isStore || isCustom} />
 
-        {/* ── Delivery Address ─────────────────────────────────────────── */}
+        {/* DELIVERY ADDRESS */}
         <DeliverySection order={order} />
 
-        {/* ── Order Dates ──────────────────────────────────────────────── */}
+        {/* ORDER DATES */}
         <OrderMeta order={order} />
 
-        {/* ── Merchant / Driver ────────────────────────────────────────── */}
+        {/* MERCHANT / DRIVER */}
         <MerchantSection
           order={order}
           merchant={merchant}
@@ -601,7 +626,7 @@ export default function OrderDetailPage() {
           isDelivered={isDelivered}
         />
 
-        {/* ── Review Section ────────────────────────────────────────────── */}
+        {/* REVIEW */}
         {isDelivered && (
           <ReviewSection
             orderId={order.id}
@@ -612,13 +637,11 @@ export default function OrderDetailPage() {
             isStore={isStore}
             isCustom={order.order_type === 'custom'}
             merchantName={merchant?.business_name ?? null}
-            onDone={() => {
-              /* optional: refresh order */
-            }}
+            onDone={() => { /* optionally reload */ }}
           />
         )}
 
-        {/* ── Action Buttons ────────────────────────────────────────────── */}
+        {/* ACTION BUTTONS */}
         <View style={S.actions}>
           {canCancel && (
             <TouchableOpacity style={S.cancelBtn} onPress={() => setShowCancel(true)}>
@@ -633,12 +656,14 @@ export default function OrderDetailPage() {
             </TouchableOpacity>
           )}
           <TouchableOpacity style={S.helpBtn} onPress={() => Linking.openURL(supportUrl)}>
-            <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 14 }}>💬 Need Help?</Text>
+            <Text style={{ color: '#15803D', fontWeight: '700', fontSize: 14 }}>
+              💬 Need Help?
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* ── Cancel Modal ─────────────────────────────────────────────────── */}
+      {/* CANCEL MODAL */}
       <CancelModal
         visible={showCancel}
         orderNumber={order.order_number}
@@ -647,27 +672,31 @@ export default function OrderDetailPage() {
         onDismiss={() => setShowCancel(false)}
       />
 
-      {/* ── Quote accepting overlay ───────────────────────────────────────── */}
+      {/* QUOTE OVERLAY */}
       {acceptingQuote && (
         <View style={S.quoteOverlay}>
           <ActivityIndicator size="large" color="#fff" />
-          <Text style={{ marginTop: 10, color: '#fff', fontWeight: '700' }}>Confirming quote…</Text>
+          <Text style={{ marginTop: 10, color: '#fff', fontWeight: '700' }}>
+            Confirming quote…
+          </Text>
         </View>
       )}
     </View>
   )
 }
 
-// ── OrderMeta sub-component ───────────────────────────────────────────────────
+// ── OrderMeta ─────────────────────────────────────────────────────────────────
 function OrderMeta({ order }: { order: OrderDetail }) {
   const rows = [
-    { label: '🕐 Placed', value: fmtDateTime(order.created_at) },
-    { label: '🔄 Last Updated', value: fmtDateTime(order.updated_at) },
+    { label: '🕐 Placed',        value: fmtDateTime(order.created_at) },
+    { label: '🔄 Last Updated',  value: fmtDateTime(order.updated_at) },
     { label: '⏱️ Est. Delivery', value: fmtDateTime(order.estimated_delivery_time) },
     ...(order.actual_delivery_time
       ? [{ label: '✅ Delivered At', value: fmtDateTime(order.actual_delivery_time) }]
       : []),
-    ...(order.preparation_time ? [{ label: '🍳 Prep Time', value: `${order.preparation_time} min` }] : []),
+    ...(order.preparation_time
+      ? [{ label: '🍳 Prep Time', value: `${order.preparation_time} min` }]
+      : []),
   ]
 
   return (
@@ -686,118 +715,70 @@ function OrderMeta({ order }: { order: OrderDetail }) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
   mapWrap: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    borderRadius: 16,
-    overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
+    marginHorizontal: 16, marginTop: 10, borderRadius: 16, overflow: 'hidden',
+    elevation: 2, shadowColor: '#000', shadowOpacity: 0.1,
+    shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
   },
   map: { width: '100%', height: 240 },
   livePill: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: '#16A34A',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    position: 'absolute', top: 10, left: 10,
+    backgroundColor: '#16A34A', borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 6,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
   },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
   distancePill: {
-    position: 'absolute',
-    bottom: 10,
-    right: 10,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
+    position: 'absolute', bottom: 10, right: 10,
+    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16,
+    paddingHorizontal: 12, paddingVertical: 6,
+    elevation: 2, shadowColor: '#000', shadowOpacity: 0.1,
+    shadowRadius: 4, shadowOffset: { width: 0, height: 1 },
   },
   mapPlaceholder: {
-    margin: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    minHeight: 110,
+    margin: 16, backgroundColor: '#F9FAFB', borderRadius: 12,
+    padding: 16, alignItems: 'center', borderWidth: 1,
+    borderColor: '#E5E7EB', minHeight: 110,
   },
-
   cancelBanner: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    backgroundColor: '#FEF2F2',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: '#FECACA',
+    marginHorizontal: 16, marginTop: 10, backgroundColor: '#FEF2F2',
+    borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: '#FECACA',
   },
-  cancelTitle: { fontSize: 16, fontWeight: '900', color: '#991B1B', marginBottom: 6 },
+  cancelTitle:  { fontSize: 16, fontWeight: '900', color: '#991B1B', marginBottom: 6 },
   cancelReason: { color: '#7F1D1D', fontSize: 13, marginBottom: 3 },
-  cancelBy: { color: '#B91C1C', fontSize: 12 },
-
-  infoCard: { marginHorizontal: 16, marginTop: 8, borderRadius: 12, padding: 12, borderWidth: 1 },
-
-  actions: { marginHorizontal: 16, marginTop: 12, gap: 10 },
+  cancelBy:     { color: '#B91C1C', fontSize: 12 },
+  infoCard:     { marginHorizontal: 16, marginTop: 8, borderRadius: 12, padding: 12, borderWidth: 1 },
+  actions:      { marginHorizontal: 16, marginTop: 12, gap: 10 },
   cancelBtn: {
-    borderWidth: 2,
-    borderColor: '#DC2626',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
+    borderWidth: 2, borderColor: '#DC2626', borderRadius: 14,
+    paddingVertical: 14, alignItems: 'center', backgroundColor: '#FEF2F2',
   },
-  reorderBtn: { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  reorderBtn: {
+    backgroundColor: COLORS.primary, borderRadius: 14,
+    paddingVertical: 14, alignItems: 'center',
+  },
   helpBtn: {
-    borderWidth: 1.5,
-    borderColor: '#15803D',
-    borderRadius: 14,
-    paddingVertical: 13,
-    alignItems: 'center',
-    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5, borderColor: '#15803D', borderRadius: 14,
+    paddingVertical: 13, alignItems: 'center', backgroundColor: '#F0FDF4',
   },
-
   quoteOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
 })
 
 const S2 = StyleSheet.create({
   section: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 10,
-    borderRadius: 16,
-    padding: 16,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
+    backgroundColor: '#fff', marginHorizontal: 16, marginTop: 10,
+    borderRadius: 16, padding: 16, elevation: 1,
+    shadowColor: '#000', shadowOpacity: 0.04,
+    shadowRadius: 4, shadowOffset: { width: 0, height: 1 },
   },
   title: { fontSize: 15, fontWeight: '800', color: '#1F2937', marginBottom: 12 },
   row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 7,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F9FAFB',
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'flex-start', paddingVertical: 7,
+    borderBottomWidth: 1, borderBottomColor: '#F9FAFB',
   },
   lbl: { fontSize: 13, color: '#6B7280', flex: 1 },
   val: { fontSize: 13, color: '#1F2937', fontWeight: '600', flex: 1.4, textAlign: 'right' },

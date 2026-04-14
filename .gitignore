@@ -70,3 +70,7 @@ node_modules/
 
 app/pattibytes/pattibytes-express-firebase-adminsdk-fbsvc-7afd64a72a.json
 pattibytes-express-firebase-adminsdk-fbsvc-7afd64a72a.json
+app/pattibytes/GoogleService-Info.plist
+app\pattibytes\GoogleService-Info.plist
+app/pattibytes/AuthKey_*.p8
+app/pattibytes/*.p8

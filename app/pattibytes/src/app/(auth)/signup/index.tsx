@@ -1,11 +1,11 @@
-// app/(auth)/signup.tsx
+// app/(auth)/signup/index.tsx
 import React, { useCallback, useRef, useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';              // ✅ Link removed — not needed
 import { supabase } from '../../../lib/supabase';
 import { signInWithGoogle } from '../../../lib/googleAuth';
 import { signInWithApple, isAppleSignInAvailable } from '../../../lib/appleAuth';
@@ -34,22 +34,22 @@ let uTimer: ReturnType<typeof setTimeout>;
 export default function Signup() {
   const router = useRouter();
 
-  const [fullName,  setFullName]  = useState('');
-  const [username,  setUsername]  = useState('');
-  const [email,     setEmail]     = useState('');
-  const [phone,     setPhone]     = useState('');
-  const [password,  setPassword]  = useState('');
-  const [confirm,   setConfirm]   = useState('');
-  const [showPw,    setShowPw]    = useState(false);
-  const [showCf,    setShowCf]    = useState(false);
-  const [terms,     setTerms]     = useState(false);
-  const [loading,   setLoading]   = useState(false);
-  const [gLoading,  setGLoading]  = useState(false);
-  const [aLoading,  setALoading]  = useState(false); // ← Apple
-  const [fieldErrors, setFE]      = useState<FieldErrors>({});
-  const [globalError, setGE]      = useState('');
-  const [unStatus,  setUnStatus]  = useState<'idle'|'checking'|'available'|'taken'>('idle');
-  const [appleAvail, setAppleAvail] = useState(false); // ← Apple available check
+  const [fullName,    setFullName]    = useState('');
+  const [username,    setUsername]    = useState('');
+  const [email,       setEmail]       = useState('');
+  const [phone,       setPhone]       = useState('');
+  const [password,    setPassword]    = useState('');
+  const [confirm,     setConfirm]     = useState('');
+  const [showPw,      setShowPw]      = useState(false);
+  const [showCf,      setShowCf]      = useState(false);
+  const [terms,       setTerms]       = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [gLoading,    setGLoading]    = useState(false);
+  const [aLoading,    setALoading]    = useState(false);
+  const [fieldErrors, setFE]          = useState<FieldErrors>({});
+  const [globalError, setGE]          = useState('');
+  const [unStatus,    setUnStatus]    = useState<'idle'|'checking'|'available'|'taken'>('idle');
+  const [appleAvail,  setAppleAvail]  = useState(false);
 
   const emailRef   = useRef<TextInput>(null);
   const phoneRef   = useRef<TextInput>(null);
@@ -85,14 +85,14 @@ export default function Signup() {
 
   function validate(): boolean {
     const e: FieldErrors = {};
-    if (!fullName.trim())                             e.fullName = 'Full name is required.';
-    if (username.length > 0 && username.length < 3)  e.username = 'Minimum 3 characters.';
-    if (unStatus === 'taken')                         e.username = 'Username already taken.';
-    if (!email.trim() || !email.includes('@'))        e.email    = 'Enter a valid email address.';
-    if (!password)                                    e.password = 'Password is required.';
-    if (password.length < 6)                          e.password = 'Minimum 6 characters.';
-    if (password !== confirm)                         e.confirm  = 'Passwords do not match.';
-    if (!terms)                                       e.terms    = 'Please accept the terms.';
+    if (!fullName.trim())                            e.fullName = 'Full name is required.';
+    if (username.length > 0 && username.length < 3) e.username = 'Minimum 3 characters.';
+    if (unStatus === 'taken')                        e.username = 'Username already taken.';
+    if (!email.trim() || !email.includes('@'))       e.email    = 'Enter a valid email address.';
+    if (!password)                                   e.password = 'Password is required.';
+    if (password.length < 6)                         e.password = 'Minimum 6 characters.';
+    if (password !== confirm)                        e.confirm  = 'Passwords do not match.';
+    if (!terms)                                      e.terms    = 'Please accept the terms.';
     setFE(e);
     return Object.keys(e).length === 0;
   }
@@ -111,14 +111,14 @@ export default function Signup() {
       if (!data.user?.id) throw new Error('Signup failed — no user returned.');
 
       await supabase.from('profiles').upsert({
-        id:               data.user.id,
-        email:            data.user.email,
-        full_name:        fullName.trim(),
-        username:         username.trim() || null,
-        phone:            phone.trim() || null,
-        role:             'customer',
-        approval_status:  'approved',
-        is_active:        true,
+        id:                data.user.id,
+        email:             data.user.email,
+        full_name:         fullName.trim(),
+        username:          username.trim() || null,
+        phone:             phone.trim() || null,
+        role:              'customer',
+        approval_status:   'approved',
+        is_active:         true,
         profile_completed: true,
       });
 
@@ -126,8 +126,8 @@ export default function Signup() {
     } catch (err: any) {
       const msg: string = err?.message ?? '';
       if (/already registered/i.test(msg))  setGE('This email is already registered. Please sign in instead.');
-      else if (/rate limit/i.test(msg))      setGE('Too many attempts. Please wait a few minutes.');
-      else                                   setGE(msg || 'Could not create account. Please try again.');
+      else if (/rate limit/i.test(msg))     setGE('Too many attempts. Please wait a few minutes.');
+      else                                  setGE(msg || 'Could not create account. Please try again.');
     } finally { setLoading(false); }
   }
 
@@ -140,12 +140,10 @@ export default function Signup() {
     } finally { setGLoading(false); }
   }
 
-  // ── NEW: Apple sign-in handler ─────────────────────────────────────────────
   async function handleApple() {
     setGE(''); setALoading(true);
     try {
       await signInWithApple();
-      // Navigation handled by RootGuard / AuthContext
     } catch (err: any) {
       const msg: string = err?.message ?? '';
       if (
@@ -178,14 +176,16 @@ export default function Signup() {
           </View>
         )}
 
-        {/* ── Sign in with Apple (iOS only, shown first per Apple HIG) ── */}
+        {/* ── Apple (iOS only, first per Apple HIG) ── */}
         {appleAvail && (
-          <View style={[S.appleWrap, busy && { opacity: 0.55 }]}
-                pointerEvents={busy ? 'none' : 'auto'}>
+          <View
+            style={[S.appleWrap, busy && { opacity: 0.55 }]}
+            pointerEvents={busy ? 'none' : 'auto'}
+          >
             {aLoading ? (
               <View style={S.appleBtnFallback}>
                 <ActivityIndicator color="#FFF" />
-                <Text style={S.appleBtnFallbackTxt}>Signing in with Apple...</Text>
+                <Text style={S.appleBtnFallbackTxt}>Signing up with Apple...</Text>
               </View>
             ) : (
               <AppleAuthentication.AppleAuthenticationButton
@@ -353,16 +353,17 @@ export default function Signup() {
           <View style={[S.checkbox, terms && S.checked]}>
             {terms && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
           </View>
-        <Text style={S.checkText}>
-  I accept the{' '}
-  <Text style={S.link} onPress={() => router.push('/legal/terms' as any)}>
-    Terms & Conditions
-  </Text>
-  {' '}and{' '}
-  <Text style={S.link} onPress={() => router.push('/legal/privacy-policy' as any)}>
-    Privacy Policy
-  </Text>
-</Text>
+          {/* ✅ FIX: route unified to /legal/terms-of-service to match login.tsx footer */}
+          <Text style={S.checkText}>
+            I accept the{' '}
+            <Text style={S.link} onPress={() => router.push('/legal/terms-of-service' as any)}>
+              Terms of Service
+            </Text>
+            {' '}and{' '}
+            <Text style={S.link} onPress={() => router.push('/legal/privacy-policy' as any)}>
+              Privacy Policy
+            </Text>
+          </Text>
         </TouchableOpacity>
         {!!fieldErrors.terms && <Text style={[S.fieldErr, { marginBottom: 12 }]}>{fieldErrors.terms}</Text>}
 
@@ -377,13 +378,12 @@ export default function Signup() {
           }
         </TouchableOpacity>
 
+        {/* ✅ FIX: Link removed — router.push directly */}
         <View style={S.footer}>
           <Text style={{ color: COLORS.textLight, fontSize: 14 }}>Already have an account? </Text>
-          <Link href={'/(auth)/login' as any} asChild>
-            <TouchableOpacity disabled={busy}>
-              <Text style={S.link}>Sign In</Text>
-            </TouchableOpacity>
-          </Link>
+          <TouchableOpacity disabled={busy} onPress={() => router.push('/(auth)/login' as any)}>
+            <Text style={S.link}>Sign In</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -401,9 +401,8 @@ const S = StyleSheet.create({
   },
   errorText: { color: '#DC2626', fontSize: 13, fontWeight: '600' },
 
-  // ── Apple button ──
-  appleWrap: { marginBottom: 12 },
-  appleBtn:  { width: '100%', height: 50 },
+  appleWrap:        { marginBottom: 12 },
+  appleBtn:         { width: '100%', height: 50 },
   appleBtnFallback: {
     height: 50, backgroundColor: '#000', borderRadius: 14,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
@@ -444,9 +443,9 @@ const S = StyleSheet.create({
   eyeBtn:     { padding: 10 },
   eyeIcon:    { fontSize: 18 },
 
-  strengthRow:   { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, marginBottom: 4 },
-  strengthBar:   { flex: 1, height: 4, borderRadius: 2 },
-  strengthLabel: { fontSize: 11, fontWeight: '700', width: 44 },
+  strengthRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, marginBottom: 4 },
+  strengthBar:  { flex: 1, height: 4, borderRadius: 2 },
+  strengthLabel:{ fontSize: 11, fontWeight: '700', width: 44 },
 
   checkRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8, gap: 10 },
   checkbox: {
@@ -456,8 +455,8 @@ const S = StyleSheet.create({
   checked:   { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   checkText: { flex: 1, fontSize: 14, color: COLORS.text, lineHeight: 20 },
 
-  btn:     { backgroundColor: COLORS.primary, borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 4 },
-  btnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  btn:      { backgroundColor: COLORS.primary, borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 4 },
+  btnText:  { color: '#fff', fontWeight: '800', fontSize: 16 },
   disabled: { opacity: 0.55 },
 
   link:   { color: COLORS.primary, fontWeight: '700', fontSize: 14 },

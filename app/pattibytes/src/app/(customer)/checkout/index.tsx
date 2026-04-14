@@ -14,6 +14,7 @@ import { getSavedAddresses, type SavedAddress } from '../../../services/location
 import { promoCodeService, type PromoCode, type PromoValidationResult } from '../../../services/promoCodes'
 import { calcDeliveryForRestaurant, calcDeliveryForStore } from '../../../services/deliveryService'
 import { useAppSettings }      from '../../../hooks/useAppSettings'
+import { ScreenLoader } from '../../../components/ui/ScreenLoader';
 
 // ── Components ────────────────────────────────────────────────────────────────
 import CheckoutBanner          from '../../../components/checkout/CheckoutBanner'
@@ -230,67 +231,80 @@ export default function CheckoutPage() {
   }, [cart?.items])
 
   // ── Load page data ────────────────────────────────────────────────────────
-  const loadCheckout = useCallback(async () => {
+   const loadCheckout = useCallback(async () => {
     if (!user) return
     setLoading(true)
     try {
-      const addrList = await getSavedAddresses(user.id)
-      const list     = addrList ?? []
+      // ── Run addresses + merchant geo in parallel ────────────────────────
+      const [addrList, merchData] = await Promise.all([
+        getSavedAddresses(user.id),
+        !isStoreOrCustom && cart?.merchant_id
+          ? supabase
+              .from('merchants')
+              .select('latitude, longitude, gst_enabled, gst_percentage, phone')
+              .eq('id', cart.merchant_id)
+              .maybeSingle()
+              .then(({ data }) => data)
+          : Promise.resolve(null),
+      ])
+
+      // Address setup
+      const list  = addrList ?? []
       setAddresses(list)
       const found = params.address_id
         ? list.find(a => a.id === params.address_id)
         : list.find(a => a.is_default) ?? list[0]
       setSelectedAddr(found ?? null)
-
       setShowDeliveryFee(appSettings.delivery_fee_enabled !== false)
 
-      if (!isStoreOrCustom && cart?.merchant_id) {
-        const { data: merch } = await supabase
-          .from('merchants')
-          .select('latitude,longitude,gst_enabled,gst_percentage,phone')
-          .eq('id', cart.merchant_id)
-          .maybeSingle()
+      // Merchant geo + GST
+      if (merchData) {
+        setMerchantGeo(merchData as any)
+        setGstEnabled(!!(merchData as any).gst_enabled)
+        setGstPct(Number((merchData as any).gst_percentage ?? 0))
+      }
 
-        if (merch) {
-          setMerchantGeo(merch as any)
-          setGstEnabled(!!(merch as any).gst_enabled)
-          setGstPct(Number((merch as any).gst_percentage ?? 0))
-        }
-
-        const promos = await promoCodeService.getActivePromos(cart.merchant_id)
+      // Available promos (separate — doesn't block the above)
+      if (cart?.merchant_id) {
+        const promos = await promoCodeService.getActivePromos(
+          isStoreOrCustom ? null : cart.merchant_id,
+        )
         setAvailablePromos(promos ?? [])
       }
 
       // Re-validate promo passed from cart
       if (params.promo_code && user) {
-        const res: PromoValidationResult = await promoCodeService.validatePromoCode(
-          params.promo_code, subtotal, user.id,
-          { merchantId: cart?.merchant_id,
-            cartItems: cart?.items?.map(i => ({
-              menu_item_id: (i as any).menu_item_id ?? i.id,
-              merchant_id:  cart.merchant_id,
-              category_id:  (i as any).category_id ?? null,
-              qty:          i.quantity,
-              unit_price:   i.price,
-            })) }
-        )
-        if (res.valid && res.promoCode) {
-          setAppliedPromo(res.promoCode)
-          setPromoDiscount(Number(params.promo_discount) || res.discount)
-          if (res.isFreeDelivery) {
-            setFreeDeliveryPromoApplied(true)
-            setIsFreeDelivery(true)
-            setDeliveryFee(0)
+        try {
+          const res: PromoValidationResult = await promoCodeService.validatePromoCode(
+            params.promo_code, subtotal, user.id,
+            {
+              merchantId: cart?.merchant_id,
+              cartItems:  cart?.items?.map(i => ({
+                menu_item_id: (i as any).menu_item_id ?? i.id,
+                merchant_id:  cart!.merchant_id,
+                category_id:  (i as any).category_id ?? null,
+                qty:          i.quantity,
+                unit_price:   i.price,
+              })),
+            },
+          )
+          if (res.valid && res.promoCode) {
+            setAppliedPromo(res.promoCode)
+            setPromoDiscount(Number(params.promo_discount) || res.discount)
+            if (res.isFreeDelivery) { setFreeDeliveryPromoApplied(true); setIsFreeDelivery(true); setDeliveryFee(0) }
+            if (res.bxgyGifts?.length) setBxgyGifts(res.bxgyGifts)
           }
-          if (res.bxgyGifts?.length) setBxgyGifts(res.bxgyGifts)
+        } catch (e: any) {
+          console.warn('[CheckoutPage] loadCheckout promo re-validate', e.message)
         }
       }
+
     } catch (e: any) {
       console.warn('[CheckoutPage] loadCheckout', e.message)
     } finally {
       setLoading(false)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, cart?.merchant_id, params.address_id, params.promo_code, isStoreOrCustom])
 
   useEffect(() => { loadCheckout() }, [loadCheckout])
@@ -711,16 +725,25 @@ const handlePlaceOrder = async () => {
 
 
   // ── Guard ─────────────────────────────────────────────────────────────────
-  if (loading || settingsLoading) return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
-      <Stack.Screen options={{ title: 'Checkout' }} />
-      <ActivityIndicator size="large" color={COLORS.primary} />
+  if (loading || settingsLoading) {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
+      <Stack.Screen options={{ title: 'Checkout', statusBarTranslucent: true, statusBarStyle: 'light' }} />
+      <ScreenLoader variant="checkout" />
     </View>
-  )
+  );
+}
 
   if (!cart?.items?.length) return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8F9FA', padding: 24 }}>
-      <Stack.Screen options={{ title: 'Checkout' }} />
+     <Stack.Screen
+  options={{
+    title: 'Checkout',
+    statusBarTranslucent: true,   // ← ADD
+    statusBarStyle: 'light',       // ← ADD
+  }}
+/>
+
       <Text style={{ fontSize: 72, marginBottom: 16 }}>🛒</Text>
       <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827', marginBottom: 8 }}>
         Cart is empty
@@ -743,12 +766,16 @@ const handlePlaceOrder = async () => {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
-      <Stack.Screen options={{
-        title:            titleMap[orderType],
-        headerStyle:      { backgroundColor: COLORS.primary },
-        headerTintColor:  '#fff',
-        headerTitleStyle: { fontWeight: '800' },
-      }} />
+     <Stack.Screen
+  options={{
+    title: titleMap[orderType],
+    headerStyle: { backgroundColor: COLORS.primary },
+    headerTintColor: '#fff',
+    headerTitleStyle: { fontWeight: '800' },
+    statusBarTranslucent: true,   // ← ADD
+    statusBarStyle: 'light',       // ← ADD
+  }}
+/>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView

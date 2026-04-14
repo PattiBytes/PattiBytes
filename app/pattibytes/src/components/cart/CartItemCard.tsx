@@ -56,15 +56,32 @@ export default function CartItemCard({ item, note, onUpdateQty, onRemove, onNote
 
         {/* Qty stepper + line total */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-          <View style={S.qtyRow}>
-            <TouchableOpacity style={S.qtyBtn} onPress={() => onUpdateQty(item.id, item.quantity - 1)}>
-              <Text style={S.qtyTxt}>−</Text>
-            </TouchableOpacity>
-            <Text style={S.qty}>{item.quantity}</Text>
-            <TouchableOpacity style={S.qtyBtn} onPress={() => onUpdateQty(item.id, item.quantity + 1)}>
-              <Text style={S.qtyTxt}>+</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={S.qtyRow}>
+  <TouchableOpacity
+    style={S.qtyBtn}
+    onPress={() => onUpdateQty(item.id, item.quantity - 1)}
+  >
+    <Text style={S.qtyTxt}>−</Text>
+  </TouchableOpacity>
+
+  <TextInput
+    style={S.qtyInput}
+    keyboardType="number-pad"
+    value={String(item.quantity)}
+    onChangeText={t => {
+      const next = Math.max(0, Number(t.replace(/[^0-9]/g, '')) || 0);
+      onUpdateQty(item.id, next);
+    }}
+    maxLength={3}
+  />
+
+  <TouchableOpacity
+    style={S.qtyBtn}
+    onPress={() => onUpdateQty(item.id, item.quantity + 1)}
+  >
+    <Text style={S.qtyTxt}>+</Text>
+  </TouchableOpacity>
+</View>
           <Text style={S.lineTotal}>₹{lineTotal.toFixed(0)}</Text>
         </View>
 
@@ -99,6 +116,13 @@ const S = StyleSheet.create({
   price:      { fontWeight: '800', color: COLORS.primary, fontSize: 14 },
   strike:     { textDecorationLine: 'line-through', color: '#9CA3AF', fontSize: 12 },
   discBadge:  { backgroundColor: '#EF4444', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 },
+  qtyInput: {
+  width: 32,
+  textAlign: 'center',
+  fontWeight: '800',
+  color: '#111827',
+  fontSize: 14,
+},
   qtyRow:     { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 8 },
   qtyBtn:     { width: 30, height: 32, alignItems: 'center', justifyContent: 'center' },
   qtyTxt:     { color: COLORS.primary, fontWeight: '800', fontSize: 18 },

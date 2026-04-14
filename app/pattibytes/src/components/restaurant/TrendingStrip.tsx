@@ -31,7 +31,7 @@ export default function TrendingStrip({
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 6, marginTop: 10 }}>
         {items.map((t) => (
-          <Pressable key={t.key} style={S.card} onPress={() => onOpen(t)}>
+         <Pressable key={t.key} style={S.card} onPress={() => onOpen(t)}>
             {showImages ? (
               t.image_url ? (
                 <Image source={{ uri: t.image_url }} style={S.img} resizeMode="cover" />

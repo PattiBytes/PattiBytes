@@ -1,42 +1,55 @@
 import React from 'react'
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native'
+import { GlobalDeal } from './types'
+import { S } from './styles'
 import { COLORS } from '../../lib/constants'
-import type { GlobalDeal } from '../../types/dashboard'
 
-type Props = { deals: GlobalDeal[]; onViewAll: () => void }
+type Props = {
+  deals: GlobalDeal[]
+  onNav: (p: string) => void
+}
 
-export default function GlobalDeals({ deals, onViewAll }: Props) {
+export function GlobalDeals({ deals, onNav }: Props) {
   if (!deals.length) return null
   return (
     <View style={{ marginTop: 8, marginBottom: 16 }}>
-      <View style={S.sectionHeader}>
-        <Text style={S.secTitle}>Today&apos;s Deals</Text>
-        <TouchableOpacity onPress={onViewAll}>
-          <Text style={S.seeAll}>All Offers</Text>
+      <View style={[S.sectionHeader, { paddingHorizontal: 16, marginBottom: 12 }]}>
+        {/* Use unicode escape to avoid emoji variation-selector parsing issues */}
+        <Text style={S.secTitle}>{'\uD83C\uDFF7 Today\'s Deals'}</Text>
+        <TouchableOpacity onPress={() => onNav('/(customer)/offers')}>
+          <Text style={S.seeAll}>{'All Offers \u2192'}</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
+      >
         {deals.map(deal => {
-          const isBxgy   = deal.dealtype === 'bxgy'
-          const label    = isBxgy
-            ? `Buy ${deal.dealjson?.buy?.qty ?? 1} Get ${deal.dealjson?.get?.qty ?? 1} FREE`
-            : deal.discounttype === 'percentage'
-            ? `${deal.discountvalue}% OFF`
-            : `₹${deal.discountvalue} OFF`
-          const bgColor  = isBxgy ? '#7C3AED' : COLORS.primary
+          const isBxgy = deal.deal_type === 'bxgy'
+          const label = isBxgy
+            ? 'Buy ' + String(deal.deal_json?.buy?.qty ?? 1) + ' Get ' + String(deal.deal_json?.get?.qty ?? 1) + ' FREE'
+            : deal.discount_type === 'percentage'
+            ? String(deal.discount_value) + '% OFF'
+            : '\u20B9' + String(deal.discount_value) + ' OFF'
+          const bgColor = isBxgy ? '#7C3AED' : COLORS.primary
           return (
-            <TouchableOpacity key={deal.id} style={[S.card, { backgroundColor: bgColor }]} onPress={onViewAll}>
-              <Text style={{ fontSize: 20, marginBottom: 4 }}>{isBxgy ? '🎁' : '🏷️'}</Text>
+            <TouchableOpacity
+              key={deal.id}
+              style={[S.dealCard, { backgroundColor: bgColor }]}
+              onPress={() => onNav('/(customer)/offers')}
+            >
+              <Text style={{ fontSize: 20, marginBottom: 4 }}>{isBxgy ? '\uD83C\uDF81' : '\uD83C\uDFF7'}</Text>
               <Text style={S.dealLabel}>{label}</Text>
               <Text style={S.dealCode}>{deal.code}</Text>
-              {!!deal.minorderamount && (
-                <Text style={S.dealMin}>Min ₹{deal.minorderamount}</Text>
-              )}
-              {!!deal.validuntil && (
+              {deal.min_order_amount ? (
+                <Text style={S.dealMin}>{'Min \u20B9' + String(deal.min_order_amount)}</Text>
+              ) : null}
+              {deal.valid_until ? (
                 <Text style={S.dealExp}>
-                  Ends {new Date(deal.validuntil).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                  {'Ends ' + new Date(deal.valid_until).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                 </Text>
-              )}
+              ) : null}
             </TouchableOpacity>
           )
         })}
@@ -44,14 +57,3 @@ export default function GlobalDeals({ deals, onViewAll }: Props) {
     </View>
   )
 }
-
-const S = StyleSheet.create({
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 },
-  secTitle:      { fontSize: 17, fontWeight: '900', color: '#111827' },
-  seeAll:        { color: COLORS.primary, fontWeight: '700', fontSize: 13 },
-  card:          { borderRadius: 16, padding: 14, width: 140, alignItems: 'center' },
-  dealLabel:     { fontSize: 15, fontWeight: '900', color: '#fff', textAlign: 'center' },
-  dealCode:      { fontSize: 12, color: 'rgba(255,255,255,0.9)', fontWeight: '700', marginTop: 5, letterSpacing: 1.5, backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-  dealMin:       { fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
-  dealExp:       { fontSize: 10, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
-})

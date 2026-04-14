@@ -1,55 +1,169 @@
+// components/dashboard/BottomNav.tsx
+// Uses @expo/vector-icons (Ionicons) — already installed in this project.
+// Active tab detected via usePathname() from expo-router.
+// Profile tab shows customer avatar_url if uploaded.
 import React from 'react'
-import { View, Text, TouchableOpacity, Platform, StyleSheet } from 'react-native'
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { usePathname } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { COLORS } from '../../lib/constants'
 
+// ─── Nav item definitions ────────────────────────────────────────────────────
 type NavItem = {
-  icon:   string
-  label:  string
-  route:  string
-  badge?: number
-  active?: boolean
+  id:         string
+  label:      string
+  route:      string
+  icon:       keyof typeof Ionicons.glyphMap        // inactive
+  iconActive: keyof typeof Ionicons.glyphMap        // active (filled)
+  isCart?:    true
+  isProfile?: true
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { icon: '🏠', label: 'Home',    route: '/customer/dashboard', active: true },
-  { icon: '📦', label: 'Orders',  route: '/customer/orders' },
-  { icon: '🛒', label: 'Cart',    route: '/customer/cart' },
-  { icon: '🎁', label: 'Offers',  route: '/customer/offers' },
-  { icon: '👤', label: 'Profile', route: '/customer/profile' },
+  { id: 'home',    label: 'Home',    route: '/(customer)/dashboard', icon: 'home-outline',       iconActive: 'home'         },
+  { id: 'orders',  label: 'Orders',  route: '/(customer)/orders',   icon: 'receipt-outline',    iconActive: 'receipt'      },
+  { id: 'cart',    label: 'Cart',    route: '/(customer)/cart',     icon: 'cart-outline',       iconActive: 'cart',    isCart: true    },
+  { id: 'offers',  label: 'Offers',  route: '/(customer)/offers',   icon: 'pricetag-outline',   iconActive: 'pricetag'     },
+  { id: 'profile', label: 'Profile', route: '/(customer)/profile',  icon: 'person-outline',     iconActive: 'person', isProfile: true },
 ]
 
 type Props = {
-  cartCount: number
-  onNav:     (route: string) => void
+  cartCount:  number
+  avatarUrl?: string | null
+  firstName?: string
+  onNav:      (path: string) => void
 }
 
-export default function BottomNav({ cartCount, onNav }: Props) {
-  const items = NAV_ITEMS.map(n =>
-    n.label === 'Cart' ? { ...n, badge: cartCount } : n
-  )
+export function BottomNav({ cartCount, avatarUrl, firstName, onNav }: Props) {
+  const insets   = useSafeAreaInsets()
+  const pathname = usePathname()
+
+  function isActive(route: string) {
+    const bare = route.replace('/(customer)', '')
+    return (
+      pathname === route      ||
+      pathname === bare       ||
+      pathname.startsWith(route + '/') ||
+      pathname.startsWith(bare  + '/')
+    )
+  }
+
   return (
-    <View style={S.nav}>
-      {items.map(n => (
-        <TouchableOpacity key={n.label} style={S.item} onPress={() => onNav(n.route)}>
-          <View style={{ position: 'relative' }}>
-            <Text style={{ fontSize: 22 }}>{n.icon}</Text>
-            {!!n.badge && n.badge > 0 && (
-              <View style={S.badge}>
-                <Text style={S.badgeTxt}>{n.badge}</Text>
-              </View>
-            )}
-          </View>
-          <Text style={[S.label, n.active && { color: COLORS.primary }]}>{n.label}</Text>
-        </TouchableOpacity>
-      ))}
+    <View style={[S.bar, { paddingBottom: Math.max(insets.bottom, 6) }]}>
+      {NAV_ITEMS.map(item => {
+        const active   = isActive(item.route)
+        const color    = active ? COLORS.primary : '#9CA3AF'
+        const showBadge = item.isCart    === true && cartCount > 0
+        const isProf    = item.isProfile === true
+
+        return (
+          <TouchableOpacity
+            key={item.id}
+            style={S.tab}
+            onPress={() => onNav(item.route)}
+            activeOpacity={0.65}
+          >
+            {/* Active top indicator */}
+            {active && <View style={S.topBar} />}
+
+            {/* Icon */}
+            <View style={S.iconWrap}>
+              {/* Profile tab: real avatar if available */}
+              {isProf && avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={[S.avatarThumb, active && S.avatarThumbActive]}
+                />
+              ) : (
+                <Ionicons
+                  name={active ? item.iconActive : item.icon}
+                  size={23}
+                  color={color}
+                />
+              )}
+
+              {/* Cart count badge */}
+              {showBadge && (
+                <View style={S.badge}>
+                  <Text style={S.badgeTxt}>{cartCount > 9 ? '9+' : String(cartCount)}</Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={[S.label, { color }]}>{item.label}</Text>
+          </TouchableOpacity>
+        )
+      })}
     </View>
   )
 }
 
 const S = StyleSheet.create({
-  nav:      { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingBottom: Platform.OS === 'ios' ? 28 : 12, paddingTop: 10, elevation: 20, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: -2 } },
-  item:     { flex: 1, alignItems: 'center' },
-  label:    { fontSize: 10, color: '#9CA3AF', marginTop: 3, fontWeight: '600' },
-  badge:    { position: 'absolute', top: -3, right: -6, backgroundColor: COLORS.primary, borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
-  badgeTxt: { color: '#fff', fontSize: 9, fontWeight: '800' },
+  bar: {
+    position:        'absolute',
+    bottom:          0,
+    left:            0,
+    right:           0,
+    flexDirection:   'row',
+    backgroundColor: '#ffffff',
+    borderTopWidth:  1,
+    borderTopColor:  '#F1F2F4',
+    paddingTop:      6,
+    elevation:       24,
+    shadowColor:     '#000',
+    shadowOpacity:   0.07,
+    shadowRadius:    10,
+    shadowOffset:    { width: 0, height: -2 },
+  },
+  tab: {
+    flex:           1,
+    alignItems:     'center',
+    paddingVertical: 2,
+    position:       'relative',
+  },
+  topBar: {
+    position:                'absolute',
+    top:                     -6,
+    left:                    '20%',
+    right:                   '20%',
+    height:                  3,
+    borderBottomLeftRadius:  3,
+    borderBottomRightRadius: 3,
+    backgroundColor:         COLORS.primary,
+  },
+  iconWrap: {
+    position: 'relative',
+    width:    28,
+    height:   26,
+    alignItems:     'center',
+    justifyContent: 'center',
+  },
+  avatarThumb: {
+    width:        26,
+    height:       26,
+    borderRadius: 13,
+    borderWidth:  1.5,
+    borderColor:  '#E5E7EB',
+  },
+  avatarThumbActive: {
+    borderColor: COLORS.primary,
+    borderWidth: 2,
+  },
+  badge: {
+    position:          'absolute',
+    top:               -5,
+    right:             -7,
+    backgroundColor:   COLORS.primary,
+    borderRadius:      8,
+    minWidth:          16,
+    height:            16,
+    alignItems:        'center',
+    justifyContent:    'center',
+    paddingHorizontal: 3,
+    borderWidth:       1.5,
+    borderColor:       '#fff',
+  },
+  badgeTxt: { color: '#fff', fontSize: 9, fontWeight: '900' },
+  label:    { fontSize: 10, fontWeight: '600', marginTop: 3 },
 })

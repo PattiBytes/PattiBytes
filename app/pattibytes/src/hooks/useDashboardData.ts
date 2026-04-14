@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as Location from 'expo-location'
 import { supabase } from '../lib/supabase'
@@ -6,6 +7,7 @@ import type {
   GlobalDeal, MenuResult, Coords,
 } from '../types/dashboard'
 import { ACTIVE_STATUSES } from '../types/dashboard'
+import { appCache, TTL } from '../lib/appCache';
 
 // ─── Helpers (exported so components can use them) ───────────────────────────
 export function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {

@@ -33,7 +33,8 @@ export function CustomOrderForm({ onSubmitted }: Props) {
   const [selectedAddr, setSelectedAddr] = useState<SavedAddressLocal | null>(null);
   const [notes,        setNotes]        = useState('');
   const [items,        setItems]        = useState<CustomOrderItem[]>([]);
-  const [imageUris,    setImageUris]    = useState<string[]>([]);
+  // ✅ Holds Cloudinary URLs (https://...) — ImagePickerGrid uploads before returning
+  const [imageUrls,    setImageUrls]    = useState<string[]>([]);
   const [submitting,   setSubmitting]   = useState(false);
 
   // ── Delivery fee state ──────────────────────────────────────────────────────
@@ -50,12 +51,12 @@ export function CustomOrderForm({ onSubmitted }: Props) {
   const resetForm = () => {
     setSelectedCats([]); setDescription(''); setBudget('');
     setAddress(''); setAddressId(null); setSelectedAddr(null);
-    setNotes(''); setItems([]); setImageUris([]);
+    setNotes(''); setItems([]); setImageUrls([]);
     setDeliveryFee(null); setDeliveryDistKm(null);
     setDeliveryBreakdown(''); setCalcingFee(false);
   };
 
-  // ── Address selected → calculate delivery fee immediately ──────────────────
+  // ── Address selected → calculate delivery fee ───────────────────────────────
   const handleAddressSelect = async (
     fullAddress: string,
     id: string | null,
@@ -122,7 +123,7 @@ export function CustomOrderForm({ onSubmitted }: Props) {
         discount_percentage: 0,
       }));
 
-      // ── 1. Insert custom_order_requests ──────────────────────────────────
+      // ── 1. Insert custom_order_requests ────────────────────────────────────
       const { data: cor, error: corErr } = await supabase
         .from('custom_order_requests')
         .insert({
@@ -130,14 +131,17 @@ export function CustomOrderForm({ onSubmitted }: Props) {
           custom_order_ref: ref,
           category:         selectedCats.join(','),
           description:      description.trim(),
-          image_url:        imageUris[0] ?? null,
+          // ✅ Primary image — already a Cloudinary URL, safe to store
+          image_url:        imageUrls[0] ?? null,
+          // ✅ All uploaded image URLs stored — none lost
+          image_urls:       imageUrls.length > 0 ? imageUrls : null,
           items:            dbItems.length ? dbItems : null,
           status:           'pending',
           delivery_address: address.trim(),
           delivery_lat:     selectedAddr?.latitude  ?? null,
           delivery_lng:     selectedAddr?.longitude ?? null,
           total_amount:     totalAmt,
-          delivery_fee:     finalFee,            // ✅ real calculated fee
+          delivery_fee:     finalFee,
           payment_method:   'cod',
           customer_phone:   selectedAddr?.recipient_phone ?? null,
         })
@@ -146,7 +150,7 @@ export function CustomOrderForm({ onSubmitted }: Props) {
 
       if (corErr) throw corErr;
 
-      // ── 2. Insert orders ─────────────────────────────────────────────────
+      // ── 2. Insert orders ───────────────────────────────────────────────────
       const { data: order, error: orderErr } = await supabase
         .from('orders')
         .insert({
@@ -155,7 +159,7 @@ export function CustomOrderForm({ onSubmitted }: Props) {
           driver_id:            null,
           status:               'pending',
           subtotal:             subtotal,
-          delivery_fee:         finalFee,        // ✅ real calculated fee
+          delivery_fee:         finalFee,
           tax:                  0,
           payment_method:       'cod',
           payment_status:       'pending',
@@ -171,27 +175,30 @@ export function CustomOrderForm({ onSubmitted }: Props) {
           recipient_name:       selectedAddr?.recipient_name  ?? null,
           delivery_latitude:    selectedAddr?.latitude  ?? null,
           delivery_longitude:   selectedAddr?.longitude ?? null,
-          delivery_distance_km: deliveryDistKm ?? null,  // ✅ store distance
+          delivery_distance_km: deliveryDistKm ?? null,
           delivery_address_id:  addressId ?? null,
           special_instructions: notes.trim() || null,
           custom_order_ref:     ref,
           custom_order_status:  'pending',
           platform_handled:     true,
           custom_category:      selectedCats,
-          custom_image_url:     imageUris[0] ?? null,
+          // ✅ Cloudinary URL — viewable by admins, drivers, anyone
+          custom_image_url:     imageUrls[0] ?? null,
+          // ✅ All image URLs preserved
+          custom_image_urls:    imageUrls.length > 0 ? imageUrls : null,
         })
         .select('id, order_number')
         .single();
 
       if (orderErr) throw orderErr;
 
-      // ── 3. Back-link ─────────────────────────────────────────────────────
+      // ── 3. Back-link ───────────────────────────────────────────────────────
       await supabase
         .from('custom_order_requests')
         .update({ order_id: order.id })
         .eq('id', cor.id);
 
-      // ── 4. Notifications: self + admins ──────────────────────────────────
+      // ── 4. Notifications: self + admins ────────────────────────────────────
       const selfNotif = {
         user_id: user.id,
         title:   `Custom request submitted ✅ (${ref})`,
@@ -218,7 +225,7 @@ export function CustomOrderForm({ onSubmitted }: Props) {
       await supabase.from('notifications').insert([selfNotif, ...adminNotifs]);
 
       Alert.alert(
-        `Order submitted 🎉`,
+        'Order submitted 🎉',
         `Reference: ${ref}\nDelivery fee: ₹${finalFee}\n\nWe will confirm and quote your custom order shortly.`,
         [
           {
@@ -270,7 +277,6 @@ export function CustomOrderForm({ onSubmitted }: Props) {
         </View>
 
         <CategoryMultiPicker selected={selectedCats} onChange={setSelectedCats} />
-
         <ProductPicker selectedCats={selectedCats} items={items} onItemsChange={setItems} />
 
         {/* ── Description ── */}
@@ -322,18 +328,12 @@ export function CustomOrderForm({ onSubmitted }: Props) {
           />
         )}
 
-        {/* ── Delivery fee card (appears after address selected) ── */}
+        {/* ── Delivery fee card ── */}
         {address.trim().length > 0 && (
           <View style={{
-            backgroundColor: calcingFee
-              ? '#F9FAFB'
-              : deliveryFee !== null ? '#F0FDF4' : '#FFFBEB',
-            borderRadius: 12,
-            padding: 12,
-            borderWidth: 1.5,
-            borderColor: calcingFee
-              ? '#E5E7EB'
-              : deliveryFee !== null ? '#BBF7D0' : '#FDE68A',
+            backgroundColor: calcingFee ? '#F9FAFB' : deliveryFee !== null ? '#F0FDF4' : '#FFFBEB',
+            borderRadius: 12, padding: 12, borderWidth: 1.5,
+            borderColor: calcingFee ? '#E5E7EB' : deliveryFee !== null ? '#BBF7D0' : '#FDE68A',
           }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={{ fontSize: 18 }}>🚚</Text>
@@ -380,9 +380,10 @@ export function CustomOrderForm({ onSubmitted }: Props) {
           />
         </View>
 
-        <ImagePickerGrid imageUris={imageUris} onChange={setImageUris} />
+        {/* ✅ imageUrls now contains Cloudinary URLs */}
+        <ImagePickerGrid imageUris={imageUrls} onChange={setImageUrls} />
 
-        {/* ── Order summary (shown only when ready to submit) ── */}
+        {/* ── Order summary ── */}
         {canSubmit && (
           <View style={{
             backgroundColor: '#F8F9FA', borderRadius: 12, padding: 14,
@@ -405,8 +406,7 @@ export function CustomOrderForm({ onSubmitted }: Props) {
                 ? <ActivityIndicator size="small" color={COLORS.primary} />
                 : <Text style={{ fontSize: 12, fontWeight: '700', color: '#111827' }}>
                     {deliveryFee !== null ? `₹${deliveryFee}` : '₹35 (est.)'}
-                  </Text>
-              }
+                  </Text>}
             </View>
             {budget ? (
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -438,11 +438,7 @@ export function CustomOrderForm({ onSubmitted }: Props) {
             <Text style={{ color: '#6B7280', fontWeight: '700' }}>↺ Reset</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[
-              S.submitBtn,
-              { flex: 1 },
-              (!canSubmit || submitting || calcingFee) && { opacity: 0.45 },
-            ]}
+            style={[S.submitBtn, { flex: 1 }, (!canSubmit || submitting || calcingFee) && { opacity: 0.45 }]}
             onPress={handleSubmit}
             disabled={!canSubmit || submitting || calcingFee}
             activeOpacity={0.85}

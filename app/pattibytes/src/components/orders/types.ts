@@ -37,7 +37,8 @@ export type OrderRow = {
 }
 
 export type OrderDetail = OrderRow & {
-  tax:                       number
+  tax:      number | null 
+  discount: number | null 
   promo_id:                  string | null
   delivery_address:          string
   delivery_address_label:    string | null
@@ -47,7 +48,7 @@ export type OrderDetail = OrderRow & {
   updated_at:                string
   estimated_delivery_time:   string | null
   actual_delivery_time:      string | null
-  preparation_time:          number | null        // ✅ was missing
+  preparation_time:          number | null        
   cancellation_reason:       string | null
   cancelled_by:              string | null
   customer_phone:            string | null
@@ -63,8 +64,8 @@ export type OrderDetail = OrderRow & {
   quoted_amount?:            number | null
   quote_message?:            string | null
   platform_handled?:         boolean
-  custom_category?:          string | null        // ✅ was missing
-  custom_image_url?:         string | null        // ✅ was missing (add proactively)
+  custom_category?:          string | null       
+  custom_image_url?:         string | null        
 }
 
 

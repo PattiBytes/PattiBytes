@@ -8,7 +8,7 @@ export default {
     name: "Pattibytes Express",
     slug: "pbexpress",
     scheme: "pattibytesexpress",
-    version: "1.0.0",
+    version: "1.1.0",
 
     updates: {
       url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
@@ -17,52 +17,87 @@ export default {
       policy: "appVersion",
     },
 
+    newArchEnabled: true,
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     userInterfaceStyle: "light",
+    assetBundlePatterns: ["**/*"],
+
     splash: {
       image: "./assets/images/icon.png",
       resizeMode: "contain",
       backgroundColor: "#FF6B35",
     },
 
+    // ── iOS ──────────────────────────────────────────────────────────────────
     ios: {
       supportsTablet: false,
       bundleIdentifier: "com.pattibytes.express",
-
-      // ── REQUIRED for Sign in with Apple ──────────────────────────────────
+      // EAS autoIncrement (appVersionSource: remote) manages this automatically.
+      // Only manually bump if submitting outside EAS.
+      buildNumber: "1",
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_PLIST ?? "./GoogleService-Info.plist",
       usesAppleSignIn: true,
+      appStoreUrl: "https://apps.apple.com/app/id6761598840",
 
-      // ── REQUIRED: all permission usage strings ────────────────────────────
-      // Apple rejects if any used permission lacks a description
       infoPlist: {
-        UIBackgroundModes: ["location", "fetch", "remote-notification"],
-
-        // Location (you already use expo-location)
+        UIBackgroundModes: ["location", "remote-notification"],
         NSLocationWhenInUseUsageDescription:
           "Pattibytes needs your location to find nearby restaurants and estimate delivery time.",
         NSLocationAlwaysAndWhenInUseUsageDescription:
           "Pattibytes uses background location to track your delivery in real time.",
-
-        // Camera & Photos — add only if your app lets users upload profile pics or review photos
         NSCameraUsageDescription:
           "Used to take a photo for your profile or attach to a review.",
         NSPhotoLibraryUsageDescription:
           "Used to choose a profile photo or attach an image to your review.",
+        NSPhotoLibraryAddUsageDescription:
+          "Used to save your order receipt or images to your photo library.",
+        ITSAppUsesNonExemptEncryption: false,
+        CFBundleURLTypes: [
+          {
+            CFBundleURLSchemes: [
+              "pattibytesexpress",
+              IOS_URL_SCHEME,
+            ],
+          },
+        ],
+      },
 
-        // ── Prevents App Store rejection for "missing NSUserTrackingUsageDescription"
-        // Only needed if you use any advertising/analytics SDK that uses IDFA.
-        // If you have no such SDK, you can remove this line.
-        NSUserTrackingUsageDescription:
-          "We use anonymous data to improve app performance and show relevant offers.",
+      // iOS 17+ Privacy Manifest — required to avoid hard App Store rejection
+      privacyManifests: {
+        NSPrivacyAccessedAPITypes: [
+          {
+            NSPrivacyAccessedAPIType:
+              "NSPrivacyAccessedAPICategoryUserDefaults",
+            NSPrivacyAccessedAPITypeReasons: ["CA92.1"],
+          },
+          {
+            NSPrivacyAccessedAPIType:
+              "NSPrivacyAccessedAPICategoryFileTimestamp",
+            NSPrivacyAccessedAPITypeReasons: ["C617.1"],
+          },
+          {
+            NSPrivacyAccessedAPIType:
+              "NSPrivacyAccessedAPICategorySystemBootTime",
+            NSPrivacyAccessedAPITypeReasons: ["35F9.1"],
+          },
+        ],
       },
     },
 
+    // ── Android ──────────────────────────────────────────────────────────────
     android: {
+      // ✅ FIX — edgeToEdgeEnabled belongs HERE in expo.android,
+      // NOT inside expo-build-properties plugin (where it has no effect).
+      // Prevents app content from rendering behind system nav bar on Android 15+.
+      edgeToEdgeEnabled: false,
+
       adaptiveIcon: {
         foregroundImage: "./assets/images/icon.png",
         backgroundColor: "#FF6B35",
       },
+
       permissions: [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -70,25 +105,62 @@ export default {
         "android.permission.VIBRATE",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",     // Android 13+
+        "android.permission.READ_EXTERNAL_STORAGE", // Android 12 and below
       ],
+
       package: "com.pattibytes.express",
-      googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
+
+      // ✅ FIX — host field cannot contain a slash ("/").
+      // "auth/callback" was silently breaking all deep links on Android.
+      // Split into host + pathPrefix instead.
+      intentFilters: [
+  {
+    action: 'VIEW',
+    autoVerify: true,
+    data: [
+      {
+        scheme: 'pattibytesexpress',
+        host: 'auth',
+        pathPrefix: '/callback',
+      },
+    ],
+    category: ['BROWSABLE', 'DEFAULT'],
+  },
+  {
+    action: 'VIEW',
+    data: [
+      {
+        scheme: 'pattibytesexpress',
+        host: 'open',
+      },
+      {
+        scheme: 'https',
+        host: 'pbexpress.pattibytes.com',
+      },
+    ],
+    category: ['BROWSABLE', 'DEFAULT'],
+  },
+],
     },
 
     web: { bundler: "metro", output: "single" },
 
+    // ── Plugins ──────────────────────────────────────────────────────────────
     plugins: [
       "expo-router",
 
-      // ── NEW: Sign in with Apple native plugin ─────────────────────────────
-      // Must come before any auth-related plugin
+      // Sign in with Apple — must stay before any other auth plugin
       "expo-apple-authentication",
 
       [
         "@sentry/react-native/expo",
         {
-          url: "https://sentry.io/",
-          project: "pattibytes",
+          url:          "https://sentry.io/",
+          project:      "pattibytes",
           organization: "pattibytes",
         },
       ],
@@ -99,9 +171,9 @@ export default {
       [
         "expo-notifications",
         {
-          icon: "./assets/images/notification-icon.png",
-          color: "#FF6B35",
-          sounds: [],
+          icon:        "./assets/images/notification-icon.png",
+          color:       "#FF6B35",
+          sounds:      [],
           androidMode: "default",
         },
       ],
@@ -111,7 +183,8 @@ export default {
         {
           locationAlwaysAndWhenInUsePermission:
             "Pattibytes needs your location for delivery tracking.",
-          isIosBackgroundLocationEnabled: true,
+          isIosBackgroundLocationEnabled:     true,
+          isAndroidBackgroundLocationEnabled: true,
         },
       ],
 
@@ -119,8 +192,16 @@ export default {
         "expo-build-properties",
         {
           android: {
-            enableProguardInReleaseBuilds: true,
+            // ✅ FIX — edgeToEdgeEnabled removed from here (wrong location).
+            // It is now set in expo.android above where it actually works.
+            enableProguardInReleaseBuilds:       true,
             enableShrinkResourcesInReleaseBuilds: true,
+            compileSdkVersion: 35,
+            targetSdkVersion:  35,
+            minSdkVersion:     24,
+          },
+          ios: {
+            deploymentTarget: "16.0",
           },
         },
       ],

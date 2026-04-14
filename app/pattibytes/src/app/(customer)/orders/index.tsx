@@ -14,6 +14,7 @@ import { navigateFromNotification }    from '../../../services/notifications'
 import ReviewsTab                      from '../../../components/orders/ReviewsTab'
 import OrderCard                       from '../../../components/orders/OrderCard'
 import CustomOrderCard                 from '../../../components/orders/CustomOrderCard'
+import { AppStatusBar } from '../../../components/ui/AppStatusBar'
 import {
   registerForPushNotifications,
   addResponseListener,
@@ -24,6 +25,7 @@ import {
   TRACKABLE_STATUSES,
 } from '../../../components/orders/constants'
 import type { OrderRow } from '../../../components/orders/types'
+import { ScreenLoader } from '../../../components/ui/ScreenLoader';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type TabKey = 'active' | 'completed' | 'cancelled' | 'reviews'
@@ -203,7 +205,7 @@ export default function OrdersScreen() {
   // ── Render item ─────────────────────────────────────────────────────────────
   // Custom orders → CustomOrderCard (rich card with categories, quote banner)
   // All others    → OrderCard (restaurant / store card)
-  const renderItem = ({ item }: { item: OrderRow }) => {
+  const renderItem = useCallback(({ item }: { item: OrderRow }) => {
     if (isCustomOrder(item)) {
       return (
         <CustomOrderCard
@@ -228,7 +230,7 @@ export default function OrdersScreen() {
         }
       />
     )
-  }
+  }, [router])
 
   // ── Empty state ─────────────────────────────────────────────────────────────
   const EmptyState = () => {
@@ -257,13 +259,15 @@ export default function OrdersScreen() {
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
-  return (
-    <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
-      <Stack.Screen
-        options={{
-          title:            'My Orders',
-          headerStyle:      { backgroundColor: COLORS.primary },
-          headerTintColor:  '#fff',
+ return (
+  <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
+    {/* Status bar matches the Stack header color */}
+    <AppStatusBar backgroundColor={COLORS.primary} style="light" />
+    <Stack.Screen
+      options={{
+        title:            'My Orders',
+        headerStyle:      { backgroundColor: COLORS.primary },
+        headerTintColor:  '#fff',
           headerTitleStyle: { fontWeight: '800' },
           headerRight: () => (
             <TouchableOpacity
@@ -342,9 +346,9 @@ export default function OrdersScreen() {
       )}
 
       {/* ── Content ── */}
-      {loading ? (
-        <ActivityIndicator color={COLORS.primary} style={{ flex: 1, marginTop: 40 }} />
-      ) : activeTab === 'reviews' ? (
+     {loading ? (
+  <ScreenLoader variant="orders" />
+) : activeTab === 'reviews' ? (
         <ReviewsTab
           userId={user!.id}
           deliveredOrders={completedOrders}
@@ -352,9 +356,14 @@ export default function OrdersScreen() {
         />
       ) : (
         <FlatList
-          data={filteredOrders}
-          keyExtractor={i => i.id}
-          renderItem={renderItem}
+    data={filteredOrders}
+    keyExtractor={item => item.id}
+    renderItem={renderItem}
+    initialNumToRender={8}
+    maxToRenderPerBatch={8}
+    windowSize={5}
+    updateCellsBatchingPeriod={50}
+    removeClippedSubviews={true}
           contentContainerStyle={{ padding: 14, gap: 12, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
           refreshControl={

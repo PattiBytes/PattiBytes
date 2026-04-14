@@ -17,10 +17,12 @@
       "channel": "development",
       "env": {
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "980629232960-h7euvsc1adl2gb94k483n2th03cpi59i.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt"
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt",
+        "EXPO_PUBLIC_CLOUDINARY_CLOUD": "your_cloud_name_here",
+        "EXPO_PUBLIC_CLOUDINARY_PRESET": "your_unsigned_preset_here"
       }
     },
-
     "preview": {
       "distribution": "internal",
       "android": {
@@ -32,11 +34,13 @@
       "channel": "preview",
       "env": {
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "980629232960-h7euvsc1adl2gb94k483n2th03cpi59i.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt",
         "APP_VARIANT": "preview",
-        "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt"
+        "EXPO_PUBLIC_CLOUDINARY_CLOUD": "your_cloud_name_here",
+        "EXPO_PUBLIC_CLOUDINARY_PRESET": "your_unsigned_preset_here"
       }
     },
-
     "preview-simulator": {
       "extends": "preview",
       "channel": "preview",
@@ -44,7 +48,6 @@
         "simulator": true
       }
     },
-
     "production": {
       "autoIncrement": true,
       "android": {
@@ -56,11 +59,22 @@
       "channel": "production",
       "env": {
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "980629232960-h7euvsc1adl2gb94k483n2th03cpi59i.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt"
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.980629232960-eq8l2m6gmqkkf1iq664a8ff52qvu6nbt",
+        "SENTRY_ORG": "pattibytes",
+        "SENTRY_PROJECT": "pattibytes",
+        "EXPO_PUBLIC_CLOUDINARY_CLOUD": "your_cloud_name_here",
+        "EXPO_PUBLIC_CLOUDINARY_PRESET": "your_unsigned_preset_here"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "pbexpress38@gmail.com",
+        "ascAppId": "6761598840",
+        "appleTeamId": "5GNTVS4TNH"
+      }
+    }
   }
 }
