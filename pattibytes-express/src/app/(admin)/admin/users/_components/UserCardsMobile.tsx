@@ -1,5 +1,5 @@
 'use client';
-import { Phone, Calendar, Pencil, Trash2, Shield, Lock } from 'lucide-react';
+import { Phone, Calendar, Pencil, Trash2, Shield, Lock, Bell } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import type { UserWithMerchant } from './types';
 import { roleBadge, statusBadge } from './utils';
@@ -12,15 +12,17 @@ interface Props {
   onRevoke: (id: string) => void;
   onDelete: (id: string) => void;
   onPermissions: (u: UserWithMerchant) => void;
+  onNotify: (u: UserWithMerchant) => void;
 }
 
 export default function UserCardsMobile({
-  rows, deletingId, onEdit, onRevoke, onDelete, onPermissions,
+  rows, deletingId, onEdit, onRevoke, onDelete, onPermissions, onNotify,
 }: Props) {
   return (
     <div className="grid gap-3 md:hidden">
       {rows.map((u) => (
         <div key={u.id} className="bg-white rounded-xl border shadow-sm p-4">
+
           {/* Header row */}
           <div className="flex items-start gap-3">
             <UserAvatar user={u} size="lg" />
@@ -79,26 +81,26 @@ export default function UserCardsMobile({
             </div>
           </div>
 
-          {/* Actions */}
+          {/* Actions — 2-col grid, Notify spans full width at bottom */}
           <div className="grid grid-cols-2 gap-2 mt-3">
             <button
               onClick={() => onEdit(u)}
               className="flex items-center justify-center gap-1.5 py-2 rounded-lg
-                bg-gray-900 text-white text-xs font-semibold"
+                bg-gray-900 text-white text-xs font-semibold hover:bg-black transition-colors"
             >
               <Pencil size={13} /> Edit
             </button>
             <button
               onClick={() => onPermissions(u)}
               className="flex items-center justify-center gap-1.5 py-2 rounded-lg
-                bg-indigo-600 text-white text-xs font-semibold"
+                bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
             >
               <Lock size={13} /> Permissions
             </button>
             <button
               onClick={() => onRevoke(u.id)}
               className="flex items-center justify-center gap-1.5 py-2 rounded-lg
-                bg-yellow-600 text-white text-xs font-semibold"
+                bg-yellow-600 text-white text-xs font-semibold hover:bg-yellow-700 transition-colors"
             >
               <Shield size={13} /> Revoke
             </button>
@@ -106,12 +108,22 @@ export default function UserCardsMobile({
               onClick={() => onDelete(u.id)}
               disabled={deletingId === u.id}
               className="flex items-center justify-center gap-1.5 py-2 rounded-lg
-                bg-red-600 text-white text-xs font-semibold disabled:opacity-50"
+                bg-red-600 text-white text-xs font-semibold disabled:opacity-50 hover:bg-red-700 transition-colors"
             >
               <Trash2 size={13} />
               {deletingId === u.id ? 'Deleting…' : 'Delete'}
             </button>
+
+            {/* Notify — full width spanning both columns */}
+            <button
+              onClick={() => onNotify(u)}
+              className="col-span-2 flex items-center justify-center gap-1.5 py-2 rounded-lg
+                bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 transition-colors"
+            >
+              <Bell size={13} /> Send Notification
+            </button>
           </div>
+
         </div>
       ))}
     </div>

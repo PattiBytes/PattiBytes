@@ -1,5 +1,5 @@
 'use client';
-import { Mail, Phone, Calendar, Pencil, Trash2, Shield, Lock } from 'lucide-react';
+import { Mail, Phone, Calendar, Pencil, Trash2, Shield, Lock, Bell } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import type { UserWithMerchant } from './types';
 import { roleBadge, statusBadge } from './utils';
@@ -12,10 +12,11 @@ interface Props {
   onRevoke: (id: string) => void;
   onDelete: (id: string) => void;
   onPermissions: (u: UserWithMerchant) => void;
+  onNotify: (u: UserWithMerchant) => void;
 }
 
 export default function UserTableDesktop({
-  rows, deletingId, onEdit, onRevoke, onDelete, onPermissions,
+  rows, deletingId, onEdit, onRevoke, onDelete, onPermissions, onNotify,
 }: Props) {
   return (
     <div className="hidden md:block bg-white rounded-xl shadow border overflow-hidden">
@@ -37,6 +38,7 @@ export default function UserTableDesktop({
           <tbody className="divide-y divide-gray-100">
             {rows.map((u) => (
               <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+
                 {/* User */}
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -110,6 +112,7 @@ export default function UserTableDesktop({
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       onClick={() => onEdit(u)}
+                      title="Edit user"
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg
                         bg-gray-900 text-white hover:bg-black text-xs"
                     >
@@ -117,13 +120,23 @@ export default function UserTableDesktop({
                     </button>
                     <button
                       onClick={() => onPermissions(u)}
+                      title="Manage permissions"
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg
                         bg-indigo-600 text-white hover:bg-indigo-700 text-xs"
                     >
                       <Lock size={13} /> Perms
                     </button>
                     <button
+                      onClick={() => onNotify(u)}
+                      title="Send push notification"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg
+                        bg-violet-600 text-white hover:bg-violet-700 text-xs"
+                    >
+                      <Bell size={13} /> Notify
+                    </button>
+                    <button
                       onClick={() => onRevoke(u.id)}
+                      title="Revoke access"
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg
                         bg-yellow-600 text-white hover:bg-yellow-700 text-xs"
                     >
@@ -132,6 +145,7 @@ export default function UserTableDesktop({
                     <button
                       onClick={() => onDelete(u.id)}
                       disabled={deletingId === u.id}
+                      title="Delete profile"
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg
                         bg-red-600 text-white hover:bg-red-700 text-xs disabled:opacity-50"
                     >
@@ -140,6 +154,7 @@ export default function UserTableDesktop({
                     </button>
                   </div>
                 </td>
+
               </tr>
             ))}
           </tbody>

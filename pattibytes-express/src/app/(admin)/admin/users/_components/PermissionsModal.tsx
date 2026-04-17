@@ -66,17 +66,20 @@ function Toggle({
 export default function PermissionsModal({ target, adminId, onClose, onSaved }: Props) {
   const prefs = target.notification_prefs ?? {};
 
+  // ── isBanned is derived from the original target prop, never from state ──
+  const isBanned = Boolean(target.banned_at);
+
   const [state, setState] = useState<PermState>({
-    is_active:            Boolean(target.is_active ?? true),
-    is_approved:          Boolean(target.is_approved),
-    is_trusted:           Boolean(target.is_trusted ?? true),
-    account_status:       target.account_status || 'active',
-    notif_order_updates:  prefs.order_updates ?? true,
-    notif_promos:         prefs.promos ?? true,
-    notif_system:         prefs.system ?? true,
-    ban_reason:           '',
-    ban_expires_at:       '',
-    isBanning:            false,
+    is_active:           Boolean(target.is_active ?? true),
+    is_approved:         Boolean(target.is_approved),
+    is_trusted:          Boolean(target.is_trusted ?? true),
+    account_status:      target.account_status || 'active',
+    notif_order_updates: prefs.order_updates ?? true,
+    notif_promos:        prefs.promos ?? true,
+    notif_system:        prefs.system ?? true,
+    ban_reason:          '',
+    ban_expires_at:      '',
+    isBanning:           false,
   });
 
   const [saving, setSaving] = useState(false);
@@ -87,42 +90,72 @@ export default function PermissionsModal({ target, adminId, onClose, onSaved }: 
     try {
       setSaving(true);
 
-      const banPayload = state.isBanning
-        ? {
-            banned_at: new Date().toISOString(),
-            banned_by: adminId,
-            ban_reason: state.ban_reason || null,
-            ban_expires_at: state.ban_expires_at || null,
-            is_active: false,
-            account_status: 'banned',
-          }
-        : {
-            banned_at: null,
-            banned_by: null,
-            ban_reason: null,
-            ban_expires_at: null,
-          };
+      // Determine the intent clearly:
+      //   isBanning=true + currently banned  → UNBAN
+      //   isBanning=true + not banned        → BAN
+      //   isBanning=false                    → no ban change
+      const isUnbanning = state.isBanning && isBanned;
+      const isBanning   = state.isBanning && !isBanned;
+
+      let banPayload: Record<string, any> = {};
+
+      if (isBanning) {
+        // ── Apply ban: lock out the user ─────────────────────────────────
+        banPayload = {
+          banned_at:      new Date().toISOString(),
+          banned_by:      adminId,
+          ban_reason:     state.ban_reason || null,
+          ban_expires_at: state.ban_expires_at || null,
+          is_active:      false,
+          account_status: 'banned',
+        };
+      } else if (isUnbanning) {
+        // ── Remove ban: fully restore access ────────────────────────────
+        banPayload = {
+          banned_at:      null,
+          banned_by:      null,
+          ban_reason:     null,
+          ban_expires_at: null,
+          is_active:      true,      // ✅ restore login
+          account_status: 'active',  // ✅ routing guards will now pass
+        };
+      }
+      // else: banPayload stays {} — no ban change, other fields still saved
+
+      // Compute the final account_status to write:
+      //   - banning   → 'banned'
+      //   - unbanning → 'active'  (banPayload overrides this anyway via spread)
+      //   - no change → keep whatever the admin set in the toggles
+      const finalAccountStatus = isBanning
+        ? 'banned'
+        : isUnbanning
+          ? 'active'
+          : state.account_status;
 
       const { error } = await supabase
         .from('profiles')
         .update({
-          is_active:       state.is_active,
-          is_approved:     state.is_approved,
-          is_trusted:      state.is_trusted,
-          account_status:  state.isBanning ? 'banned' : state.account_status,
+          is_active:      state.is_active,
+          is_approved:    state.is_approved,
+          is_trusted:     state.is_trusted,
+          account_status: finalAccountStatus,
           notification_prefs: {
             order_updates: state.notif_order_updates,
             promos:        state.notif_promos,
             system:        state.notif_system,
           },
-          ...banPayload,
+          ...banPayload,   // ✅ overrides is_active + account_status when banning/unbanning
           updated_at: new Date().toISOString(),
         })
         .eq('id', target.id);
 
       if (error) throw error;
 
-      toast.success('✅ Permissions saved');
+      toast.success(
+        isBanning   ? '🚫 User banned successfully' :
+        isUnbanning ? '✅ User unbanned successfully' :
+                      '✅ Permissions saved'
+      );
       onSaved();
       onClose();
     } catch (e: any) {
@@ -131,8 +164,6 @@ export default function PermissionsModal({ target, adminId, onClose, onSaved }: 
       setSaving(false);
     }
   };
-
-  const isBanned = Boolean(target.banned_at);
 
   return (
     <div className="fixed inset-0 z-50">
@@ -254,7 +285,7 @@ export default function PermissionsModal({ target, adminId, onClose, onSaved }: 
               </div>
             </section>
 
-            {/* Ban section */}
+            {/* Ban / Unban section */}
             <section>
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
                 Ban / Unban
@@ -264,9 +295,10 @@ export default function PermissionsModal({ target, adminId, onClose, onSaved }: 
                 icon={Ban}
                 checked={state.isBanning}
                 onChange={(v) => set({ isBanning: v })}
-                desc={isBanned ? 'Remove the existing ban' : 'Blocks all access immediately'}
+                desc={isBanned ? 'Restores full account access' : 'Blocks all access immediately'}
               />
 
+              {/* Ban reason form — only shown when banning a non-banned user */}
               {state.isBanning && !isBanned && (
                 <div className="mt-3 space-y-3 bg-red-50 rounded-xl p-3 border border-red-200">
                   <div>
@@ -287,6 +319,13 @@ export default function PermissionsModal({ target, adminId, onClose, onSaved }: 
                       className="mt-1 w-full px-3 py-2 border border-red-300 rounded-lg text-sm focus:ring-2 focus:ring-red-400"
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Unban confirmation hint */}
+              {state.isBanning && isBanned && (
+                <div className="mt-3 bg-green-50 rounded-xl p-3 border border-green-200 text-sm text-green-800">
+                  ✅ Saving will clear the ban and restore <strong>active</strong> status.
                 </div>
               )}
             </section>

@@ -7,16 +7,17 @@ import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-toastify';
-import { Search } from 'lucide-react';
+import { Search, Bell } from 'lucide-react';
 
 import type { Role, UserWithMerchant } from './_components/types';
 import { PER_PAGE } from './_components/types';
 import { useUsersData } from './_components/hooks/useUsersData';
 import { useRoleCounts } from './_components/hooks/useRoleCounts';
 import { useOrderAnalytics } from './_components/hooks/useOrderAnalytics';
+import PushNotificationModal from './_components/PushNotificationModal';
 
-import UserStatsCards  from './_components/UserStatsCards';
-import UserFilters     from './_components/UserFilters';
+import UserStatsCards   from './_components/UserStatsCards';
+import UserFilters      from './_components/UserFilters';
 import UserTableDesktop from './_components/UserTableDesktop';
 import UserCardsMobile  from './_components/UserCardsMobile';
 import UserEditModal    from './_components/UserEditModal';
@@ -41,7 +42,7 @@ export default function AdminUsersPage() {
   const { loading, rows, count, loadUsers } = useUsersData(
     user?.id, roleFilter, debouncedQuery, page
   );
-  const roleCounts   = useRoleCounts(user?.id);
+  const roleCounts    = useRoleCounts(user?.id);
   const { analytics } = useOrderAnalytics(user?.id);
 
   // ── Edit ─────────────────────────────────────────────────────────────
@@ -55,19 +56,19 @@ export default function AdminUsersPage() {
       const { error } = await supabase
         .from('profiles')
         .update({
-          full_name:        editing.full_name,
-          email:            editing.email,
-          phone:            editing.phone,
-          role:             editing.role,
-          approval_status:  editing.approval_status,
-          is_approved:      editing.is_approved,
-          is_active:        editing.is_active,
+          full_name:         editing.full_name,
+          email:             editing.email,
+          phone:             editing.phone,
+          role:              editing.role,
+          approval_status:   editing.approval_status,
+          is_approved:       editing.is_approved,
+          is_active:         editing.is_active,
           profile_completed: editing.profile_completed,
-          is_trusted:       editing.is_trusted,
-          address:          editing.address,
-          city:             editing.city,
-          state:            editing.state,
-          updated_at:       new Date().toISOString(),
+          is_trusted:        editing.is_trusted,
+          address:           editing.address,
+          city:              editing.city,
+          state:             editing.state,
+          updated_at:        new Date().toISOString(),
         })
         .eq('id', editing.id);
       if (error) throw error;
@@ -85,9 +86,12 @@ export default function AdminUsersPage() {
   const softRevoke = async (profileId: string) => {
     try {
       const { error } = await supabase.from('profiles').update({
-        role: 'customer', approval_status: 'revoked',
-        is_approved: false, profile_completed: false,
-        is_active: true, updated_at: new Date().toISOString(),
+        role:              'customer',
+        approval_status:   'revoked',
+        is_approved:       false,
+        profile_completed: false,
+        is_active:         true,
+        updated_at:        new Date().toISOString(),
       }).eq('id', profileId);
       if (error) throw error;
       toast.success('Access revoked');
@@ -119,6 +123,10 @@ export default function AdminUsersPage() {
   // ── Permissions modal ────────────────────────────────────────────────
   const [permTarget, setPermTarget] = useState<UserWithMerchant | null>(null);
 
+  // ── Push notification modal ──────────────────────────────────────────
+  // null = closed | 'bulk' = bulk sender | UserWithMerchant = single user
+  const [pushTarget, setPushTarget] = useState<UserWithMerchant | 'bulk' | null>(null);
+
   // ── Helpers ──────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(count / PER_PAGE));
 
@@ -132,10 +140,23 @@ export default function AdminUsersPage() {
         className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 overflow-x-hidden"
         style={{ paddingBottom: 'calc(88px + env(safe-area-inset-bottom))' }}
       >
-        {/* Page title */}
-        <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">All Users</h1>
-          <p className="text-gray-600 mt-1 text-sm">Search, edit, manage permissions, and analyse users.</p>
+        {/* Page title + Bulk Notify button */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">All Users</h1>
+            <p className="text-gray-600 mt-1 text-sm">
+              Search, edit, manage permissions, and analyse users.
+            </p>
+          </div>
+
+          <button
+            onClick={() => setPushTarget('bulk')}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600
+              hover:bg-indigo-700 text-white font-semibold text-sm transition-colors shrink-0"
+          >
+            <Bell size={15} />
+            Bulk Notify
+          </button>
         </div>
 
         {/* Analytics + role stats */}
@@ -171,6 +192,7 @@ export default function AdminUsersPage() {
           </div>
         ) : (
           <>
+            {/* Mobile cards */}
             <UserCardsMobile
               rows={rows}
               deletingId={deletingId}
@@ -178,8 +200,10 @@ export default function AdminUsersPage() {
               onRevoke={(id) => softRevoke(id)}
               onDelete={deleteProfileRow}
               onPermissions={(u) => setPermTarget({ ...u })}
+              onNotify={(u) => setPushTarget({ ...u })}
             />
 
+            {/* Desktop table */}
             <UserTableDesktop
               rows={rows}
               deletingId={deletingId}
@@ -187,6 +211,7 @@ export default function AdminUsersPage() {
               onRevoke={(id) => softRevoke(id)}
               onDelete={deleteProfileRow}
               onPermissions={(u) => setPermTarget({ ...u })}
+              onNotify={(u) => setPushTarget({ ...u })}
             />
 
             {/* Pagination */}
@@ -214,7 +239,7 @@ export default function AdminUsersPage() {
           </>
         )}
 
-        {/* Edit modal */}
+        {/* ── Edit modal ── */}
         {editing && (
           <UserEditModal
             editing={editing}
@@ -227,13 +252,21 @@ export default function AdminUsersPage() {
           />
         )}
 
-        {/* Permissions modal */}
+        {/* ── Permissions modal ── */}
         {permTarget && user && (
           <PermissionsModal
             target={permTarget}
             adminId={user.id}
             onClose={() => setPermTarget(null)}
             onSaved={loadUsers}
+          />
+        )}
+
+        {/* ── Push notification modal ── */}
+        {pushTarget !== null && (
+          <PushNotificationModal
+            singleUser={pushTarget === 'bulk' ? undefined : pushTarget}
+            onClose={() => setPushTarget(null)}
           />
         )}
       </div>
