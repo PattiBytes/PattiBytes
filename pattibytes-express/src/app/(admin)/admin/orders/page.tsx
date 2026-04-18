@@ -5,10 +5,8 @@ import { useAuth }   from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import DashboardLayout from '@/components/layouts/DashboardLayout';
 import { PageLoadingSpinner } from '@/components/common/LoadingSpinner';
-import { Clock, MessageSquare, Package } from 'lucide-react';
-// In your admin orders page header
+import { Clock, MessageSquare, Package, ShoppingBag } from 'lucide-react';
 import BarcodeScanner from './_components/BarcodeScanner';
-
 
 import { useOrders }            from './_hooks/useOrders';
 import { useCustomOrders }      from './_hooks/useCustomOrders';
@@ -21,8 +19,10 @@ import { OrdersFilters }      from './_components/OrdersFilters';
 import { OrdersTable }        from './_components/OrdersTable';
 import { CustomOrdersPanel }  from './_components/CustomOrdersPanel';
 import { AdminWarningBanner } from './_components/AdminWarningBanner';
+// ── NEW: multi-cart session panel ──────────────────────────────────────────
+import { MultiCartSessionsPanel } from './_components/MultiCartSessionsPanel';
 
-type Tab = 'orders' | 'custom';
+type Tab = 'orders' | 'custom' | 'sessions';
 
 export default function AdminOrdersPage() {
   const { user } = useAuth();
@@ -35,14 +35,14 @@ export default function AdminOrdersPage() {
   const [searchQuery,  setSearchQuery]  = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // ── Persisted preferences (auto-reload settings stored in app_settings) ──
+  // ── Persisted preferences ──────────────────────────────────────────────────
   const { prefs, loading: prefsLoading, updatePrefs } = useAdminPreferences();
 
-  // ── Data hooks ────────────────────────────────────────────────────────────
+  // ── Data hooks ─────────────────────────────────────────────────────────────
   const orders = useOrders();
   const custom = useCustomOrders();
 
-  // ── Auto-reload — initial state comes from DB via prefs ───────────────────
+  // ── Auto-reload ────────────────────────────────────────────────────────────
   const autoReload = useAutoReload(
     async () => { await Promise.all([orders.loadOrders(), custom.loadCustomOrders()]); },
     {
@@ -53,7 +53,7 @@ export default function AdminOrdersPage() {
     },
   );
 
-  // ── Auth guard + initial data load ───────────────────────────────────────
+  // ── Auth guard + initial load ──────────────────────────────────────────────
   useEffect(() => {
     if (!user) { router.push('/login'); return; }
     void orders.loadOrders();
@@ -61,7 +61,7 @@ export default function AdminOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // ── Filtered orders ───────────────────────────────────────────────────────
+  // ── Filtered orders ────────────────────────────────────────────────────────
   const filteredOrders = useMemo(() => {
     let list = [...orders.orders];
     if (statusFilter !== 'all') list = list.filter(o => o.status === statusFilter);
@@ -78,8 +78,15 @@ export default function AdminOrdersPage() {
     return list;
   }, [orders.orders, statusFilter, searchQuery]);
 
-  const pendingCustom = custom.customOrders.filter(o => o.status === 'pending').length;
-  const fullStats     = { ...orders.stats, customPending: pendingCustom };
+  // ── Multi-cart sessions filter ─────────────────────────────────────────────
+  // Show orders that belong to a session (multi-restaurant orders)
+  const multiOrders = useMemo(
+    () => orders.orders.filter(o => !!(o as any).cart_session_id),
+    [orders.orders],
+  );
+
+  const pendingCustom   = custom.customOrders.filter(o => o.status === 'pending').length;
+  const fullStats       = { ...orders.stats, customPending: pendingCustom };
 
   if (orders.loading && !orders.orders.length) return <PageLoadingSpinner />;
 
@@ -92,12 +99,14 @@ export default function AdminOrdersPage() {
           onRefresh={orders.handleRefresh} onExport={orders.exportToCSV}
         />
 
-        {/* Last refreshed + prefs loading indicator */}
+        {/* Status bar */}
         <div className="flex items-center gap-3 -mt-2 mb-3">
           {orders.lastRefreshed && (
             <p className="text-xs text-gray-400 flex items-center gap-1">
               <Clock size={10} />
-              {orders.lastRefreshed.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              {orders.lastRefreshed.toLocaleTimeString('en-IN', {
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+              })}
             </p>
           )}
           {prefsLoading && (
@@ -116,28 +125,54 @@ export default function AdminOrdersPage() {
 
         <OrdersStats stats={fullStats} />
 
-        {/* Tab switcher */}
-        <div className="flex gap-1 mb-3 bg-white rounded-lg shadow-sm p-1 w-fit border border-gray-100">
+        {/* Tab switcher — now 3 tabs */}
+        <div className="flex gap-1 mb-3 bg-white rounded-lg shadow-sm p-1 w-fit border border-gray-100 flex-wrap">
           {([
-            { id: 'orders', label: 'All Orders',      Icon: Package,       count: filteredOrders.length },
-            { id: 'custom', label: 'Custom Requests', Icon: MessageSquare, count: pendingCustom          },
+            {
+              id:    'orders',
+              label: 'All Orders',
+              Icon:  Package,
+              count: filteredOrders.length,
+            },
+            {
+              id:    'sessions',
+              label: 'Multi-Restaurant',
+              Icon:  ShoppingBag,
+              count: multiOrders.length,
+            },
+            {
+              id:    'custom',
+              label: 'Custom Requests',
+              Icon:  MessageSquare,
+              count: pendingCustom,
+            },
           ] as const).map(({ id, label, Icon, count }) => (
-            <button key={id} onClick={() => setTab(id)}
+            <button
+              key={id}
+              onClick={() => setTab(id as Tab)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold transition-all ${
-                tab === id ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'
-              }`}>
+                tab === id
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
               <Icon size={13} />
               {label}
               {count > 0 && (
                 <span className={`text-xs px-1.5 py-0 rounded-full font-bold ${
-                  tab === id ? 'bg-white/25 text-white' : 'bg-gray-200 text-gray-600'
-                }`}>{count}</span>
+                  tab === id
+                    ? 'bg-white/25 text-white'
+                    : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {count}
+                </span>
               )}
             </button>
           ))}
         </div>
 
-        {tab === 'orders' ? (
+        {/* ── Tab content ────────────────────────────────────────────────── */}
+        {tab === 'orders' && (
           <>
             <OrdersFilters
               searchQuery={searchQuery}   statusFilter={statusFilter}
@@ -145,7 +180,8 @@ export default function AdminOrdersPage() {
               autoReload={autoReload}
             />
             <OrdersTable
-              orders={filteredOrders}             isAdmin={isAdmin}
+              orders={filteredOrders}
+              isAdmin={isAdmin}
               updatingOrderId={orders.updatingOrderId}
               deletingOrderId={orders.deletingOrderId}
               notifyingOrderId={orders.notifyingOrderId}
@@ -154,20 +190,34 @@ export default function AdminOrdersPage() {
               onDelete={o => orders.deleteOrder(o, isAdmin)}
             />
           </>
-        ) : (
+        )}
+
+        {tab === 'sessions' && (
+          <MultiCartSessionsPanel
+            onViewOrder={id => router.push(`/admin/orders/${id}`)}
+          />
+        )}
+
+        {tab === 'custom' && (
           <CustomOrdersPanel
-            orders={custom.customOrders}   loading={custom.loadingCustom}
+            orders={custom.customOrders}
+            loading={custom.loadingCustom}
             quotingId={custom.quotingId}
             onQuote={custom.quoteCustomOrder}
             onStatus={custom.updateCustomOrderStatus}
           />
         )}
 
+        {/* Barcode scanner — floating action */}
+        <div className="fixed bottom-6 right-6 z-50">
+          <BarcodeScanner />
+        </div>
+
         {isAdmin && <AdminWarningBanner />}
       </div>
 
       <style jsx global>{`
-        @keyframes fade-in  { from { opacity:0; transform:translateY(6px)  } to { opacity:1; transform:none } }
+        @keyframes fade-in  { from { opacity:0; transform:translateY(6px) }  to { opacity:1; transform:none } }
         @keyframes slide-up { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:none } }
         .animate-fade-in  { animation: fade-in  0.3s ease-out forwards; }
         .animate-slide-up { animation: slide-up 0.4s ease-out forwards; }
@@ -175,7 +225,5 @@ export default function AdminOrdersPage() {
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
     </DashboardLayout>
-    
   );
 }
-<BarcodeScanner />
