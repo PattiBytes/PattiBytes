@@ -322,111 +322,152 @@ export default function AdminOrderDetailPage() {
   };
 
   // ── saveEditFields ─────────────────────────────────────────────────────────
-  const saveEditFields = async (fields: EditFields) => {
-    if (!order) return;
-    setUpdating(true);
-    try {
-      const now = new Date().toISOString();
+const saveEditFields = async (fields: EditFields & {
+  items?: any[];
+  _computedSubtotal?: number;
+  _computedTotal?: number;
+}) => {
+  if (!order) return;
+  setUpdating(true);
+  try {
+    const now = new Date().toISOString();
 
-      const prepNum        = fields.preparationTime.trim() === '' ? null : Number(fields.preparationTime);
-      const deliveryFeeNum = fields.deliveryFee.trim() === ''     ? order.deliveryFee  : Number(fields.deliveryFee);
-      const discountNum    = fields.discount.trim() === ''        ? order.discount     : Number(fields.discount);
-      const quotedNum      = fields.quotedAmount.trim() === ''    ? null               : Number(fields.quotedAmount);
+    const prepNum        = fields.preparationTime.trim() === '' ? null : Number(fields.preparationTime);
+    const deliveryFeeNum = fields.deliveryFee.trim() === ''     ? order.deliveryFee  : Number(fields.deliveryFee);
+    const discountNum    = fields.discount.trim() === ''        ? order.discount     : Number(fields.discount);
+    const quotedNum      = fields.quotedAmount.trim() === ''    ? null               : Number(fields.quotedAmount);
 
-      if (prepNum != null && !Number.isFinite(prepNum)) {
-        toast.error('Prep time must be a valid number'); return;
-      }
+    if (prepNum != null && !Number.isFinite(prepNum)) {
+      toast.error('Prep time must be a valid number'); return;
+    }
 
-      const newTotal = Math.max(0, order.subtotal - discountNum + deliveryFeeNum + order.tax);
+    // ── Recalculate subtotal from edited items ──────────────────────────
+    const updatedItems = fields.items ?? null;
 
-      const patch: any = {
-        [cols.updatedAt]:             now,
-        [cols.paymentStatus]:         fields.paymentStatus || null,
-        [cols.deliveryFee]:           deliveryFeeNum,
-        discount:                     discountNum,
-        [cols.totalAmount]:           newTotal,
-        [cols.estimatedDeliveryTime]: fromDatetimeLocal(fields.estimatedDeliveryTime),
-        [cols.actualDeliveryTime]:    fromDatetimeLocal(fields.actualDeliveryTime),
-        [cols.preparationTime]:       prepNum,
-        [cols.customerNotes]:         fields.customerNotes.trim()       || null,
-        [cols.specialInstructions]:   fields.specialInstructions.trim() || null,
-        [cols.deliveryInstructions]:  fields.deliveryInstructions.trim()|| null,
-        [cols.cancellationReason]:    fields.cancellationReason.trim()  || null,
-        [cols.recipientName]:         fields.recipientName.trim()       || null,
-        [cols.quoteMessage]:          fields.quoteMessage.trim()        || null,
-      };
+    const newSubtotal = updatedItems
+      ? updatedItems.reduce((s: number, it: any) => {
+          const disc = (it.discount_percentage ?? 0) > 0
+            ? it.price * (1 - it.discount_percentage / 100)
+            : it.price;
+          return s + disc * it.quantity;
+        }, 0)
+      : order.subtotal;
 
-      if (order.orderType === 'custom' || order.customOrderRef) {
-        patch[cols.quotedAmount]    = quotedNum;
-        patch[cols.platformHandled] = fields.platformHandled;
+    const newTotal = fields._computedTotal
+      ?? Math.max(0, Math.round((newSubtotal - discountNum + deliveryFeeNum + order.tax) * 100) / 100);
 
-        const customStatus = fields.customOrderStatus.trim();
-        if (customStatus) {
-          const VALID_CUSTOM_STATUSES = [
-            'pending', 'quoted', 'accepted', 'rejected',
-            'processing', 'delivered', 'reviewed', 'cancelled', 'on_hold',
-          ];
-          if (VALID_CUSTOM_STATUSES.includes(customStatus)) {
-            patch[cols.customOrderStatus] = customStatus;
-          } else {
-            toast.error(`Invalid custom status: "${customStatus}"`);
-            setUpdating(false);
-            return;
-          }
+    const patch: any = {
+      [cols.updatedAt]:             now,
+      [cols.paymentStatus]:         fields.paymentStatus || null,
+      [cols.deliveryFee]:           deliveryFeeNum,
+      discount:                     discountNum,
+      subtotal:                     Math.round(newSubtotal * 100) / 100,  // ← NEW
+      [cols.totalAmount]:           newTotal,
+      [cols.estimatedDeliveryTime]: fromDatetimeLocal(fields.estimatedDeliveryTime),
+      [cols.actualDeliveryTime]:    fromDatetimeLocal(fields.actualDeliveryTime),
+      [cols.preparationTime]:       prepNum,
+      [cols.customerNotes]:         fields.customerNotes.trim()        || null,
+      [cols.specialInstructions]:   fields.specialInstructions.trim()  || null,
+      [cols.deliveryInstructions]:  fields.deliveryInstructions.trim() || null,
+      [cols.cancellationReason]:    fields.cancellationReason.trim()   || null,
+      [cols.recipientName]:         fields.recipientName.trim()        || null,
+      [cols.quoteMessage]:          fields.quoteMessage.trim()         || null,
+    };
+
+    // ── ✅ FIX: Write items to DB ──────────────────────────────────────
+    if (updatedItems) {
+      // Normalize items so they match the existing DB shape exactly
+      patch.items = updatedItems.map((it: any) => ({
+        id:                  it.id,
+        name:                it.name,
+        price:               Number(it.price) || 0,
+        quantity:            Number(it.quantity) || 1,
+        is_veg:              it.is_veg ?? false,
+        is_free:             it.is_free ?? false,
+        category:            it.category ?? null,
+        image_url:           it.image_url ?? null,
+        menu_item_id:        it.menu_item_id ?? it.id,
+        merchant_id:         it.merchant_id ?? order.merchantId ?? null,
+        discount_percentage: Number(it.discount_percentage) || 0,
+        category_id:         it.category_id ?? null,
+        note:                it.note ?? null,
+        is_custom_product:   it.is_custom_product ?? false,
+      }));
+    }
+
+    // ── Custom order fields ──────────────────────────────────────────────
+    if (order.orderType === 'custom' || order.customOrderRef) {
+      patch[cols.quotedAmount]    = quotedNum;
+      patch[cols.platformHandled] = fields.platformHandled;
+
+      const customStatus = fields.customOrderStatus?.trim();
+      if (customStatus) {
+        const VALID_CUSTOM_STATUSES = [
+          'pending', 'quoted', 'accepted', 'rejected',
+          'processing', 'delivered', 'reviewed', 'cancelled', 'on_hold',
+        ];
+        if (VALID_CUSTOM_STATUSES.includes(customStatus)) {
+          patch[cols.customOrderStatus] = customStatus;
+        } else {
+          toast.error(`Invalid custom status: "${customStatus}"`);
+          setUpdating(false);
+          return;
         }
       }
-
-      const { error } = await supabase.from('orders').update(patch).eq('id', order.id);
-      if (error) throw error;
-
-      if (
-        order.customerId &&
-        fields.quoteMessage.trim() &&
-        fields.quoteMessage.trim() !== (order.quoteMessage ?? '')
-      ) {
-        await sendNotification(
-          order.customerId,
-          'Quote Ready — Custom Order',
-          `Your custom order #${order.customOrderRef ?? order.orderNumber} has a new quote. Tap to view.`,
-          'order',
-          { order_id: order.id, type: 'quote' },
-        );
-      }
-
-      // ── NEW: update session merchant_bills if delivery fee/discount changed
-      if (session?.id && session.merchant_bills?.length) {
-        const updatedBills = session.merchant_bills.map((b: any) =>
-          b.merchant_id === order.merchantId
-            ? {
-                ...b,
-                delivery_fee: deliveryFeeNum,
-                discount:     discountNum,
-                total:        Math.max(0, b.subtotal - discountNum + deliveryFeeNum + (b.tax ?? 0)),
-              }
-            : b,
-        );
-        const newGrandTotal = updatedBills.reduce((s: number, b: any) => s + b.total, 0);
-        await supabase
-          .from('multi_cart_sessions')
-          .update({
-            merchant_bills: updatedBills,
-            total_amount:   newGrandTotal,
-            updated_at:     now,
-          })
-          .eq('id', session.id);
-      }
-
-      toast.success('Order updated!');
-      await loadAll();
-    } catch (e: any) {
-      const msg         = e?.message ?? 'Failed to save';
-      const isConstraint = msg.includes('violates check constraint');
-      toast.error(isConstraint ? `DB constraint error: ${msg}` : msg);
-      console.error('saveEditFields:', e);
-    } finally {
-      setUpdating(false);
     }
-  };
+
+    const { error } = await supabase.from('orders').update(patch).eq('id', order.id);
+    if (error) throw error;
+
+    // ── Notify customer if quote message changed ────────────────────────
+    if (
+      order.customerId &&
+      fields.quoteMessage.trim() &&
+      fields.quoteMessage.trim() !== (order.quoteMessage ?? '')
+    ) {
+      await sendNotification(
+        order.customerId,
+        'Quote Ready — Custom Order',
+        `Your custom order #${order.customOrderRef ?? order.orderNumber} has a new quote. Tap to view.`,
+        'order',
+        { order_id: order.id, type: 'quote' },
+      );
+    }
+
+    // ── Sync session merchant_bills if fee/discount/items changed ───────
+    if (session?.id && session.merchant_bills?.length) {
+      const updatedBills = session.merchant_bills.map((b: any) =>
+        b.merchant_id === order.merchantId
+          ? {
+              ...b,
+              subtotal:     Math.round(newSubtotal * 100) / 100,  // ← sync subtotal too
+              delivery_fee: deliveryFeeNum,
+              discount:     discountNum,
+              total:        Math.max(0, newSubtotal - discountNum + deliveryFeeNum + (b.tax ?? 0)),
+            }
+          : b,
+      );
+      const newGrandTotal = updatedBills.reduce((s: number, b: any) => s + b.total, 0);
+      await supabase
+        .from('multi_cart_sessions')
+        .update({
+          merchant_bills: updatedBills,
+          total_amount:   newGrandTotal,
+          updated_at:     now,
+        })
+        .eq('id', session.id);
+    }
+
+    toast.success('Order updated!');
+    await loadAll();
+  } catch (e: any) {
+    const msg = e?.message ?? 'Failed to save';
+    toast.error(msg.includes('violates check constraint') ? `DB constraint: ${msg}` : msg);
+    console.error('saveEditFields:', e);
+  } finally {
+    setUpdating(false);
+  }
+};
 
   // ── updateCustomStatus ─────────────────────────────────────────────────────
   const updateCustomStatus = async (newCustomStatus: string) => {
@@ -694,7 +735,7 @@ export default function AdminOrderDetailPage() {
               <AdminEditPanel
                 order={order}
                 saving={updating}
-                onSave={saveEditFields}
+               onSave={saveEditFields as any} 
               />
             )}
           </div>

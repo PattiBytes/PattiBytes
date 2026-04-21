@@ -8,6 +8,7 @@ import {
   Package, DollarSign, Clock, CreditCard, User,
   FileText, Settings2, ShoppingCart, ChevronDown,
   X, Leaf, Drumstick, ImageOff, RefreshCw, Percent,
+  Bell, BellRing, StickyNote, CheckCircle,
 } from 'lucide-react';
 import {
   toDatetimeLocal, type OrderNormalized, type EditFields, cx,
@@ -28,6 +29,7 @@ interface OrderItem {
   merchant_id: string;
   discount_percentage: number;
   category_id: string | null;
+  note?: string | null;
 }
 
 interface MenuItem {
@@ -48,11 +50,9 @@ interface Props {
   onSave: (fields: EditFields & { items: OrderItem[] }) => void;
 }
 
-// ── Input class ───────────────────────────────────────────────────────────────
 const IC = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm ' +
            'focus:ring-2 focus:ring-primary/30 focus:border-primary transition bg-white';
 
-// ── Parse items from order ────────────────────────────────────────────────────
 function parseItems(order: OrderNormalized): OrderItem[] {
   try {
     const raw = (order as any).items;
@@ -98,8 +98,6 @@ function Section({
         </span>
         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
       </button>
-
-      {/* Animated body */}
       <div className={`grid transition-all duration-300 ease-in-out ${
         open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
       }`}>
@@ -113,15 +111,12 @@ function Section({
   );
 }
 
-// ── Veg / Non-veg badge ───────────────────────────────────────────────────────
 function VegBadge({ isVeg }: { isVeg: boolean }) {
   return (
     <span className={`inline-flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.5 rounded-md border ${
       isVeg ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-500 border-red-200'
     }`}>
-      {isVeg
-        ? <Leaf className="w-2.5 h-2.5" />
-        : <Drumstick className="w-2.5 h-2.5" />}
+      {isVeg ? <Leaf className="w-2.5 h-2.5" /> : <Drumstick className="w-2.5 h-2.5" />}
       {isVeg ? 'VEG' : 'NON'}
     </span>
   );
@@ -129,7 +124,6 @@ function VegBadge({ isVeg }: { isVeg: boolean }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export function AdminEditPanel({ order, saving, onSave }: Props) {
-  // ── Fields state ──────────────────────────────────────────────────────────
   const [fields, setFields] = useState<EditFields>({
     paymentStatus:         order.paymentStatus        ?? 'pending',
     deliveryFee:           String(order.deliveryFee),
@@ -148,18 +142,22 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
     platformHandled:       !!order.platformHandled,
   });
 
-  // ── Items state ───────────────────────────────────────────────────────────
   const [items,     setItems]     = useState<OrderItem[]>(parseItems(order));
   const [origItems] = useState<OrderItem[]>(parseItems(order));
 
-  // ── Menu catalog state ────────────────────────────────────────────────────
   const [menuItems,    setMenuItems]    = useState<MenuItem[]>([]);
   const [menuLoading,  setMenuLoading]  = useState(false);
   const [menuSearch,   setMenuSearch]   = useState('');
   const [showCatalog,  setShowCatalog]  = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // ── Sync on order refresh ─────────────────────────────────────────────────
+  // ── Admin notes state ─────────────────────────────────────────────────────
+  const [adminNote,       setAdminNote]       = useState<string>((order as any).admin_notes ?? '');
+  const [sendingNote,     setSendingNote]     = useState(false);
+  const [noteSent,        setNoteSent]        = useState(false);
+  const [noteError,       setNoteError]       = useState<string | null>(null);
+
+  // Sync on order refresh
   useEffect(() => {
     setFields({
       paymentStatus:         order.paymentStatus        ?? 'pending',
@@ -179,9 +177,11 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
       platformHandled:       !!order.platformHandled,
     });
     setItems(parseItems(order));
+    setAdminNote((order as any).admin_notes ?? '');
+    setNoteSent(false);
   }, [order]);
 
-  // ── Load merchant menu catalog ────────────────────────────────────────────
+  // Load merchant menu catalog
   const loadMenu = useCallback(async () => {
     const merchantId = (order as any).merchant_id || (order as any).merchantId;
     if (!merchantId) return;
@@ -200,33 +200,33 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
     }
   }, [order]);
 
-  useEffect(() => {
-    loadMenu();
-  }, [loadMenu]);
+  useEffect(() => { loadMenu(); }, [loadMenu]);
 
-  // ── Open catalog handler ──────────────────────────────────────────────────
   const openCatalog = () => {
     setShowCatalog(true);
     setMenuSearch('');
     setTimeout(() => searchRef.current?.focus(), 100);
   };
 
-  // ── Computed values ───────────────────────────────────────────────────────
   const set = <K extends keyof EditFields>(k: K, v: EditFields[K]) =>
     setFields(p => ({ ...p, [k]: v }));
 
-  const itemsSubtotal   = items.reduce((s, it) => s + it.price * it.quantity, 0);
-  const deliveryFeeNum  = parseFloat(fields.deliveryFee)  || 0;
-  const discountNum     = parseFloat(fields.discount)     || 0;
-  const orderTotal      = itemsSubtotal + deliveryFeeNum - discountNum;
-  const itemsChanged    = JSON.stringify(items) !== JSON.stringify(origItems);
+  const itemsSubtotal  = items.reduce((s, it) => {
+    const disc = it.discount_percentage > 0
+      ? it.price * (1 - it.discount_percentage / 100)
+      : it.price;
+    return s + disc * it.quantity;
+  }, 0);
+  const deliveryFeeNum = parseFloat(fields.deliveryFee)  || 0;
+  const discountNum    = parseFloat(fields.discount)     || 0;
+  const orderTotal     = itemsSubtotal + deliveryFeeNum - discountNum;
+  const itemsChanged   = JSON.stringify(items) !== JSON.stringify(origItems);
 
   const filteredMenu = menuItems.filter(m =>
     m.name.toLowerCase().includes(menuSearch.toLowerCase()) ||
     m.category.toLowerCase().includes(menuSearch.toLowerCase())
   );
 
-  // Group by category for catalog
   const catalogGroups = filteredMenu.reduce<Record<string, MenuItem[]>>((acc, m) => {
     (acc[m.category] ??= []).push(m);
     return acc;
@@ -234,15 +234,19 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
 
   // ── Item operations ───────────────────────────────────────────────────────
   const changeQty = (id: string, delta: number) =>
-    setItems(prev => prev
-      .map(it => it.id === id ? { ...it, quantity: Math.max(1, it.quantity + delta) } : it)
-    );
+    setItems(prev => prev.map(it =>
+      it.id === id ? { ...it, quantity: Math.max(1, it.quantity + delta) } : it
+    ));
 
   const changePrice = (id: string, val: string) =>
-    setItems(prev => prev.map(it => it.id === id ? { ...it, price: parseFloat(val) || 0 } : it));
+    setItems(prev => prev.map(it =>
+      it.id === id ? { ...it, price: parseFloat(val) || 0 } : it
+    ));
 
   const changeDiscount = (id: string, val: string) =>
-    setItems(prev => prev.map(it => it.id === id ? { ...it, discount_percentage: parseFloat(val) || 0 } : it));
+    setItems(prev => prev.map(it =>
+      it.id === id ? { ...it, discount_percentage: parseFloat(val) || 0 } : it
+    ));
 
   const removeItem = (id: string) => setItems(prev => prev.filter(it => it.id !== id));
 
@@ -268,7 +272,95 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
     setShowCatalog(false);
   };
 
-  const handleSave = () => onSave({ ...fields, items } as any);
+  // ── Save handler — passes items + recalculated subtotal/total ────────────
+  const handleSave = () => {
+    onSave({
+      ...fields,
+      items,
+      // Pass computed totals so parent can persist correct values
+      _computedSubtotal: itemsSubtotal,
+      _computedTotal:    orderTotal,
+    } as any);
+  };
+
+  // ── Admin note + push notification ───────────────────────────────────────
+  const handleSendAdminNote = useCallback(async () => {
+    if (!adminNote.trim()) return;
+    setSendingNote(true);
+    setNoteError(null);
+    setNoteSent(false);
+
+    try {
+      const customerId = (order as any).customer_id || (order as any).customerId;
+      const orderId    = (order as any).id;
+      const orderNum   = (order as any).order_number || (order as any).orderNumber || orderId?.slice(0, 8);
+
+      // 1. Save admin note to orders table
+      const { error: dbErr } = await supabase
+        .from('orders')
+        .update({
+          admin_notes:             adminNote.trim(),
+          admin_notes_updated_at:  new Date().toISOString(),
+          admin_notes_push_sent:   false,
+          updated_at:              new Date().toISOString(),
+        })
+        .eq('id', orderId);
+
+      if (dbErr) throw dbErr;
+
+      // 2. Save in-app notification row for customer
+      await supabase.from('notifications').insert({
+        user_id:    customerId,
+        title:      `Note on Order #${orderNum}`,
+        message:    adminNote.trim(),
+        type:       'order',
+        data:       { order_id: orderId, order_number: String(orderNum), type: 'admin_note' },
+        body:       adminNote.trim(),
+        is_read:    false,
+        sent_push:  false,
+        created_at: new Date().toISOString(),
+      });
+
+      // 3. Send push notification via your existing /api/notify endpoint
+      const { data: sessionData } = await supabase.auth.getSession();
+      const jwt = sessionData?.session?.access_token;
+
+      if (jwt && customerId) {
+        const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'https://pbexpress.pattibytes.com';
+        await fetch(`${API_BASE}/api/notify`, {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${jwt}`,
+          },
+          body: JSON.stringify({
+            targetUserId: customerId,
+            title:        `📋 Note on Order #${orderNum}`,
+            message:      adminNote.trim(),
+            type:         'admin_note',
+            data: {
+              order_id:     orderId,
+              order_number: String(orderNum),
+              type:         'admin_note',
+            },
+          }),
+        });
+
+        // Mark push as sent
+        await supabase
+          .from('orders')
+          .update({ admin_notes_push_sent: true })
+          .eq('id', orderId);
+      }
+
+      setNoteSent(true);
+      setTimeout(() => setNoteSent(false), 4000);
+    } catch (e: any) {
+      setNoteError(e?.message ?? 'Failed to send note');
+    } finally {
+      setSendingNote(false);
+    }
+  }, [adminNote, order]);
 
   const isCustom = order.orderType === 'custom' || !!(order as any).customOrderRef;
 
@@ -282,9 +374,9 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
         </p>
         <div className="space-y-1.5 text-sm">
           {[
-            { label: `Items (${items.length})`,     value: itemsSubtotal },
-            { label: 'Delivery fee',                 value: deliveryFeeNum },
-            { label: 'Discount',                     value: -discountNum, cls: discountNum > 0 ? 'text-green-300' : '' },
+            { label: `Items (${items.length})`,  value: itemsSubtotal },
+            { label: 'Delivery fee',              value: deliveryFeeNum },
+            { label: 'Discount',                  value: -discountNum, cls: discountNum > 0 ? 'text-green-300' : '' },
           ].map(({ label, value, cls }) => (
             <div key={label} className="flex justify-between items-center">
               <span className="text-orange-100/80 font-medium">{label}</span>
@@ -317,18 +409,18 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
 
           {items.map((item, idx) => (
             <div key={item.id}
-              className={`bg-gray-50 rounded-xl p-3 border border-gray-100 transition-all duration-200
-                          hover:border-orange-200 hover:bg-orange-50/30 group
-                          animate-in fade-in slide-in-from-top-1 duration-200`}
+              className={cx(
+                'bg-gray-50 rounded-xl p-3 border border-gray-100 transition-all duration-200',
+                'hover:border-orange-200 hover:bg-orange-50/30 group',
+                'animate-in fade-in slide-in-from-top-1 duration-200',
+              )}
               style={{ animationDelay: `${idx * 30}ms` }}
             >
               <div className="flex items-start gap-3">
-                {/* Image */}
                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 flex-shrink-0 border border-gray-200">
                   {item.image_url && !item.image_url.startsWith('http://www.google') ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.image_url} alt={item.name}
-                      className="w-full h-full object-cover" />
+                    <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <ImageOff className="w-4 h-4 text-gray-300" />
@@ -336,7 +428,6 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
                   )}
                 </div>
 
-                {/* Details */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -374,7 +465,7 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
                       </button>
                     </div>
 
-                    {/* Price editor */}
+                    {/* Price */}
                     <div className="flex items-center gap-1">
                       <span className="text-xs text-gray-400 font-bold">₹</span>
                       <input
@@ -403,7 +494,13 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
 
                     {/* Line total */}
                     <span className="ml-auto text-sm font-black text-gray-800">
-                      = ₹{(item.price * item.quantity).toFixed(2)}
+                      = ₹{(
+                        (
+                          item.discount_percentage > 0
+                            ? item.price * (1 - item.discount_percentage / 100)
+                            : item.price
+                        ) * item.quantity
+                      ).toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -411,7 +508,7 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
             </div>
           ))}
 
-          {/* Add from catalog button */}
+          {/* Add from catalog */}
           <button
             type="button"
             onClick={openCatalog}
@@ -425,14 +522,12 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
           </button>
         </div>
 
-        {/* ── Catalog modal ── */}
+        {/* Catalog modal */}
         {showCatalog && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center
                           justify-center p-0 sm:p-4 animate-in fade-in duration-200">
             <div className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl
                             max-h-[80vh] flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-300">
-
-              {/* Header */}
               <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b">
                 <div>
                   <h3 className="font-black text-gray-900">Menu Catalog</h3>
@@ -441,7 +536,7 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={loadMenu} title="Refresh menu"
+                  <button onClick={loadMenu} title="Refresh"
                     className={`p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition-all hover:scale-110 ${menuLoading ? 'animate-spin' : ''}`}>
                     <RefreshCw className="w-4 h-4" />
                   </button>
@@ -452,7 +547,6 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
                 </div>
               </div>
 
-              {/* Search */}
               <div className="px-5 py-3 border-b">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -473,7 +567,6 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
                 </div>
               </div>
 
-              {/* Items list */}
               <div className="overflow-y-auto flex-1 px-5 py-3">
                 {menuLoading ? (
                   <div className="flex items-center justify-center py-12 gap-3 text-gray-400">
@@ -482,7 +575,7 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
                   </div>
                 ) : Object.keys(catalogGroups).length === 0 ? (
                   <div className="text-center py-12 text-gray-400 text-sm font-semibold">
-                    {menuSearch ? `No items matching "${menuSearch}"` : 'No items found in catalog'}
+                    {menuSearch ? `No items matching "${menuSearch}"` : 'No items found'}
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -495,19 +588,15 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
                           {catItems.map(m => {
                             const alreadyAdded = items.some(it => it.menu_item_id === m.id);
                             return (
-                              <button
-                                key={m.id}
-                                type="button"
-                                onClick={() => addFromCatalog(m)}
+                              <button key={m.id} type="button" onClick={() => addFromCatalog(m)}
                                 className={cx(
-                                  'w-full flex items-center gap-3 p-3 rounded-xl border-2',
-                                  'text-left transition-all duration-150 hover:scale-[1.01] active:scale-[0.99]',
+                                  'w-full flex items-center gap-3 p-3 rounded-xl border-2 text-left',
+                                  'transition-all duration-150 hover:scale-[1.01] active:scale-[0.99]',
                                   alreadyAdded
                                     ? 'border-orange-300 bg-orange-50'
                                     : 'border-gray-100 hover:border-orange-200 hover:bg-orange-50/40'
                                 )}
                               >
-                                {/* Image */}
                                 <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-200">
                                   {m.image_url ? (
                                     // eslint-disable-next-line @next/next/no-img-element
@@ -518,7 +607,6 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
                                     </div>
                                   )}
                                 </div>
-
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-black text-gray-900 truncate">{m.name}</p>
                                   <div className="flex items-center gap-1.5 mt-0.5">
@@ -530,7 +618,6 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
                                     )}
                                   </div>
                                 </div>
-
                                 <div className="flex-shrink-0 text-right">
                                   <p className="text-sm font-black text-gray-900">₹{m.price}</p>
                                   {alreadyAdded && (
@@ -552,11 +639,7 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
       </Section>
 
       {/* ══ 2. PAYMENT & STATUS ══════════════════════════════════════════════ */}
-      <Section
-        icon={<CreditCard className="w-4 h-4 text-white" />}
-        color="bg-blue-500"
-        title="Payment & Status"
-      >
+      <Section icon={<CreditCard className="w-4 h-4 text-white" />} color="bg-blue-500" title="Payment & Status">
         <div className="grid sm:grid-cols-2 gap-4 pt-1">
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-1">Payment Status</label>
@@ -566,21 +649,17 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
               ))}
             </select>
           </div>
-
           {isCustom && (
             <div>
               <label className="block text-xs font-bold text-gray-600 mb-1">Custom Order Status</label>
               <select value={fields.customOrderStatus} onChange={e => set('customOrderStatus', e.target.value)} className={IC}>
                 <option value="">— unchanged —</option>
                 {CUSTOM_ORDER_STATUSES.map(s => (
-                  <option key={s} value={s}>
-                    {s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                  </option>
+                  <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
                 ))}
               </select>
             </div>
           )}
-
           {isCustom && (
             <div>
               <label className="block text-xs font-bold text-gray-600 mb-1">Quoted Amount (₹)</label>
@@ -591,20 +670,13 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
             </div>
           )}
         </div>
-
         {isCustom && (
           <label className="flex items-center gap-3 cursor-pointer select-none mt-4">
-            <div
-              onClick={() => set('platformHandled', !fields.platformHandled)}
-              className={cx(
-                'relative w-11 h-6 rounded-full transition-colors duration-200',
-                fields.platformHandled ? 'bg-primary' : 'bg-gray-200'
-              )}
-            >
-              <span className={cx(
-                'absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200',
-                fields.platformHandled ? 'translate-x-5' : 'translate-x-0.5'
-              )} />
+            <div onClick={() => set('platformHandled', !fields.platformHandled)}
+              className={cx('relative w-11 h-6 rounded-full transition-colors duration-200',
+                fields.platformHandled ? 'bg-primary' : 'bg-gray-200')}>
+              <span className={cx('absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200',
+                fields.platformHandled ? 'translate-x-5' : 'translate-x-0.5')} />
             </div>
             <span className="text-sm font-semibold text-gray-700">Platform Handled</span>
           </label>
@@ -612,27 +684,19 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
       </Section>
 
       {/* ══ 3. FINANCIALS ════════════════════════════════════════════════════ */}
-      <Section
-        icon={<DollarSign className="w-4 h-4 text-white" />}
-        color="bg-green-500"
-        title="Financials"
-      >
+      <Section icon={<DollarSign className="w-4 h-4 text-white" />} color="bg-green-500" title="Financials">
         <div className="grid sm:grid-cols-2 gap-4 pt-1">
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-1">Delivery Fee (₹)</label>
             <input type="number" min={0} step="0.01" className={IC}
-              value={fields.deliveryFee}
-              onChange={e => set('deliveryFee', e.target.value)} />
+              value={fields.deliveryFee} onChange={e => set('deliveryFee', e.target.value)} />
           </div>
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-1">Discount (₹)</label>
             <input type="number" min={0} step="0.01" className={IC}
-              value={fields.discount}
-              onChange={e => set('discount', e.target.value)} />
+              value={fields.discount} onChange={e => set('discount', e.target.value)} />
           </div>
         </div>
-
-        {/* Mini breakdown */}
         <div className="mt-3 bg-gray-50 rounded-xl p-3 text-xs space-y-1.5 font-semibold">
           <div className="flex justify-between text-gray-500">
             <span>Items subtotal</span><span>₹{itemsSubtotal.toFixed(2)}</span>
@@ -650,11 +714,7 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
       </Section>
 
       {/* ══ 4. TIMING ════════════════════════════════════════════════════════ */}
-      <Section
-        icon={<Clock className="w-4 h-4 text-white" />}
-        color="bg-purple-500"
-        title="Timing"
-      >
+      <Section icon={<Clock className="w-4 h-4 text-white" />} color="bg-purple-500" title="Timing">
         <div className="grid sm:grid-cols-2 gap-4 pt-1">
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-1">Prep Time (min)</label>
@@ -679,11 +739,7 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
       </Section>
 
       {/* ══ 5. RECIPIENT ═════════════════════════════════════════════════════ */}
-      <Section
-        icon={<User className="w-4 h-4 text-white" />}
-        color="bg-teal-500"
-        title="Recipient & Delivery"
-      >
+      <Section icon={<User className="w-4 h-4 text-white" />} color="bg-teal-500" title="Recipient & Delivery">
         <div className="space-y-3 pt-1">
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-1">Recipient Name</label>
@@ -702,11 +758,7 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
       </Section>
 
       {/* ══ 6. NOTES ═════════════════════════════════════════════════════════ */}
-      <Section
-        icon={<FileText className="w-4 h-4 text-white" />}
-        color="bg-amber-500"
-        title="Notes & Instructions"
-      >
+      <Section icon={<FileText className="w-4 h-4 text-white" />} color="bg-amber-500" title="Notes & Instructions">
         <div className="space-y-3 pt-1">
           <div>
             <label className="block text-xs font-bold text-gray-600 mb-1">Customer Notes</label>
@@ -722,11 +774,11 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
           </div>
           {isCustom && (
             <div>
-              <label className="block text-xs font-bold text-gray-600 mb-1">Quote Message (reply to customer)</label>
+              <label className="block text-xs font-bold text-gray-600 mb-1">Quote Message</label>
               <textarea rows={3} className={cx(IC, 'resize-none')}
                 value={fields.quoteMessage}
                 onChange={e => set('quoteMessage', e.target.value)}
-                placeholder="Admin reply to customer's custom order request…" />
+                placeholder="Admin reply to customer's custom order…" />
             </div>
           )}
           {order.status === 'cancelled' && (
@@ -737,6 +789,90 @@ export function AdminEditPanel({ order, saving, onSave }: Props) {
                 onChange={e => set('cancellationReason', e.target.value)} />
             </div>
           )}
+        </div>
+      </Section>
+
+      {/* ══ 7. ADMIN NOTE + PUSH NOTIFICATION ════════════════════════════════ */}
+      <Section
+        icon={<BellRing className="w-4 h-4 text-white" />}
+        color="bg-violet-600"
+        title="Admin Note to Customer"
+        badge={adminNote.trim() ? '!' : undefined}
+        defaultOpen={false}
+      >
+        <div className="space-y-3 pt-1">
+          <p className="text-xs text-gray-500 font-medium leading-relaxed">
+            Write a note that will be saved on the order and sent as a <strong>push notification</strong> to the customer.
+            Use this for updates like delays, substitutions, or special messages.
+          </p>
+
+          {/* Existing note preview */}
+          {(order as any).admin_notes && (
+            <div className="bg-violet-50 border border-violet-200 rounded-xl p-3">
+              <p className="text-[10px] font-black text-violet-500 uppercase tracking-widest mb-1">
+                Last Note Sent
+              </p>
+              <p className="text-sm text-violet-900 font-medium">{(order as any).admin_notes}</p>
+              {(order as any).admin_notes_updated_at && (
+                <p className="text-[10px] text-violet-400 mt-1">
+                  {new Date((order as any).admin_notes_updated_at).toLocaleString('en-IN')}
+                  {(order as any).admin_notes_push_sent && (
+                    <span className="ml-2 text-green-600 font-black">✓ Push sent</span>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-bold text-gray-600 mb-1">
+              New Note / Message
+            </label>
+            <textarea
+              rows={3}
+              className={cx(IC, 'resize-none')}
+              value={adminNote}
+              onChange={e => { setAdminNote(e.target.value); setNoteSent(false); setNoteError(null); }}
+              placeholder="e.g. Your order is slightly delayed due to high demand. ETA 15 more minutes!"
+            />
+          </div>
+
+          {noteError && (
+            <p className="text-xs text-red-600 font-semibold bg-red-50 rounded-lg px-3 py-2">
+              ⚠️ {noteError}
+            </p>
+          )}
+
+          {noteSent && (
+            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2
+                            animate-in fade-in duration-300">
+              <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+              <p className="text-xs text-green-700 font-bold">
+                Note saved &amp; push notification sent to customer!
+              </p>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSendAdminNote}
+            disabled={sendingNote || !adminNote.trim()}
+            className={cx(
+              'w-full flex items-center justify-center gap-2 py-3 rounded-xl font-black text-sm',
+              'transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]',
+              adminNote.trim()
+                ? 'bg-violet-600 text-white hover:bg-violet-700 hover:shadow-lg hover:shadow-violet-200/50'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed',
+            )}
+          >
+            {sendingNote
+              ? <><Loader2 className="w-4 h-4 animate-spin" />Sending…</>
+              : <><Bell className="w-4 h-4" />Save Note &amp; Notify Customer</>
+            }
+          </button>
+          <p className="text-center text-[10px] text-gray-400">
+            This sends a push + in-app notification to the customer immediately.
+          </p>
         </div>
       </Section>
 
