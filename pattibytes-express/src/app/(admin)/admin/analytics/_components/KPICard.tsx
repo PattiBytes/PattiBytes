@@ -94,3 +94,4 @@ export default function KPICard({ title, value, format, icon, iconBg, subtitle, 
     </div>
   );
 }
+

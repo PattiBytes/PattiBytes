@@ -227,3 +227,4 @@ export function OrderSummaryPanel({
     </div>
   );
 }
+

@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+import { uploadToStorage } from '@/lib/storage';
 import { menuService }          from '@/services/menu';
 
 import { Row }               from './bulk-menu-upload/types';
@@ -110,7 +110,7 @@ export default function BulkMenuUploadModal({ merchantId, onClose, onSuccess }: 
         setProgress(`Preparing ${i + 1}/${rows.length}…`);
         let imageUrl = r.image_url;
         if (!imageUrl && r._file) {
-          imageUrl = await uploadToCloudinary(r._file, 'menu-items');
+          imageUrl = await uploadToStorage(r._file, 'menu-items');
         }
         fixed.push({ ...r, image_url: imageUrl ?? '' });
       }
@@ -202,3 +202,4 @@ export default function BulkMenuUploadModal({ merchantId, onClose, onSuccess }: 
     </div>
   );
 }
+

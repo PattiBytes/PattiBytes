@@ -260,3 +260,4 @@ async function recalcMerchantRating(merchantId: string) {
     }).eq('id', merchantId);
   } catch { /* non-critical */ }
 }
+

@@ -132,3 +132,4 @@ export function CartItemCard({ item, onRemove, onUpdateQty }: Props) {
     </div>
   );
 }
+

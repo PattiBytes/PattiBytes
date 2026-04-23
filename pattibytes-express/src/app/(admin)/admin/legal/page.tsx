@@ -10,3 +10,5 @@ export default function AdminLegalPage() {
   //  - self-fetches via Server Actions
   return <LegalPagesList />;
 }
+
+

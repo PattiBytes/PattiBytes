@@ -66,3 +66,4 @@ export interface FormState {
   /** Persisted as `dish_timing` jsonb column in menu_items */
   timing:              DishTiming;
 }
+

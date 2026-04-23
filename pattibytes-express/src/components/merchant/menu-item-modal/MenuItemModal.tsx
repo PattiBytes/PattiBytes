@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast }               from 'react-toastify';
 import { menuService }         from '@/services/menu';
-import { uploadToCloudinary }  from '@/lib/cloudinary';
+import { uploadToSupabase } from '@/lib/storage';
 import { useMenuItemAutosave } from '@/hooks/useMenuItemAutosave';
 
 import { DEFAULT_TIMING, FormState, MenuItemModalProps } from './types';
@@ -89,7 +89,7 @@ export default function MenuItemModal({
   const uploadFile = useCallback(async (file: File) => {
     setUploading(true);
     try {
-      const url = await uploadToCloudinary(file, 'menu-items');
+     const url = await uploadToSupabase(file, 'menu-items');
       set('image_url', url);
       schedule({ image_url: url });
       toast.success('Image uploaded & saved');
@@ -180,7 +180,7 @@ export default function MenuItemModal({
         toast.info('Uploading image…');
         setUploading(true);
         try {
-          finalImg = await uploadToCloudinary(
+          finalImg = await uploadToSupabase(
             dataUrlToFile(finalImg, 'menu-item'),
             'menu-items',
           );
@@ -307,3 +307,4 @@ export default function MenuItemModal({
     </div>
   );
 }
+

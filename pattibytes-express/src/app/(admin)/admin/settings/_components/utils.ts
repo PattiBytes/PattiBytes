@@ -1,4 +1,5 @@
 import type { DayKey, DeliveryFeeSchedule, Announcement } from './types';
+import { supabase } from '@/lib/supabase';
 
 export const DAYS: { key: DayKey; label: string }[] = [
   { key: 'mon', label: 'Mon' }, { key: 'tue', label: 'Tue' },
@@ -55,14 +56,28 @@ export function toDatetimeLocal(iso?: string): string {
 }
 
 export function defaultAnnouncement(): Announcement {
-  return { enabled: false, type: 'banner', title: '', message: '', image_url: '', link_url: '', start_at: '', end_at: '', dismissible: true, dismiss_key: 'v1' };
+  return {
+    enabled: false,
+    type: 'banner',
+    title: '',
+    message: '',
+    image_url: '',
+    link_url: '',
+    start_at: '',
+    end_at: '',
+    dismissible: true,
+    dismiss_key: 'v1',
+  };
 }
 
 export function defaultSchedule(fee = 40): DeliveryFeeSchedule {
   const day = { enabled: true, fee };
   return {
     timezone: 'Asia/Kolkata',
-    weekly: { mon: day, tue: day, wed: day, thu: day, fri: day, sat: day, sun: { enabled: false, fee: 0 } },
+    weekly: {
+      mon: day, tue: day, wed: day, thu: day,
+      fri: day, sat: day, sun: { enabled: false, fee: 0 },
+    },
     overrides: [],
     ui: { show_to_customer: true },
   };
@@ -76,7 +91,10 @@ export function parseSchedule(v: any, fallbackFee: number): DeliveryFeeSchedule 
     const base = defaultSchedule(fallbackFee);
     const weekly = { ...base.weekly, ...(obj?.weekly ?? {}) };
     for (const key of Object.keys(weekly) as DayKey[]) {
-      weekly[key] = { enabled: asBool(weekly[key]?.enabled, true), fee: Math.max(0, asNum(weekly[key]?.fee, fallbackFee)) };
+      weekly[key] = {
+        enabled: asBool(weekly[key]?.enabled, true),
+        fee: Math.max(0, asNum(weekly[key]?.fee, fallbackFee)),
+      };
     }
     return {
       timezone: String(obj?.timezone ?? base.timezone),
@@ -90,21 +108,37 @@ export function parseSchedule(v: any, fallbackFee: number): DeliveryFeeSchedule 
 }
 
 export function dayKeyForNow(timezone: string): DayKey {
-  const short = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: timezone }).format(new Date());
+  const short = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    timeZone: timezone,
+  }).format(new Date());
   const k = short.toLowerCase().slice(0, 3);
   const valid: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
   return valid.includes(k as DayKey) ? (k as DayKey) : 'mon';
 }
 
-export async function uploadToCloudinary(file: File): Promise<string> {
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-  if (!cloudName || !uploadPreset) throw new Error('Cloudinary env vars missing');
-  const form = new FormData();
-  form.append('file', file);
-  form.append('upload_preset', uploadPreset);
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: 'POST', body: form });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json?.error?.message ?? 'Cloudinary upload failed');
-  return json.secure_url as string;
+const BUCKET = 'app-assets';
+
+export async function uploadToStorage(file: File): Promise<string> {
+  if (!file) throw new Error('No file provided');
+  if (!file.type.startsWith('image/')) throw new Error('Please upload an image file');
+  if (file.size > 5 * 1024 * 1024) throw new Error('Image must be under 5 MB');
+
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+  const path = `announcements/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, file, {
+      contentType: file.type,
+      upsert: false,
+    });
+
+  if (error) throw new Error(`Upload failed: ${error.message}`);
+
+  const { data: { publicUrl } } = supabase.storage
+    .from(BUCKET)
+    .getPublicUrl(path);
+
+  return publicUrl;
 }

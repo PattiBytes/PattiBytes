@@ -18,3 +18,4 @@ export function playSound(src: string, volume = 0.7): void {
     // Audio API unavailable (SSR, blocked, file missing) — ignore
   }
 }
+

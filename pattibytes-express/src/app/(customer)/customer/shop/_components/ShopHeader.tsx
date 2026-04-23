@@ -72,3 +72,4 @@ export function ShopHeader({ cartCount, search, setSearch, totalProducts }: Prop
     </div>
   );
 }
+

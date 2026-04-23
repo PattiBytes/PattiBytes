@@ -47,3 +47,5 @@ export function ShareBillButton({ order, variant = 'full', size = 'xs' }: Props)
     </button>
   );
 }
+
+

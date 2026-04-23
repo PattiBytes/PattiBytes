@@ -103,3 +103,5 @@ export type OrderType    = 'restaurant' | 'custom';
 export type CustomerMode = 'existing' | 'walkin';
 export type PaymentMethod  = 'cod' | 'online';
 export type PaymentStatus  = 'pending' | 'paid' | 'failed';
+
+

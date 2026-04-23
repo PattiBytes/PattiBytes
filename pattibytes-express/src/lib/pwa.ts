@@ -62,3 +62,4 @@ export const getDeviceType = (): 'ios' | 'android' | 'desktop' => {
   if (/android/.test(userAgent)) return 'android';
   return 'desktop';
 };
+

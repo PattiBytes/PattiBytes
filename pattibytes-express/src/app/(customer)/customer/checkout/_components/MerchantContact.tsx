@@ -46,3 +46,4 @@ export function MerchantContact({ phone, businessName }: Props) {
     </div>
   );
 }
+

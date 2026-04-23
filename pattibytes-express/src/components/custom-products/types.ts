@@ -45,3 +45,4 @@ export const CATEGORIES = [
 
 export const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 export const UNITS = ['pc','kg','g','ltr','ml','pack','dozen','box','pair','set'];
+

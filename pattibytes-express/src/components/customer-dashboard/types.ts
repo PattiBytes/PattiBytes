@@ -52,3 +52,4 @@ export type MenuItem = {
 export type SearchResult =
   | { type: 'restaurant'; restaurant: Merchant }
   | { type: 'menu'; menu: MenuItem; restaurantName?: string };
+

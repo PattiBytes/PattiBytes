@@ -29,3 +29,4 @@ export function BasicInfoFields({ form, onChange, onAutosave }: Props) {
     </>
   );
 }
+

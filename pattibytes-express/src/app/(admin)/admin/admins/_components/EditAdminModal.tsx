@@ -198,3 +198,4 @@ export default function EditAdminModal({ admin, isSuperAdmin, onClose, onSaved }
     </div>
   );
 }
+

@@ -118,3 +118,4 @@ export function getCustomerDisplayName(
 export function isWalkInOrder(order: { customer_id?: string | null }): boolean {
   return !order.customer_id;
 }
+

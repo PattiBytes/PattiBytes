@@ -88,3 +88,4 @@ export const EMPTY_ANALYTICS: AnalyticsData = {
   topCancellationReasons: [],
   pendingCustomOrders: 0, customOrdersByCategory: [],
 };
+

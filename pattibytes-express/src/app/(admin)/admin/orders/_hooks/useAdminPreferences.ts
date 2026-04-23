@@ -66,3 +66,5 @@ export function useAdminPreferences() {
 
   return { prefs, loading, updatePrefs };
 }
+
+

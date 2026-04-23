@@ -59,3 +59,4 @@ export function downloadExcelTemplate() {
   XLSX.utils.book_append_sheet(wb, ws, 'menu');
   XLSX.writeFile(wb, 'menu_template.xlsx');
 }
+

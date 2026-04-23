@@ -468,3 +468,4 @@ const amount = Math.max(0, total - del);
     </DashboardLayout>
   );
 }
+

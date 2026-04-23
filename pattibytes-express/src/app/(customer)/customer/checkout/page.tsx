@@ -851,3 +851,4 @@ export default function CheckoutPage() {
     </DashboardLayout>
   );
 }
+

@@ -111,3 +111,4 @@ export async function GET(request: NextRequest) {
   // No code provided
   return NextResponse.redirect(new URL('/auth/login', requestUrl.origin));
 }
+

@@ -256,3 +256,4 @@ export default function UserDetailModal({ request, onClose }: Props) {
     </div>
   );
 }
+

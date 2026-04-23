@@ -2,7 +2,7 @@
 import { useCallback, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Clipboard, Copy, Link2, Loader2, Trash2, Upload } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+import { uploadToStorage } from '@/lib/storage';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { copyText, isDataImageUrl, isValidHttpUrl, isValidImageSource } from './helpers';
 
@@ -19,7 +19,7 @@ export function ImagePickerSection({ imageUrl, onChange, onAutosave }: ImagePick
   const doUpload = useCallback(async (file: File) => {
     setUploading(true);
     try {
-      const url = await uploadToCloudinary(file, 'menu-items');
+      const url = await uploadToStorage(file, 'menu-items');
       onChange(url); onAutosave(url);
       toast.success('Image uploaded & saved');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -29,9 +29,12 @@ export function ImagePickerSection({ imageUrl, onChange, onAutosave }: ImagePick
   }, [onChange, onAutosave]);
 
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) { await doUpload(file); e.currentTarget.value = ''; }
-  };
+  const file  = e.target.files?.[0];
+  const input = e.currentTarget;          // ← capture before any await
+  if (!file) return;
+  await doUpload(file);
+  input.value = '';                        // ← safe: uses captured ref
+};
 
   const handleClipboardBtn = async () => {
     try {
@@ -140,3 +143,4 @@ export function ImagePickerSection({ imageUrl, onChange, onAutosave }: ImagePick
     </div>
   );
 }
+

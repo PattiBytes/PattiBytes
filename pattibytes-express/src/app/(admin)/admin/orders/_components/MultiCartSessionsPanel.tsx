@@ -201,3 +201,4 @@ export function MultiCartSessionsPanel({ onViewOrder }: Props) {
     </div>
   );
 }
+

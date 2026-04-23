@@ -33,3 +33,4 @@ export function DeleteConfirmModal({ name, onConfirm, onCancel }: Props) {
     </div>
   );
 }
+

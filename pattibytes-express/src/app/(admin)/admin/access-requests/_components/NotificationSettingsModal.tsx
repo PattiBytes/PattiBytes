@@ -195,3 +195,4 @@ export default function NotificationSettingsModal({ open, onClose, prefs, onPref
     </div>
   );
 }
+

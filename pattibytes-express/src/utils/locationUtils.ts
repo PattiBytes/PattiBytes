@@ -90,3 +90,4 @@ export const punjabPincodes: Record<string, Coordinates> = {
   '144001': { lat: 31.3260, lng: 75.5762 }, // Jalandhar
   '147001': { lat: 30.2100, lng: 74.9455 }, // Patiala
 };
+

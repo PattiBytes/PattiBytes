@@ -283,3 +283,4 @@ export function useAnalyticsData(timeRange: TimeRange) {
 
   return { data, loading, lastUpdated, reload: load };
 }
+

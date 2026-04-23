@@ -279,3 +279,4 @@ export function CustomOrdersPanel({ pending, byCategory }: CustomOrdersProps) {
     </div>
   );
 }
+

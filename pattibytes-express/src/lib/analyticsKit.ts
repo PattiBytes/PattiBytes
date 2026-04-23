@@ -66,3 +66,4 @@ export function groupRevenueByDay(orders: OrderForMetrics[]) {
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([day, revenue]) => ({ day, revenue }));
 }
+

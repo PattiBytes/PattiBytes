@@ -6,7 +6,7 @@ import {
   Loader2, MapPinned, Navigation2
 } from 'lucide-react';
 import type { Settings } from './types';
-import { uploadToCloudinary } from './utils';
+import { uploadToStorage } from './utils';
 import { useState } from 'react';
 import { toast } from 'react-toastify';
 import { HubLocationPicker } from './HubLocationPicker';
@@ -22,7 +22,7 @@ export function GeneralSection({ settings, onChange }: Props) {
     if (file.size > 2 * 1024 * 1024) { toast.error('File must be < 2MB'); return; }
     setUploadingLogo(true);
     try {
-      const url = await uploadToCloudinary(file);
+      const url = await uploadToStorage(file);
       onChange({ ...settings, app_logo_url: url });
       toast.success('Logo uploaded!');
     } catch (e: unknown) {

@@ -46,3 +46,4 @@ export function PriceCategoryFields({ form, availableCategories, onChange, onAut
     </div>
   );
 }
+

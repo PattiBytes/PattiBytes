@@ -59,3 +59,4 @@ export default function RestaurantGrid({
     </div>
   );
 }
+

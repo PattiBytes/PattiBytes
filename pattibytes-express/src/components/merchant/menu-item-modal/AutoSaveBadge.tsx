@@ -26,3 +26,4 @@ export function AutoSaveBadge({ saving, savedAt, hasUnsaved }: Props) {
   );
   return null;
 }
+

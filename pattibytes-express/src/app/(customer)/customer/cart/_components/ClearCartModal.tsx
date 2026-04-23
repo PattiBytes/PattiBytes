@@ -43,3 +43,4 @@ export function ClearCartModal({ onConfirm, onCancel }: Props) {
     </>
   );
 }
+

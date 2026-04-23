@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import type { Settings } from './types';
 import { Toggle } from './Toggle';
-import { defaultAnnouncement, toDatetimeLocal, toIsoOrEmpty, uploadToCloudinary } from './utils';
+import { defaultAnnouncement, toDatetimeLocal, toIsoOrEmpty, uploadToStorage } from './utils';
 import { useState } from 'react';
 import { toast } from 'react-toastify';
 import { supabase } from '@/lib/supabase';
@@ -46,7 +46,7 @@ export function AnnouncementSection({ settings, onChange, onSave }: Props) {
     if (!file) return;
     setUploading(true);
     try {
-      const url = await uploadToCloudinary(file);
+      const url = await uploadToStorage(file);
       set({ image_url: url });
       toast.success('Image uploaded!');
     } catch (e: unknown) {

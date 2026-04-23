@@ -31,3 +31,4 @@ export function CartHeader({ itemCount, onBack, onClearCart }: Props) {
     </div>
   );
 }
+

@@ -98,3 +98,4 @@ export function TopDrivers({ drivers }: { drivers: DriverRow[] }) {
     </div>
   );
 }
+

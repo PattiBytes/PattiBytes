@@ -184,3 +184,4 @@ export default function MapLocationPicker({ initialLat, initialLon, onSelect }: 
     </div>
   );
 }
+

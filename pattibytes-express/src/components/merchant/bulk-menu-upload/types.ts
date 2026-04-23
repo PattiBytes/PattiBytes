@@ -24,3 +24,4 @@ export interface Row {
   dish_timing: DishTiming | null;
   _file?: File | null;
 }
+

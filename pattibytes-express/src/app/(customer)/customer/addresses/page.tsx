@@ -694,3 +694,4 @@ export default function CustomerAddressesPage() {
     </DashboardLayout>
   );
 }
+

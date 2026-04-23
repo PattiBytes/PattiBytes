@@ -54,3 +54,4 @@ export function useCustomProducts() {
 
   return { products, loading, load, toggleActive, remove };
 }
+

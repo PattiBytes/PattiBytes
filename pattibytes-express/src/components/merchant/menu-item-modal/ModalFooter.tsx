@@ -28,3 +28,4 @@ export function ModalFooter({ item, submitting, uploading, closing, onClose }: P
     </div>
   );
 }
+

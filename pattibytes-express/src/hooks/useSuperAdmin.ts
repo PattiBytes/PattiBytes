@@ -46,3 +46,4 @@ export const useSuperAdmin = () => {
     deleteAdmin: superadminService.deleteAdmin,
   };
 };
+

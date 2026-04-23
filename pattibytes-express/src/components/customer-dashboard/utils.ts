@@ -67,3 +67,4 @@ export function normalizeReverseGeocodeToString(result: any): {
 
   return { address, city, state, postal_code };
 }
+

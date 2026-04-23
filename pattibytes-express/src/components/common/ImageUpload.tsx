@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Upload, X, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'react-toastify';
+import { uploadToSupabase } from '@/lib/storage';
 
 interface ImageUploadProps {
   type: 'profile' | 'menu' | 'banner' | 'document';
@@ -44,55 +45,30 @@ export default function ImageUpload({
     setPreview(currentImage || '');
   }, [currentImage]);
 
-  const uploadToCloudinary = async (file: File) => {
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+// NEW — Supabase Storage
 
-    if (!cloudName || !preset) {
-      toast.error('Cloudinary env missing (CLOUD_NAME / UPLOAD_PRESET)');
-      return;
-    }
 
-    setUploading(true);
-    try {
-      const form = new FormData();
-      form.append('file', file);
-      form.append('upload_preset', preset);
-      form.append('folder', folder || defaultFolderByType(type));
+const uploadToStorage = async (file: File) => {
+  setUploading(true);
+  try {
+    const folderPath = folder ?? defaultFolderByType(type);
+    const url = await uploadToSupabase(file, folderPath);
+    setPreview(url);
+    onUpload(url);
+    toast.success('Uploaded');
+  } catch (e: any) {
+    toast.error(e?.message || 'Upload failed');
+  } finally {
+    setUploading(false);
+  }
+};
 
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-        method: 'POST',
-        body: form,
-      });
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error?.message || 'Upload failed');
-
-      const url = String(json.secure_url || '');
-      if (!url) throw new Error('No secure_url returned');
-
-      setPreview(url);
-      onUpload(url);
-      toast.success('Uploaded');
-    } catch (e: any) {
-      console.error('Cloudinary upload error:', e);
-      toast.error(e?.message || 'Upload failed');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const onPickFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Max 5MB allowed');
-      return;
-    }
-
-    await uploadToCloudinary(file);
-  };
+ const onPickFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { toast.error('Max 5MB allowed'); return; }
+  await uploadToStorage(file);  // ← was uploadToStorage
+};
 
   const removeImage = () => {
     setPreview('');
@@ -148,3 +124,4 @@ export default function ImageUpload({
     </div>
   );
 }
+

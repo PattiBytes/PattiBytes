@@ -33,3 +33,4 @@ export function useOrdersRealtime({ enabled, onInsert, onAnyChange }: Opts) {
     };
   }, [enabled, onInsert, onAnyChange]);
 }
+

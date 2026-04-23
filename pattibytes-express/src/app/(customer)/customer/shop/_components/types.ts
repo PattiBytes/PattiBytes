@@ -80,3 +80,4 @@ export const SORT_OPTIONS: { id: SortOption; label: string }[] = [
   { id: 'name_asc',   label: 'Name: A→Z'     },
   { id: 'newest',     label: 'Newest first'  },
 ];
+

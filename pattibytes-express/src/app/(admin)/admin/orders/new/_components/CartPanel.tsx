@@ -124,3 +124,5 @@ export function CartPanel({ items, changeQty, removeItem, updateItemNote }: Prop
     </div>
   );
 }
+
+

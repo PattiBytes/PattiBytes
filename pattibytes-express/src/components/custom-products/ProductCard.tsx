@@ -95,3 +95,4 @@ export function ProductCard({ product, onEdit, onDelete, onToggle }: Props) {
     </div>
   );
 }
+

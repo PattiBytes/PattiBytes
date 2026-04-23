@@ -39,3 +39,4 @@ export function SearchSortBar({ search, onSearch, sort, onSort }: Props) {
     </div>
   );
 }
+

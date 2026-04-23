@@ -29,3 +29,4 @@ export function ProductStats({ products }: Props) {
     </div>
   );
 }
+

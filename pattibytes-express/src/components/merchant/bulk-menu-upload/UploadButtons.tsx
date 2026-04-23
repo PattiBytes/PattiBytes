@@ -17,3 +17,4 @@ export function UploadButtons({ onFile }: Props) {
     </div>
   );
 }
+

@@ -14,3 +14,4 @@ const SW_HEADERS = {
 export async function GET() {
   return new Response(SW_CONTENT, { headers: SW_HEADERS });
 }
+

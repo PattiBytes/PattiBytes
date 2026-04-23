@@ -100,3 +100,4 @@ export function normalizeRow(obj: any, i: number): { row?: Row; err?: string } {
     },
   };
 }
+

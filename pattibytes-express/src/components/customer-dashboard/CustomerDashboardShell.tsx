@@ -14,3 +14,4 @@ export default function CustomerDashboardShell({ children }: { children: ReactNo
     </DashboardLayout>
   );
 }
+

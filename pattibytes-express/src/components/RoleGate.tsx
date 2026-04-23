@@ -147,3 +147,4 @@ export default function RoleGate({ children, allowedRoles }: RoleGateProps) {
 
   return <>{children}</>;
 }
+

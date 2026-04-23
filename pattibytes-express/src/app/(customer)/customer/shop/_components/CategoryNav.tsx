@@ -55,3 +55,4 @@ export function CategoryNav({ categories, selected, loading, onSelect }: Props) 
     </div>
   );
 }
+

@@ -510,3 +510,5 @@ function MobileCard({ o, i, ...p }: { o: Order; i: number } & TableProps) {
     </div>
   );
 }
+
+

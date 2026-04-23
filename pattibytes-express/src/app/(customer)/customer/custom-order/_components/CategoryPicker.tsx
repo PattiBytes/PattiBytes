@@ -47,3 +47,4 @@ export function CategoryPicker({ value, onChange }: Props) {
     </div>
   );
 }
+

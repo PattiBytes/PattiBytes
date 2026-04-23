@@ -32,3 +32,4 @@ export function ReviewsStats({ reviews }: { reviews: Review[] }) {
     </div>
   );
 }
+

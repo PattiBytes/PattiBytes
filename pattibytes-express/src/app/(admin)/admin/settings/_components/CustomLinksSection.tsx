@@ -2,7 +2,7 @@
 import Image from 'next/image';
 import { Plus, Trash2, ArrowUp, ArrowDown, Eye, EyeOff, Globe, Upload, Link as LinkIcon, Loader2 } from 'lucide-react';
 import type { Settings, CustomLink } from './types';
-import { uid, normalizeHttpUrl, normalizeMaybeMarkdownUrl, uploadToCloudinary } from './utils';
+import { uid, normalizeHttpUrl, normalizeMaybeMarkdownUrl, uploadToStorage } from './utils';
 import { useState } from 'react';
 import { toast } from 'react-toastify';
 
@@ -18,7 +18,7 @@ export function CustomLinksSection({ settings, onChange }: Props) {
     if (!file) return;
     setUploading(true);
     try {
-      const url = await uploadToCloudinary(file);
+      const url = await uploadToStorage(file);
       setDraft(p => ({ ...p, logo_url: url }));
     } catch (e: unknown) { toast.error((e as Error)?.message ?? 'Upload failed'); }
     finally { setUploading(false); }

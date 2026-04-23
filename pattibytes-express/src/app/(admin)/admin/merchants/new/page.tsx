@@ -324,3 +324,5 @@ export default function AdminAddMerchantPage() {
     </DashboardLayout>
   );
 }
+
+

@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'react-toastify';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+import { uploadToStorage } from '@/lib/storage';
 
 type Tab = 'profile' | 'security';
 
@@ -56,7 +56,7 @@ export default function SuperAdminProfilePage() {
     if (!file || !user) return;
     try {
       setUploading(true);
-      const url = await uploadToCloudinary(file, `superadmin/${user.id}/avatar`);
+      const url = await uploadToStorage(file, `superadmin/${user.id}/avatar`);
       setProfileForm((f) => ({ ...f, avatar_url: url }));
       // Save immediately so it persists
       await supabase.from('profiles').update({ avatar_url: url, updated_at: new Date().toISOString() }).eq('id', user.id);

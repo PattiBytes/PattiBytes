@@ -39,3 +39,4 @@ export function ActionBar({ parsing, saving, previewCount, progress, onParseCsv,
     </div>
   );
 }
+

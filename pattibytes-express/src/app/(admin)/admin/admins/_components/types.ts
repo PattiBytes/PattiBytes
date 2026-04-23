@@ -34,3 +34,4 @@ export const BRANCHES: BranchOption[] = [
   { code: 'global',      label: '🌐 All Branches', city: '',            state: '' },
   { code: 'custom',      label: '✏️ Custom…',      city: '',            state: '' },
 ];
+

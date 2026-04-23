@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import { Loader2, Save, X, Upload, ImageIcon, Clock, Calendar, Tag, CheckCircle2 } from 'lucide-react';
 import { CATEGORIES, DAY_LABELS, UNITS, EMPTY_FORM } from './types';
 import type { ProductFormData } from './types';
-import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
+import { useStorageUpload } from '@/hooks/useStorageUpload';
 import { toast } from 'react-toastify';
 
 interface Props {
@@ -27,7 +27,7 @@ export function ProductFormModal({
   const [localPreview, setLocalPreview] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
-  const { upload, uploading, progress } = useCloudinaryUpload();
+  const { upload, uploading, progress } = useStorageUpload();
 
   // Merged category list: preset + dynamic extras
   const allCats = [
@@ -431,3 +431,4 @@ export function ProductFormModal({
     </div>
   );
 }
+

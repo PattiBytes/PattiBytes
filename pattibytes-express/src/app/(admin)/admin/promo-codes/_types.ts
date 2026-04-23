@@ -105,3 +105,5 @@ export interface PromoFormState {
   secret_allowed_users   : string[];
   secret_note            : string;
 }
+
+

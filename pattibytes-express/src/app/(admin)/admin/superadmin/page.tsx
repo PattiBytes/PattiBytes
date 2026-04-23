@@ -810,3 +810,4 @@ const loadRecentOrders = async () => {
     </DashboardLayout>
   );
 }
+

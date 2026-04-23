@@ -104,3 +104,4 @@ export default function AdminCard({ admin, currentUserId, isSuperAdmin, onEdit, 
     </div>
   );
 }
+

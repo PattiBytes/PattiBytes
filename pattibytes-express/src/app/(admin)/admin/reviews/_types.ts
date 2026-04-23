@@ -40,3 +40,4 @@ export interface ReviewFormData {
 
 export interface MerchantOption { id: string; business_name: string; }
 export interface CustomerOption { id: string; full_name: string | null; phone: string | null; email: string | null; }
+

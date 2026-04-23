@@ -508,3 +508,4 @@ export default function MerchantMenuPage() {
     </DashboardLayout>
   );
 }
+

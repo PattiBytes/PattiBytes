@@ -295,3 +295,4 @@ export default function NotificationsPanel() {
     </div>
   );
 }
+

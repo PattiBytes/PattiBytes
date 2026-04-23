@@ -45,3 +45,4 @@ function FilterChip({ label, count, selected, onClick, emoji }: {
     </button>
   );
 }
+

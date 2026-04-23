@@ -28,3 +28,4 @@ export function ToggleFields({ form, onChange, onAutosave }: Props) {
     </div>
   );
 }
+

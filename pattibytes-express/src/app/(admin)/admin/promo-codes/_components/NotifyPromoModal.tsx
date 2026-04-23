@@ -68,3 +68,5 @@ export function NotifyPromoModal({ promo, merchants, onSend, onClose }: Props) {
     </div>
   );
 }
+
+

@@ -1,4 +1,4 @@
-export const uploadToCloudinary = async (file: File, folder: string = 'pattibytes'): Promise<string> => {
+export const uploadToStorage = async (file: File, folder: string = 'pattibytes'): Promise<string> => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '');
@@ -22,9 +22,10 @@ export const uploadToCloudinary = async (file: File, folder: string = 'pattibyte
 };
 
 export const uploadPDF = async (file: File): Promise<string> => {
-  return uploadToCloudinary(file, 'pattibytes/menus');
+  return uploadToStorage(file, 'pattibytes/menus');
 };
 
 export const uploadImage = async (file: File, type: 'profile' | 'menu' | 'banner'): Promise<string> => {
-  return uploadToCloudinary(file, `pattibytes/${type}s`);
+  return uploadToStorage(file, `pattibytes/${type}s`);
 };
+

@@ -121,3 +121,4 @@ export async function isOneSignalSubscribed(): Promise<boolean> {
     return OneSignal.Notifications.permission === true && (optedIn ?? false);
   } catch { return false; }
 }
+

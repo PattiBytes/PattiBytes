@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+import { uploadToSupabase } from '@/lib/storage';
 import { menuService }         from '@/services/menu';
 
 import { Row }              from './types';
@@ -82,7 +82,7 @@ export default function BulkMenuUploadModal({ merchantId, onClose, onSuccess }: 
       const fixed: Row[] = [];
       for (const r of rows) {
         let imageUrl = r.image_url;
-        if (!imageUrl && r._file) imageUrl = await uploadToCloudinary(r._file, 'menu-items');
+        if (!imageUrl && r._file) imageUrl = await uploadToSupabase(r._file, 'menu-items');
         fixed.push({ ...r, image_url: imageUrl || '' });
       }
       await menuService.createMenuItemsBulk(
@@ -124,7 +124,7 @@ export default function BulkMenuUploadModal({ merchantId, onClose, onSuccess }: 
           <div className="text-xs text-gray-600">
             Example CSV row:
             <div className="mt-1 font-mono break-words">
-              Pizza,Very nice chopping,98,Main Course,https://res.cloudinary.com/...png,true,true,30,0,
+              Pizza,Very nice chopping,98,Main Course,https://pattibytes-express/images.com/...png,true,true,30,0,
             </div>
           </div>
         </div>
@@ -132,3 +132,4 @@ export default function BulkMenuUploadModal({ merchantId, onClose, onSuccess }: 
     </div>
   );
 }
+

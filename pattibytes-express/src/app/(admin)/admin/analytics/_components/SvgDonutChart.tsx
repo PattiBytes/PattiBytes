@@ -82,3 +82,4 @@ export default function SvgDonutChart({ segments, size = 140, strokeWidth = 16, 
     </div>
   );
 }
+

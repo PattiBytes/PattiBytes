@@ -31,3 +31,4 @@ export function ModalHeader({ item, autoSaving, savedAt, hasUnsaved, closing, on
     </div>
   );
 }
+

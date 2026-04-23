@@ -26,3 +26,5 @@ export function OrdersStats({ stats }: { stats: OrderStats }) {
     </div>
   );
 }
+
+

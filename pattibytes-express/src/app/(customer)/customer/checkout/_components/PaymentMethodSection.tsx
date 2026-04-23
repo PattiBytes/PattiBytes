@@ -62,3 +62,4 @@ export function PaymentMethodSection({ selected, onChange }: Props) {
     </div>
   );
 }
+

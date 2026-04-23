@@ -51,3 +51,5 @@ export async function deleteLegalPage(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath('/admin/legal');
 }
+
+

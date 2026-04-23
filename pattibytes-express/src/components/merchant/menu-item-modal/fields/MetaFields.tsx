@@ -39,3 +39,4 @@ export function MetaFields({ form, discountOk, onChange, onAutosave }: Props) {
     </div>
   );
 }
+

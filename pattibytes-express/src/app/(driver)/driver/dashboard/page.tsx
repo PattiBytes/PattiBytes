@@ -605,3 +605,4 @@ const { data: completedToday, error: completedError } = await supabase
     </DashboardLayout>
   );
 }
+

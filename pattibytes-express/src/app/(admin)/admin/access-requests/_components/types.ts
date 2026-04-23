@@ -104,3 +104,4 @@ export const REQUEST_TYPE_CONFIG: Record<
     borderColor: 'border-gray-300',
   },
 };
+

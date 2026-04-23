@@ -44,3 +44,4 @@ export function StarRating({ value, onChange, size = 16, label }: Props) {
     </div>
   );
 }
+

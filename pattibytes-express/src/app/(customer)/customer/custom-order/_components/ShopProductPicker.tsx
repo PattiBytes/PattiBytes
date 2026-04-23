@@ -190,3 +190,4 @@ export function ShopProductPicker({ selectedIds, onToggle }: Props) {
     </div>
   );
 }
+

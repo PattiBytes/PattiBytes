@@ -368,3 +368,4 @@ class RestaurantService {
 
 export const restaurantService = new RestaurantService();
 export default restaurantService;
+

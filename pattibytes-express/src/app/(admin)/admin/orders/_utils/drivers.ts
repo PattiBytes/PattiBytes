@@ -34,3 +34,5 @@ export async function upsertDriverAssignments(orderId: string, driverIds: string
     .upsert(rows as any, { onConflict: 'order_id,driver_id' } as any);
   if (error) throw error;
 }
+
+

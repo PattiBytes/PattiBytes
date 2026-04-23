@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 import { Store, Upload, X } from 'lucide-react';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+import { uploadToStorage } from '@/lib/storage';
 import Image from 'next/image';
 
 export default function CompleteProfilePage() {
@@ -43,7 +43,7 @@ export default function CompleteProfilePage() {
 
     setUploading(true);
     try {
-      const url = await uploadToCloudinary(file, 'restaurant');
+      const url = await uploadToStorage(file, 'restaurant');
       setFormData({ ...formData, [field]: url });
       toast.success('Image uploaded');
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -300,3 +300,4 @@ export default function CompleteProfilePage() {
     </div>
   );
 }
+

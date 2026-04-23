@@ -33,3 +33,4 @@ export function PromoStats({ promos }: { promos: PromoCodeRow[] }) {
     </div>
   );
 }
+

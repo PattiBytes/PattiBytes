@@ -7,3 +7,4 @@ export default function SuperAdminLayout({
 }) {
   return <RoleGate allowedRoles={['superadmin']}>{children}</RoleGate>;
 }
+
