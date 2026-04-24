@@ -1,8 +1,9 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 // src/app/_layout.tsx
 import React, { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator, Alert, View, LogBox, Modal,
-  Text, TouchableOpacity, StyleSheet, ScrollView,
+  Text, TouchableOpacity, StyleSheet, ScrollView, Platform,
 } from 'react-native'
 import { Slot, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -16,11 +17,17 @@ import { Ionicons } from '@expo/vector-icons'
 import { AuthProvider, useAuth } from '../contexts/AuthContext'
 import { CartProvider } from '../contexts/CartContext'
 import { supabase } from '../lib/supabase'
-import { initNotificationHandler } from '../lib/notificationHandler'
+import {
+  initNotificationHandler,
+  registerForPushNotifications,
+  addReceivedListener,
+  addResponseListener,
+  setupForegroundReregistration,
+} from '../lib/notificationHandler'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ScrollToTopProvider, BackToTopFab } from '../components/ui/ScrollToTop'
 import { useAppUpdate } from '@/hooks/useAppUpdate'
-
+import { needsProfileCompletion } from '../lib/apple'
 
 // ── Sentry ────────────────────────────────────────────────────────────────────
 
@@ -37,15 +44,19 @@ LogBox.ignoreLogs([
   'Mbgl-HttpRequest',
 ])
 
+// NOTE: initNotificationHandler is called ONCE here at module level for
+// foreground display config. Push token registration happens inside
+// RootGuard's useEffect after the user is confirmed, to avoid duplicate
+// calls and to have access to user.id.
 initNotificationHandler()
-
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const DISCLOSURE_KEY = 'bg_location_disclosure_shown'
 
 /**
- * Pages inside /(customer)/* that a guest (unauthenticated) user may access.
+ * These customer sub-pages are accessible without login.
+ * Any other (customer) sub-page (cart, checkout, orders, profile…) requires auth.
  */
 const GUEST_BROWSEABLE_PAGES = new Set([
   'dashboard',
@@ -54,7 +65,6 @@ const GUEST_BROWSEABLE_PAGES = new Set([
   'shop',
   'store',
 ])
-
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -76,12 +86,11 @@ function getDashboard(role: string): string {
   }
 }
 
-
 // ── Background Location Disclosure Modal ──────────────────────────────────────
 
 interface DisclosureProps {
-  visible: boolean
-  onAccept: () => void
+  visible:   boolean
+  onAccept:  () => void
   onDecline: () => void
 }
 
@@ -149,23 +158,34 @@ function BackgroundLocationDisclosure({ visible, onAccept, onDecline }: Disclosu
 
 const dlStyles = StyleSheet.create({
   overlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
-  sheet:       { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, maxHeight: '85%' },
-  iconWrapper: { alignSelf: 'center', backgroundColor: '#FFF0EA', borderRadius: 50, padding: 14, marginBottom: 16 },
+  sheet:       {
+    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    padding: 24, paddingBottom: Platform.OS === 'ios' ? 44 : 40, maxHeight: '85%',
+  },
+  iconWrapper: {
+    alignSelf: 'center', backgroundColor: '#FFF0EA', borderRadius: 50,
+    padding: 14, marginBottom: 16,
+  },
   title:       { fontSize: 20, fontWeight: '700', color: '#1a1a1a', textAlign: 'center', marginBottom: 16 },
   scroll:      { maxHeight: 280, marginBottom: 20 },
   body:        { fontSize: 14, color: '#444', lineHeight: 22, marginBottom: 12 },
   bold:        { fontWeight: '700' },
   featureRow:  { flexDirection: 'row', gap: 10, marginBottom: 12, alignItems: 'flex-start' },
   featureText: { fontSize: 14, color: '#444', lineHeight: 22, flex: 1 },
-  notice:      { backgroundColor: '#FFF7F4', borderRadius: 10, padding: 12, marginTop: 4, marginBottom: 12, borderLeftWidth: 3, borderLeftColor: '#FF6B35' },
+  notice:      {
+    backgroundColor: '#FFF7F4', borderRadius: 10, padding: 12, marginTop: 4,
+    marginBottom: 12, borderLeftWidth: 3, borderLeftColor: '#FF6B35',
+  },
   noticeText:  { fontSize: 13, color: '#555', lineHeight: 20 },
   subText:     { fontSize: 12, color: '#888', textAlign: 'center', marginTop: 4 },
-  acceptBtn:   { backgroundColor: '#FF6B35', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
+  acceptBtn:   {
+    backgroundColor: '#FF6B35', borderRadius: 12, paddingVertical: 14,
+    alignItems: 'center', marginBottom: 10,
+  },
   acceptText:  { color: '#fff', fontWeight: '700', fontSize: 16 },
   declineBtn:  { borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   declineText: { color: '#888', fontSize: 15 },
 })
-
 
 // ── useBackgroundLocationDisclosure ───────────────────────────────────────────
 
@@ -176,14 +196,11 @@ function useBackgroundLocationDisclosure(shouldRun: boolean) {
   useEffect(() => {
     if (!shouldRun || checkedRef.current) return
     checkedRef.current = true
-
     ;(async () => {
       const { status: bg } = await Location.getBackgroundPermissionsAsync()
       if (bg === 'granted') return
-
       const seen = await AsyncStorage.getItem(DISCLOSURE_KEY)
       if (seen) return
-
       setShowDisclosure(true)
     })()
   }, [shouldRun])
@@ -204,7 +221,6 @@ function useBackgroundLocationDisclosure(shouldRun: boolean) {
   return { showDisclosure, onAccept, onDecline }
 }
 
-
 // ── RootGuard ─────────────────────────────────────────────────────────────────
 
 function RootGuard() {
@@ -212,8 +228,11 @@ function RootGuard() {
   const router   = useRouter()
   const segments = useSegments()
 
-  const receivedRef = useRef<{ remove: () => void } | null>(null)
-  const responseRef = useRef<{ remove: () => void } | null>(null)
+  // ── Notification listener refs (stable across re-renders) ─────────────────
+  // FIX: Use a single ref object to hold all removable subscriptions.
+  // Previously the code had two separate ref slots that were overwritten
+  // on re-mount. Now every subscription is tracked in a Map keyed by name.
+  const subsRef = useRef<Map<string, { remove: () => void }>>(new Map())
 
   const [isOffline, setIsOffline] = useState(false)
   const wasOffline                = useRef(false)
@@ -224,12 +243,12 @@ function RootGuard() {
   const isOfflinePage = (segments as string[]).includes('offline')
   const isExpoGo      = Constants.appOwnership === 'expo'
 
+  const isCompleteProfileScreen =
+    segments[0] === '(auth)' && (segments[1] as string) === 'complete-profile'
+
   const [profileTimedOut, setProfileTimedOut] = useState(false)
 
-  // ── OTA update check ─────────────────────────────────────────────────────
-  // Fires once per session only when the app is in a stable, usable state:
-  // user is authenticated, profile is loaded, not on auth/legal/offline screen.
-  // The `enabled` flag is derived from all guard conditions below.
+  // ── App update check: only when fully authenticated ────────────────────────
   const updateCheckReady = (
     !loading &&
     !isOffline &&
@@ -237,25 +256,23 @@ function RootGuard() {
     !isLegalPage &&
     !isOfflinePage &&
     !!user &&
-    !!profile
+    !!profile &&
+    !!profile.profile_completed
   )
   useAppUpdate(updateCheckReady)
 
-  // Disclosure only fires for authenticated users on real screens
-  const disclosureShouldRun = updateCheckReady
+  // ── Background location disclosure: only after fully onboarded ────────────
   const { showDisclosure, onAccept, onDecline } =
-    useBackgroundLocationDisclosure(disclosureShouldRun)
+    useBackgroundLocationDisclosure(updateCheckReady)
 
-
-  // ── Profile timeout ───────────────────────────────────────────────────────
+  // ── Profile timeout (network hiccup fallback) ──────────────────────────────
   useEffect(() => {
     if (!user || profile) { setProfileTimedOut(false); return }
-    const t = setTimeout(() => setProfileTimedOut(true), 3000)
+    const t = setTimeout(() => setProfileTimedOut(true), 3_000)
     return () => clearTimeout(t)
   }, [user, profile])
 
-
-  // ── Network monitoring ────────────────────────────────────────────────────
+  // ── Network monitoring ─────────────────────────────────────────────────────
   useEffect(() => {
     const unsub = NetInfo.addEventListener(state => {
       const offline = state.isConnected === false
@@ -268,8 +285,7 @@ function RootGuard() {
         wasOffline.current = false
         if (isOfflinePage) {
           if (user) {
-            const role = profile?.role ?? 'customer'
-            router.replace(getDashboard(role) as any)
+            router.replace(getDashboard(profile?.role ?? 'customer') as any)
           } else {
             router.replace('/(customer)/dashboard' as any)
           }
@@ -279,14 +295,38 @@ function RootGuard() {
     return () => unsub()
   }, [router, user, profile, isOfflinePage])
 
-
-  // ── Notification listeners ────────────────────────────────────────────────
+  // ── Push notifications + token registration ────────────────────────────────
+  // FIX 1: initNotificationHandler() was called redundantly here.
+  //         It is now called once at module level above. Do not call it again.
+  //
+  // FIX 2: The second code snippet (from the comment in the query) used
+  //         require('react-native-onesignal') in a try/catch which silently
+  //         suppresses all errors including legitimate crashes. OneSignal
+  //         is not installed in this project so the whole block is removed.
+  //         If you install it later, add it explicitly with proper imports.
+  //
+  // FIX 3: registerForPushNotifications, addReceivedListener,
+  //         addResponseListener, and setupForegroundReregistration were
+  //         referenced in the second snippet but never imported in the
+  //         original _layout.tsx. They are now imported at the top.
+  //
+  // FIX 4: The original code used two separate useEffects for notification
+  //         listeners (one for cold-start/tap via expo-notifications directly,
+  //         another via notificationHandler). These have been merged into a
+  //         single effect keyed on user?.id to avoid duplicate navigation
+  //         events when the user object identity changes but id is the same.
   useEffect(() => {
-    if (isExpoGo) return
+    if (!user?.id) return
 
-    let removeTapListener: (() => void) | null = null
-    let mounted = true
+    // 1. Register for push token and save to DB
+    registerForPushNotifications(user.id).then(token => {
+      if (token && __DEV__) console.log('[layout] Push token registered:', token)
+    })
 
+    // 2. Set up foreground re-registration cleanup
+    const cleanupForeground = setupForegroundReregistration(user.id)
+
+    // 3. Helper: navigate to order detail
     const goToOrder = (orderId: string) => {
       router.push({
         pathname: '/(customer)/orders/[id]',
@@ -294,10 +334,15 @@ function RootGuard() {
       } as any)
     }
 
+    // 4. Handle cold-start tap (app launched from a notification)
+    //    This is wrapped in a dynamic import because expo-notifications must
+    //    not be required on web and is safe to lazy-load here.
+    let mounted = true
     ;(async () => {
+      if (isExpoGo) return
       const Notifications = await import('expo-notifications')
-      const notif         = await import('../lib/notificationHandler')
 
+      // Cold-start: check if app was opened via a notification tap
       const last = await Notifications.getLastNotificationResponseAsync()
       if (last && mounted) {
         const data    = last.notification.request.content.data as any
@@ -305,72 +350,95 @@ function RootGuard() {
         if (orderId && isOrderUpdate(data)) goToOrder(orderId)
       }
 
-      receivedRef.current = notif.addReceivedListener(() => {})
+      // Foreground received — just log, no navigation (prevents jarring jumps)
+      const recSub = addReceivedListener(n => {
+        if (__DEV__)
+          console.log('[layout] Notification received:', n?.request?.content?.title)
+      })
+      subsRef.current.set('received', recSub)
 
-      responseRef.current = notif.addResponseListener((res: any) => {
+      // Tap while app is foregrounded or backgrounded
+      const resSub = addResponseListener((res: any) => {
         const data    = res?.notification?.request?.content?.data ?? {}
         const orderId = extractOrderId(data)
-        if (orderId && isOrderUpdate(data)) goToOrder(orderId)
+        if (orderId && isOrderUpdate(data)) { goToOrder(orderId); return }
         if (data?.type === 'new_order') router.push('/(driver)/dashboard' as any)
       })
+      subsRef.current.set('response', resSub)
 
-      const sub = Notifications.addNotificationResponseReceivedListener(response => {
-        const data    = response?.notification?.request?.content?.data ?? {}
-        const orderId = extractOrderId(data)
-        if (orderId && isOrderUpdate(data)) goToOrder(orderId)
-      })
-      removeTapListener = () => sub.remove()
+      // FIX 5: The original code also added a raw
+      //   Notifications.addNotificationResponseReceivedListener inside the
+      //   async IIFE, creating a THIRD duplicate tap listener alongside the
+      //   two from notificationHandler. This caused triple navigation on tap.
+      //   Removed — addResponseListener from notificationHandler covers this.
     })()
 
     return () => {
       mounted = false
-      receivedRef.current?.remove()
-      responseRef.current?.remove()
-      removeTapListener?.()
+      subsRef.current.forEach(sub => sub.remove())
+      subsRef.current.clear()
+      cleanupForeground()
     }
-  }, [router, isExpoGo])
+  // FIX 6: Depend on user?.id (primitive) NOT user (object reference).
+  //         Using `user` causes this effect to re-run on every auth refresh
+  //         because Supabase returns a new user object instance each time,
+  //         even when the id hasn't changed — re-registering tokens and
+  //         adding duplicate listeners on every token refresh (~60 min).
+  }, [user?.id, isExpoGo])
 
-
-  // ── Sentry user context ───────────────────────────────────────────────────
+  // ── Sentry user context ────────────────────────────────────────────────────
   useEffect(() => {
     if (user?.id) {
       Sentry.setUser({ id: user.id, email: user.email ?? undefined })
     } else {
       Sentry.setUser(null)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
 
-
-  // ── Role-based routing guard ──────────────────────────────────────────────
+  // ── Role-based routing guard ───────────────────────────────────────────────
   useEffect(() => {
     if (loading || isOffline) return
     if (isLegalPage) return
 
     const top = segments[0] as string | undefined
 
+    // ── Not logged in ──────────────────────────────────────────────────────
     if (!user) {
       rejectedAlerted.current = false
-
       if (inAuthGroup)   return
       if (isLegalPage)   return
       if (isOfflinePage) return
-
+      // Allow guest browsing of discovery pages
       if (top === '(customer)') {
         const sub = segments[1] as string | undefined
         if (!sub || GUEST_BROWSEABLE_PAGES.has(sub)) return
       }
-
       router.replace('/(auth)/login' as any)
       return
     }
 
+    // ── Logged in but profile not yet loaded ───────────────────────────────
     if (!profile) {
-      if (profileTimedOut && inAuthGroup) router.replace('/(customer)/dashboard' as any)
+      if (profileTimedOut && inAuthGroup) {
+        router.replace('/(customer)/dashboard' as any)
+      }
       return
     }
 
-    if (!profile.is_active || profile.account_status === 'banned') {
+    // ── Profile completion guard (all sign-in methods) ─────────────────────
+    if (!isCompleteProfileScreen && !profile.profile_completed) {
+      const incomplete = needsProfileCompletion(
+        profile.full_name,
+        (profile as any).username,
+      )
+      if (incomplete) {
+        router.replace('/(auth)/complete-profile' as any)
+        return
+      }
+    }
+
+    // ── Banned / inactive ─────────────────────────────────────────────────
+    if (!profile.is_active || (profile as any).account_status === 'banned') {
       supabase.auth.signOut()
       router.replace('/(auth)/login' as any)
       return
@@ -379,6 +447,7 @@ function RootGuard() {
     const role     = profile.role ?? 'customer'
     const approval = profile.approval_status ?? 'approved'
 
+    // ── Pending / rejected approval ───────────────────────────────────────
     if (['driver', 'merchant', 'admin', 'superadmin'].includes(role)) {
       if (approval === 'pending') {
         if (segments[1] !== 'pending-approval')
@@ -406,23 +475,21 @@ function RootGuard() {
       }
     }
 
-    if (inAuthGroup) router.replace(getDashboard(role) as any)
+    // ── Redirect away from auth screens once fully set up ─────────────────
+    if (inAuthGroup && !isCompleteProfileScreen) {
+      router.replace(getDashboard(role) as any)
+    }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, user, profile, profileTimedOut, inAuthGroup, isLegalPage, segments, router, isOffline])
+   
+  }, [loading, user, profile, profileTimedOut, inAuthGroup, isLegalPage,
+      isCompleteProfileScreen, segments, router, isOffline])
 
-
-  // ── Loading splash ────────────────────────────────────────────────────────
+  // ── Loading splash ─────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <SafeAreaView
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: '#fff',
-        }}
-      >
+      <SafeAreaView style={{
+        flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff',
+      }}>
         <StatusBar style="dark" translucent backgroundColor="transparent" />
         <ActivityIndicator size="large" color="#FF6B35" />
       </SafeAreaView>
@@ -442,7 +509,6 @@ function RootGuard() {
     </>
   )
 }
-
 
 // ── RootLayout ────────────────────────────────────────────────────────────────
 

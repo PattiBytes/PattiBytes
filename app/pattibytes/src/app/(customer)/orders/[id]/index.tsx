@@ -1,4 +1,3 @@
- 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   View,
@@ -15,22 +14,22 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import Constants from 'expo-constants'
 import * as Device from 'expo-device'
-import { supabase } from '../../../../lib/supabase'
-import { useAuth } from '../../../../contexts/AuthContext'
-import { COLORS } from '../../../../lib/constants'
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '../../../../components/MapView'
-import type { Region } from '../../../../components/MapView'
-import { ScreenLoader } from '../../../../components/ui/ScreenLoader'
-
-import StatusHero from '../../../../components/orders/StatusHero'
-import OrderTimeline from '../../../../components/orders/OrderTimeline'
-import CustomOrderFlow from '../../../../components/orders/CustomOrderFlow'
-import OrderItems from '../../../../components/orders/OrderItems'
-import BillSection from '../../../../components/orders/BillSection'
-import DeliverySection from '../../../../components/orders/DeliverySection'
-import MerchantSection from '../../../../components/orders/MerchantSection'
-import ReviewSection from '../../../../components/orders/ReviewSection'
-import CancelModal from '../../../../components/orders/CancelModal'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
+import { COLORS } from '@/lib/constants'
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/components/MapView'
+import type { Region } from '@/components/MapView'
+import { ScreenLoader } from '@/components/ui/ScreenLoader'
+import { createAndSendNotification } from '@/lib/notificationHandler'
+import StatusHero        from '@/components/orders/StatusHero'
+import OrderTimeline     from '@/components/orders/OrderTimeline'
+import CustomOrderFlow   from '@/components/orders/CustomOrderFlow'
+import OrderItems        from '@/components/orders/OrderItems'
+import BillSection       from '@/components/orders/BillSection'
+import DeliverySection   from '@/components/orders/DeliverySection'
+import MerchantSection   from '@/components/orders/MerchantSection'
+import ReviewSection     from '@/components/orders/ReviewSection'
+import CancelModal       from '@/components/orders/CancelModal'
 import {
   ACTIVE_STATUSES,
   CANCELLABLE_STATUSES,
@@ -38,10 +37,10 @@ import {
   STORE_TIMELINE,
   CUSTOM_TIMELINE,
   TRACKABLE_STATUSES,
-} from '../../../../components/orders/constants'
+} from '@/components/orders/constants'
 
-import type { OrderDetail, DriverInfo, LatLng, MerchantInfo } from '../../../../components/orders/types'
-import { useAppSettings, getSupportWhatsApp } from '../../../../hooks/useAppSettings'
+import type { OrderDetail, DriverInfo, LatLng, MerchantInfo } from '@/components/orders/types'
+import { useAppSettings, getSupportWhatsApp } from '@/hooks/useAppSettings'
 
 // ── Push safety guard ─────────────────────────────────────────────────────────
 const canUsePush =
@@ -49,7 +48,6 @@ const canUsePush =
   !(Platform.OS === 'android' && Constants.appOwnership === 'expo')
 
 // ── Full order select columns ─────────────────────────────────────────────────
-// Every field accessed anywhere in this screen — single source of truth
 const ORDER_SELECT = [
   'id',
   'order_number',
@@ -85,7 +83,21 @@ const ORDER_SELECT = [
   'actual_delivery_time',
   'preparation_time',
   'customer_id',
+  // ── NEW: multi-cart session fields ──────────────────────────────────────
+  'cart_session_id',
+  'session_order_index',
+  'merchant_ids',
 ].join(',')
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+type SessionSummary = {
+  id:              string
+  total_amount:    number
+  merchant_ids:    string[]
+  order_ids:       string[]
+  status:          string
+  payment_method:  string
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function parseLocation(v: unknown): { lat: number; lng: number } | null {
@@ -129,6 +141,7 @@ export default function OrderDetailPage() {
   const [order,          setOrder]          = useState<OrderDetail | null>(null)
   const [merchant,       setMerchant]       = useState<MerchantInfo | null>(null)
   const [driver,         setDriver]         = useState<DriverInfo | null>(null)
+  const [session,        setSession]        = useState<SessionSummary | null>(null)  // ← NEW
   const [loading,        setLoading]        = useState(true)
   const [refreshing,     setRefreshing]     = useState(false)
   const [driverCoords,   setDriverCoords]   = useState<LatLng | null>(null)
@@ -144,7 +157,7 @@ export default function OrderDetailPage() {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select(ORDER_SELECT)           // ← was a comment placeholder before
+        .select(ORDER_SELECT)
         .eq('id', id)
         .eq('customer_id', user.id)
         .single()
@@ -159,8 +172,8 @@ export default function OrderDetailPage() {
       if (dl) setDriverCoords({ latitude: dl.lat, longitude: dl.lng })
       else    setDriverCoords(null)
 
-      // Merchant + driver in parallel
-      const [merchResult, driverResult] = await Promise.all([
+      // ── Parallel fetches: merchant + driver + session ─────────────────
+      const [merchResult, driverResult, sessionResult] = await Promise.all([
         o.merchant_id && o.order_type === 'restaurant'
           ? supabase
               .from('merchants')
@@ -178,24 +191,31 @@ export default function OrderDetailPage() {
               .maybeSingle()
               .then(({ data: d }) => d ?? null)
           : Promise.resolve(null),
+
+        // ── NEW: load session if this order belongs to one ────────────
+        (o as any).cart_session_id
+          ? supabase
+              .from('multi_cart_sessions')
+              .select('id,total_amount,merchant_ids,order_ids,status,payment_method')
+              .eq('id', (o as any).cart_session_id)
+              .maybeSingle()
+              .then(({ data: s }) => s ?? null)
+          : Promise.resolve(null),
       ])
 
       setMerchant(merchResult as MerchantInfo | null)
       setDriver(driverResult as DriverInfo | null)
+      setSession(sessionResult as SessionSummary | null)    // ← NEW
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Could not load order', [
         { text: 'Back', onPress: () => router.back() },
       ])
     } finally {
-      setLoading(false)   // ← always clears loading, even on error
+      setLoading(false)
     }
   }, [id, user, router])
 
-  // ── FIX: call loadOrder on mount ──────────────────────────────────────────
-  // This was the PRIMARY bug — loadOrder was defined but never invoked.
-  useEffect(() => {
-    loadOrder()
-  }, [loadOrder])
+  useEffect(() => { loadOrder() }, [loadOrder])
 
   // ── Real-time order updates ───────────────────────────────────────────────
   useEffect(() => {
@@ -261,21 +281,35 @@ export default function OrderDetailPage() {
     setCancelling(true)
     try {
       await supabase.from('order_cancellations').insert({
-        order_id: order.id,
-        customer_id: user.id,
+        order_id:     order.id,
+        customer_id:  user.id,
         reason,
         cancelled_at: new Date().toISOString(),
       })
       const { error } = await supabase
         .from('orders')
         .update({
-          status: 'cancelled',
+          status:              'cancelled',
           cancellation_reason: reason,
-          cancelled_by: 'customer',
-          updated_at: new Date().toISOString(),
+          cancelled_by:        'customer',
+          updated_at:          new Date().toISOString(),
         })
         .eq('id', order.id)
       if (error) throw error
+
+      await createAndSendNotification({
+  userId:    user.id,
+  title:     'Order Cancelled',
+  body:      `Your order #${order.order_number} has been cancelled.`,
+  type:      'order_update',
+  channelId: 'orders',
+  data: {
+    order_id:     order.id,
+    orderId:      order.id,
+    order_number: order.order_number,
+    status:       'cancelled',
+  },
+})
 
       await supabase.from('notifications').insert({
         user_id:    user.id,
@@ -317,8 +351,8 @@ export default function OrderDetailPage() {
                 .from('orders')
                 .update({
                   custom_order_status: 'confirmed',
-                  total_amount: order.quoted_amount,
-                  updated_at: new Date().toISOString(),
+                  total_amount:        order.quoted_amount,
+                  updated_at:          new Date().toISOString(),
                 })
                 .eq('id', order.id)
               if (error) throw error
@@ -371,14 +405,19 @@ export default function OrderDetailPage() {
   if (!order) return null
 
   // ── Derived state ─────────────────────────────────────────────────────────
-  const isStore    = order.order_type === 'store'
-  const isCustom   = order.order_type === 'custom'
-  const isPlatform = isStore || isCustom || order.platform_handled === true
-  const isActive   = ACTIVE_STATUSES.includes(order.status)
-  const canCancel  = CANCELLABLE_STATUSES.includes(order.status)
+  const isStore      = order.order_type === 'store'
+  const isCustom     = order.order_type === 'custom'
+  const isPlatform   = isStore || isCustom || order.platform_handled === true
+  const isActive     = ACTIVE_STATUSES.includes(order.status)
+  const canCancel    = CANCELLABLE_STATUSES.includes(order.status)
   const isDelivered  = order.status === 'delivered'
   const isCancelled  = order.status === 'cancelled' || order.status === 'rejected'
   const canReorder   = isDelivered || isCancelled
+
+  // ── NEW: multi-order session ──────────────────────────────────────────────
+  const isPartOfSession   = !!(order as any).cart_session_id && !!session
+  const sessionOrderIndex = (order as any).session_order_index ?? 0
+  const sessionOrderCount = session?.order_ids?.length ?? 0
 
   const timeline = isCustom
     ? CUSTOM_TIMELINE
@@ -425,7 +464,7 @@ export default function OrderDetailPage() {
     <View style={{ flex: 1, backgroundColor: '#F8F9FA' }}>
       <Stack.Screen
         options={{
-          title: `Order ${order.order_number}`,
+          title: `Order #${order.order_number}`,
           headerStyle: { backgroundColor: headerColor },
           headerTintColor: '#fff',
           headerTitleStyle: { fontWeight: '800' },
@@ -445,14 +484,24 @@ export default function OrderDetailPage() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={COLORS.primary}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
         }
         contentContainerStyle={{ paddingBottom: 50 }}
       >
+        {/* ── NEW: Multi-order session banner ──────────────────────── */}
+        {isPartOfSession && (
+          <SessionBanner
+            session={session!}
+            orderIndex={sessionOrderIndex}
+            orderCount={sessionOrderCount}
+            onViewSession={() =>
+              router.push(
+                `/(customer)/orders/session/${(order as any).cart_session_id}` as any,
+              )
+            }
+          />
+        )}
+
         {/* STATUS HERO */}
         <StatusHero order={order} />
 
@@ -499,10 +548,8 @@ export default function OrderDetailPage() {
                   <TouchableOpacity
                     onPress={() => Linking.openURL(`tel:${driver.phone}`)}
                     style={{
-                      backgroundColor: '#F97316',
-                      borderRadius: 8,
-                      paddingHorizontal: 12,
-                      paddingVertical: 5,
+                      backgroundColor: '#F97316', borderRadius: 8,
+                      paddingHorizontal: 12, paddingVertical: 5,
                     }}
                   >
                     <Text style={{ color: '#fff', fontWeight: '700', fontSize: 11 }}>📞 Call</Text>
@@ -587,8 +634,7 @@ export default function OrderDetailPage() {
             )}
             {order.cancelled_by && (
               <Text style={S.cancelBy}>
-                Cancelled by:{' '}
-                {order.cancelled_by === 'customer' ? 'You' : order.cancelled_by}
+                Cancelled by: {order.cancelled_by === 'customer' ? 'You' : order.cancelled_by}
               </Text>
             )}
           </View>
@@ -629,16 +675,20 @@ export default function OrderDetailPage() {
         {/* REVIEW */}
         {isDelivered && (
           <ReviewSection
-            orderId={order.id}
-            customerId={user!.id}
-            merchantId={order.merchant_id ?? null}
-            driverId={order.driver_id ?? null}
-            orderItems={order.items ?? []}
-            isStore={isStore}
-            isCustom={order.order_type === 'custom'}
-            merchantName={merchant?.business_name ?? null}
-            onDone={() => { /* optionally reload */ }}
-          />
+  orderId={order.id}
+  customerId={user!.id}
+  merchantId={order.merchant_id ?? null}
+  driverId={order.driver_id ?? null}
+  orderItems={order.items ?? []}
+  isStore={isStore}
+  isCustom={order.order_type === 'custom'}
+  merchantName={merchant?.business_name ?? null}
+  onDone={() => { /* optionally reload */ }}
+  // ── NEW multi-session props ──
+  sessionOrderIndex={isPartOfSession ? sessionOrderIndex : undefined}
+  totalMerchantsInSession={isPartOfSession ? sessionOrderCount : undefined}
+  sessionId={isPartOfSession ? (order as any).cart_session_id : undefined}
+/>
         )}
 
         {/* ACTION BUTTONS */}
@@ -685,6 +735,40 @@ export default function OrderDetailPage() {
   )
 }
 
+// ── NEW: SessionBanner ─────────────────────────────────────────────────────────
+function SessionBanner({
+  session, orderIndex, orderCount, onViewSession,
+}: {
+  session:        SessionSummary
+  orderIndex:     number
+  orderCount:     number
+  onViewSession:  () => void
+}) {
+  const statusColor = session.status === 'completed'
+    ? '#16A34A' : session.status === 'cancelled'
+    ? '#DC2626' : '#D97706'
+
+  return (
+    <TouchableOpacity style={S.sessionBanner} onPress={onViewSession} activeOpacity={0.8}>
+      <View style={{ flex: 1 }}>
+        <Text style={S.sessionTitle}>
+          🛒 Multi-Restaurant Order — {orderIndex + 1} of {orderCount}
+        </Text>
+        <Text style={S.sessionSub}>
+          Total: ₹{Number(session.total_amount).toFixed(2)} ·{' '}
+          {session.merchant_ids?.length ?? orderCount} restaurants
+        </Text>
+        <View style={[S.sessionStatusDot, { backgroundColor: statusColor }]}>
+          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>
+            {session.status?.replace('_', ' ').toUpperCase()}
+          </Text>
+        </View>
+      </View>
+      <Text style={S.sessionArrow}>View All Orders →</Text>
+    </TouchableOpacity>
+  )
+}
+
 // ── OrderMeta ─────────────────────────────────────────────────────────────────
 function OrderMeta({ order }: { order: OrderDetail }) {
   const rows = [
@@ -714,6 +798,25 @@ function OrderMeta({ order }: { order: OrderDetail }) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
+  // ── NEW: session banner ────────────────────────────────────────────────
+  sessionBanner: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    backgroundColor:  '#FFF7ED',
+    margin:           16,
+    marginBottom:     4,
+    borderRadius:     14,
+    padding:          14,
+    borderWidth:      1.5,
+    borderColor:      '#FED7AA',
+    gap:              10,
+  },
+  sessionTitle:     { fontSize: 13, fontWeight: '800', color: '#92400E', marginBottom: 3 },
+  sessionSub:       { fontSize: 12, color: '#B45309' },
+  sessionStatusDot: { marginTop: 6, borderRadius: 6, paddingHorizontal: 8,
+                      paddingVertical: 3, alignSelf: 'flex-start' },
+  sessionArrow:     { fontSize: 11, color: COLORS.primary, fontWeight: '700' },
+  // ── map ───────────────────────────────────────────────────────────────
   mapWrap: {
     marginHorizontal: 16, marginTop: 10, borderRadius: 16, overflow: 'hidden',
     elevation: 2, shadowColor: '#000', shadowOpacity: 0.1,
@@ -726,7 +829,7 @@ const S = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 6,
     flexDirection: 'row', alignItems: 'center', gap: 6,
   },
-  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
+  liveDot:     { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
   distancePill: {
     position: 'absolute', bottom: 10, right: 10,
     backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16,

@@ -36,13 +36,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading,   setLoading]   = useState(true)
   const [pushToken, setPushToken] = useState<string | null>(null)
 
-  const mounted      = useRef(true)
-  const inflight     = useRef<Promise<Profile | null> | null>(null)
-  const lastUid      = useRef<string | null>(null)
-  // ✅ prevents duplicate push registration calls within same session
+  const mounted        = useRef(true)
+  const inflight       = useRef<Promise<Profile | null> | null>(null)
+  const lastUid        = useRef<string | null>(null)
   const pushRegistered = useRef<Set<string>>(new Set())
 
-  // ── Profile loader (deduped) ─────────────────────────────────────────────
+  // ── Profile loader (deduped) ──────────────────────────────────────────────
   const loadProfile = useCallback(async (uid: string, force = false) => {
     if (!force && lastUid.current === uid && inflight.current) {
       return inflight.current
@@ -64,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
   }, [user?.id])
 
-  // ── Push registration — fire-and-forget, never blocks UI ─────────────────
+  // ── Push registration — fire-and-forget ───────────────────────────────────
   const registerPushAsync = useCallback((uid: string) => {
     if (pushRegistered.current.has(uid)) return
     pushRegistered.current.add(uid)
@@ -73,20 +72,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (mounted.current && token) setPushToken(token)
       })
       .catch(() => {
-        // allow retry next time
         pushRegistered.current.delete(uid)
       })
   }, [])
 
   // ── Handle sign-in ────────────────────────────────────────────────────────
-  // Only awaits what is needed to render the app (user + profile).
-  // Push token runs in background — does NOT delay setLoading(false).
   const handleSignedIn = useCallback(async (u: User) => {
     if (!mounted.current) return
-    lastUid.current = u.id      // synchronous — blocks duplicate calls
+    lastUid.current = u.id
     setUser(u)
-    await loadProfile(u.id)     // ✅ loading-critical — await this
-    registerPushAsync(u.id)     // ✅ NOT loading-critical — fire and forget
+    await loadProfile(u.id)
+    registerPushAsync(u.id)
   }, [loadProfile, registerPushAsync])
 
   // ── Bootstrap ─────────────────────────────────────────────────────────────
@@ -102,13 +98,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.warn('[AuthContext] bootstrap error:', e)
       } finally {
-        // ✅ fires as soon as session + profile ready
-        // push token continues in background
         if (mounted.current) setLoading(false)
       }
     })()
 
-    // ── Auth state changes ────────────────────────────────────────────────
     const { data: sub } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, session) => {
         if (!mounted.current) return
@@ -124,7 +117,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
 
-        // TOKEN_REFRESHED fires frequently — skip heavy operations
         if (event === 'TOKEN_REFRESHED') {
           setUser(prev => (prev?.id === u?.id ? prev : u))
           return
@@ -152,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [handleSignedIn])
 
-  // ── Foreground re-registration (1hr cooldown inside handler) ─────────────
+  // ── Foreground re-registration (1hr cooldown) ─────────────────────────────
   useEffect(() => {
     if (!user?.id) return
     const cleanup = setupForegroundReregistration(user.id)

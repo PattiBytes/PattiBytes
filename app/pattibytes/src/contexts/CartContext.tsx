@@ -14,8 +14,7 @@ export type CartItem = {
   category?:            string | null
   merchant_id?:         string
   category_id?:         string | null
-  // Future multi-merchant: keep the per-item merchant_id so
-  // when we ship multi-cart ordering each item is traceable
+  menu_item_id?:        string
 }
 
 export type Cart = {
@@ -23,48 +22,47 @@ export type Cart = {
   merchant_name: string
   items:         CartItem[]
   subtotal:      number
-  // Canonical aliases (legacy compat)
+  // legacy aliases
   merchantid:    string
   merchantname:  any
 }
 
-/**
- * FUTURE-PROOF: MultiCart stores one Cart per merchant.
- * Today we only allow one active merchant (single_merchant mode).
- * When multi-merchant ordering ships, switch `mode` to 'multi_merchant'
- * and remove the conflict-detection block in ADD.
- */
 export type MultiCart = {
-  mode:     'single_merchant' | 'multi_merchant'
-  carts:    Record<string, Cart>   // merchantId → Cart
-  activeMerchantId: string | null  // single_merchant mode active merchant
+  mode:              'single_merchant' | 'multi_merchant'
+  carts:             Record<string, Cart>   // merchantId → Cart
+  activeMerchantId:  string | null
 }
 
 type AddPayload = Omit<CartItem, 'quantity'> & { quantity?: number }
 
 type Action =
-  | { type: 'ADD';             item: AddPayload; merchantId: string; merchantName: string }
-  | { type: 'UPDATEQTY';       itemId: string; qty: number }
-  | { type: 'REMOVE';          itemId: string }
+  | { type: 'ADD';            item: AddPayload; merchantId: string; merchantName: string }
+  | { type: 'UPDATEQTY';      itemId: string; qty: number; merchantId?: string }
+  | { type: 'REMOVE';         itemId: string; merchantId?: string }
   | { type: 'CLEAR' }
-  | { type: 'CLEAR_MERCHANT';  merchantId: string }
-  | { type: 'HYDRATE';         state: MultiCart | null }
-  | { type: 'SET_MODE';        mode: 'single_merchant' | 'multi_merchant' }
+  | { type: 'CLEAR_MERCHANT'; merchantId: string }
+  | { type: 'HYDRATE';        state: MultiCart | null }
+  | { type: 'SET_MODE';       mode: 'single_merchant' | 'multi_merchant' }
 
 export type CartCtx = {
-  // ── Current active single-merchant cart (back-compat) ──
+  // Single-merchant back-compat
   cart:              Cart | null
-  // ── Multi-cart state (all merchants) ──
   multiCart:         MultiCart
-  // ── Cart ops ──
+  // Cart ops
   addToCart:         (item: AddPayload, merchantId: string, merchantName: string) => void
-  updateQuantity:    (itemId: string, qty: number) => void
-  removeFromCart:    (itemId: string) => void
+  updateQuantity:    (itemId: string, qty: number, merchantId?: string) => void
+  removeFromCart:    (itemId: string, merchantId?: string) => void
   clearCart:         () => void
   clearMerchantCart: (merchantId: string) => void
-  // ── Total item count across all carts ──
+  setMode:           (mode: 'single_merchant' | 'multi_merchant') => void
+  // Derived
   totalItemCount:    number
-  items:             CartItem[]   // items from active cart (back-compat)
+  merchantCount:     number
+  allCarts:          Cart[]
+  // Back-compat: items from first/active cart
+  items:             CartItem[]
+  // Per-merchant totals (for multi-billing summary)
+  getMerchantSubtotal: (merchantId: string) => number
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -86,12 +84,11 @@ function buildCart(merchantId: string, merchantName: string, items: CartItem[]):
   }
 }
 
-const EMPTY_MULTI: MultiCart = { mode: 'single_merchant', carts: {}, activeMerchantId: null }
+const EMPTY_MULTI: MultiCart = { mode: 'multi_merchant', carts: {}, activeMerchantId: null }
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 function reducer(state: MultiCart, action: Action): MultiCart {
   switch (action.type) {
-
     case 'HYDRATE':
       return action.state ?? EMPTY_MULTI
 
@@ -99,12 +96,14 @@ function reducer(state: MultiCart, action: Action): MultiCart {
       return { ...state, mode: action.mode }
 
     case 'CLEAR':
-      return EMPTY_MULTI
+  return { ...state, carts: {}, activeMerchantId: null }
 
     case 'CLEAR_MERCHANT': {
       const { [action.merchantId]: _, ...rest } = state.carts
       const activeMerchantId =
-        state.activeMerchantId === action.merchantId ? null : state.activeMerchantId
+        state.activeMerchantId === action.merchantId
+          ? Object.keys(rest)[0] ?? null
+          : state.activeMerchantId
       return { ...state, carts: rest, activeMerchantId }
     }
 
@@ -113,33 +112,29 @@ function reducer(state: MultiCart, action: Action): MultiCart {
       const qty = Math.max(1, item.quantity ?? 1)
 
       if (state.mode === 'single_merchant') {
-        // Single-merchant: replace entire cart when switching restaurant
-        // (caller handles the Alert dialog — see addToCart wrapper)
-        const existing = state.carts[merchantId]
-        const prevItems = existing?.items ?? []
+        // In single mode: caller already handled conflict alert
+        const existing   = state.carts[merchantId]
+        const prevItems  = existing?.items ?? []
         const itemInCart = prevItems.find(i => i.id === item.id)
-        const newItems = itemInCart
+        const newItems   = itemInCart
           ? prevItems.map(i => i.id === item.id ? { ...i, quantity: i.quantity + qty } : i)
           : [...prevItems, { ...item, quantity: qty }]
-
         return {
           ...state,
           activeMerchantId: merchantId,
-          carts: {
-            [merchantId]: buildCart(merchantId, merchantName, newItems),
-          },
+          carts: { [merchantId]: buildCart(merchantId, merchantName, newItems) },
         }
       } else {
-        // Multi-merchant mode (future): add to the specific merchant's cart
-        const existing = state.carts[merchantId]
-        const prevItems = existing?.items ?? []
+        // Multi-merchant: add freely to any merchant cart
+        const existing   = state.carts[merchantId]
+        const prevItems  = existing?.items ?? []
         const itemInCart = prevItems.find(i => i.id === item.id)
-        const newItems = itemInCart
+        const newItems   = itemInCart
           ? prevItems.map(i => i.id === item.id ? { ...i, quantity: i.quantity + qty } : i)
           : [...prevItems, { ...item, quantity: qty }]
-
         return {
           ...state,
+          activeMerchantId: state.activeMerchantId ?? merchantId,
           carts: {
             ...state.carts,
             [merchantId]: buildCart(merchantId, merchantName, newItems),
@@ -149,33 +144,33 @@ function reducer(state: MultiCart, action: Action): MultiCart {
     }
 
     case 'UPDATEQTY': {
-      const activeId = state.activeMerchantId
-      if (!activeId || !state.carts[activeId]) return state
-      const cart = state.carts[activeId]
+      const targetId = action.merchantId ?? state.activeMerchantId
+      if (!targetId || !state.carts[targetId]) return state
+      const cart = state.carts[targetId]
       if (action.qty <= 0) {
         const items = cart.items.filter(i => i.id !== action.itemId)
         if (!items.length) {
-          const { [activeId]: _, ...rest } = state.carts
-          return { ...state, carts: rest, activeMerchantId: null }
+          const { [targetId]: _, ...rest } = state.carts
+          const nextActive = Object.keys(rest)[0] ?? null
+          return { ...state, carts: rest, activeMerchantId: nextActive }
         }
-        return { ...state, carts: { ...state.carts, [activeId]: buildCart(activeId, cart.merchant_name, items) } }
+        return { ...state, carts: { ...state.carts, [targetId]: buildCart(targetId, cart.merchant_name, items) } }
       }
-      const items = cart.items.map(i =>
-        i.id === action.itemId ? { ...i, quantity: action.qty } : i,
-      )
-      return { ...state, carts: { ...state.carts, [activeId]: buildCart(activeId, cart.merchant_name, items) } }
+      const items = cart.items.map(i => i.id === action.itemId ? { ...i, quantity: action.qty } : i)
+      return { ...state, carts: { ...state.carts, [targetId]: buildCart(targetId, cart.merchant_name, items) } }
     }
 
     case 'REMOVE': {
-      const activeId = state.activeMerchantId
-      if (!activeId || !state.carts[activeId]) return state
-      const cart = state.carts[activeId]
+      const targetId = action.merchantId ?? state.activeMerchantId
+      if (!targetId || !state.carts[targetId]) return state
+      const cart  = state.carts[targetId]
       const items = cart.items.filter(i => i.id !== action.itemId)
       if (!items.length) {
-        const { [activeId]: _, ...rest } = state.carts
-        return { ...state, carts: rest, activeMerchantId: null }
+        const { [targetId]: _, ...rest } = state.carts
+        const nextActive = Object.keys(rest)[0] ?? null
+        return { ...state, carts: rest, activeMerchantId: nextActive }
       }
-      return { ...state, carts: { ...state.carts, [activeId]: buildCart(activeId, cart.merchant_name, items) } }
+      return { ...state, carts: { ...state.carts, [targetId]: buildCart(targetId, cart.merchant_name, items) } }
     }
 
     default:
@@ -189,8 +184,9 @@ const KEY = 'pbexpress_multicart_v1'
 const defaultCtx: CartCtx = {
   cart: null, multiCart: EMPTY_MULTI,
   addToCart: () => {}, updateQuantity: () => {}, removeFromCart: () => {},
-  clearCart: () => {}, clearMerchantCart: () => {},
-  totalItemCount: 0, items: [],
+  clearCart: () => {}, clearMerchantCart: () => {}, setMode: () => {},
+  totalItemCount: 0, merchantCount: 0, allCarts: [], items: [],
+  getMerchantSubtotal: () => 0,
 }
 
 const Ctx = createContext<CartCtx>(defaultCtx)
@@ -198,11 +194,10 @@ const Ctx = createContext<CartCtx>(defaultCtx)
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [multiCart, dispatch] = useReducer(reducer, EMPTY_MULTI)
 
-  // Hydrate from AsyncStorage — supports both old v2 format and new v1 multi format
+  // Hydrate from storage (supports old v2 single-cart format)
   useEffect(() => {
     AsyncStorage.getItem(KEY).then(raw => {
       if (!raw) {
-        // Try migrating from old format
         AsyncStorage.getItem('pbexpress_cart_v2').then(oldRaw => {
           if (!oldRaw) return
           try {
@@ -225,38 +220,47 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
-  // Persist on change
+  // Persist
   useEffect(() => {
     const hasItems = Object.keys(multiCart.carts).length > 0
     if (hasItems) AsyncStorage.setItem(KEY, JSON.stringify(multiCart)).catch(() => {})
     else          AsyncStorage.removeItem(KEY).catch(() => {})
   }, [multiCart])
 
-  // ── Derived values ──────────────────────────────────────────────────────
+  // ── Derived ──────────────────────────────────────────────────────────────
+  const allCarts = Object.values(multiCart.carts)
+
   const activeCart = multiCart.activeMerchantId
     ? multiCart.carts[multiCart.activeMerchantId] ?? null
-    : null
+    : allCarts[0] ?? null
 
-  const totalItemCount = Object.values(multiCart.carts)
-    .reduce((s, c) => s + c.items.reduce((n, i) => n + i.quantity, 0), 0)
+  const totalItemCount = allCarts.reduce(
+    (s, c) => s + c.items.reduce((n, i) => n + i.quantity, 0), 0
+  )
 
-  // ── addToCart — shows alert if switching merchants ──────────────────────
+  const merchantCount = allCarts.length
+
+  const getMerchantSubtotal = useCallback((merchantId: string) => {
+    return multiCart.carts[merchantId]?.subtotal ?? 0
+  }, [multiCart.carts])
+
+  // ── addToCart — conflict alert only in single_merchant mode ──────────────
   const addToCart = useCallback((
     item:         AddPayload,
     merchantId:   string,
     merchantName: string,
   ) => {
-    const active = multiCart.activeMerchantId
-
-    if (
+    const active     = multiCart.activeMerchantId
+    const hasOtherCart =
       multiCart.mode === 'single_merchant' &&
       active &&
       active !== merchantId &&
       Object.keys(multiCart.carts).length > 0
-    ) {
+
+    if (hasOtherCart) {
       Alert.alert(
-        'Start new order?',
-        `Your cart has items from ${Object.values(multiCart.carts)[0]?.merchant_name ?? 'another restaurant'}. Adding items from ${merchantName} will clear your current cart.`,
+        'Add from another restaurant?',
+        `You have items from "${Object.values(multiCart.carts)[0]?.merchant_name}". Clear that cart and start fresh, or switch to multi-restaurant mode to order from both at once.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -264,6 +268,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             style: 'destructive',
             onPress: () => {
               dispatch({ type: 'CLEAR' })
+              dispatch({ type: 'ADD', item, merchantId, merchantName })
+            },
+          },
+          {
+            text: '🛒 Add to Multi-Cart',
+            onPress: () => {
+              dispatch({ type: 'SET_MODE', mode: 'multi_merchant' })
               dispatch({ type: 'ADD', item, merchantId, merchantName })
             },
           },
@@ -278,12 +289,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     cart:              activeCart,
     multiCart,
     addToCart,
-    updateQuantity:    (itemId, qty) => dispatch({ type: 'UPDATEQTY', itemId, qty }),
-    removeFromCart:    (itemId)      => dispatch({ type: 'REMOVE', itemId }),
-    clearCart:         ()            => dispatch({ type: 'CLEAR' }),
-    clearMerchantCart: (merchantId)  => dispatch({ type: 'CLEAR_MERCHANT', merchantId }),
+    updateQuantity:    (itemId, qty, merchantId) =>
+      dispatch({ type: 'UPDATEQTY', itemId, qty, merchantId }),
+    removeFromCart:    (itemId, merchantId) =>
+      dispatch({ type: 'REMOVE', itemId, merchantId }),
+    clearCart:         () => dispatch({ type: 'CLEAR' }),
+    clearMerchantCart: (merchantId) => dispatch({ type: 'CLEAR_MERCHANT', merchantId }),
+    setMode:           (mode) => dispatch({ type: 'SET_MODE', mode }),
     totalItemCount,
+    merchantCount,
+    allCarts,
     items:             activeCart?.items ?? [],
+    getMerchantSubtotal,
   }
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

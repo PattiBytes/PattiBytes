@@ -21,11 +21,11 @@ type NavItem = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'home',    label: 'Home',    route: '/(customer)/dashboard', icon: 'home-outline',       iconActive: 'home'         },
-  { id: 'orders',  label: 'Orders',  route: '/(customer)/orders',   icon: 'receipt-outline',    iconActive: 'receipt'      },
-  { id: 'cart',    label: 'Cart',    route: '/(customer)/cart',     icon: 'cart-outline',       iconActive: 'cart',    isCart: true    },
-  { id: 'offers',  label: 'Offers',  route: '/(customer)/offers',   icon: 'pricetag-outline',   iconActive: 'pricetag'     },
-  { id: 'profile', label: 'Profile', route: '/(customer)/profile',  icon: 'person-outline',     iconActive: 'person', isProfile: true },
+  { id: 'home',    label: 'Home',    route: '/(customer)/dashboard', icon: 'home-outline',     iconActive: 'home'     },
+  { id: 'orders',  label: 'Orders',  route: '/(customer)/orders',   icon: 'receipt-outline',  iconActive: 'receipt'  },
+  { id: 'cab',     label: 'taxi',     route: '/(customer)/cab',      icon: 'car-outline',      iconActive: 'car'      },  // ← NEW
+  { id: 'cart',    label: 'Cart',    route: '/(customer)/cart',     icon: 'cart-outline',     iconActive: 'cart', isCart: true   },
+  { id: 'profile', label: 'Profile', route: '/(customer)/profile',  icon: 'person-outline',   iconActive: 'person', isProfile: true },
 ]
 
 type Props = {

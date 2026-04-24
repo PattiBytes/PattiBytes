@@ -131,7 +131,7 @@ export default function ShopScreen() {
   // ✅ cat param passed from dashboard ShopByCategory chips
   const { cat } = useLocalSearchParams<{ cat?: string }>()
   const router  = useRouter()
-  const { cart, addToCart } = useCart()
+  const { cart,multiCart, addToCart } = useCart()
 
   const [products,    setProducts]   = useState<CustomProduct[]>([])
   const [loading,     setLoading]    = useState(true)
@@ -233,21 +233,30 @@ export default function ShopScreen() {
   }
 
   const handleAddToCart = () => {
-    const entries = Object.entries(qtys).filter(([, q]) => q > 0)
-    if (!entries.length) { Alert.alert('No items selected'); return }
-    if (cart?.merchantid && cart.merchantid !== 'store' && (cart.items?.length ?? 0) > 0) {
-      Alert.alert(
-        'Different Store',
-        `Your cart has items from "${cart.merchantname}". Clear it and add store products?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Clear & Add', style: 'destructive', onPress: () => doAddToCart(entries) },
-        ]
-      )
-      return
-    }
-    doAddToCart(entries)
+  const entries = Object.entries(qtys).filter(([, q]) => q > 0)
+  if (!entries.length) { Alert.alert('No items selected'); return }
+
+  // In multi_merchant mode: freely mix store + restaurant items — no conflict.
+  // In single_merchant mode: warn if cart already has items from elsewhere.
+  const isMultiMode     = multiCart.mode === 'multi_merchant'
+  const hasOtherMerchant = !isMultiMode
+    && cart?.merchantid
+    && cart.merchantid !== 'store'
+    && (cart.items?.length ?? 0) > 0
+
+  if (hasOtherMerchant) {
+    Alert.alert(
+      'Different Store',
+      `Your cart has items from "${cart!.merchantname}". Clear it and add store products?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear & Add', style: 'destructive', onPress: () => doAddToCart(entries) },
+      ]
+    )
+    return
   }
+  doAddToCart(entries)
+}
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const activeCatInfo = getCatInfo(catFilter === 'all' ? 'other' : catFilter)

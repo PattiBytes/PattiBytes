@@ -1,17 +1,12 @@
 // src/components/orders/ReviewSection.tsx
-
 import React, { useEffect, useMemo, useState } from 'react'
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
+  View, Text, TouchableOpacity, TextInput,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  StyleSheet, ActivityIndicator, Alert, ScrollView,
 } from 'react-native'
-import { COLORS } from '../../lib/constants'
-import { supabase } from '../../lib/supabase'
+import { COLORS }      from '../../lib/constants'
+import { supabase }    from '../../lib/supabase'
 import { STAR_LABELS } from './constants'
 import type { ReviewData, ItemRating, OrderItem } from './types'
 
@@ -22,28 +17,32 @@ import type { ReviewData, ItemRating, OrderItem } from './types'
 type Tab = 'overall' | 'items' | 'delivery'
 
 interface Props {
-  orderId:       string
-  customerId:    string
-  merchantId:    string | null
-  driverId:      string | null
-  orderItems:    OrderItem[]
-  isStore:       boolean
-  isCustom:      boolean
-  merchantName?: string | null
-  onDone?:       (review: ReviewData) => void
+  orderId:                  string
+  customerId:               string
+  merchantId:               string | null
+  driverId:                 string | null
+  orderItems:               OrderItem[]
+  isStore:                  boolean
+  isCustom:                 boolean
+  merchantName?:            string | null
+  onDone?:                  (review: ReviewData) => void
+  // ── Multi-order session context ─────────────────────────────────────────
+  sessionOrderIndex?:       number
+  totalMerchantsInSession?: number
+  sessionId?:               string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Matches exact columns in the `reviews` table
 const REVIEW_SELECT =
   'id,order_id,customer_id,merchant_id,driver_id,' +
   'rating,overall_rating,merchant_rating,driver_rating,food_rating,delivery_rating,' +
   'comment,title,item_ratings,images,created_at,updated_at'
 
 const DELIVERY_SEP = '\n\n---Delivery feedback---\n'
+const API_BASE     = 'https://pbexpress.pattibytes.com'
 
 const TABS: { key: Tab; label: string; emoji: string }[] = [
   { key: 'overall',  label: 'Overall',  emoji: '🌟' },
@@ -52,41 +51,145 @@ const TABS: { key: Tab; label: string; emoji: string }[] = [
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sub-components (defined outside parent — stable reference, no remount)
+// Notification helper — fire and forget
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function notifyReviewSubmitted(params: {
+  customerId:   string
+  merchantId:   string | null
+  orderId:      string
+  orderNumber?: string | null
+  rating:       number
+  isUpdate:     boolean
+}): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const jwt = session?.access_token
+    if (!jwt) return
+
+    const num     = params.orderNumber ?? params.orderId.slice(0, 8)
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` }
+
+    const merchantNotify = async () => {
+      if (!params.merchantId) return
+      const { data: m } = await supabase
+        .from('merchants')
+        .select('user_id')
+        .eq('id', params.merchantId)
+        .maybeSingle()
+      if (!m?.user_id) return
+      await fetch(`${API_BASE}/api/notify`, {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          targetUserId: m.user_id,
+          title:        `New Review for Order #${num}`,
+          message:      `A customer left a ${params.rating}★ review on order #${num}.`,
+          type:         'review',
+          data:         { orderId: params.orderId, rating: params.rating },
+        }),
+      })
+    }
+
+    const adminEscalate = async () => {
+      if (params.rating > 2) return
+      const { data: admins } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('role', ['admin', 'superadmin'])
+        .eq('is_active', true)
+      if (!admins?.length) return
+      await Promise.allSettled(
+        admins.map(({ id }) =>
+          fetch(`${API_BASE}/api/notify`, {
+            method: 'POST', headers,
+            body: JSON.stringify({
+              targetUserId: id,
+              title:        `⚠️ Low Review Alert — ${params.rating}★`,
+              message:      `Order #${num} received a ${params.rating}★ rating. Review may need attention.`,
+              type:         'system',
+              data:         { orderId: params.orderId, rating: params.rating },
+            }),
+          }),
+        ),
+      )
+    }
+
+    const merchantInAppNotify = async () => {
+      if (!params.merchantId) return
+      const { data: m } = await supabase
+        .from('merchants')
+        .select('user_id')
+        .eq('id', params.merchantId)
+        .maybeSingle()
+      if (!m?.user_id) return
+      await supabase.from('notifications').insert({
+        user_id:    m.user_id,
+        title:      `New ${params.rating}★ Review — Order #${num}`,
+        message:    `A customer reviewed their order. Rating: ${params.rating}/5.`,
+        type:       'review',
+        data:       { orderId: params.orderId, rating: params.rating, merchantId: params.merchantId },
+        is_read:    false,
+        sent_push:  false,
+        created_at: new Date().toISOString(),
+      })
+    }
+
+    await Promise.allSettled([merchantNotify(), adminEscalate(), merchantInAppNotify()])
+  } catch (e) {
+    console.warn('[notifyReviewSubmitted]', e)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-components (stable — defined outside parent to avoid re-creation)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function MerchantBadge({
-  merchantName,
-  isStore,
-  isCustom,
+  merchantName, isStore, isCustom, sessionOrderIndex, totalMerchantsInSession,
 }: {
-  merchantName?: string | null
-  isStore:       boolean
-  isCustom:      boolean
+  merchantName?:            string | null
+  isStore:                  boolean
+  isCustom:                 boolean
+  sessionOrderIndex?:       number
+  totalMerchantsInSession?: number
 }) {
   if (!merchantName) return null
+  const isMulti =
+    typeof sessionOrderIndex === 'number' &&
+    typeof totalMerchantsInSession === 'number' &&
+    totalMerchantsInSession > 1
+
   return (
     <View style={S.merchantBadge}>
       <Text style={S.merchantBadgeText}>
         {isStore ? '🏪' : isCustom ? '🎁' : '🍽️'}{'  '}{merchantName}
+        {isMulti ? (
+          <Text style={{ fontSize: 11, fontWeight: '600', color: '#B45309' }}>
+            {'  '}({sessionOrderIndex! + 1}/{totalMerchantsInSession})
+          </Text>
+        ) : null}
       </Text>
     </View>
   )
 }
 
 function StarRow({
-  value,
-  onChange,
-  size = 34,
+  value, onChange, size = 34, disabled = false,
 }: {
-  value:    number
-  onChange: (n: number) => void
-  size?:    number
+  value:     number
+  onChange:  (n: number) => void
+  size?:     number
+  disabled?: boolean
 }) {
   return (
     <View style={{ flexDirection: 'row', gap: 6 }}>
       {[1, 2, 3, 4, 5].map(s => (
-        <TouchableOpacity key={s} onPress={() => onChange(s)} activeOpacity={0.7}>
+        <TouchableOpacity
+          key={s}
+          onPress={() => !disabled && onChange(s)}
+          activeOpacity={disabled ? 1 : 0.7}
+          disabled={disabled}
+        >
           <Text style={{ fontSize: size, color: s <= value ? '#F59E0B' : '#D1D5DB' }}>★</Text>
         </TouchableOpacity>
       ))}
@@ -95,24 +198,16 @@ function StarRow({
 }
 
 function BreakdownRow({
-  emoji,
-  label,
-  rating,
-}: {
-  emoji:  string
-  label:  string
-  rating: number
-}) {
+  emoji, label, rating,
+}: { emoji: string; label: string; rating: number }) {
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }}>
       <Text style={{ fontSize: 13, color: '#6B7280', fontWeight: '600' }}>
         {emoji} {label}
       </Text>
       <View style={{ flexDirection: 'row', gap: 1 }}>
         {[1, 2, 3, 4, 5].map(s => (
-          <Text key={s} style={{ fontSize: 13, color: s <= rating ? '#F59E0B' : '#D1D5DB' }}>
-            ★
-          </Text>
+          <Text key={s} style={{ fontSize: 13, color: s <= rating ? '#F59E0B' : '#D1D5DB' }}>★</Text>
         ))}
       </View>
     </View>
@@ -134,507 +229,517 @@ function ReviewSkeleton() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ReviewSection({
-  orderId,
-  customerId,
-  merchantId,
-  driverId,
-  orderItems,
-  isStore,
-  isCustom,
-  merchantName,
-  onDone,
+  orderId, customerId, merchantId, driverId, orderItems,
+  isStore, isCustom, merchantName, onDone,
+  sessionOrderIndex, totalMerchantsInSession, sessionId,
 }: Props) {
 
-  // ── State: review lifecycle ───────────────────────────────────────────────
+  // ── State ──────────────────────────────────────────────────────────────────
   const [existing,   setExisting]   = useState<ReviewData | null>(null)
   const [loadingRev, setLoadingRev] = useState(true)
   const [editing,    setEditing]    = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [activeTab,  setActiveTab]  = useState<Tab>('overall')
 
-  // ── State: overall tab ────────────────────────────────────────────────────
-  const [overallRating, setOverallRating] = useState(5)
-  const [title,         setTitle]         = useState('')
-  const [comment,       setComment]       = useState('')
+  // Overall tab
+  const [overallRating,   setOverallRating]   = useState(5)
+  const [merchantRating,  setMerchantRating]  = useState(5)
+  const [foodRating,      setFoodRating]      = useState(5)
+  const [overallComment,  setOverallComment]  = useState('')
 
-  // ── State: items tab ──────────────────────────────────────────────────────
+  // Items tab
   const [itemRatings, setItemRatings] = useState<Record<string, ItemRating>>({})
 
-  // ── State: delivery tab ───────────────────────────────────────────────────
-  const [foodRating,     setFoodRating]     = useState(5)
-  const [driverRating,   setDriverRating]   = useState(5)
-  const [deliveryRating, setDeliveryRating] = useState(5)
-  const [deliveryNote,   setDeliveryNote]   = useState('')
+  // Delivery tab
+  const [driverRating,    setDriverRating]    = useState(5)
+  const [deliveryRating,  setDeliveryRating]  = useState(5)
+  const [deliveryComment, setDeliveryComment] = useState('')
 
-  // ── Derived: reviewable items (stable reference for useEffect deps) ────────
-  const reviewableItems = useMemo(
-    () => orderItems.filter(i => !i.is_free && (i.price ?? 0) > 0),
-    [orderItems],
-  )
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Load existing review
-  // ─────────────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      setLoadingRev(true)
-      const { data } = await supabase
+  // ── Load existing review ──────────────────────────────────────────────────
+useEffect(() => {
+  let cancelled = false
+  ;(async () => {
+    try {
+      const { data, error } = await supabase
         .from('reviews')
         .select(REVIEW_SELECT)
-        .eq('order_id', orderId)
+        .eq('order_id',    orderId)
         .eq('customer_id', customerId)
         .maybeSingle()
 
       if (cancelled) return
+      // ── FIX: cast through unknown to silence GenericStringError mismatch ──
+      const rev = (error ? null : data) as unknown as ReviewData | null
 
-      if (data) {
-        const rev = data as unknown as ReviewData
+      if (rev) {
         setExisting(rev)
-        setOverallRating(rev.overall_rating ?? rev.rating ?? 5)
-        setTitle(rev.title ?? '')
+        setOverallRating(  rev.overall_rating  ?? rev.rating ?? 5)
+        setMerchantRating( rev.merchant_rating ?? 5)
+        setFoodRating(     rev.food_rating     ?? 5)
+        setDriverRating(   rev.driver_rating   ?? 5)
+        setDeliveryRating( rev.delivery_rating ?? 5)
 
-        // Split stored delivery note back out of the comment field
-        const rawComment = rev.comment ?? ''
-        const sepIdx     = rawComment.indexOf(DELIVERY_SEP)
-        if (sepIdx !== -1) {
-          setComment(rawComment.slice(0, sepIdx))
-          setDeliveryNote(rawComment.slice(sepIdx + DELIVERY_SEP.length))
-        } else {
-          setComment(rawComment)
-          setDeliveryNote('')
+        if (rev.comment) {
+          const parts = rev.comment.split(DELIVERY_SEP)
+          setOverallComment(  parts[0]?.trim() ?? '')
+          setDeliveryComment( parts[1]?.trim() ?? '')
         }
 
-        setFoodRating(rev.food_rating ?? 5)
-        setDriverRating(rev.driver_rating ?? 5)
-        setDeliveryRating(rev.delivery_rating ?? 5)
-
-        const irMap: Record<string, ItemRating> = {}
-        ;(rev.item_ratings ?? []).forEach(ir => { irMap[ir.item_id] = ir })
-        setItemRatings(irMap)
-      } else {
-        // Pre-seed item ratings at 5
-        const irMap: Record<string, ItemRating> = {}
-        reviewableItems.forEach(i => {
-          irMap[i.id] = { item_id: i.id, item_name: i.name, rating: 5 }
-        })
-        setItemRatings(irMap)
+        if (rev.item_ratings && Array.isArray(rev.item_ratings)) {
+          const map: Record<string, ItemRating> = {}
+          ;(rev.item_ratings as ItemRating[]).forEach(r => { map[r.item_id] = r })
+          setItemRatings(map)
+        }
       }
-
-      setLoadingRev(false)
+    } catch (e) {
+      console.warn('[ReviewSection] load existing', e)
+    } finally {
+      if (!cancelled) setLoadingRev(false)
     }
+  })()
+  return () => { cancelled = true }
+}, [orderId, customerId])
 
-    load()
-    return () => { cancelled = true }
-  }, [orderId, customerId, reviewableItems])
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const isMultiSession = typeof sessionOrderIndex === 'number'
+    && typeof totalMerchantsInSession === 'number'
+    && totalMerchantsInSession > 1
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Item rating helpers
-  // ─────────────────────────────────────────────────────────────────────────
+  const reviewableItems = useMemo(
+    () => orderItems.filter(i => !(i as any).is_free),
+    [orderItems],
+  )
 
-  const setItemRating = (itemId: string, itemName: string, rating: number) =>
-    setItemRatings(prev => ({
-      ...prev,
-      [itemId]: { ...prev[itemId], item_id: itemId, item_name: itemName, rating },
-    }))
+  const avgItemRating = useMemo(() => {
+    const rated = Object.values(itemRatings).filter(r => r.rating > 0)
+    if (!rated.length) return null
+    return rated.reduce((s, r) => s + r.rating, 0) / rated.length
+  }, [itemRatings])
 
-  const setItemComment = (itemId: string, itemName: string, note: string) =>
-    setItemRatings(prev => ({
-      ...prev,
-      [itemId]: { ...prev[itemId], item_id: itemId, item_name: itemName, comment: note },
-    }))
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Submit
-  // ─────────────────────────────────────────────────────────────────────────
+ const handleItemRating = (
+  itemId:  string,
+  field:   'rating' | 'comment',
+  value:   number | string,
+) => {
+  // Resolve item name from orderItems for the item_name required field
+  const itemName = orderItems.find(
+    i => ((i as any).menu_item_id ?? i.id) === itemId
+  )?.name ?? ''
+
+  setItemRatings(prev => ({
+    ...prev,
+    [itemId]: {
+      item_id:   itemId,
+      item_name: prev[itemId]?.item_name ?? itemName,  // ← satisfies ItemRating
+      rating:    prev[itemId]?.rating    ?? 0,
+      comment:   prev[itemId]?.comment   ?? '',
+      ...(field === 'rating'  ? { rating:  Number(value) } : {}),
+      ...(field === 'comment' ? { comment: String(value) } : {}),
+    } satisfies ItemRating,
+  }))
+}
 
   const handleSubmit = async () => {
-    if (overallRating < 1) return
     setSubmitting(true)
-
-    const now            = new Date().toISOString()
-    const itemRatingsArr = Object.values(itemRatings)
-    const finalComment   =
-      [comment.trim(), deliveryNote.trim()].filter(Boolean).join(DELIVERY_SEP) || null
-
-    const payload: Record<string, any> = {
-      order_id:        orderId,
-      customer_id:     customerId,
-      merchant_id:     merchantId,
-      driver_id:       driverId,
-      rating:          overallRating,
-      overall_rating:  overallRating,
-      food_rating:     isStore || isCustom ? null : foodRating,
-      merchant_rating: merchantId ? overallRating : null,
-      driver_rating:   driverId  ? driverRating  : null,
-      delivery_rating: deliveryRating,
-      comment:         finalComment,
-      title:           title.trim() || null,
-      item_ratings:    itemRatingsArr.length > 0 ? itemRatingsArr : [],
-      updated_at:      now,
-      ...(existing ? {} : { created_at: now }),
-    }
-
-    const showErr = (step: string, err: any) => {
-      console.error(`[reviews.${step}]`, JSON.stringify(err, null, 2))
-      Alert.alert(
-        `Submit failed: ${step}`,
-        [
-          err?.message ?? 'Unknown error',
-          `code: ${err?.code ?? '—'}`,
-          `details: ${err?.details ?? '—'}`,
-          `hint: ${err?.hint ?? '—'}`,
-        ].join('\n'),
-      )
-    }
-
     try {
-      // 1. Upsert review
-      const r1 = await supabase
-        .from('reviews')
-        .upsert(payload, { onConflict: 'order_id,customer_id' })
-        .select(REVIEW_SELECT)
-        .single()
+      // Combine overall + delivery comment
+      const fullComment = [
+        overallComment.trim(),
+        deliveryComment.trim() ? `${DELIVERY_SEP}${deliveryComment.trim()}` : '',
+      ].join('')
 
-      if (r1.error) { showErr('upsert', r1.error); return }
+      const itemRatingsArr: ItemRating[] = Object.values(itemRatings).filter(r => r.rating > 0)
 
-      // 2. Sync rating + review text back to the order row
-      const r2 = await supabase
-        .from('orders')
-        .update({ rating: overallRating, review: comment.trim() || null })
-        .eq('id', orderId)
-        .eq('customer_id', customerId)   // satisfies RLS USING clause
-
-      if (r2.error) { showErr('orders.update', r2.error); return }
-
-      setExisting(r1.data as unknown as ReviewData)
-      setEditing(false)
-      Alert.alert(
-        '🙏 Thank You!',
-        existing ? 'Your review has been updated!' : 'Your review has been submitted!',
+      // Composite rating: weighted avg
+      const ratings = [overallRating, merchantRating, foodRating]
+      if (driverId) ratings.push(driverRating, deliveryRating)
+      const compositeRating = Math.round(
+        ratings.reduce((s, r) => s + r, 0) / ratings.length,
       )
-      onDone?.(r1.data as unknown as ReviewData)
+
+      const payload: Record<string, any> = {
+        order_id:        orderId,
+        customer_id:     customerId,
+        merchant_id:     merchantId,
+        driver_id:       driverId,
+        rating:          compositeRating,
+        overall_rating:  overallRating,
+        merchant_rating: merchantRating,
+        food_rating:     foodRating,
+        driver_rating:   driverId ? driverRating  : null,
+        delivery_rating: driverId ? deliveryRating : null,
+        comment:         fullComment || null,
+        title:           STAR_LABELS?.[overallRating] ?? null,
+        item_ratings:    itemRatingsArr.length ? itemRatingsArr : null,
+        updated_at:      new Date().toISOString(),
+        // session context (nullable)
+        session_id:      sessionId ?? null,
+        session_order_index: typeof sessionOrderIndex === 'number' ? sessionOrderIndex : null,
+      }
+
+      let savedReview: ReviewData
+
+      if (existing?.id) {
+        const { data, error } = await supabase
+          .from('reviews')
+          .update(payload)
+          .eq('id', existing.id)
+          .select(REVIEW_SELECT)
+          .single()
+        if (error) throw error
+        savedReview = data as unknown as ReviewData
+      } else {
+        const { data, error } = await supabase
+          .from('reviews')
+          .insert({ ...payload, created_at: new Date().toISOString() })
+          .select(REVIEW_SELECT)
+          .single()
+        if (error) throw error
+        savedReview = data as unknown as ReviewData
+
+        // Update order.rating column (denormalized for quick display)
+        await supabase
+          .from('orders')
+          .update({ rating: compositeRating, review: fullComment || null })
+          .eq('id', orderId)
+      }
+
+      setExisting(savedReview)
+      setEditing(false)
+
+      // Fire notifications async
+      void notifyReviewSubmitted({
+        customerId,
+        merchantId,
+        orderId,
+        orderNumber: null,
+        rating:      compositeRating,
+        isUpdate:    !!existing?.id,
+      })
+
+      Alert.alert(
+        existing?.id ? '✅ Review Updated' : '🎉 Review Submitted',
+        `Thanks for your ${compositeRating}★ review!`,
+      )
+      onDone?.(savedReview)
     } catch (e: any) {
-      console.error('[handleSubmit.catch]', e)
-      Alert.alert('Error', e?.message ?? 'Failed to submit review')
+      Alert.alert('Error', e?.message ?? 'Could not submit review.')
     } finally {
       setSubmitting(false)
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Loading state
-  // ─────────────────────────────────────────────────────────────────────────
-
+  // ── Guards ────────────────────────────────────────────────────────────────
   if (loadingRev) return <ReviewSkeleton />
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Read-only (submitted) view
-  // ─────────────────────────────────────────────────────────────────────────
+  const isReadOnly = !!existing && !editing
 
-  if (existing && !editing) {
-    const displayRating = existing.overall_rating ?? existing.rating ?? 0
-
+  // ─────────────────────────────────────────────────────────────────────────
+  // RENDER — Existing review (read-only summary)
+  // ─────────────────────────────────────────────────────────────────────────
+  if (isReadOnly) {
     return (
       <View style={S.section}>
-        <MerchantBadge merchantName={merchantName} isStore={isStore} isCustom={isCustom} />
+        <MerchantBadge
+          merchantName={merchantName}
+          isStore={isStore}
+          isCustom={isCustom}
+          sessionOrderIndex={sessionOrderIndex}
+          totalMerchantsInSession={totalMerchantsInSession}
+        />
 
-        {/* Header row */}
         <View style={S.reviewedHeader}>
-          <View style={{ flex: 1 }}>
+          <View>
             <Text style={S.sectionTitle}>⭐ Your Review</Text>
-            {existing.title ? (
-              <Text style={S.reviewTitle}>{existing.title}</Text>
-            ) : null}
-            <View style={{ flexDirection: 'row', gap: 2, marginTop: 6 }}>
-              {[1, 2, 3, 4, 5].map(s => (
-                <Text
-                  key={s}
-                  style={{ fontSize: 22, color: s <= displayRating ? '#F59E0B' : '#D1D5DB' }}
-                >
-                  ★
-                </Text>
-              ))}
-            </View>
-            <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
-              {STAR_LABELS[displayRating] ?? ''}
+            <Text style={S.submittedAt}>
+              {existing.updated_at
+                ? `Updated ${new Date(existing.updated_at).toLocaleDateString('en-IN', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                  })}`
+                : 'Submitted'}
             </Text>
           </View>
-
           <TouchableOpacity style={S.editBtn} onPress={() => setEditing(true)}>
             <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 13 }}>✏️ Edit</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Comment bubble */}
-      {(() => {
-  const raw      = existing.comment ?? ''
-  const sepIdx   = raw.indexOf(DELIVERY_SEP)
-  const mainText = sepIdx !== -1 ? raw.slice(0, sepIdx).trim()           : raw.trim()
-  const dlvText  = sepIdx !== -1 ? raw.slice(sepIdx + DELIVERY_SEP.length).trim() : null
-
-  return (
-    <>
-      {/* Main comment */}
-      {mainText ? (
-        <View style={S.commentBubble}>
-          <Text style={{ fontSize: 13, color: '#374151', lineHeight: 20 }}>
-            {mainText}
+        {/* Rating display */}
+        <View style={S.ratingDisplay}>
+          {[1, 2, 3, 4, 5].map(s => (
+            <Text key={s} style={{
+              fontSize: 28,
+              color: s <= (existing.overall_rating ?? existing.rating ?? 0) ? '#F59E0B' : '#D1D5DB',
+            }}>★</Text>
+          ))}
+          <Text style={S.ratingLabel}>
+            {STAR_LABELS?.[existing.overall_rating ?? existing.rating ?? 0] ?? ''}
           </Text>
         </View>
-      ) : null}
 
-      {/* Delivery feedback — only shown if it was saved */}
-      {dlvText ? (
-        <View style={S.deliveryFeedbackWrap}>
-          {/* Divider with label */}
-          <View style={S.dividerRow}>
-            <View style={S.dividerLine} />
-            <Text style={S.dividerLabel}>🚚 Delivery Feedback</Text>
-            <View style={S.dividerLine} />
-          </View>
-
-          <View style={S.deliveryFeedbackBubble}>
-            <Text style={{ fontSize: 13, color: '#92400E', lineHeight: 20 }}>
-              {dlvText}
-            </Text>
-          </View>
+        {/* Breakdown rows */}
+        <View style={S.breakdownCard}>
+          {!!existing.merchant_rating && (
+            <BreakdownRow emoji="🍽️" label="Food & Restaurant" rating={existing.merchant_rating} />
+          )}
+          {!!existing.food_rating && (
+            <BreakdownRow emoji="😋" label="Food Quality"  rating={existing.food_rating} />
+          )}
+          {!!existing.driver_rating && (
+            <BreakdownRow emoji="🛵" label="Driver"        rating={existing.driver_rating} />
+          )}
+          {!!existing.delivery_rating && (
+            <BreakdownRow emoji="⏱️" label="Delivery Speed" rating={existing.delivery_rating} />
+          )}
         </View>
-      ) : null}
-    </>
-  )
-})()}
 
-        {/* Per-item ratings */}
-        {(existing.item_ratings ?? []).length > 0 && (
-          <View style={S.itemRatingsWrap}>
-            <Text style={S.subHead}>🍽️ Item Ratings</Text>
-            {(existing.item_ratings ?? []).map(ir => (
-              <View key={ir.item_id} style={S.irRow}>
-                <Text style={S.irName} numberOfLines={1}>{ir.item_name}</Text>
-                <View style={{ flexDirection: 'row', gap: 1 }}>
-                  {[1, 2, 3, 4, 5].map(s => (
-                    <Text
-                      key={s}
-                      style={{ fontSize: 13, color: s <= ir.rating ? '#F59E0B' : '#D1D5DB' }}
-                    >
-                      ★
-                    </Text>
-                  ))}
-                </View>
-              </View>
-            ))}
+        {/* Comment */}
+        {!!existing.comment && (
+          <View style={S.commentCard}>
+            <Text style={S.commentText}>
+              &quot;{existing.comment.split(DELIVERY_SEP)[0]?.trim()}&quot;
+            </Text>
           </View>
         )}
 
-        {/* Sub-rating breakdown */}
-        <View style={S.breakdown}>
-          {!isStore && !isCustom && existing.food_rating ? (
-            <BreakdownRow emoji="🍔" label="Food" rating={existing.food_rating} />
-          ) : null}
-          {driverId && existing.driver_rating ? (
-            <BreakdownRow emoji="🛵" label="Driver" rating={existing.driver_rating} />
-          ) : null}
-          {existing.delivery_rating ? (
-            <BreakdownRow emoji="🚚" label="Delivery" rating={existing.delivery_rating} />
-          ) : null}
-        </View>
+        {/* Item ratings summary */}
+        {Array.isArray(existing.item_ratings) && existing.item_ratings.length > 0 && (
+          <View style={S.itemRatingSummary}>
+            <Text style={S.itemRatingsTitle}>Item Ratings</Text>
+            {(existing.item_ratings as ItemRating[]).map(ir => {
+              const item = orderItems.find(i => i.id === ir.item_id || (i as any).menu_item_id === ir.item_id)
+              return (
+                <View key={ir.item_id} style={S.itemRatingRow}>
+                  <Text style={S.itemRatingName} numberOfLines={1}>
+                    {item?.name ?? ir.item_id}
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 2 }}>
+                    {[1, 2, 3, 4, 5].map(s => (
+                      <Text key={s} style={{ fontSize: 11, color: s <= ir.rating ? '#F59E0B' : '#E5E7EB' }}>★</Text>
+                    ))}
+                  </View>
+                </View>
+              )
+            })}
+          </View>
+        )}
 
-        <Text style={S.reviewDate}>
-          Reviewed{' '}
-          {new Date(existing.updated_at ?? existing.created_at).toLocaleDateString('en-IN', {
-            day: '2-digit', month: 'short', year: 'numeric',
-          })}
-        </Text>
+        {/* Multi-session context */}
+        {isMultiSession && (
+          <View style={S.sessionNote}>
+            <Text style={S.sessionNoteText}>
+              ℹ️ Review {sessionOrderIndex! + 1} of {totalMerchantsInSession} for this multi-restaurant order
+            </Text>
+          </View>
+        )}
       </View>
     )
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Form (write) view
+  // RENDER — Write / Edit review
   // ─────────────────────────────────────────────────────────────────────────
-
   return (
     <View style={S.section}>
-      <MerchantBadge merchantName={merchantName} isStore={isStore} isCustom={isCustom} />
+      <MerchantBadge
+        merchantName={merchantName}
+        isStore={isStore}
+        isCustom={isCustom}
+        sessionOrderIndex={sessionOrderIndex}
+        totalMerchantsInSession={totalMerchantsInSession}
+      />
 
-      {/* Title row */}
-      <View style={S.formTitleRow}>
-        <Text style={S.sectionTitle}>
-          {existing ? '✏️ Edit Your Review' : '⭐ Rate Your Experience'}
-        </Text>
-        {editing && (
-          <TouchableOpacity onPress={() => setEditing(false)}>
-            <Text style={{ color: '#9CA3AF', fontSize: 13 }}>✕ Cancel</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <Text style={S.sectionTitle}>
+        {existing ? '✏️ Edit Your Review' : '⭐ Rate Your Order'}
+      </Text>
 
-      {/* Tab bar */}
+      {isMultiSession && (
+        <View style={S.sessionNote}>
+          <Text style={S.sessionNoteText}>
+            Restaurant {sessionOrderIndex! + 1} of {totalMerchantsInSession} — reviewing{' '}
+            <Text style={{ fontWeight: '800' }}>{merchantName ?? 'this restaurant'}</Text>
+          </Text>
+        </View>
+      )}
+
+      {/* ── Tab Bar ───────────────────────────────────────────────── */}
       <View style={S.tabRow}>
-        {TABS.map(t => (
-          <TouchableOpacity
-            key={t.key}
-            style={[S.tab, activeTab === t.key && S.tabActive]}
-            onPress={() => setActiveTab(t.key)}
-          >
-            <Text style={{ fontSize: 13 }}>{t.emoji}</Text>
-            <Text style={[S.tabLbl, activeTab === t.key && S.tabLblActive]}>
-              {t.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {TABS.map(t => {
+          // Hide Delivery tab if no driver
+          if (t.key === 'delivery' && !driverId) return null
+          const isActive = activeTab === t.key
+          return (
+            <TouchableOpacity
+              key={t.key}
+              style={[S.tab, isActive && S.tabActive]}
+              onPress={() => setActiveTab(t.key)}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: 13 }}>{t.emoji}</Text>
+              <Text style={[S.tabTxt, isActive && S.tabTxtActive]}>{t.label}</Text>
+            </TouchableOpacity>
+          )
+        })}
       </View>
 
-      {/* ── Overall tab ────────────────────────────────────────────────── */}
+      {/* ── Overall Tab ───────────────────────────────────────────── */}
       {activeTab === 'overall' && (
-        <View style={{ gap: 0 }}>
-          <Text style={S.subHead}>Overall Experience</Text>
+        <View style={S.tabBody}>
+          {/* Overall star rating */}
+          <Text style={S.ratingLabel2}>Overall Experience</Text>
+          <StarRow value={overallRating} onChange={setOverallRating} size={36} />
+          {STAR_LABELS?.[overallRating] && (
+            <Text style={S.starHint}>{STAR_LABELS[overallRating]}</Text>
+          )}
 
-          <View style={{ alignItems: 'center', marginBottom: 12 }}>
-            <StarRow value={overallRating} onChange={setOverallRating} size={42} />
-            <Text style={{ marginTop: 8, fontWeight: '900', color: '#1F2937', fontSize: 17 }}>
-              {STAR_LABELS[overallRating] ?? ''}
-            </Text>
-          </View>
+          <View style={S.divider} />
 
+          {/* Food/Merchant rating */}
+          {!isCustom && (
+            <>
+              <Text style={S.ratingLabel2}>
+                {isStore ? '🏪 Store Experience' : '🍽️ Food & Restaurant'}
+              </Text>
+              <StarRow value={merchantRating} onChange={setMerchantRating} size={28} />
+
+              {!isStore && (
+                <>
+                  <View style={{ height: 10 }} />
+                  <Text style={S.ratingLabel2}>😋 Food Quality</Text>
+                  <StarRow value={foodRating} onChange={setFoodRating} size={28} />
+                </>
+              )}
+              <View style={S.divider} />
+            </>
+          )}
+
+          {/* Comment */}
+          <Text style={S.ratingLabel2}>Your Comments (optional)</Text>
           <TextInput
-            style={S.input}
-            placeholder="Give your review a title (optional)"
-            value={title}
-            onChangeText={setTitle}
+            style={S.textArea}
+            placeholder="What did you like or dislike?"
             placeholderTextColor="#9CA3AF"
-            maxLength={80}
-          />
-
-          <TextInput
-            style={[S.input, { minHeight: 90, marginTop: 10 }]}
             multiline
             numberOfLines={4}
-            placeholder={
-              isStore  ? 'How was the product quality and packaging?' :
-              isCustom ? 'How was your custom order experience?' :
-              'Share your experience — food quality, service, etc.'
-            }
-            value={comment}
-            onChangeText={setComment}
-            placeholderTextColor="#9CA3AF"
-            textAlignVertical="top"
+            value={overallComment}
+            onChangeText={setOverallComment}
             maxLength={500}
           />
-          <Text style={S.charCount}>{comment.length}/500</Text>
+          <Text style={S.charCount}>{overallComment.length}/500</Text>
         </View>
       )}
 
-      {/* ── Items tab ──────────────────────────────────────────────────── */}
+      {/* ── Items Tab ─────────────────────────────────────────────── */}
       {activeTab === 'items' && (
-        <View>
-          <Text style={S.subHead}>Rate Individual Items</Text>
-
+        <View style={S.tabBody}>
           {reviewableItems.length === 0 ? (
-            <View style={S.emptyItems}>
-              <Text style={{ fontSize: 28, marginBottom: 8 }}>🍽️</Text>
-              <Text style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center' }}>
-                No reviewable items in this order.
-              </Text>
-            </View>
+            <Text style={{ color: '#9CA3AF', textAlign: 'center', paddingVertical: 20 }}>
+              No items to rate.
+            </Text>
           ) : (
-            reviewableItems.map(item => {
-              const ir = itemRatings[item.id] ?? {
-                item_id: item.id, item_name: item.name, rating: 5,
-              }
-              return (
-                <View key={item.id} style={S.itemRatingCard}>
-                  {/* Item header */}
-                  <View style={S.itemCardHead}>
-                    <View style={{ flex: 1, paddingRight: 8 }}>
-                      <Text style={S.itemCardName} numberOfLines={2}>{item.name}</Text>
-                      {item.category ? (
-                        <Text style={{ fontSize: 10, color: '#9CA3AF' }}>{item.category}</Text>
-                      ) : null}
-                    </View>
-                    <Text style={{ fontSize: 13, color: '#6B7280' }}>×{item.quantity}</Text>
-                  </View>
-
-                  <StarRow
-                    value={ir.rating}
-                    onChange={r => setItemRating(item.id, item.name, r)}
-                    size={28}
-                  />
-                  <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>
-                    {STAR_LABELS[ir.rating] ?? ''}
+            <>
+              {avgItemRating !== null && (
+                <View style={S.avgBadge}>
+                  <Text style={S.avgBadgeTxt}>
+                    Avg item rating: {avgItemRating.toFixed(1)}★
                   </Text>
-
-                  <TextInput
-                    style={[S.input, { marginTop: 8, fontSize: 12, paddingVertical: 8, minHeight: 0 }]}
-                    placeholder="Quick note about this item (optional)"
-                    value={ir.comment ?? ''}
-                    onChangeText={t => setItemComment(item.id, item.name, t)}
-                    placeholderTextColor="#9CA3AF"
-                    maxLength={150}
-                  />
                 </View>
-              )
-            })
+              )}
+              {reviewableItems.map(item => {
+                const itemId  = (item as any).menu_item_id ?? item.id
+                const current = itemRatings[itemId]
+                return (
+                  <View key={itemId} style={S.itemRow}>
+                    <View style={S.itemRowTop}>
+                      {item.is_veg !== null && item.is_veg !== undefined && (
+                        <View style={[S.vegDot,
+                          { backgroundColor: item.is_veg ? '#16A34A' : '#DC2626' }]} />
+                      )}
+                      <Text style={S.itemName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={S.itemQty}>x{item.quantity}</Text>
+                    </View>
+                    <StarRow
+                      value={current?.rating ?? 0}
+                      onChange={v => handleItemRating(itemId, 'rating', v)}
+                      size={24}
+                    />
+                    <TextInput
+                      style={S.itemNote}
+                      placeholder="Any feedback for this item?"
+                      placeholderTextColor="#9CA3AF"
+                      value={current?.comment ?? ''}
+                      onChangeText={v => handleItemRating(itemId, 'comment', v)}
+                      maxLength={200}
+                    />
+                  </View>
+                )
+              })}
+            </>
           )}
         </View>
       )}
 
-      {/* ── Delivery tab ───────────────────────────────────────────────── */}
-      {activeTab === 'delivery' && (
-        <View>
-          {!isStore && !isCustom && (
-            <View style={S.ratingGroup}>
-              <Text style={S.groupLbl}>🍔 Food Quality</Text>
-              <StarRow value={foodRating} onChange={setFoodRating} size={30} />
-              <Text style={S.ratingHint}>{STAR_LABELS[foodRating] ?? ''}</Text>
-            </View>
-          )}
+      {/* ── Delivery Tab ──────────────────────────────────────────── */}
+      {activeTab === 'delivery' && driverId && (
+        <View style={S.tabBody}>
+          <Text style={S.ratingLabel2}>🛵 Driver Rating</Text>
+          <StarRow value={driverRating} onChange={setDriverRating} size={32} />
 
-          <View style={S.ratingGroup}>
-            <Text style={S.groupLbl}>🚚 Delivery Speed</Text>
-            <StarRow value={deliveryRating} onChange={setDeliveryRating} size={30} />
-            <Text style={S.ratingHint}>{STAR_LABELS[deliveryRating] ?? ''}</Text>
-          </View>
+          <View style={{ height: 12 }} />
+          <Text style={S.ratingLabel2}>⏱️ Delivery Speed</Text>
+          <StarRow value={deliveryRating} onChange={setDeliveryRating} size={32} />
 
-          {driverId && (
-            <View style={S.ratingGroup}>
-              <Text style={S.groupLbl}>🛵 Driver Behaviour</Text>
-              <StarRow value={driverRating} onChange={setDriverRating} size={30} />
-              <Text style={S.ratingHint}>{STAR_LABELS[driverRating] ?? ''}</Text>
-            </View>
-          )}
-
+          <View style={S.divider} />
+          <Text style={S.ratingLabel2}>Delivery Feedback (optional)</Text>
           <TextInput
-            style={[S.input, { minHeight: 70, marginTop: 6 }]}
-            multiline
-            placeholder="Any feedback about delivery? (optional)"
-            value={deliveryNote}
-            onChangeText={setDeliveryNote}
+            style={S.textArea}
+            placeholder="How was your delivery experience?"
             placeholderTextColor="#9CA3AF"
-            textAlignVertical="top"
-            maxLength={250}
+            multiline
+            numberOfLines={4}
+            value={deliveryComment}
+            onChangeText={setDeliveryComment}
+            maxLength={300}
           />
+          <Text style={S.charCount}>{deliveryComment.length}/300</Text>
         </View>
       )}
 
-      {/* Submit button */}
-      <TouchableOpacity
-        style={[S.submitBtn, submitting && { opacity: 0.6 }]}
-        onPress={handleSubmit}
-        disabled={submitting}
-        activeOpacity={0.85}
-      >
-        {submitting ? (
-          <ActivityIndicator color="#fff" size="small" />
-        ) : (
-          <Text style={{ color: '#fff', fontWeight: '900', fontSize: 15 }}>
-            {existing ? '✅ Update Review' : '⭐ Submit Review'}
-          </Text>
+      {/* ── Actions ───────────────────────────────────────────────── */}
+      <View style={S.actionRow}>
+        {editing && (
+          <TouchableOpacity
+            style={S.cancelEditBtn}
+            onPress={() => setEditing(false)}
+            disabled={submitting}
+          >
+            <Text style={{ color: '#6B7280', fontWeight: '700', fontSize: 14 }}>Cancel</Text>
+          </TouchableOpacity>
         )}
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[S.submitBtn, submitting && { opacity: 0.6 }]}
+          onPress={handleSubmit}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={S.submitBtnTxt}>
+              {existing ? '💾 Update Review' : '🚀 Submit Review'}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Progress hint for multi-session */}
+      {isMultiSession && !existing && (
+        <Text style={S.multiHint}>
+          💡 You can review each restaurant separately. Take your time!
+        </Text>
+      )}
     </View>
   )
 }
@@ -644,100 +749,45 @@ export default function ReviewSection({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const S = StyleSheet.create({
-  // ── Layout ────────────────────────────────────────────────────────────────
   section: {
     backgroundColor: '#fff',
     marginHorizontal: 16,
     marginTop: 10,
     borderRadius: 16,
     padding: 16,
-    elevation: 1,
+    elevation: 2,
     shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
 
-  // ── Merchant badge ────────────────────────────────────────────────────────
+  // Merchant badge
   merchantBadge: {
-    backgroundColor: '#FFF3EE',
+    backgroundColor: '#FFF7ED',
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 7,
     marginBottom: 12,
     alignSelf: 'flex-start',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#FED7AA',
   },
-  merchantBadgeText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#92400E',
-  },
+  merchantBadgeText: { fontSize: 13, fontWeight: '700', color: '#92400E' },
 
-  // ── Delivery feedback (read view) ─────────────────────────────────────────
-deliveryFeedbackWrap: {
-  marginTop: 10,
-},
-dividerRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 8,
-  marginBottom: 8,
-},
-dividerLine: {
-  flex: 1,
-  height: 1,
-  backgroundColor: '#FED7AA',
-},
-dividerLabel: {
-  fontSize: 11,
-  fontWeight: '700',
-  color: '#92400E',
-  paddingHorizontal: 4,
-},
-deliveryFeedbackBubble: {
-  backgroundColor: '#FFF7ED',
-  borderRadius: 12,
-  padding: 12,
-  borderLeftWidth: 3,
-  borderLeftColor: '#F97316',
-},
-
-  // ── Typography ────────────────────────────────────────────────────────────
+  // Section title
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1F2937',
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#111827',
+    marginBottom: 6,
   },
-  subHead: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#374151',
-    marginBottom: 10,
-  },
-  reviewTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginTop: 8,
-  },
-  reviewDate: {
-    fontSize: 11,
-    color: '#D1D5DB',
-    marginTop: 10,
-    textAlign: 'right',
-  },
-  charCount: {
-    fontSize: 10,
-    color: '#D1D5DB',
-    textAlign: 'right',
-    marginTop: 4,
-  },
+  submittedAt: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
 
-  // ── Read view ─────────────────────────────────────────────────────────────
+  // Read-only header
   reviewedHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
   },
@@ -748,142 +798,221 @@ deliveryFeedbackBubble: {
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  commentBubble: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.primary + '40',
-  },
-  itemRatingsWrap: {
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 12,
-    marginTop: 8,
-  },
-  irRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 7,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F9FAFB',
-  },
-  irName: {
-    flex: 1,
-    fontSize: 13,
-    color: '#4B5563',
-    paddingRight: 10,
-  },
-  breakdown: {
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 12,
-    marginTop: 10,
-    gap: 8,
-  },
 
-  // ── Form view ─────────────────────────────────────────────────────────────
-  formTitleRow: {
+  // Rating display (read-only)
+  ratingDisplay: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
-  },
-
-  // ── Tabs ──────────────────────────────────────────────────────────────────
-  tabRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 14,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 10,
-    flexDirection: 'row',
-    justifyContent: 'center',
     gap: 4,
+    marginBottom: 12,
   },
-  tabActive: {
-    backgroundColor: '#fff',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-  },
-  tabLbl: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#9CA3AF',
-  },
-  tabLblActive: {
-    color: COLORS.primary,
-    fontWeight: '800',
+  ratingLabel: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
   },
 
-  // ── Items tab ─────────────────────────────────────────────────────────────
-  itemRatingCard: {
-    backgroundColor: '#F9FAFB',
+  // Breakdown
+  breakdownCard: {
+    backgroundColor: '#FAFAFA',
     borderRadius: 12,
     padding: 12,
+    gap: 4,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: '#F3F4F6',
   },
-  itemCardHead: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+
+  // Comment
+  commentCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 10,
+    padding: 12,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
   },
-  itemCardName: {
-    fontWeight: '700',
-    color: '#1F2937',
+  commentText: {
     fontSize: 13,
-  },
-  emptyItems: {
-    alignItems: 'center',
-    padding: 24,
+    color: '#065F46',
+    fontStyle: 'italic',
+    lineHeight: 20,
   },
 
-  // ── Delivery tab ──────────────────────────────────────────────────────────
-  ratingGroup: {
-    marginBottom: 16,
+  // Item ratings summary (read-only)
+  itemRatingSummary: {
+    marginTop: 8,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 10,
   },
-  groupLbl: {
+  itemRatingsTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#374151',
+    marginBottom: 6,
+  },
+  itemRatingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  itemRatingName: {
+    flex: 1,
+    fontSize: 12,
+    color: '#4B5563',
+    marginRight: 8,
+  },
+
+  // Tabs
+  tabRow: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    padding: 3,
+    marginBottom: 14,
+    marginTop: 4,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  tabActive: { backgroundColor: '#fff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
+  tabTxt:    { fontSize: 11, fontWeight: '600', color: '#9CA3AF' },
+  tabTxtActive: { color: '#111827', fontWeight: '800' },
+
+  // Tab body
+  tabBody: { gap: 8 },
+
+  // Rating labels
+  ratingLabel2: {
     fontSize: 13,
     fontWeight: '700',
     color: '#374151',
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  ratingHint: {
-    fontSize: 11,
-    color: '#9CA3AF',
+  starHint: {
+    fontSize: 12,
+    color: '#F59E0B',
+    fontWeight: '700',
     marginTop: 4,
   },
 
-  // ── Input + submit ────────────────────────────────────────────────────────
-  input: {
+  // Divider
+  divider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 12,
+  },
+
+  // Text areas
+  textArea: {
     borderWidth: 1.5,
     borderColor: '#E5E7EB',
     borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    padding: 12,
     fontSize: 14,
     color: '#1F2937',
-    minHeight: 46,
+    minHeight: 90,
+    textAlignVertical: 'top',
+    backgroundColor: '#FAFAFA',
+  },
+  charCount: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    textAlign: 'right',
+    marginTop: 2,
+  },
+
+  // Item rows
+  avgBadge: {
+    backgroundColor: '#FFF7ED',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  avgBadgeTxt: { fontSize: 12, color: '#92400E', fontWeight: '700' },
+
+  itemRow: {
+    backgroundColor: '#FAFAFA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    gap: 6,
+  },
+  itemRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  vegDot:   { width: 8, height: 8, borderRadius: 4 },
+  itemName: { flex: 1, fontSize: 13, fontWeight: '700', color: '#1F2937' },
+  itemQty:  { fontSize: 12, color: '#9CA3AF', fontWeight: '600' },
+  itemNote: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 8,
+    fontSize: 12,
+    color: '#374151',
+    backgroundColor: '#fff',
+    marginTop: 4,
+  },
+
+  // Actions
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  cancelEditBtn: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
   },
   submitBtn: {
+    flex: 2,
     backgroundColor: COLORS.primary,
-    borderRadius: 14,
+    borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 16,
+  },
+  submitBtnTxt: { color: '#fff', fontWeight: '900', fontSize: 14 },
+
+  // Session context
+  sessionNote: {
+    backgroundColor: '#FFF7ED',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  sessionNoteText: { fontSize: 12, color: '#92400E', fontWeight: '600' },
+
+  multiHint: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 16,
   },
 })

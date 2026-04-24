@@ -18,6 +18,8 @@ interface Props {
   taxAmount:         number
   finalTotal:        number
   totalSavings:      number
+  isMultiCart?:      boolean
+  merchantCount?:    number
 }
 
 function BillRow({ label, value, green, sub }: {
@@ -41,10 +43,20 @@ export default function CheckoutBillSummary({
   promoIsBxgy, bxgyGiftCount = 0, deliveryFee, showDeliveryFee,
   isFreeDelivery, deliveryBreakdown, gstEnabled, gstPct,
   taxAmount, finalTotal, totalSavings,
+  isMultiCart, merchantCount,
 }: Props) {
   return (
     <View style={S.section}>
       <Text style={S.title}>🧾 Bill Summary</Text>
+
+      {/* Multi-cart info strip */}
+      {isMultiCart && merchantCount && merchantCount > 1 && (
+        <View style={S.multiStrip}>
+          <Text style={S.multiStripText}>
+            🛒 Grand total across {merchantCount} restaurants
+          </Text>
+        </View>
+      )}
 
       <BillRow label="Item Total" value={`₹${subtotal.toFixed(2)}`} />
 
@@ -69,7 +81,9 @@ export default function CheckoutBillSummary({
 
       {showDeliveryFee && (
         <BillRow
-          label="Delivery Fee"
+          label={isMultiCart && merchantCount && merchantCount > 1
+            ? `Delivery Fee (${merchantCount} restaurants)`
+            : 'Delivery Fee'}
           value={isFreeDelivery ? '🎉 FREE' : `₹${deliveryFee.toFixed(2)}`}
           green={isFreeDelivery}
           sub={deliveryBreakdown || undefined}
@@ -85,9 +99,18 @@ export default function CheckoutBillSummary({
 
       {/* Total row */}
       <View style={S.totalRow}>
-        <Text style={S.totalLbl}>Total</Text>
+        <Text style={S.totalLbl}>
+          {isMultiCart && merchantCount && merchantCount > 1 ? 'Grand Total' : 'Total'}
+        </Text>
         <Text style={S.totalVal}>₹{finalTotal.toFixed(2)}</Text>
       </View>
+
+      {/* Multi-cart order count note */}
+      {isMultiCart && merchantCount && merchantCount > 1 && (
+        <Text style={S.multiNote}>
+          {merchantCount} separate orders will be placed simultaneously
+        </Text>
+      )}
 
       {totalSavings > 0 && (
         <View style={S.savingsBox}>
@@ -101,11 +124,19 @@ export default function CheckoutBillSummary({
 }
 
 const S = StyleSheet.create({
-  section:    { backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 10, borderRadius: 16, padding: 16, elevation: 1, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-  title:      { fontSize: 15, fontWeight: '800', color: '#111827', marginBottom: 12 },
-  totalRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, borderTopWidth: 2, borderTopColor: '#F3F4F6', marginTop: 6 },
-  totalLbl:   { fontSize: 18, fontWeight: '900', color: '#111827' },
-  totalVal:   { fontSize: 22, fontWeight: '900', color: COLORS.primary },
-  savingsBox: { backgroundColor: '#F0FDF4', borderRadius: 10, padding: 10, marginTop: 12 },
-  savingsTxt: { color: '#15803D', fontWeight: '700', fontSize: 13, textAlign: 'center' },
+  section:        { backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 10,
+                    borderRadius: 16, padding: 16, elevation: 1, shadowColor: '#000',
+                    shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
+  title:          { fontSize: 15, fontWeight: '800', color: '#111827', marginBottom: 12 },
+  multiStrip:     { backgroundColor: '#FFF7ED', borderRadius: 10, padding: 8,
+                    marginBottom: 12, borderWidth: 1, borderColor: '#FED7AA' },
+  multiStripText: { fontSize: 12, color: '#92400E', fontWeight: '700', textAlign: 'center' },
+  totalRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                    paddingTop: 14, borderTopWidth: 2, borderTopColor: '#F3F4F6', marginTop: 6 },
+  totalLbl:       { fontSize: 18, fontWeight: '900', color: '#111827' },
+  totalVal:       { fontSize: 22, fontWeight: '900', color: COLORS.primary },
+  multiNote:      { fontSize: 11, color: '#9CA3AF', textAlign: 'center',
+                    marginTop: 6, lineHeight: 16 },
+  savingsBox:     { backgroundColor: '#F0FDF4', borderRadius: 10, padding: 10, marginTop: 12 },
+  savingsTxt:     { color: '#15803D', fontWeight: '700', fontSize: 13, textAlign: 'center' },
 })
