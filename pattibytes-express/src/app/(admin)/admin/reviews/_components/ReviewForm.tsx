@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { useEffect, useState } from 'react';
 import { X, Send, Store, User } from 'lucide-react';
 import { StarRating }  from './StarRating';
@@ -15,23 +14,37 @@ interface Props {
   onClose      (): void;
 }
 
+function buildForm(t?: Review | null): ReviewFormData {
+  return {
+    customer_id    : t?.customer_id      ?? '',
+    merchant_id    : t?.merchant_id      ?? '',
+    order_id       : t?.order_id         ?? null,
+    rating         : Number(t?.overall_rating || t?.rating || 0),
+    overall_rating : Number(t?.overall_rating || t?.rating || 0),
+    food_rating    : Number(t?.food_rating    || 0),
+    merchant_rating: Number(t?.merchant_rating|| 0),
+    delivery_rating: Number(t?.delivery_rating|| 0),
+    driver_rating  : Number(t?.driver_rating  || 0),
+    comment        : t?.comment  ?? '',
+    title          : t?.title    ?? '',
+  };
+}
+
 export function ReviewForm({ editTarget, merchants, customers, saving, onSubmit, onClose }: Props) {
   const isEdit = !!editTarget;
 
-  const [form, setForm] = useState<ReviewFormData>({
-    customer_id    : editTarget?.customer_id     ?? '',
-    merchant_id    : editTarget?.merchant_id     ?? '',
-    order_id       : editTarget?.order_id        ?? null,
-    rating         : Number(editTarget?.overall_rating || editTarget?.rating || 0),
-    food_rating    : Number(editTarget?.food_rating    || 0),
-    merchant_rating: Number(editTarget?.merchant_rating|| 0),
-    delivery_rating: Number(editTarget?.delivery_rating|| 0),
-    driver_rating  : Number(editTarget?.driver_rating  || 0),
-    comment        : editTarget?.comment   ?? '',
-    title          : editTarget?.title     ?? '',
-  });
-  const [notify, setNotify] = useState(!isEdit);
-  const [custSearch, setCustSearch] = useState(editTarget?.customerName ?? '');
+  // ✅ KEY FIX: reset form whenever editTarget changes (new edit target or open-for-create)
+  const [form, setForm] = useState<ReviewFormData>(() => buildForm(editTarget));
+  useEffect(() => {
+    setForm(buildForm(editTarget));
+    // eslint-disable-next-line react-hooks/immutability
+    setCustSearch(editTarget?.customerName ?? '');
+    // eslint-disable-next-line react-hooks/immutability
+    setMerchSearch(editTarget?.merchantName ?? '');
+  }, [editTarget]);
+
+  const [notify, setNotify]         = useState(!isEdit);
+  const [custSearch, setCustSearch]   = useState(editTarget?.customerName ?? '');
   const [merchSearch, setMerchSearch] = useState(editTarget?.merchantName ?? '');
 
   const filteredCustomers = custSearch.length > 1
@@ -46,26 +59,32 @@ export function ReviewForm({ editTarget, merchants, customers, saving, onSubmit,
     ? merchants.filter(m => m.business_name.toLowerCase().includes(merchSearch.toLowerCase())).slice(0, 6)
     : [];
 
-  const set = (k: keyof ReviewFormData, v: any) => setForm(p => ({ ...p, [k]: v }));
+  const set = (k: keyof ReviewFormData, v: any) =>
+    setForm(p => ({ ...p, [k]: v }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.customer_id) { alert('Select a customer'); return; }
     if (!form.merchant_id) { alert('Select a merchant'); return; }
-    if (form.rating < 1)   { alert('Add at least 1 star overall rating'); return; }
-    onSubmit({ ...form, overall_rating: form.rating }, notify);
+    if ((form.rating ?? 0) < 1) { alert('Add at least 1 star overall rating'); return; }
+    // ✅ Always send both rating fields so DB gets overall_rating regardless of column name
+    onSubmit({ ...form, overall_rating: form.rating, rating: form.rating }, notify);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in"
-      onClick={e => e.target === e.currentTarget && onClose()}>
+    <div
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
       <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
 
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between z-10">
           <div>
             <h2 className="font-bold text-gray-900">{isEdit ? 'Edit Review' : 'Add Review'}</h2>
-            <p className="text-xs text-gray-400">{isEdit ? 'Update review details below' : 'Post a review on behalf of a customer'}</p>
+            <p className="text-xs text-gray-400">
+              {isEdit ? `Editing review by ${editTarget?.customerName ?? 'customer'}` : 'Post a review on behalf of a customer'}
+            </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
             <X size={16}/>
@@ -73,29 +92,36 @@ export function ReviewForm({ editTarget, merchants, customers, saving, onSubmit,
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
+
           {/* Customer picker */}
           <div className="relative">
             <label className="text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1">
               <User size={10}/> Customer
             </label>
-            {form.customer_id && !isEdit ? (
+            {/* In edit mode: show locked customer badge */}
+            {isEdit ? (
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                <User size={13} className="text-blue-400 shrink-0"/>
+                <span className="text-sm font-semibold text-blue-800">
+                  {editTarget?.customerName || form.customer_id.slice(0, 8)}
+                </span>
+                <span className="ml-auto text-xs text-blue-400 bg-blue-100 px-2 py-0.5 rounded-full">locked</span>
+              </div>
+            ) : form.customer_id ? (
               <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
                 <span className="text-sm font-semibold text-blue-800">
-                  {customers.find(c => c.id === form.customer_id)?.full_name ?? form.customer_id.slice(0,8)}
+                  {customers.find(c => c.id === form.customer_id)?.full_name ?? form.customer_id.slice(0, 8)}
                 </span>
-                <button type="button" onClick={() => { set('customer_id',''); setCustSearch(''); }}
-                  className="text-blue-400 hover:text-blue-600">
-                  <X size={13}/>
-                </button>
+                <button type="button" onClick={() => { set('customer_id', ''); setCustSearch(''); }}
+                  className="text-blue-400 hover:text-blue-600"><X size={13}/></button>
               </div>
             ) : (
               <>
                 <input value={custSearch} onChange={e => setCustSearch(e.target.value)}
                   placeholder="Search by name / phone / email…"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary bg-white"
-                  readOnly={isEdit}
                 />
-                {filteredCustomers.length > 0 && !isEdit && (
+                {filteredCustomers.length > 0 && (
                   <div className="absolute z-30 top-full mt-1 left-0 right-0 bg-white rounded-xl shadow-xl border border-gray-100 py-1 max-h-48 overflow-y-auto">
                     {filteredCustomers.map(c => (
                       <button key={c.id} type="button"
@@ -116,24 +142,29 @@ export function ReviewForm({ editTarget, merchants, customers, saving, onSubmit,
             <label className="text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1">
               <Store size={10}/> Restaurant / Merchant
             </label>
-            {form.merchant_id && !isEdit ? (
+            {isEdit ? (
+              <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                <Store size={13} className="text-orange-400 shrink-0"/>
+                <span className="text-sm font-semibold text-orange-800">
+                  {editTarget?.merchantName || form.merchant_id.slice(0, 8)}
+                </span>
+                <span className="ml-auto text-xs text-orange-400 bg-orange-100 px-2 py-0.5 rounded-full">locked</span>
+              </div>
+            ) : form.merchant_id ? (
               <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
                 <span className="text-sm font-semibold text-orange-800">
                   {merchants.find(m => m.id === form.merchant_id)?.business_name}
                 </span>
-                <button type="button" onClick={() => { set('merchant_id',''); setMerchSearch(''); }}
-                  className="text-orange-400 hover:text-orange-600">
-                  <X size={13}/>
-                </button>
+                <button type="button" onClick={() => { set('merchant_id', ''); setMerchSearch(''); }}
+                  className="text-orange-400 hover:text-orange-600"><X size={13}/></button>
               </div>
             ) : (
               <>
                 <input value={merchSearch} onChange={e => setMerchSearch(e.target.value)}
                   placeholder="Search merchant name…"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary bg-white"
-                  readOnly={isEdit}
                 />
-                {filteredMerchants.length > 0 && !isEdit && (
+                {filteredMerchants.length > 0 && (
                   <div className="absolute z-30 top-full mt-1 left-0 right-0 bg-white rounded-xl shadow-xl border border-gray-100 py-1">
                     {filteredMerchants.map(m => (
                       <button key={m.id} type="button"
@@ -148,7 +179,7 @@ export function ReviewForm({ editTarget, merchants, customers, saving, onSubmit,
             )}
           </div>
 
-          {/* Order ID (optional) */}
+          {/* Order ID */}
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Order ID (optional)</label>
             <input value={form.order_id ?? ''} onChange={e => set('order_id', e.target.value || null)}
@@ -175,15 +206,15 @@ export function ReviewForm({ editTarget, merchants, customers, saving, onSubmit,
             />
           </div>
 
-          {/* Star ratings grid */}
+          {/* Star ratings */}
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Ratings</label>
             <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
-              <StarRating label="Overall ★ (required)" value={form.rating}          onChange={v => set('rating', v)}          size={18} />
-              <StarRating label="Food Quality"         value={form.food_rating ?? 0} onChange={v => set('food_rating', v)}     size={15} />
-              <StarRating label="Service"              value={form.merchant_rating ?? 0} onChange={v => set('merchant_rating', v)} size={15} />
-              <StarRating label="Delivery"             value={form.delivery_rating ?? 0} onChange={v => set('delivery_rating', v)} size={15} />
-              <StarRating label="Driver"               value={form.driver_rating ?? 0}   onChange={v => set('driver_rating', v)}   size={15} />
+              <StarRating label="Overall ★ (required)" value={form.rating}               onChange={v => set('rating', v)}           size={18} />
+              <StarRating label="Food Quality"         value={form.food_rating    ?? 0}  onChange={v => set('food_rating', v)}      size={15} />
+              <StarRating label="Service"              value={form.merchant_rating?? 0}  onChange={v => set('merchant_rating', v)}  size={15} />
+              <StarRating label="Delivery"             value={form.delivery_rating?? 0}  onChange={v => set('delivery_rating', v)}  size={15} />
+              <StarRating label="Driver"               value={form.driver_rating  ?? 0}  onChange={v => set('driver_rating', v)}    size={15} />
             </div>
           </div>
 
@@ -210,5 +241,3 @@ export function ReviewForm({ editTarget, merchants, customers, saving, onSubmit,
     </div>
   );
 }
-
-

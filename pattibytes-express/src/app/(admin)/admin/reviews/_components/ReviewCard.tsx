@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState } from 'react';
-import { Edit2, Trash2, User, Store, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { Edit2, Trash2, User, Store, ChevronDown, ChevronUp, ExternalLink, Loader2 } from 'lucide-react';
 import { StarRating } from './StarRating';
 import type { Review } from '../_types';
 
 interface Props {
-  review  : Review;
-  role    : string;
-  onEdit  (r: Review): void;
-  onDelete(r: Review): void;
+  review   : Review;
+  role     : string;
+  onEdit   (r: Review): void;
+  onDelete (r: Review): Promise<void> | void;
 }
 
 function timeAgo(iso: string | null | undefined) {
@@ -18,36 +18,50 @@ function timeAgo(iso: string | null | undefined) {
   if (s < 60)    return `${s}s ago`;
   if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return new Date(iso).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'2-digit' });
+  return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
 }
 
 const RATING_COLOR = (v: number) =>
   v >= 4 ? 'text-green-600' : v >= 3 ? 'text-amber-600' : 'text-red-500';
 
 export function ReviewCard({ review: r, role, onEdit, onDelete }: Props) {
-  const [expanded, setExpanded] = useState(false);
-  const canEdit   = ['admin','superadmin','merchant'].includes(role);
-  const canDelete = ['admin','superadmin'].includes(role);
+  const [expanded,  setExpanded]  = useState(false);
+  const [deleting,  setDeleting]  = useState(false);
+
+  const canEdit   = ['admin', 'superadmin', 'merchant'].includes(role);
+  const canDelete = ['admin', 'superadmin'].includes(role);
   const rating    = Number(r.overall_rating || r.rating || 0);
+
+  // ✅ Delete with loading state + confirmation
+  const handleDelete = async () => {
+    if (!confirm(`Delete review by "${r.customerName || 'this customer'}"? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await onDelete(r);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className={`bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden animate-fade-in
-      ${rating >= 4 ? 'border-l-4 border-l-green-300' : rating <= 2 && rating > 0 ? 'border-l-4 border-l-red-300' : 'border-l-4 border-l-amber-200'}`}>
+      ${rating >= 4 ? 'border-l-4 border-l-green-300'
+        : rating <= 2 && rating > 0 ? 'border-l-4 border-l-red-300'
+        : 'border-l-4 border-l-amber-200'}
+      ${deleting ? 'opacity-50 pointer-events-none' : ''}`}>
 
       {/* Header */}
       <div className="px-4 py-3 flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0 flex-1">
           {/* Avatar */}
           <div className="w-9 h-9 bg-gradient-to-br from-orange-100 to-amber-100 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold text-primary">
-           {(r.customerName?.trim() || 'U')[0].toUpperCase()}
+            {(r.customerName?.trim() || 'U')[0].toUpperCase()}
           </div>
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-bold text-sm text-gray-900">{r.customerName}</p>
-              {r.customerPhone && (
-                <span className="text-xs text-gray-400">{r.customerPhone}</span>
-              )}
+              <p className="font-bold text-sm text-gray-900">{r.customerName || 'Unknown'}</p>
+              {r.customerPhone && <span className="text-xs text-gray-400">{r.customerPhone}</span>}
               {r.orderNumber && (
                 <span className="text-xs bg-gray-100 text-gray-500 px-1.5 rounded font-mono">
                   #{r.orderNumber}
@@ -55,12 +69,10 @@ export function ReviewCard({ review: r, role, onEdit, onDelete }: Props) {
               )}
             </div>
 
-            {/* Merchant */}
             <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-  <Store size={10}/>{r.merchantName || 'Unknown merchant'}
-</p>
+              <Store size={10}/>{r.merchantName || 'Unknown merchant'}
+            </p>
 
-            {/* Main star rating */}
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <StarRating value={rating} size={13} />
               {r.title && (
@@ -86,11 +98,12 @@ export function ReviewCard({ review: r, role, onEdit, onDelete }: Props) {
             )}
             {canDelete && (
               <button
-                onClick={() => onDelete(r)}
-                className="p-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-600 hover:text-white transition-all"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="p-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-600 hover:text-white transition-all disabled:opacity-50"
                 title="Delete review"
               >
-                <Trash2 size={11}/>
+                {deleting ? <Loader2 size={11} className="animate-spin"/> : <Trash2 size={11}/>}
               </button>
             )}
             <button
@@ -115,7 +128,7 @@ export function ReviewCard({ review: r, role, onEdit, onDelete }: Props) {
       {/* Expanded detail */}
       {expanded && (
         <div className="border-t border-gray-100 px-4 py-3 bg-gray-50/50 space-y-3 animate-fade-in">
-          {/* Sub-ratings grid */}
+          {/* Sub-ratings */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: 'Food',     val: r.food_rating     },
@@ -143,7 +156,7 @@ export function ReviewCard({ review: r, role, onEdit, onDelete }: Props) {
             <div className="flex gap-2 flex-wrap">
               {(r.images ?? []).map((img, i) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={i} src={img} alt={`Review image ${i+1}`}
+                <img key={i} src={img} alt={`Review image ${i + 1}`}
                   className="w-16 h-16 rounded-lg object-cover border border-gray-200 cursor-pointer hover:opacity-80"
                   onClick={() => window.open(img, '_blank')}
                 />
@@ -168,13 +181,13 @@ export function ReviewCard({ review: r, role, onEdit, onDelete }: Props) {
 
           {/* Metadata */}
           <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap pt-1">
-           <span><User size={9} className="inline mr-0.5"/>{r.customer_id?.slice(0, 8) ?? '—'}</span>
+            <span><User size={9} className="inline mr-0.5"/>{r.customer_id?.slice(0, 8) ?? '—'}</span>
             <span>Created: {new Date(r.created_at).toLocaleString('en-IN')}</span>
             {r.updated_at && r.updated_at !== r.created_at && (
               <span>Updated: {new Date(r.updated_at).toLocaleString('en-IN')}</span>
             )}
             {r.order_id && (
-              <a href={`/admin/orders/${r.order_id}`}
+              <a href={`/admin/orders/${r.order_id}`} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-0.5 text-primary hover:underline">
                 <ExternalLink size={9}/> View Order
               </a>
@@ -185,5 +198,3 @@ export function ReviewCard({ review: r, role, onEdit, onDelete }: Props) {
     </div>
   );
 }
-
-
