@@ -39,7 +39,7 @@ export function ReviewCard({ review: r, role, onEdit, onDelete }: Props) {
         <div className="flex items-start gap-3 min-w-0 flex-1">
           {/* Avatar */}
           <div className="w-9 h-9 bg-gradient-to-br from-orange-100 to-amber-100 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold text-primary">
-            {(r.customerName ?? 'U')[0].toUpperCase()}
+           {(r.customerName?.trim() || 'U')[0].toUpperCase()}
           </div>
 
           <div className="min-w-0 flex-1">
@@ -57,8 +57,8 @@ export function ReviewCard({ review: r, role, onEdit, onDelete }: Props) {
 
             {/* Merchant */}
             <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-              <Store size={10}/>{r.merchantName}
-            </p>
+  <Store size={10}/>{r.merchantName || 'Unknown merchant'}
+</p>
 
             {/* Main star rating */}
             <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -168,7 +168,7 @@ export function ReviewCard({ review: r, role, onEdit, onDelete }: Props) {
 
           {/* Metadata */}
           <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap pt-1">
-            <span><User size={9} className="inline mr-0.5"/>{r.customer_id.slice(0, 8)}</span>
+           <span><User size={9} className="inline mr-0.5"/>{r.customer_id?.slice(0, 8) ?? '—'}</span>
             <span>Created: {new Date(r.created_at).toLocaleString('en-IN')}</span>
             {r.updated_at && r.updated_at !== r.created_at && (
               <span>Updated: {new Date(r.updated_at).toLocaleString('en-IN')}</span>
