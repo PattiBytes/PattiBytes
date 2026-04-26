@@ -1,7 +1,7 @@
 import React from 'react'
 import { Modal, View, Text, TouchableOpacity, Image, Linking } from 'react-native'
 import { COLORS } from '../../lib/constants'
-import { S } from './styles'
+import { useDashboardStyles } from './styles'
 
 type Props = {
   visible: boolean
@@ -10,6 +10,7 @@ type Props = {
 }
 
 export function AnnouncementPopup({ visible, announcement, onDismiss }: Props) {
+  const S = useDashboardStyles()
   if (!announcement) return null
   return (
     <Modal visible={visible} transparent animationType="fade">

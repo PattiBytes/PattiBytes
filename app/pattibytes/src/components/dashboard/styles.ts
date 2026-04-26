@@ -1,8 +1,10 @@
  
 import { StyleSheet, Platform } from 'react-native'
 import { COLORS } from '../../lib/constants'
+import { useThemedStyles } from '@/hooks/useThemedStyles'
 
-export const S = StyleSheet.create({
+export function useDashboardStyles() {
+  return useThemedStyles(c => StyleSheet.create({
   // Header
   header:        { backgroundColor: COLORS.primary, paddingTop: 52, paddingBottom: 12, paddingHorizontal: 16 },
   headerTop:     { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
@@ -69,4 +71,6 @@ export const S = StyleSheet.create({
   popupOverlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   popup:         { backgroundColor: '#fff', borderRadius: 20, padding: 24, width: '100%', elevation: 20 },
   popupBtn:      { flex: 1, alignItems: 'center', paddingVertical: 13, borderRadius: 12 },
-})
+ btn: { backgroundColor: c.primary }
+  }))
+}

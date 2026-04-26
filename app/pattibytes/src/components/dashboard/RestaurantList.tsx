@@ -6,7 +6,7 @@ import {
 } from 'react-native'
 import { Merchant } from './types'
 import { openTimeLabel } from './helpers'
-import { S } from './styles'
+import { useDashboardStyles } from './styles'
 import { COLORS } from '../../lib/constants'
 
 type Props = {
@@ -24,6 +24,7 @@ export function RestaurantList({
   restaurants, loading, activeTab, cuisineFilter,
   allCuisines, onTabChange, onCuisineChange, onRestaurantPress,
 }: Props) {
+  const S = useDashboardStyles()
   return (
     <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
       {/* Section header */}

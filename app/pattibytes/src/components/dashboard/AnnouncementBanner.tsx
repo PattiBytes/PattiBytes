@@ -1,6 +1,6 @@
 import React from 'react'
 import { View, Text, TouchableOpacity, Linking } from 'react-native'
-import { S } from './styles'
+import { useDashboardStyles } from './styles'
 
 type Props = {
   announcement: any
@@ -8,6 +8,7 @@ type Props = {
 }
 
 export function AnnouncementBanner({ announcement, onDismiss }: Props) {
+  const S = useDashboardStyles()
   if (!announcement) return null
   return (
     <TouchableOpacity

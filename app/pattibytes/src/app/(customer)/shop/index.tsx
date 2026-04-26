@@ -72,7 +72,7 @@ function ProductCard({
           </View>
         )}
         <View style={[PC.badge, { backgroundColor: c.bg }]}>
-          <Text style={{ fontSize: 8, color: c.text, fontWeight: '800' }}>
+          <Text style={{ fontSize: 8, color: COLORS.text, fontWeight: '800' }}>
             {product.category.toUpperCase()}
           </Text>
         </View>
@@ -391,8 +391,8 @@ export default function ShopScreen() {
                 {catFilter === 'all' && (
                   <View style={[S.secHeader, { backgroundColor: cc.bg }]}>
                     <Text style={{ fontSize: 22 }}>{ci.emoji}</Text>
-                    <Text style={[S.secHeaderTxt, { color: cc.text }]}>{ci.label}</Text>
-                    <View style={[S.secCount, { backgroundColor: cc.text }]}>
+                    <Text style={[S.secHeaderTxt, { color: cCOLORS.text }]}>{ci.label}</Text>
+                    <View style={[S.secCount, { backgroundColor: cCOLORS.text }]}>
                       <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{items.length}</Text>
                     </View>
                   </View>

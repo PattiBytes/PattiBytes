@@ -1,7 +1,7 @@
 import React from 'react'
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native'
 import { COLORS } from '../../lib/constants'
-import { S } from './styles'
+import { useDashboardStyles } from './styles'
 import { ShopCategory } from './types'
 
 // Metadata lookup for known category keys
@@ -42,6 +42,7 @@ type Props = {
 }
 
 export function ShopByCategory({ categories, loadingCategories, onNav }: Props) {
+  const S = useDashboardStyles()
   return (
     <View style={{ marginBottom: 8 }}>
       <View style={[S.sectionHeader, { paddingHorizontal: 16, marginBottom: 10 }]}>

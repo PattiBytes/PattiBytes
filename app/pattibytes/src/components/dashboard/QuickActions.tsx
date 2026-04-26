@@ -1,6 +1,6 @@
 import React from 'react'
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native'
-import { S } from './styles'
+import { useDashboardStyles } from './styles'
 
 const QUICK_ITEMS = [
   { emoji: '📦', label: 'My Orders', route: '/(customer)/orders'       },
@@ -12,6 +12,7 @@ const QUICK_ITEMS = [
 ]
 
 export function QuickActions({ onNav }: { onNav: (p: string) => void }) {
+  const S = useDashboardStyles()
   return (
     <ScrollView
       horizontal

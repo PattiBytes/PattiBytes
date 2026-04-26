@@ -1,95 +1,172 @@
+// src/contexts/ThemeContext.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+// Priority chain (highest wins):
+//   1. DB  (supabase profiles.theme_id)  — loaded on every sign-in
+//   2. AsyncStorage                      — fast cold-boot
+//   3. DEFAULT_THEME_ID                  — initial render placeholder
+//
+// Dark mode: 'system' | 'light' | 'dark' — stored in AsyncStorage only
+//   'system' → follow Appearance.getColorScheme()
+//   'light' / 'dark' → override regardless of system
+// ─────────────────────────────────────────────────────────────────────────────
 import React, {
   createContext, useCallback, useContext,
-  useEffect, useMemo, useState,
+  useEffect, useMemo, useRef, useState,
 } from 'react'
-import { useColorScheme } from 'react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Appearance } from 'react-native'
+import AsyncStorage   from '@react-native-async-storage/async-storage'
+import { supabase }   from '../lib/supabase'
+import {
+  DEFAULT_THEME_ID, ThemeColors, getThemeById, resolveColors,
+} from '../lib/themes'
+import { logDeviceSession } from '../hooks/useSessionAnalytics'
 
-const THEME_KEY = 'app_theme'
 
-// ── Token palette ─────────────────────────────────────────────────────────────
-export const LIGHT_THEME = {
-  dark: false,
-  bg:            '#F8F9FA',
-  surface:       '#FFFFFF',
-  surfaceOffset: '#F3F4F6',
-  border:        '#E5E7EB',
-  text:          '#111827',
-  textMuted:     '#6B7280',
-  textFaint:     '#9CA3AF',
-  primary:       '#FF6B35',
-  primaryBg:     '#FFF0EA',
-  card:          '#FFFFFF',
-  headerBg:      '#FF6B35',
-  skeleton:      '#E5E7EB',
-  skeletonShine: '#F3F4F6',
-  statusBar:     'dark' as const,
+const THEME_KEY  = 'pattibytes_theme_id'
+const SCHEME_KEY = 'pattibytes_color_scheme'
+
+export type ColorScheme = 'system' | 'light' | 'dark'
+
+function isValidThemeId(id: string | null | undefined): id is string {
+  return !!id && getThemeById(id).id === id
 }
 
-export const DARK_THEME = {
-  dark: true,
-  bg:            '#0F0F0F',
-  surface:       '#1A1A1A',
-  surfaceOffset: '#242424',
-  border:        '#2E2E2E',
-  text:          '#F9FAFB',
-  textMuted:     '#9CA3AF',
-  textFaint:     '#4B5563',
-  primary:       '#FF7A45',
-  primaryBg:     '#2D1A10',
-  card:          '#1A1A1A',
-  headerBg:      '#1E1E1E',
-  skeleton:      '#2A2A2A',
-  skeletonShine: '#333333',
-  statusBar:     'light' as const,
+
+interface ThemeContextValue {
+  themeId:       string
+  setThemeId:    (id: string) => void
+  colors:        ThemeColors
+  isDark:        boolean
+  colorScheme:   ColorScheme
+  setColorScheme:(s: ColorScheme) => void
 }
 
-export type AppTheme = Omit<typeof LIGHT_THEME, 'statusBar'> & { statusBar: 'dark' | 'light' }
-type ThemeMode = 'light' | 'dark' | 'system'
 
-type ThemeCtx = {
-  theme:       AppTheme
-  mode:        ThemeMode
-  toggleTheme: () => void
-  setMode:     (m: ThemeMode) => void
-}
+const ThemeContext = createContext<ThemeContextValue>({
+  themeId:       DEFAULT_THEME_ID,
+  setThemeId:    () => {},
+  colors:        getThemeById(DEFAULT_THEME_ID).colors,
+  isDark:        false,
+  colorScheme:   'system',
+  setColorScheme:() => {},
+})
 
-const Ctx = createContext<ThemeCtx | undefined>(undefined)
-
-export function useTheme() {
-  const c = useContext(Ctx)
-  if (!c) throw new Error('useTheme must be used inside ThemeProvider')
-  return c
-}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const system = useColorScheme()               // 'light' | 'dark' | null
-  const [mode, setModeState] = useState<ThemeMode>('system')
-
-  // Load persisted preference
-  useEffect(() => {
-    AsyncStorage.getItem(THEME_KEY)
-      .then(v => { if (v) setModeState(v as ThemeMode) })
-      .catch(() => {})
-  }, [])
-
-  const setMode = useCallback((m: ThemeMode) => {
-    setModeState(m)
-    AsyncStorage.setItem(THEME_KEY, m).catch(() => {})
-  }, [])
-
-  const toggleTheme = useCallback(() => {
-    setMode(mode === 'dark' ? 'light' : 'dark')
-  }, [mode, setMode])
-
-  const theme = useMemo<AppTheme>(() => {
-    const effective = mode === 'system' ? (system ?? 'light') : mode
-    return effective === 'dark' ? DARK_THEME : LIGHT_THEME
-  }, [mode, system])
-
-  return (
-    <Ctx.Provider value={{ theme, mode, toggleTheme, setMode }}>
-      {children}
-    </Ctx.Provider>
+  const [themeId,      setThemeIdState]    = useState(DEFAULT_THEME_ID)
+  const [colorScheme,  setColorSchemeState]= useState<ColorScheme>('system')
+  const [systemIsDark, setSystemIsDark]    = useState(
+    () => Appearance.getColorScheme() === 'dark',
   )
+
+  // Race-condition guard: DB is authoritative once resolved
+  const dbResolvedRef = useRef(false)
+  const syncedUserRef = useRef<string | null>(null)
+
+
+  // ── 1. Boot: AsyncStorage → theme + scheme ────────────────────────────────
+  useEffect(() => {
+    ;(async () => {
+      const [savedTheme, savedScheme] = await Promise.all([
+        AsyncStorage.getItem(THEME_KEY).catch(() => null),
+        AsyncStorage.getItem(SCHEME_KEY).catch(() => null),
+      ])
+      if (!dbResolvedRef.current && isValidThemeId(savedTheme)) {
+        setThemeIdState(savedTheme)
+      }
+      if (savedScheme === 'light' || savedScheme === 'dark' || savedScheme === 'system') {
+        setColorSchemeState(savedScheme)
+      }
+    })()
+  }, [])
+
+
+  // ── 2. System appearance listener ────────────────────────────────────────
+  useEffect(() => {
+    const sub = Appearance.addChangeListener(({ colorScheme: cs }) =>
+      setSystemIsDark(cs === 'dark'),
+    )
+    return () => sub.remove()
+  }, [])
+
+
+  // ── 3. setThemeId — instant → AsyncStorage → Supabase ────────────────────
+  const setThemeId = useCallback(async (id: string) => {
+    if (!isValidThemeId(id)) return
+    setThemeIdState(id)
+    AsyncStorage.setItem(THEME_KEY, id).catch(() => {})
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user?.id) return
+    supabase
+      .from('profiles')
+      .update({ theme_id: id })
+      .eq('id', user.id)
+      .then(({ error }) => {
+        if (error && __DEV__) console.warn('[Theme] Supabase sync error', error.message)
+      })
+  }, [])
+
+
+  // ── 4. setColorScheme — instant → AsyncStorage (local-only preference) ───
+  const setColorScheme = useCallback((scheme: ColorScheme) => {
+    setColorSchemeState(scheme)
+    AsyncStorage.setItem(SCHEME_KEY, scheme).catch(() => {})
+  }, [])
+
+
+  // ── 5. Sign-in: load authoritative theme from DB ─────────────────────────
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        const userId = session?.user?.id
+        if (!userId) {
+          syncedUserRef.current = null
+          dbResolvedRef.current = false
+          return
+        }
+        if (syncedUserRef.current === userId) return
+        syncedUserRef.current = userId
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('theme_id')
+          .eq('id', userId)
+          .single()
+
+        // DB wins — mark resolved so AsyncStorage cannot override
+        dbResolvedRef.current = true
+        if (!error && isValidThemeId(data?.theme_id)) {
+          setThemeIdState(data.theme_id)
+          AsyncStorage.setItem(THEME_KEY, data.theme_id).catch(() => {})
+        }
+
+        logDeviceSession(userId)
+      },
+    )
+    return () => subscription.unsubscribe()
+  }, [])
+
+
+  // ── Derived values ────────────────────────────────────────────────────────
+  const isDark = useMemo(() => {
+    if (colorScheme === 'dark')  return true
+    if (colorScheme === 'light') return false
+    return systemIsDark   // 'system'
+  }, [colorScheme, systemIsDark])
+
+  const colors = useMemo(
+    () => resolveColors(getThemeById(themeId), isDark),
+    [themeId, isDark],
+  )
+
+  const value = useMemo<ThemeContextValue>(
+    () => ({ themeId, setThemeId, colors, isDark, colorScheme, setColorScheme }),
+    [themeId, setThemeId, colors, isDark, colorScheme, setColorScheme],
+  )
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }
+
+
+export function useTheme():  ThemeContextValue { return useContext(ThemeContext) }
+export function useColors():  ThemeColors      { return useContext(ThemeContext).colors }

@@ -1,7 +1,7 @@
 import React from 'react'
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native'
 import { GlobalDeal } from './types'
-import { S } from './styles'
+import { useDashboardStyles } from './styles'
 import { COLORS } from '../../lib/constants'
 
 type Props = {
@@ -10,6 +10,7 @@ type Props = {
 }
 
 export function GlobalDeals({ deals, onNav }: Props) {
+  const S = useDashboardStyles()
   if (!deals.length) return null
   return (
     <View style={{ marginTop: 8, marginBottom: 16 }}>
@@ -21,7 +22,7 @@ export function GlobalDeals({ deals, onNav }: Props) {
         </TouchableOpacity>
       </View>
       <ScrollView
-        horizontal
+        horizontal 
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 16, gap: 10 }}
       >

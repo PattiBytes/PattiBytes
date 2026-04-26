@@ -2,7 +2,7 @@ import React from 'react'
 import { View, Text, TouchableOpacity } from 'react-native'
 import { ActiveOrder } from './types'
 import { STATUS_COLORS } from './constants'
-import { S } from './styles'
+import { useDashboardStyles } from './styles'
 import { COLORS } from '../../lib/constants'
 
 type Props = {
@@ -11,6 +11,7 @@ type Props = {
 }
 
 export function ActiveOrders({ orders, onNav }: Props) {
+  const S = useDashboardStyles()
   if (!orders.length) return null
   return (
     <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>

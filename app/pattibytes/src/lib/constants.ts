@@ -1,29 +1,37 @@
+// src/lib/constants.ts
+// ─────────────────────────────────────────────────────────────────────────────
+// COLORS is kept for backward-compat only — it is the Forest Green palette
+// frozen at module load (cannot reflect theme changes at runtime).
+//
+// ⚠️  Do NOT use COLORS in component render logic or StyleSheet.create() calls.
+//
+//     Use `useColors()` from ThemeContext instead:
+//       const colors = useColors()           // ← live, re-renders on theme change
+//       const styles = useThemedStyles(c => ({...}))  // ← themed StyleSheet
+//
+//     COLORS is safe for:
+//       • Non-component constants (STATUS_COLORS, STATUS_EMOJI)
+//       • Default prop values
+//       • One-off non-React utilities (e.g. a helper function that picks a color)
+// ─────────────────────────────────────────────────────────────────────────────
+import { getThemeById, DEFAULT_THEME_ID } from './themes'
+
+export const COLORS = getThemeById(DEFAULT_THEME_ID).colors
+
+
 export const APP_NAME    = 'Pattibytes Express'
 export const DEVELOPER   = 'Thrillyverse'
 export const APP_VERSION = '1.0.0'
 
-export const COLORS = {
-  primary:         '#FF6B35',
-  secondary:       '#4CAF50',
-  danger:          '#F44336',
-  warning:         '#FFC107',
-  info:            '#2196F3',
-  background:      '#FFFFFF',
-  backgroundLight: '#F5F5F5',
-  card:            '#FFFFFF',
-  text:            '#1A1A1A',
-  textLight:       '#666666',
-  textMuted:       '#999999',
-  border:          '#E0E0E0',
-  success:         '#22C55E',
-  orange:          '#FF6B35',
-} as const
 
 export const ACTIVE_ORDER_STATUSES = [
   'pending','confirmed','preparing','ready',
   'assigned','pickedup','on_the_way','outfordelivery',
 ] as const
 
+
+// These are intentionally static — they are data-semantic, not theme-semantic.
+// Order status colours are the same regardless of which app theme is active.
 export const STATUS_COLORS: Record<string, string> = {
   pending:        '#F59E0B',
   confirmed:      '#3B82F6',
@@ -41,7 +49,7 @@ export const STATUS_COLORS: Record<string, string> = {
 export const STATUS_EMOJI: Record<string, string> = {
   pending:        '🕐',
   confirmed:      '✅',
-  preparing:      '👨‍🍳',
+  preparing:      '👨\u200d🍳',
   ready:          '📦',
   assigned:       '🛵',
   pickedup:       '🛵',
