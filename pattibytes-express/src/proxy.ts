@@ -41,16 +41,17 @@ export async function proxy(req: NextRequest) {
     '/auth/callback',
     '/qr',
     '/auth/forgot-password',
+     '/review', 
   ];
 
   if (
-    publicRoutes.includes(path) ||
-    path.startsWith('/auth/') ||
-    path.startsWith('/legal/')
-  ) {
-    return response;
-  }
-
+  publicRoutes.includes(path) ||
+  path.startsWith('/auth/')   ||
+  path.startsWith('/legal/')  ||
+  path.startsWith('/review') 
+) {
+  return response;
+}
   // ── Verify session securely with the Auth server ─────────────────────────
   // ✅ getUser() contacts Supabase Auth to cryptographically verify the JWT.
   //    getSession() only reads the cookie and can be forged — never use it

@@ -4,10 +4,12 @@ import { supabase } from '@/lib/supabase';
 const PROFILE_FIELDS =
   'id,email,full_name,phone,role,approval_status,profile_completed,is_active,created_at';
 
-// ── Module-level cache ────────────────────────────────────────────────────────
+// ✅ NEW: Roles permitted to use the web portal
+const WEB_STAFF_ROLES = ['merchant', 'driver', 'admin', 'superadmin'];
+
 let cachedProfile: any = null;
 let cacheTimestamp = 0;
-const CACHE_TTL = 5 * 60_000; // 5 minutes (increased from 1m — profile rarely changes)
+const CACHE_TTL = 5 * 60_000;
 
 async function waitForProfile(userId: string, maxRetries = 6, delayMs = 400): Promise<any> {
   for (let i = 0; i < maxRetries; i++) {
@@ -22,8 +24,13 @@ async function waitForProfile(userId: string, maxRetries = 6, delayMs = 400): Pr
 export const authService = {
   async signup(
     email: string, password: string,
-    fullName: string, phone: string, role = 'customer'
+    fullName: string, phone: string, role = 'customer',
   ) {
+    // ✅ NEW: Prevent customer accounts from being created via the web portal
+    if (role === 'customer') {
+      throw new Error('Customers must register through the PattiBytes mobile app.');
+    }
+
     try {
       const { data: authData, error } = await supabase.auth.signUp({
         email, password,
@@ -51,7 +58,6 @@ export const authService = {
         profile = np;
       }
 
-      // Fire-and-forget access request
       if (role === 'merchant' || role === 'driver') {
         supabase.from('access_requests')
           .insert({ user_id: authData.user.id, requested_role: role, status: 'pending' })
@@ -105,6 +111,10 @@ export const authService = {
       return np;
     }
 
+    // ✅ NOTE: The web UI (LoginForm.tsx) handles the customer redirect after login.
+    // auth.ts intentionally does NOT throw here — the UI decides what to do
+    // depending on whether it's a web portal (staff-only) or a future API call.
+
     cachedProfile = profile;
     cacheTimestamp = Date.now();
     return profile;
@@ -127,19 +137,11 @@ export const authService = {
   },
 
   async getCurrentUser() {
-    // ✅ Return in-memory cache if fresh (5 min TTL)
     if (cachedProfile && Date.now() - cacheTimestamp < CACHE_TTL) {
       return cachedProfile;
     }
-
-    // ✅ Use getSession() — reads from memory/localStorage, NO network call
-    // getUser() hits the Supabase Auth server every time — avoid it here
     const { data: { session } } = await supabase.auth.getSession();
-
-    if (!session?.user) {
-      cachedProfile = null;
-      return null;
-    }
+    if (!session?.user) { cachedProfile = null; return null; }
 
     const { data: profile } = await supabase
       .from('profiles').select(PROFILE_FIELDS).eq('id', session.user.id).maybeSingle();
@@ -165,5 +167,9 @@ export const authService = {
     cachedProfile = null;
     cacheTimestamp = 0;
   },
-};
 
+  // ✅ NEW: expose for UI guards
+  isStaffRole(role: string): boolean {
+    return WEB_STAFF_ROLES.includes(role);
+  },
+};

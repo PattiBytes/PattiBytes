@@ -800,6 +800,20 @@ const loadRecentOrders = async () => {
         </div>
       </button>
 
+       <button
+        onClick={() => router.push('/admin/review')}
+        className="w-full bg-gray-50 hover:bg-gray-100 rounded-xl p-3 text-left border"
+      >
+
+        <div className="flex items-center gap-2">
+          <TrendingUp className="text-primary" size={18} />
+          <span className="font-semibold text-gray-900">Manage App Reviews</span>
+        </div>
+        <div className="mt-1 text-xs text-gray-600">
+         Manage App Reviews
+        </div>
+      </button>
+
     </div>
   </div>
 </div>
@@ -810,4 +824,5 @@ const loadRecentOrders = async () => {
     </DashboardLayout>
   );
 }
+
 

@@ -245,7 +245,7 @@ function normalizeHttpUrl(v: any) {
 }
 
 export default function CustomerDashboardPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [location, setLocation] = useState<Location | null>(null);
@@ -342,6 +342,7 @@ const [stats, setStats] = useState({
     return { label: `Buy ${buyQty} Get ${getQty} ${disc}`, subLabel: 'Offer', auto: Boolean(promo.auto_apply) };
   }
 
+  
   useEffect(() => {
     const run = async () => {
       const merchantIds = filteredRestaurants.slice(0, 60).map((r) => String(r.id)).filter(Boolean);
