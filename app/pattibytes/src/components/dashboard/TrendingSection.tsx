@@ -1,10 +1,10 @@
 import React from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity,
-  Image, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from "react-native";
 import { TrendingDish } from "./types";
 import { COLORS } from "../../lib/constants";
+import { Image } from 'expo-image'
 
 interface Props {
   dishes: TrendingDish[];
@@ -62,7 +62,13 @@ function TrendCard({
       {/* Image */}
       <View style={S.imgBox}>
         {item.image_url ? (
-          <Image source={{ uri: item.image_url }} style={S.img} resizeMode="cover" />
+         <Image
+  source={{ uri: item.image_url }}
+  style={S.img}
+  contentFit="cover"
+  cachePolicy="memory-disk"
+  transition={120}
+/>
         ) : (
           <View style={[S.imgBox, S.imgPlaceholder]}>
             <Text style={{ fontSize: 36 }}>{"\uD83C\uDF71"}</Text>

@@ -3,8 +3,9 @@ import React from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Image, ActivityIndicator, StyleSheet,
+  ActivityIndicator, StyleSheet,
 } from 'react-native'
+import { Image} from 'expo-image'
 import { COLORS } from '../../lib/constants'
 import type { MenuResult } from '../../types/dashboard'
 
@@ -80,11 +81,13 @@ export default function MenuSearchResults({ results, searching, query, onPress }
               {/* Image */}
               <View style={S.imgBox}>
                 {item.imageurl ? (
-                  <Image
-                    source={{ uri: item.imageurl }}
-                    style={S.img}
-                    resizeMode="cover"
-                  />
+                 <Image
+  source={{ uri: item.imageurl }}
+  style={S.img}
+  contentFit="cover"
+  cachePolicy="memory-disk"
+  transition={120}
+/>
                 ) : (
                   <Text style={{ fontSize: 26 }}>🍽️</Text>
                 )}

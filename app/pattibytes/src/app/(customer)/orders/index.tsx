@@ -150,11 +150,11 @@ export default function OrdersScreen() {
 
   // ── Push registration ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (!user) return
-    registerForPushNotifications(user.id)
-    const sub = addResponseListener(r => navigateFromNotification(r.notification))
-    return () => sub.remove()
-  }, [user])
+  if (!user) return
+  registerForPushNotifications(user.id)
+  const sub = addResponseListener(r => navigateFromNotification(r.notification))
+  return () => sub.remove()
+}, [user])
 
   // ── Notification badge ──────────────────────────────────────────────────────
   useEffect(() => {

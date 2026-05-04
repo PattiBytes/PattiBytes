@@ -8,9 +8,7 @@ import * as Location from 'expo-location'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../contexts/AuthContext'
 import { COLORS } from '../../../lib/constants'
-import {
-  MapView, Marker, Polyline, PROVIDER_GOOGLE,
-} from '../../../components/MapView'
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '../../../components/MapView'
 
 type MerchantInfo = {
   business_name: string
@@ -225,7 +223,6 @@ export default function ActiveDeliveryScreen() {
             initialRegion={mapRegion}
             region={driverCoords ? { ...driverCoords, latitudeDelta: 0.02, longitudeDelta: 0.02 } : mapRegion}
             showsUserLocation
-            showsMyLocationButton
           >
             {merchantCoord && (
               <Marker

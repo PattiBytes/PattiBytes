@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, ActivityIndicator, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Animated, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import { COLORS } from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 
@@ -370,7 +371,13 @@ export default function RecommendedStrip({
                 <View style={[S.card, !open && { backgroundColor: '#F9FAFB' }]}>
                   <View style={S.logoWrap}>
                     {logo ? (
-                      <Image source={{ uri: String(logo) }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                     <Image
+  source={{ uri: String(logo) }}
+  style={StyleSheet.absoluteFillObject}
+  contentFit="cover"
+  cachePolicy="memory-disk"
+  transition={120}
+/>
                     ) : (
                       <Text style={{ fontSize: 24 }}>🏪</Text>
                     )}

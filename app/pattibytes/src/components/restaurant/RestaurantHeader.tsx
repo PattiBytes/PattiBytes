@@ -4,13 +4,13 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   Pressable,
   useWindowDimensions,
   Share,
   Alert,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../lib/constants';
 
@@ -133,10 +133,12 @@ export default function RestaurantHeader({
         <View style={[S.banner, { height: bannerH }]}>
           {banner ? (
             <Image
-              source={{ uri: banner }}
-              style={StyleSheet.absoluteFillObject}
-              resizeMode="cover"
-            />
+  source={{ uri: banner }}
+  style={StyleSheet.absoluteFillObject}
+  contentFit="cover"
+  cachePolicy="memory-disk"
+  transition={140}
+/>
           ) : (
             <View style={[StyleSheet.absoluteFillObject, S.bannerFallback]}>
               <Text style={{ fontSize: 48 }}>🍽️</Text>
@@ -186,7 +188,13 @@ export default function RestaurantHeader({
         <View style={S.infoCard}>
           <View style={[S.logoWrap, { width: LOGO, height: LOGO, borderRadius: LOGO / 2 }]}>
             {logo ? (
-              <Image source={{ uri: logo }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+              <Image
+  source={{ uri: banner }}
+  style={StyleSheet.absoluteFillObject}
+  contentFit="cover"
+  cachePolicy="memory-disk"
+  transition={140}
+/>
             ) : (
               <Text style={{ fontSize: 28 }}>🏪</Text>
             )}

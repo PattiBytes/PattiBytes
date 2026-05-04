@@ -425,411 +425,417 @@ export default function CheckoutPage() {
   // ── handlePlaceOrder ──────────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────────
   const handlePlaceOrder = async () => {
-    if (!user || !selectedAddr) {
-      Alert.alert('Incomplete', 'Please select a delivery address.')
-      return
-    }
-    if (!liveLocation) {
-      Alert.alert('Location Required', 'Live location is mandatory to track your delivery.', [
-        { text: 'Allow Now', onPress: detectLocation },
-        { text: 'Cancel', style: 'cancel' },
-      ])
-      return
-    }
-    if (!cartsToProcess.length) {
-      Alert.alert('Empty Cart', 'Add items before placing an order.')
-      return
+  if (!user || !selectedAddr) {
+    Alert.alert('Incomplete', 'Please select a delivery address.')
+    return
+  }
+
+  if (!liveLocation) {
+    Alert.alert('Location Required', 'Live location is mandatory to track your delivery.', [
+      { text: 'Allow Now', onPress: detectLocation },
+      { text: 'Cancel', style: 'cancel' },
+    ])
+    return
+  }
+
+  if (!cartsToProcess.length) {
+    Alert.alert('Empty Cart', 'Add items before placing an order.')
+    return
+  }
+
+  console.log('[checkout] context', {
+    authContextUserId: user?.id ?? null,
+    authContextEmail: user?.email ?? null,
+    selectedAddrId: selectedAddr?.id ?? null,
+    cartsCount: cartsToProcess.length,
+  })
+
+  const { data: sessionDump, error: sessionDumpError } = await supabase.auth.getSession()
+
+  console.log('[checkout] supabase session user', {
+    sessionDumpError: sessionDumpError?.message ?? null,
+    sessionUserId: sessionDump?.session?.user?.id ?? null,
+    sessionEmail: sessionDump?.session?.user?.email ?? null,
+  })
+
+  setPlacing(true)
+
+  try {
+    const {
+      data: { session: authSession },
+      error: sessionLookupError,
+    } = await supabase.auth.getSession()
+
+    if (sessionLookupError) {
+      throw new Error(`Auth session lookup failed: ${sessionLookupError.message}`)
     }
 
-    setPlacing(true)
-    try {
-      const eta     = new Date(Date.now() + 45 * 60 * 1000).toISOString()
-      const addrStr = formatAddr(selectedAddr)
+    const runtimeUserId = authSession?.user?.id ?? user?.id ?? null
+    const runtimeEmail = authSession?.user?.email ?? user?.email ?? null
 
-      // ── Step 1: Create multi_cart_session ─────────────────────────────────
-      const grandTotal     = Number((params.grand_total    ?? finalTotal).toString())
-      const grandSubtotal  = Number((params.grand_subtotal ?? subtotal).toString())
-      const grandDelivery  = Number((params.grand_delivery ?? effectiveDeliveryFee).toString())
-      const grandTax       = Number((params.grand_tax      ?? taxAmount).toString())
-      const grandDiscount  = Number((params.grand_discount ?? promoDiscount).toString())
+    if (!runtimeUserId) {
+      throw new Error('No authenticated user ID found. Please sign in again.')
+    }
 
-      const { data: session, error: sessionError } = await supabase
-        .from('multi_cart_sessions')
-        .insert({
-          customer_id:         user.id,
-          merchant_ids:        cartsToProcess.map(c => c.merchant_id).filter(isValidUUID),
-          order_ids:           [],
-          total_amount:        grandTotal,
-          subtotal:            grandSubtotal,
-          total_delivery_fee:  grandDelivery,
-          total_tax:           grandTax,
-          delivery_address:    addrStr,
-          delivery_latitude:   selectedAddr.latitude  ?? null,
-          delivery_longitude:  selectedAddr.longitude ?? null,
-          delivery_address_id: selectedAddr.id        ?? null,
-          payment_method:      payMethod,
-          payment_status:      'pending',
-          status:              'pending',
-          promo_code:          appliedPromo?.code ?? null,
-          promo_id:            appliedPromo?.id   ?? null,
-          discount:            grandDiscount,
-          notes:               notes.trim() || null,
-        })
+    const { data: profileRow, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, role, is_active')
+      .eq('id', runtimeUserId)
+      .maybeSingle()
+
+    if (profileError) {
+      throw new Error(`Profile lookup failed: ${profileError.message}`)
+    }
+
+    if (!profileRow) {
+      throw new Error(
+        `Customer profile missing for auth user ${runtimeUserId}${runtimeEmail ? ` (${runtimeEmail})` : ''}.`
+      )
+    }
+
+    if (profileRow.is_active === false) {
+      throw new Error('This account is inactive. Please contact support.')
+    }
+
+    const eta = new Date(Date.now() + 45 * 60 * 1000).toISOString()
+    const addrStr = formatAddr(selectedAddr)
+
+    const grandTotal = Number((params.grand_total ?? finalTotal).toString())
+    const grandSubtotal = Number((params.grand_subtotal ?? subtotal).toString())
+    const grandDelivery = Number((params.grand_delivery ?? effectiveDeliveryFee).toString())
+    const grandTax = Number((params.grand_tax ?? taxAmount).toString())
+    const grandDiscount = Number((params.grand_discount ?? promoDiscount).toString())
+
+    const validMerchantIds = cartsToProcess
+      .map(c => c.merchant_id)
+      .filter(isValidUUID)
+
+    const { data: session, error: sessionError } = await supabase
+      .from('multi_cart_sessions')
+      .insert({
+        customer_id: runtimeUserId,
+        merchant_ids: validMerchantIds,
+        order_ids: [],
+        total_amount: grandTotal,
+        subtotal: grandSubtotal,
+        total_delivery_fee: grandDelivery,
+        total_tax: grandTax,
+        delivery_address: addrStr,
+        delivery_latitude: selectedAddr.latitude ?? null,
+        delivery_longitude: selectedAddr.longitude ?? null,
+        delivery_address_id: selectedAddr.id ?? null,
+        payment_method: payMethod,
+        payment_status: 'pending',
+        status: 'pending',
+        promo_code: appliedPromo?.code ?? null,
+        promo_id: appliedPromo?.id ?? null,
+        discount: grandDiscount,
+        notes: notes.trim() || null,
+      })
+      .select()
+      .single()
+
+    if (sessionError) {
+      throw new Error(`Failed to create cart session: ${sessionError.message}`)
+    }
+
+    const placedOrders: any[] = []
+
+    for (let idx = 0; idx < cartsToProcess.length; idx++) {
+      const merchantCart = cartsToProcess[idx]
+      const isStorCart = !isValidUUID(merchantCart.merchant_id)
+      const meta = merchantMetas.find(m => m.merchant_id === merchantCart.merchant_id)
+
+      const merchantSubtotal = meta?.subtotal ?? merchantCart.subtotal
+      const discountShare =
+        meta?.discount ??
+        (subtotal > 0
+          ? Math.round((promoDiscount * merchantSubtotal / subtotal) * 100) / 100
+          : promoDiscount)
+
+      const merchantTax =
+        meta?.tax ??
+        (subtotal > 0 && gstEnabled && gstPct > 0
+          ? Math.round((taxAmount * merchantSubtotal / subtotal) * 100) / 100
+          : (idx === 0 ? taxAmount : 0))
+
+      const merchantDeliveryFee =
+        meta?.delivery_fee ??
+        (isMultiCart
+          ? (showDeliveryFee && !isFreeDelivery ? deliveryFee : 0)
+          : effectiveDeliveryFee)
+
+      const merchantTotal = Math.max(
+        0,
+        Math.round((merchantSubtotal - discountShare + merchantDeliveryFee + merchantTax) * 100) / 100,
+      )
+
+      const giftsForThisOrder = meta?.bxgy_gifts?.length
+        ? meta.bxgy_gifts
+        : (idx === 0 ? bxgyGifts : [])
+
+      const orderItems = [
+        ...merchantCart.items.map((i: any) => ({
+          id: i.id,
+          menu_item_id: i.menu_item_id ?? i.id,
+          name: i.name,
+          price: i.price,
+          quantity: i.quantity,
+          discount_percentage: i.discount_percentage ?? 0,
+          image_url: i.image_url ?? null,
+          category: i.category ?? null,
+          is_veg: i.is_veg ?? null,
+          merchant_id: isValidUUID(merchantCart.merchant_id) ? merchantCart.merchant_id : null,
+          note: itemNotes[i.id] ?? i.note ?? null,
+          is_free: false,
+          is_custom_product: isStorCart,
+        })),
+        ...giftsForThisOrder.map(g => ({
+          id: `${g.menuItemId}_free`,
+          menu_item_id: g.menuItemId,
+          name: `${g.name} (FREE)`,
+          price: 0,
+          quantity: g.qty,
+          discount_percentage: 100,
+          image_url: null,
+          category: 'Promo Gift',
+          is_veg: null,
+          merchant_id: null,
+          note: null,
+          is_free: true,
+          is_custom_product: false,
+        })),
+      ]
+
+      const resolvedOrderType: OrderType =
+        isStorCart ? (orderType ?? 'store') : 'restaurant'
+
+      const orderPayload: Record<string, any> = {
+        customer_id: runtimeUserId,
+        merchant_id: isValidUUID(merchantCart.merchant_id) ? merchantCart.merchant_id : null,
+        order_type: resolvedOrderType,
+        status: 'pending',
+        subtotal: merchantSubtotal,
+        delivery_fee: merchantDeliveryFee,
+        tax: merchantTax,
+        discount: discountShare,
+        total_amount: merchantTotal,
+        payment_method: payMethod,
+        payment_status: 'pending',
+        delivery_address: addrStr,
+        delivery_address_label: selectedAddr.label,
+        delivery_address_id: selectedAddr.id,
+        delivery_latitude: selectedAddr.latitude ?? null,
+        delivery_longitude: selectedAddr.longitude ?? null,
+        delivery_distance_km:
+          (meta?.delivery_km ?? deliveryKm) > 0
+            ? parseFloat((meta?.delivery_km ?? deliveryKm).toFixed(2))
+            : null,
+        customer_phone: selectedAddr.recipient_phone ?? null,
+        recipient_name: selectedAddr.recipient_name ?? null,
+        special_instructions: specialInst.trim() || null,
+        customer_notes: notes.trim() || null,
+        delivery_instructions: selectedAddr.delivery_instructions ?? null,
+        promo_code: idx === 0 ? (appliedPromo?.code ?? meta?.promo_code ?? null) : null,
+        promo_id: idx === 0 ? (appliedPromo?.id ?? meta?.promo_id ?? null) : null,
+        customer_location: { lat: liveLocation.lat, lng: liveLocation.lng },
+        items: orderItems,
+        preparation_time:
+          resolvedOrderType === 'custom' ? 60 : resolvedOrderType === 'store' ? 20 : 30,
+        estimated_delivery_time: eta,
+        platform_handled: isStorCart,
+        cart_session_id: session.id,
+        session_order_index: idx,
+        merchant_ids: validMerchantIds,
+        ...(resolvedOrderType === 'custom' || resolvedOrderType === 'store'
+          ? {
+              custom_order_ref: customOrderRef,
+              custom_order_status: 'pending',
+              hub_origin: {
+                lat: 31.2837165,
+                lng: 74.847114,
+                label: 'Patti, Punjab 143416',
+              },
+            }
+          : {}),
+      }
+
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert(orderPayload)
         .select()
         .single()
 
-      if (sessionError) throw sessionError
-
-      // ── Step 2: One order per cart entry ──────────────────────────────────
-      const placedOrders: any[] = []
-
-      for (let idx = 0; idx < cartsToProcess.length; idx++) {
-        const merchantCart = cartsToProcess[idx]
-        const isStorCart   = !isValidUUID(merchantCart.merchant_id)
-
-        // Use pre-computed meta if available (passed from multi-cart screen)
-        const meta = merchantMetas.find(m => m.merchant_id === merchantCart.merchant_id)
-
-        const merchantSubtotal  = meta?.subtotal  ?? merchantCart.subtotal
-        const discountShare     = meta?.discount  ?? (subtotal > 0
-          ? Math.round((promoDiscount * merchantSubtotal / subtotal) * 100) / 100
-          : promoDiscount)
-        const merchantTax       = meta?.tax       ?? (subtotal > 0 && gstEnabled && gstPct > 0
-          ? Math.round((taxAmount * merchantSubtotal / subtotal) * 100) / 100
-          : (idx === 0 ? taxAmount : 0))
-        const merchantDeliveryFee = meta?.delivery_fee ?? (
-          isMultiCart
-            ? (showDeliveryFee && !isFreeDelivery ? deliveryFee : 0)
-            : effectiveDeliveryFee
-        )
-        const merchantTotal = Math.max(
-          0,
-          Math.round((merchantSubtotal - discountShare + merchantDeliveryFee + merchantTax) * 100) / 100,
-        )
-
-        // BxGy gifts: use meta's if available, else assign to first order only
-        const giftsForThisOrder = meta?.bxgy_gifts?.length
-          ? meta.bxgy_gifts
-          : (idx === 0 ? bxgyGifts : [])
-
-        const orderItems = [
-          ...merchantCart.items.map((i: any) => ({
-            id:                  i.id,
-            menu_item_id:        (i as any).menu_item_id ?? i.id,
-            name:                i.name,
-            price:               i.price,
-            quantity:            i.quantity,
-            discount_percentage: i.discount_percentage ?? 0,
-            image_url:           i.image_url ?? null,
-            category:            i.category ?? null,
-            is_veg:              i.is_veg ?? null,
-            merchant_id:         isValidUUID(merchantCart.merchant_id) ? merchantCart.merchant_id : null,
-            note:                itemNotes[i.id] ?? (i as any).note ?? null,
-            is_free:             false,
-            is_custom_product:   isStorCart,
-          })),
-          ...giftsForThisOrder.map(g => ({
-            id:                  `${g.menuItemId}_free`,
-            menu_item_id:        g.menuItemId,
-            name:                `${g.name} (FREE)`,
-            price:               0,
-            quantity:            g.qty,
-            discount_percentage: 100,
-            image_url:           null,
-            category:            'Promo Gift',
-            is_veg:              null,
-            merchant_id:         null,
-            note:                null,
-            is_free:             true,
-            is_custom_product:   false,
-          })),
-        ]
-
-        const resolvedOrderType: OrderType = isStorCart
-          ? (orderType ?? 'store')
-          : 'restaurant'
-
-        const orderPayload: Record<string, any> = {
-          customer_id:             user.id,
-          merchant_id:             isValidUUID(merchantCart.merchant_id) ? merchantCart.merchant_id : null,
-          order_type:              resolvedOrderType,
-          status:                  'pending',
-          subtotal:                merchantSubtotal,
-          delivery_fee:            merchantDeliveryFee,
-          tax:                     merchantTax,
-          discount:                discountShare,
-          total_amount:            merchantTotal,
-          payment_method:          payMethod,
-          payment_status:          'pending',
-          delivery_address:        addrStr,
-          delivery_address_label:  selectedAddr.label,
-          delivery_address_id:     selectedAddr.id,
-          delivery_latitude:       selectedAddr.latitude  ?? null,
-          delivery_longitude:      selectedAddr.longitude ?? null,
-          delivery_distance_km:    (meta?.delivery_km ?? deliveryKm) > 0
-                                     ? parseFloat((meta?.delivery_km ?? deliveryKm).toFixed(2))
-                                     : null,
-          customer_phone:          selectedAddr.recipient_phone ?? null,
-          recipient_name:          selectedAddr.recipient_name  ?? null,
-          special_instructions:    specialInst.trim() || null,
-          customer_notes:          notes.trim() || null,
-          delivery_instructions:   selectedAddr.delivery_instructions ?? null,
-          promo_code:              idx === 0 ? (appliedPromo?.code ?? meta?.promo_code ?? null) : null,
-          promo_id:                idx === 0 ? (appliedPromo?.id   ?? meta?.promo_id   ?? null) : null,
-          customer_location:       { lat: liveLocation.lat, lng: liveLocation.lng },
-          items:                   orderItems,
-          preparation_time:        resolvedOrderType === 'custom' ? 60 : resolvedOrderType === 'store' ? 20 : 30,
-          estimated_delivery_time: eta,
-          platform_handled:        isStorCart,
-          // ── Multi-cart session linkage ────────────────────────────────────
-          cart_session_id:         session.id,
-          session_order_index:     idx,
-          merchant_ids:            cartsToProcess.map(c => c.merchant_id).filter(isValidUUID),
-          ...(resolvedOrderType === 'custom' || resolvedOrderType === 'store'
-            ? {
-                custom_order_ref:    customOrderRef,
-                custom_order_status: 'pending',
-                hub_origin: { lat: 31.2837165, lng: 74.847114, label: 'Patti, Punjab 143416' },
-              }
-            : {}),
-        }
-
-        const { data: order, error: orderError } = await supabase
-          .from('orders').insert(orderPayload).select().single()
-        if (orderError) throw orderError
-        placedOrders.push(order)
-
-        if (resolvedOrderType === 'custom' && order) {
-          await supabase.from('custom_order_requests').insert({
-            order_id:         order.id,
-            customer_id:      user.id,
-            custom_order_ref: customOrderRef!,
-            category:         (merchantCart as any).customCategory ?? 'custom',
-            description:      specialInst.trim() || null,
-            image_url:        (merchantCart as any).customImageUrl ?? null,
-            items:            orderItems,
-            status:           'pending',
-            delivery_address: addrStr,
-            delivery_lat:     selectedAddr.latitude  ?? null,
-            delivery_lng:     selectedAddr.longitude ?? null,
-            total_amount:     merchantTotal,
-            delivery_fee:     merchantDeliveryFee,
-            payment_method:   payMethod,
-            customer_phone:   selectedAddr.recipient_phone ?? null,
-            created_at:       new Date().toISOString(),
-            updated_at:       new Date().toISOString(),
-          })
-        }
-
-        if (resolvedOrderType === 'store' && order) {
-          await supabase.from('customproductorders').insert({
-            order_id:             order.id,
-            customer_id:          user.id,
-            items:                orderItems,
-            total_amount:         merchantTotal,
-            delivery_fee:         merchantDeliveryFee,
-            delivery_distance_km: deliveryKm > 0 ? parseFloat(deliveryKm.toFixed(2)) : null,
-            delivery_address:     addrStr,
-            delivery_latitude:    selectedAddr.latitude  ?? null,
-            delivery_longitude:   selectedAddr.longitude ?? null,
-            customer_location:    orderPayload.customer_location,
-            status:               'pending',
-            payment_method:       payMethod,
-            special_instructions: specialInst.trim() || null,
-            customer_notes:       notes.trim() || null,
-            custom_order_ref:     customOrderRef,
-            created_at:           new Date().toISOString(),
-          })
-        }
+      if (orderError) {
+        throw new Error(`Failed to create order #${idx + 1}: ${orderError.message}`)
       }
 
-      // ── Step 3: Update session with complete merchant bills ───────────────
-      await supabase
-        .from('multi_cart_sessions')
-        .update({
-          order_ids: placedOrders.map(o => o.id),
-          merchant_bills: cartsToProcess.map((c, idx) => {
-            const meta      = merchantMetas.find(m => m.merchant_id === c.merchant_id)
-            const discShare = meta?.discount ?? (subtotal > 0
-              ? Math.round((promoDiscount * c.subtotal / subtotal) * 100) / 100 : 0)
-            const taxShare  = meta?.tax ?? (subtotal > 0
-              ? Math.round((taxAmount * c.subtotal / subtotal) * 100) / 100 : 0)
-            const delivFee  = meta?.delivery_fee ?? (
-              isMultiCart ? (showDeliveryFee && !isFreeDelivery ? deliveryFee : 0) : effectiveDeliveryFee
-            )
-            return {
-              merchant_id:   isValidUUID(c.merchant_id) ? c.merchant_id : null,
-              merchant_name: c.merchant_name,
-              order_id:      placedOrders[idx]?.id,
-              order_number:  placedOrders[idx]?.order_number,
-              subtotal:      c.subtotal,
-              discount:      discShare,
-              delivery_fee:  delivFee,
-              tax:           taxShare,
-              total:         Math.max(
-                0,
-                Math.round((c.subtotal - discShare + delivFee + taxShare) * 100) / 100,
-              ),
-            }
-          }),
+      placedOrders.push(order)
+
+      if (resolvedOrderType === 'custom') {
+        const { error } = await supabase.from('custom_order_requests').insert({
+          order_id: order.id,
+          customer_id: runtimeUserId,
+          custom_order_ref: customOrderRef!,
+          category: (merchantCart as any).customCategory ?? 'custom',
+          description: specialInst.trim() || null,
+          image_url: (merchantCart as any).customImageUrl ?? null,
+          items: orderItems,
+          status: 'pending',
+          delivery_address: addrStr,
+          delivery_lat: selectedAddr.latitude ?? null,
+          delivery_lng: selectedAddr.longitude ?? null,
+          total_amount: merchantTotal,
+          delivery_fee: merchantDeliveryFee,
+          payment_method: payMethod,
+          customer_phone: selectedAddr.recipient_phone ?? null,
+          created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq('id', session.id)
 
-      // ── Step 4: Promo usage (once for whole session) ──────────────────────
-      if (appliedPromo && placedOrders[0]) {
-        await Promise.allSettled([
-          supabase.from('promo_usage').insert({
-            promo_code_id: appliedPromo.id,
-            order_id:      placedOrders[0].id,
-            user_id:       user.id,
-            discount:      promoDiscount,
-            used_at:       new Date().toISOString(),
-          }),
-          supabase
-            .from('promo_codes')
-            .update({ used_count: (appliedPromo.used_count ?? 0) + 1 })
-            .eq('id', appliedPromo.id),
-        ])
+        if (error) throw new Error(`Custom request insert failed: ${error.message}`)
       }
 
-      // ─── Step 5: Push notifications ──────────────────────────────────────────────
-if (isMultiCart && placedOrders.length > 1) {
-  // 5a. ONE consolidated push + in-app row to customer (via createAndSendNotification)
-  await notifyMultiCartSessionLocal(
-    user.id,
-    session.id,
-    placedOrders.length,
-    cartsToProcess.map(c => c.merchant_name),
-    grandTotal,
-    placedOrders.map(o => o.order_number ?? null),
-  )
+      if (resolvedOrderType === 'store') {
+        const { error } = await supabase.from('customproductorders').insert({
+          order_id: order.id,
+          customer_id: runtimeUserId,
+          items: orderItems,
+          total_amount: merchantTotal,
+          delivery_fee: merchantDeliveryFee,
+          delivery_distance_km: deliveryKm > 0 ? parseFloat(deliveryKm.toFixed(2)) : null,
+          delivery_address: addrStr,
+          delivery_latitude: selectedAddr.latitude ?? null,
+          delivery_longitude: selectedAddr.longitude ?? null,
+          customer_location: orderPayload.customer_location,
+          status: 'pending',
+          payment_method: payMethod,
+          special_instructions: specialInst.trim() || null,
+          customer_notes: notes.trim() || null,
+          custom_order_ref: customOrderRef,
+          created_at: new Date().toISOString(),
+        })
 
-  // 5b. Per-merchant + admin pushes (NOT customer — they got 5a)
-  await Promise.allSettled(
-    placedOrders.map(async (o) => {
-      try {
-        const num = o.order_number ?? o.id?.slice(0, 8)
-
-        // Merchant owner
-        if (isValidUUID(o.merchant_id)) {
-          const { data: m } = await supabase
-            .from('merchants')
-            .select('user_id')
-            .eq('id', o.merchant_id)
-            .maybeSingle()
-
-          if (m?.user_id) {
-            await createAndSendNotification({
-              userId:    m.user_id,
-              title:     `🔔 New Order #${num}`,
-              body:      `Part of a multi-restaurant order. Please confirm it.`,
-              type:      'new_order',
-              channelId: 'orders',
-              data: {
-                order_id:        o.id,
-                order_number:    num,
-                cart_session_id: session.id,
-                is_multi:        true,
-                status:          'pending',
-              },
-            })
-          }
-        }
-
-        // Admins / superadmins
-        const { data: admins } = await supabase
-          .from('profiles')
-          .select('id')
-          .in('role', ['admin', 'superadmin'])
-          .eq('is_active', true)
-
-        if (admins?.length) {
-          await Promise.allSettled(
-            admins.map(({ id: adminId }) =>
-              createAndSendNotification({
-                userId:    adminId,
-                title:     `📋 Multi-Order #${num} (${placedOrders.length} restaurants)`,
-                body:      `Session ${session.id.slice(0, 8)} — order #${num} from ${o.merchant_id ? 'restaurant' : 'store'}.`,
-                type:      'new_order',
-                channelId: 'orders',
-                data: {
-                  order_id:        o.id,
-                  order_number:    num,
-                  cart_session_id: session.id,
-                  is_multi:        true,
-                  forwarded_from:  user.id,
-                },
-              }),
-            ),
-          )
-        }
-      } catch (e: any) {
-        console.warn('[checkout] multi-cart per-order notify:', e?.message)
+        if (error) throw new Error(`Store sidecar insert failed: ${error.message}`)
       }
-    }),
-  )
-} else {
-  // Single-cart: notifyOrderPlaced handles customer + merchant + admins in one call
-  // This function is from lib/notificationHandler.ts — uses createAndSendNotification internally
-  await Promise.allSettled(
-    placedOrders.map(o =>
-      notifyOrderPlaced(
-        user.id,
-        o.id,
-        o.order_number ?? null,
-        o.merchant_id ?? null,
-      ),
-    ),
-  )
-}
-
-// ─── Step 6: In-app notification row (bell icon) ─────────────────────────────
-// NOTE: For single-cart, notifyOrderPlaced already calls createAndSendNotification
-// which inserts the row + fires the push atomically. No duplicate insert needed.
-// For multi-cart, notifyMultiCartSessionLocal already did it in Step 5a.
-// This block is now ONLY for a session-level summary row (multi-cart only).
-if (isMultiCart && placedOrders.length > 1) {
-  // Already handled in Step 5a via createAndSendNotification — skip to avoid duplicate
-  // If you want an extra "summary" row with session link, uncomment below:
-  /*
-  await supabase.from('notifications').insert({
-    user_id:    user.id,
-    title:      `${placedOrders.length} Orders Placed!`,
-    message:    `${placedOrders.length} orders from ${cartsToProcess.map(c => c.merchant_name).join(', ')} placed. Total ₹${grandTotal.toFixed(2)}`,
-    type:       'order',
-    data: {
-      cart_session_id: session.id,
-      order_ids:       placedOrders.map(o => o.id),
-      order_numbers:   placedOrders.map(o => o.order_number),
-      status:          'pending',
-      is_multi:        true,
-    },
-    body:       `Total ₹${grandTotal.toFixed(2)}`,
-    is_read:    false,
-    sent_push:  true,   // ← already sent in Step 5a
-    created_at: new Date().toISOString(),
-  })
-  */
-}
-
-      // ── Step 7: Finalise ──────────────────────────────────────────────────
-      orderIdRef.current = placedOrders[0].id
-      startWatch()
-      clearCart()
-
-      if (isMultiCart && placedOrders.length > 1) {
-        router.replace(`/(customer)/orders/session/${session.id}` as any)
-      } else {
-        router.replace(`/(customer)/orders/${placedOrders[0].id}` as any)
-      }
-
-    } catch (e: any) {
-      Alert.alert('Order Failed', e.message ?? 'Please try again.')
-    } finally {
-      setPlacing(false)
     }
+
+    const { error: updateSessionError } = await supabase
+      .from('multi_cart_sessions')
+      .update({
+        order_ids: placedOrders.map(o => o.id),
+        merchant_bills: cartsToProcess.map((c, idx) => {
+          const meta = merchantMetas.find(m => m.merchant_id === c.merchant_id)
+          const merchantSubtotal = meta?.subtotal ?? c.subtotal
+          const discShare =
+            meta?.discount ??
+            (subtotal > 0
+              ? Math.round((promoDiscount * merchantSubtotal / subtotal) * 100) / 100
+              : 0)
+          const taxShare =
+            meta?.tax ??
+            (subtotal > 0
+              ? Math.round((taxAmount * merchantSubtotal / subtotal) * 100) / 100
+              : 0)
+          const delivFee =
+            meta?.delivery_fee ??
+            (isMultiCart
+              ? (showDeliveryFee && !isFreeDelivery ? deliveryFee : 0)
+              : effectiveDeliveryFee)
+
+          return {
+            merchant_id: isValidUUID(c.merchant_id) ? c.merchant_id : null,
+            merchant_name: c.merchant_name,
+            order_id: placedOrders[idx]?.id,
+            order_number: placedOrders[idx]?.order_number,
+            subtotal: merchantSubtotal,
+            discount: discShare,
+            delivery_fee: delivFee,
+            tax: taxShare,
+            total: Math.max(
+              0,
+              Math.round((merchantSubtotal - discShare + delivFee + taxShare) * 100) / 100,
+            ),
+          }
+        }),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', session.id)
+
+    if (updateSessionError) {
+      throw new Error(`Failed to update cart session: ${updateSessionError.message}`)
+    }
+
+    if (appliedPromo && placedOrders[0]) {
+      await Promise.allSettled([
+        supabase.from('promo_usage').insert({
+          promo_code_id: appliedPromo.id,
+          order_id: placedOrders[0].id,
+          user_id: runtimeUserId,
+          discount: promoDiscount,
+          used_at: new Date().toISOString(),
+        }),
+        supabase
+          .from('promo_codes')
+          .update({ used_count: (appliedPromo.used_count ?? 0) + 1 })
+          .eq('id', appliedPromo.id),
+      ])
+    }
+
+    if (isMultiCart && placedOrders.length > 1) {
+      await notifyMultiCartSessionLocal(
+        runtimeUserId,
+        session.id,
+        placedOrders.length,
+        cartsToProcess.map(c => c.merchant_name),
+        grandTotal,
+        placedOrders.map(o => o.order_number ?? null),
+      )
+    } else {
+      await Promise.allSettled(
+        placedOrders.map(o =>
+          notifyOrderPlaced(
+            runtimeUserId,
+            o.id,
+            o.order_number ?? null,
+            o.merchant_id ?? null,
+          ),
+        ),
+      )
+    }
+
+    orderIdRef.current = placedOrders[0].id
+    startWatch()
+    clearCart()
+
+    if (isMultiCart && placedOrders.length > 1) {
+      router.replace(`/(customer)/orders/session/${session.id}` as any)
+    } else {
+      router.replace(`/(customer)/orders/${placedOrders[0].id}` as any)
+    }
+  } catch (e: any) {
+    const msg = String(e?.message ?? 'Please try again.')
+
+    console.error('[checkout] handlePlaceOrder failed', {
+      message: msg,
+      authUserId: user?.id ?? null,
+      selectedAddrId: selectedAddr?.id ?? null,
+      carts: cartsToProcess.length,
+    })
+
+    if (msg.includes('Customer profile missing')) {
+      Alert.alert(
+        'Order Failed',
+        'Your account exists, but your customer profile is missing in the database. Please contact support.'
+      )
+      return
+    }
+
+    Alert.alert('Order Failed', msg)
+  } finally {
+    setPlacing(false)
   }
+}
 
   // ── Guards ────────────────────────────────────────────────────────────────
   if (loading || settingsLoading) {

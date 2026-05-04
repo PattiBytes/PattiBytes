@@ -36,24 +36,25 @@ export async function uploadAvatar(
   const arrayBuffer = decode(base64);
 
   // ── Step 3: Upload
-  const { error: uploadError } = await supabase.storage
-    .from("profiles")
-    .upload(filePath, arrayBuffer, { contentType: mime, upsert: true });
+ // uploadAvatar.ts: one bucket, explicit DB verification
+const { error: uploadError } = await supabase.storage
+  .from('avatars')
+  .upload(filePath, arrayBuffer, { contentType: mime, upsert: true })
 
-  if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+if (uploadError) throw uploadError
 
-  // ── Step 4: Public URL
-  const { data: { publicUrl } } = supabase.storage
-    .from("profiles")
-    .getPublicUrl(filePath);
+const { data: { publicUrl } } = supabase.storage
+  .from('avatars')
+  .getPublicUrl(filePath)
 
-  // ── Step 5: Save to DB
-  const { error: dbError } = await supabase
-    .from("profiles")
-    .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
-    .eq("id", userId);
+const { data, error: dbError } = await supabase
+  .from('profiles')
+  .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+  .eq('id', userId)
+  .select('id, avatar_url')
+  .single()
 
-  if (dbError) throw new Error(`Photo uploaded but profile save failed: ${dbError.message}`);
+if (dbError || !data) throw new Error('Avatar saved to storage but profile update failed')
 
   return publicUrl;
 }

@@ -5,48 +5,8 @@ import {
   Alert, ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { uploadImageToSupabase, safeImageUrl } from '../../lib/storage'
 import { S } from './styles';
-
-// ── Cloudinary config ────────────────────────────────────────────────────────
-// Add these to your .env / eas.json env blocks:
-//   EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name
-//   EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET=your_unsigned_preset
-const CLOUD_NAME    = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD ?? '';
-const UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET ?? '';
-
-async function uploadToCloudinary(localUri: string): Promise<string> {
-  if (!CLOUD_NAME || !UPLOAD_PRESET) {
-    throw new Error('Cloudinary env vars not set.');
-  }
-
-  // Read file as blob — works on both iOS and Android
-  const response = await fetch(localUri);
-  const blob     = await response.blob();
-
-  const formData = new FormData();
-  // React Native requires the file object format below
-  formData.append('file', {
-    uri:  localUri,
-    type: blob.type || 'image/jpeg',
-    name: `custom_order_${Date.now()}.jpg`,
-  } as any);
-  formData.append('upload_preset', UPLOAD_PRESET);
-  formData.append('folder', 'custom_orders');  // optional — organises in Cloudinary
-
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-    { method: 'POST', body: formData },
-  );
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message ?? `Upload failed (${res.status})`);
-  }
-
-  const data = await res.json();
-  // secure_url is always HTTPS — safe to store in Supabase
-  return data.secure_url as string;
-}
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -60,44 +20,41 @@ export function ImagePickerGrid({ imageUris, onChange }: Props) {
   // Track which slots are currently uploading (by index)
   const [uploading, setUploading] = useState(false);
 
-  const pickImage = async () => {
-    if (imageUris.length >= 3) {
-      Alert.alert('Limit reached', 'Maximum 3 images allowed.');
-      return;
-    }
+ const pickImage = async () => {
+  if (imageUris.length >= 3) {
+    Alert.alert('Limit reached', 'Maximum 3 images allowed.')
+    return
+  }
 
-    // Request permission on iOS
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Permission required',
-        'Please allow photo library access in Settings to attach images.',
-      );
-      return;
-    }
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+  if (status !== 'granted') {
+    Alert.alert('Permission required', 'Please allow photo library access in Settings to attach images.')
+    return
+  }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      // ✅ mediaTypes array format — replaces deprecated MediaTypeOptions.Images
-      mediaTypes: ['images'],
-      quality:    0.75,
-      allowsEditing: false,
-    });
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    quality: 0.75,
+    allowsEditing: false,
+  })
 
-    if (result.canceled) return;
+  if (result.canceled || !result.assets?.[0]?.uri) return
 
-    const localUri = result.assets[0].uri;
-    setUploading(true);
+  setUploading(true)
+  try {
+    const uploaded = await uploadImageToSupabase({
+      bucket: 'custom-order-images',
+      folder: 'requests',
+      fileUri: result.assets[0].uri,
+    })
 
-    try {
-      const cloudUrl = await uploadToCloudinary(localUri);
-      // ✅ Store the Cloudinary URL — not the local device path
-      onChange([...imageUris, cloudUrl]);
-    } catch (e: any) {
-      Alert.alert('Upload failed', e.message ?? 'Could not upload image. Please try again.');
-    } finally {
-      setUploading(false);
-    }
-  };
+    onChange([...imageUris, uploaded.publicUrl])
+  } catch (e: any) {
+    Alert.alert('Upload failed', e?.message ?? 'Could not upload image. Please try again.')
+  } finally {
+    setUploading(false)
+  }
+}
 
   const remove = (idx: number) => {
     Alert.alert('Remove photo?', 'This will remove the photo from your request.', [
@@ -121,22 +78,27 @@ export function ImagePickerGrid({ imageUris, onChange }: Props) {
       </Text>
 
       <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-        {imageUris.map((uri, idx) => (
-          <TouchableOpacity
-            key={uri}                        // ✅ use URI as key — stable & unique
-            onPress={() => remove(idx)}      // ✅ tap to remove (long-press is easy to miss)
-            onLongPress={() => remove(idx)}  // keep long-press too
-            style={S.imgThumb}
-            activeOpacity={0.8}
-          >
-            <Image source={{ uri }} style={{ width: 80, height: 80, borderRadius: 10 }} />
-            <View style={S.imgOverlay}>
-              <Text style={{ color: '#fff', fontSize: 8, fontWeight: '700', textAlign: 'center' }}>
-                TAP TO{'\n'}REMOVE
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+       {imageUris.map((uri, idx) => {
+  const img = safeImageUrl(uri)
+  if (!img) return null
+
+  return (
+    <TouchableOpacity
+      key={`${img}-${idx}`}
+      onPress={() => remove(idx)}
+      onLongPress={() => remove(idx)}
+      style={S.imgThumb}
+      activeOpacity={0.8}
+    >
+      <Image source={{ uri: img }} style={{ width: 80, height: 80, borderRadius: 10 }} />
+      <View style={S.imgOverlay}>
+        <Text style={{ color: '#fff', fontSize: 8, fontWeight: '700', textAlign: 'center' }}>
+          TAP TO REMOVE
+        </Text>
+      </View>
+    </TouchableOpacity>
+  )
+})}
 
         {/* Upload slot — shows spinner while uploading */}
         {imageUris.length < 3 && (

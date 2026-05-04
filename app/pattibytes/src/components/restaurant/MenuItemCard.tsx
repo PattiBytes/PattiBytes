@@ -1,13 +1,13 @@
  
 import React, { memo } from 'react'
 import {
-  Image,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native'
+import { Image } from 'expo-image'
 import { COLORS } from '../../lib/constants'
 import {
   dishTimingOf,
@@ -152,11 +152,13 @@ function MenuItemCardComponent({
         {showImages && (
           <View style={[S.imgWrap, itemDisabled && { opacity: 0.5 }]}>
             {img ? (
-              <Image
-                source={{ uri: img }}
-                style={StyleSheet.absoluteFillObject}
-                resizeMode="cover"
-              />
+             <Image
+  source={{ uri: img }}
+  style={StyleSheet.absoluteFillObject}
+  contentFit="cover"
+  cachePolicy="memory-disk"
+  transition={120}
+/>
             ) : (
               <View style={S.imgFallback}>
                 <Text style={{ fontSize: 22 }}>🍔</Text>

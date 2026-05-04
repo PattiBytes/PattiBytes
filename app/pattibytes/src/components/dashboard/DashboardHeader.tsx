@@ -2,10 +2,11 @@
 // Uses @expo/vector-icons (Ionicons) — already installed in this project.
 // NO paddingTop: layout SafeAreaView handles safe-area insets.
 import React from 'react'
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { COLORS } from '../../lib/constants'
 import type { AppSettings } from './types'
+import { Image } from 'expo-image'
 
 type Props = {
   appSettings:     AppSettings | null
@@ -41,7 +42,13 @@ export function DashboardHeader({
 
         {/* App logo */}
         {logoUrl ? (
-          <Image source={{ uri: logoUrl }} style={S.logo} />
+          <Image
+  source={{ uri: logoUrl }}
+  style={S.logo}
+  contentFit="cover"
+  cachePolicy="memory-disk"
+  transition={100}
+/>
         ) : (
           <View style={S.logoPh}>
             <Text style={{ fontSize: 15 }}>🍔</Text>
@@ -79,7 +86,13 @@ export function DashboardHeader({
 
           {/* Customer avatar */}
           {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={S.avatar} />
+            <Image
+  source={{ uri: avatarUrl }}
+  style={S.avatar}
+  contentFit="cover"
+  cachePolicy="memory-disk"
+  transition={100}
+/>
           ) : (
             <View style={S.avatarPh}>
               <Text style={S.avatarInitial}>

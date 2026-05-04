@@ -2,8 +2,9 @@ import React from 'react'
 import {
   View, Text, ScrollView, TouchableOpacity,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Image, ActivityIndicator, Alert,
+ ActivityIndicator, Alert,
 } from 'react-native'
+import { Image } from 'expo-image'
 import { Merchant } from './types'
 import { openTimeLabel } from './helpers'
 import { useDashboardStyles } from './styles'
@@ -94,7 +95,13 @@ export function RestaurantList({
             {/* Logo */}
             <View style={S.restLogo}>
               {r.logo_url
-                ? <Image source={{ uri: r.logo_url }} style={{ width: 68, height: 68, borderRadius: 12 }} resizeMode="cover" />
+                ? <Image
+  source={{ uri: r.logo_url }}
+  style={{ width: 68, height: 68, borderRadius: 12 }}
+  contentFit="cover"
+  cachePolicy="memory-disk"
+  transition={120}
+/>
                 : <Text style={{ fontSize: 28 }}>🍴</Text>
               }
               {r.is_featured && r.is_open && (
