@@ -1,4 +1,3 @@
-# .github/workflows/webpushr-on-publish.yml
 name: Send Webpushr Notifications (on content changes)
 
 on:
@@ -10,11 +9,10 @@ on:
       - "_news/**"
       - "_places/**"
 
-  # Allow manual triggering with optional dry-run
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Only log payloads without sending"
+        description: "Only log payloads without sending notifications"
         required: false
         default: "true"
         type: choice
@@ -27,55 +25,86 @@ concurrency:
   group: webpushr-notifications
   cancel-in-progress: false
 
+# Minimum permissions required
+permissions:
+  contents: read
+
 jobs:
   send-notifications:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository (full history)
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      - name: Create debug log directory
+        run: |
+          mkdir -p logs
+          touch logs/notifications.log
+
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
-          cache: "pip"
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml requests
+          pip install PyYAML requests
 
       - name: Verify notification script exists
         run: |
           if [ ! -f ".github/scripts/send_notifications.py" ]; then
-            echo "::error::Script not found: .github/scripts/send_notifications.py"
+            echo "::error::Notification script not found!"
             exit 1
           fi
 
-      - name: Run notifications script
+      - name: Determine commit range
+        id: commit-range
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ] &&
+             [ -n "$PUSH_BEFORE" ] &&
+             [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            BEFORE="$PUSH_BEFORE"
+          else
+            BEFORE="$(git rev-parse HEAD^ 2>/dev/null || git rev-parse HEAD)"
+          fi
+
+          echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
+          echo "Commit range starts at: $BEFORE"
+          echo "Current commit: $GITHUB_SHA"
+
+      - name: Run Webpushr notification script
         env:
           WEBPUSHR_KEY: ${{ secrets.WEBPUSHR_KEY }}
           WEBPUSHR_AUTH: ${{ secrets.WEBPUSHR_AUTH }}
           SITE_URL: ${{ secrets.SITE_URL }}
-          BEFORE_COMMIT: ${{ github.event.before }}
+          BEFORE_COMMIT: ${{ steps.commit-range.outputs.before }}
           AFTER_COMMIT: ${{ github.sha }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
+          echo "======================================"
+          echo "Webpushr Notification Workflow"
           echo "Event: $EVENT_NAME"
-          echo "Checking changes between $BEFORE_COMMIT and $AFTER_COMMIT"
-          python .github/scripts/send_notifications.py
+          echo "Dry run: $DRY_RUN"
+          echo "Before: $BEFORE_COMMIT"
+          echo "After: $AFTER_COMMIT"
+          echo "======================================"
+
+          set -o pipefail
+          python -u .github/scripts/send_notifications.py 2>&1 | tee logs/notifications.log
 
       - name: Upload debug logs
-        if: failure()
-        uses: actions/upload-artifact@v4
+        if: always() && failure()
+        uses: actions/upload-artifact@v7
         with:
           name: webpushr-debug-logs
-          path: |
-            *.log
-            .github/scripts/
+          path: logs/notifications.log
           retention-days: 7
-          if-no-files-found: warn
+          if-no-files-found: ignore
